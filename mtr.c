@@ -250,6 +250,26 @@ void init_fld_options (void)
   available_options[i] = 0;
 }
 
+int my_getopt_long(int argc, char *argv[], struct option *long_options) {
+  static char *short_options;
+  char *p;
+  int i;
+
+  if (!short_options) {
+    short_options = malloc (128);
+    if (!short_options) return -1; // Trouble!
+
+    p = short_options;
+    for (i = 0; long_options[i].name; i++) {
+      *p++ = (char)long_options[i].val;
+      if (long_options[i].has_arg)
+         *p++ = ':';
+    }
+    *p++ = '\0';
+  }
+  return getopt_long (argc, argv, short_options, long_options, NULL);
+}
+
 
 void parse_arg (int argc, char **argv)
 {
@@ -300,8 +320,7 @@ void parse_arg (int argc, char **argv)
   opt = 0;
   while(1) {
     /* added f:m:o: byMin */
-    opt = getopt_long(argc, argv,
-		      "vhrwxtglCpo:B:i:c:s:Q:ena:f:m:uTP:Zby:z46", long_options, NULL);
+    opt = my_getopt_long(argc, argv, long_options);
     if(opt == -1)
       break;
 
