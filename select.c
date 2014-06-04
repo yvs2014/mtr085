@@ -239,19 +239,13 @@ void select_loop(void) {
 	}
 	break;
 #ifdef IPINFO
-      case ActionII:
-	if (ipinfo_no >= 0) {
-	  ipinfo_no++;
-          if (ipinfo_no > ipinfo_max)
-            ipinfo_no = 0;
-	}
-	break;
-      case ActionAS:
-	if (ipinfo_no >= 0)
-          ipinfo_no = ipinfo_no?0:ipinfo_max;
-	break;
+	case ActionII:
+		ii_action(0);
+		break;
+	case ActionAS:
+		ii_action(1);
+		break;
 #endif
-
       case ActionScrollDown:
         display_offset += 5;
 	break;

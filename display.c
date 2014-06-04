@@ -96,10 +96,6 @@ void display_open(void)
     break;
   case DisplayCurses:
     mtr_curses_open();  
-#ifdef IPINFO
-    if (ipinfo_no >= 0)
-        asn_open();
-#endif
     break;
   case DisplaySplit:
     split_open();
@@ -127,11 +123,10 @@ void display_close(time_t now)
     csv_close(now);
     break;
   case DisplayCurses:
-#ifdef IPINFO
-    if (ipinfo_no >= 0)
-        asn_close();
-#endif
     mtr_curses_close();
+#ifdef IPINFO
+    asn_close();
+#endif
     break;
   case DisplaySplit:
     split_close();

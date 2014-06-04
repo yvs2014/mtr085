@@ -345,7 +345,7 @@ void mtr_curses_hosts(int startstat)
       if (! net_up(at))
 	attron(A_BOLD);
 #ifdef IPINFO
-      if (is_printii())
+      if (enable_ipinfo)
         printw(fmt_ipinfo(addr));
 #endif
       if(name != NULL) {
@@ -402,7 +402,7 @@ void mtr_curses_hosts(int startstat)
         if (! net_up(at)) attron(A_BOLD);
         printw("\n    ");
 #ifdef IPINFO
-        if (is_printii())
+        if (enable_ipinfo)
           printw(fmt_ipinfo(addrs));
 #endif
         if (name != NULL) {
@@ -553,7 +553,7 @@ void mtr_curses_graph(int startstat, int cols)
 			attron(A_BOLD);
 		if (addrcmp((void *) addr, (void *) &unspec_addr, af)) {
 #ifdef IPINFO
-			if (is_printii())
+			if (enable_ipinfo)
 				printw(fmt_ipinfo(addr));
 #endif
 			name = dns_lookup(addr);
@@ -643,8 +643,8 @@ void mtr_curses_redraw(void)
     char msg[80];
     int padding = 30;
 #ifdef IPINFO
-    if (is_printii())
-      padding += get_iiwidth();
+    if (enable_ipinfo)
+      padding += ii_getwidth();
 #endif
     int max_cols = maxx<=SAVED_PINGS+padding ? maxx-padding : SAVED_PINGS;
     startstat = padding - 2;
