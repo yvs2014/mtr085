@@ -29,6 +29,16 @@ mtr_DEPENDENCIES = $(GTK_OBJ) $(CURSES_OBJ)
 mtr_LDFLAGS = $(GTK_OBJ) $(CURSES_OBJ)
 mtr_LDADD = $(GLIB_LIBS) $(RESOLV_LIBS)
 
+if GRAPHCAIRO
+DEFAULT_INCLUDES += @graphcairo_CFLAGS@ -Igraphcairo
+mtr_LDADD += @graphcairo_LIBS@
+mtr_SOURCES += \
+	graphcairo/graphcairo.c graphcairo/graphcairo.h \
+	graphcairo/graphcairo-xcb.c graphcairo/graphcairo-xcb.h \
+	graphcairo/graphcairo-mtr.c graphcairo/graphcairo-mtr.h \
+	graphcairo/graphcairo-curses.c graphcairo/graphcairo-curses.h
+endif
+
 CLEANFILES = version.h
 BUILT_SOURCES = version.h
 

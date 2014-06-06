@@ -31,6 +31,9 @@
 #include "raw.h"
 #include "dns.h"
 #include "asn.h"
+#ifdef GRAPHCAIRO
+#include "graphcairo-mtr.h"
+#endif
 
 extern int DisplayMode;
 
@@ -103,6 +106,16 @@ void display_open(void)
   case DisplayGTK:
     gtk_open();
     break;
+#ifdef GRAPHCAIRO
+  case DisplayGraphCairo: {
+		int r = gc_open();
+		if (!r) {
+			fprintf(stderr, "gc_open() failed\n");
+			exit(r);
+		}
+	}
+	break;
+#endif
   }
 }
 
@@ -134,6 +147,11 @@ void display_close(time_t now)
   case DisplayGTK:
     gtk_close();
     break;
+#ifdef GRAPHCAIRO
+  case DisplayGraphCairo:
+	gc_close();  
+	break;
+#endif
   }
 }
 
@@ -153,6 +171,12 @@ void display_redraw(void)
   case DisplayGTK:
     gtk_redraw();
     break;
+
+#ifdef GRAPHCAIRO
+  case DisplayGraphCairo:
+	gc_redraw();
+	break;
+#endif
   }
 }
 
@@ -219,6 +243,9 @@ void display_loop(void)
   case DisplaySplit:
   case DisplayCurses:
   case DisplayRaw:
+#ifdef GRAPHCAIRO
+  case DisplayGraphCairo:
+#endif
     select_loop();
     break;
   case DisplayGTK:

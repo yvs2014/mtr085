@@ -1,6 +1,6 @@
 AC_INIT([mtr], [0.85])
 AC_CONFIG_SRCDIR([mtr.c])
-AM_INIT_AUTOMAKE([foreign])
+AM_INIT_AUTOMAKE([foreign subdir-objects])
 
 AC_CONFIG_FILES([version.h.tmp:version.h.in])
 
@@ -11,6 +11,7 @@ GTK_OBJ=gtk.o
 CURSES_OBJ=curses.o
 
 AC_PROG_CC
+AM_PROG_CC_C_O
 
 AC_CHECK_SIZEOF(unsigned char, 1)
 AC_CHECK_SIZEOF(unsigned short, 2)
@@ -47,6 +48,11 @@ AC_ARG_WITH([ipinfo],
 [ipinfo="${withval}"], [ipinfo=yes])
 AM_CONDITIONAL([IPINFO], [test x$ipinfo = xyes])
 
+AC_ARG_WITH([graphcairo],
+[  --with-graphcairo       Do try to use cairo graph],
+[graphcairo="${withval}"], [graphcairo=no])
+AM_CONDITIONAL([GRAPHCAIRO], [test x$graphcairo = xyes])
+
 AC_ARG_ENABLE(ipv6,
 [  --disable-ipv6          Do not enable IPv6],
 WANTS_IPV6=$enableval, WANTS_IPV6=yes)
@@ -72,6 +78,16 @@ fi
 
 if test "x$ipinfo" = "xno"; then
 	AC_DEFINE([NO_IPINFO], [1], [Define to disable ipinfo lookup])
+fi
+
+if test "x$graphcairo" = "xyes"; then
+	AC_DEFINE([GRAPHCAIRO], [1], [Define to enable cairo graph])
+	PKG_CHECK_MODULES([graphcairo], [cairo >= 1.12 pango pangocairo xcb xcb-keysyms cairo-xcb], [
+		LIBS="$LIBS -lm"
+		AC_SUBST(graphcairo_CFLAGS)
+		AC_SUBST(graphcairo_LIBS)
+		AC_DEFINE([ENABLE_GRAPHCAIRO_XCB], [1], [Define to enable XCB backend])
+	])
 fi
 
 AC_CHECK_FUNC(socket, , 

@@ -27,6 +27,9 @@ enum { ActionNone,  ActionQuit,  ActionReset,  ActionDisplay,
 #endif
        ActionScrollDown, ActionScrollUp  };
 enum { DisplayReport, DisplayCurses, DisplayGTK, DisplaySplit, 
+#ifdef GRAPHCAIRO
+       DisplayGraphCairo,
+#endif
        DisplayRaw,    DisplayXML,    DisplayCSV, DisplayTXT};
 
 /*  Prototypes for display.c  */

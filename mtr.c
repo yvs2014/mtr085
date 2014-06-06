@@ -45,6 +45,9 @@
 #include "net.h"
 #include "asn.h"
 #include "version.h"
+#ifdef GRAPHCAIRO
+#include "graphcairo-mtr.h"
+#endif
 
 
 #ifdef ENABLE_IPV6
@@ -314,6 +317,9 @@ void parse_arg (int argc, char **argv)
     { "ipinfo", 1, 0, 'y' },
     { "aslookup", 0, 0, 'z' },
 #endif
+#ifdef GRAPHCAIRO
+    { "graphcairo", 1, 0, 'G' },
+#endif
     { 0, 0, 0, 0 }
   };
 
@@ -483,6 +489,12 @@ void parse_arg (int argc, char **argv)
       ii_parsearg("2");	// routeviews.org origin
       break;
 #endif
+#ifdef GRAPHCAIRO
+    case 'G':
+      gc_parsearg(optarg);
+      DisplayMode = DisplayGraphCairo;
+      break;
+#endif
     }
   }
 
@@ -590,6 +602,9 @@ int main(int argc, char **argv)
            "\t\t[--address interface] [--filename=FILE|-F]\n" /* BL */
 #ifdef IPINFO
            "\t\t[--aslookup|-z] [--ipinfo|-y origin,fields]\n"
+#endif
+#ifdef GRAPHCAIRO
+           "\t\t[--graphcairo|-G graphtype,timeperiod,enable_legend,enable_multipath]\n"
 #endif
            "\t\t[--psize=bytes/-s bytes] [--order fields]\n"            /* ok */
            "\t\t[--report-wide|-w] [--inet] [--inet6] [--max-ttl=NUM] [--first-ttl=NUM]\n"

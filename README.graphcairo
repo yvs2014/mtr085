@@ -1,0 +1,43 @@
+In brief:
+
+
+To build mtr with graphcairo you need to install -
+  cairo pango xcb xcb-keysyms
+
+Ubuntu packages: libcairo2(-dev) libpango1.0(-dev) libxcb1(-dev) libxcb-keysyms1(-dev)
+
+FreeBSD packages: pango libxcb xcb-util-keysyms
+cairo >= 1.12 (see http://people.freebsd.org/~kwm/cairo-1.12-CFT.txt)
+
+NetBSD packages: cairo pango libxcb xcb-util-keysyms
+
+
+
+then, for example
+ ./bootstrap.sh
+ ./configure --with-graphcairo --without-gtk
+ make
+ ./mtr -G, hostname
+
+
+
+graphcairo arguments (-G args):
+	Available arguments:
+		1st argument:  graph type
+			1 - dot, 2 - line, 3 - curve (default)
+		2nd argument:  viewport timeperiod
+			in N ticks, one tick - 10sec   (default - 6, i.e.  60sec)
+		3rd argument:  enable legend
+			0 - none, 1 - enable (default)
+		4th argument:  enable multipath
+			0 - none, 1 - enable (default)
+
+		Examples:
+			-G,		(default: 3,6,1,1  - curve, 1min, enable, enable)
+			-G2		(line, default, default, default)
+			-G,30,,0	(default, 5min, default, disable)
+
+
+
+graphcairo keys support: `dejnpqrtuyz+- '
+

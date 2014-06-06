@@ -8,7 +8,7 @@ mtr \- a network diagnostic tool
 .SH SYNOPSIS
 .B mtr 
 [\c
-.B \-BfhvrctglxspQemniuTP46yz\c
+.B \-BfhvrctglxspQemniuTP46yzG\c
 ]
 [\c
 .B \-\-help\c
@@ -313,6 +313,42 @@ Examples:
 .br
 
 Key: `y' switching IP info
+
+.TP
+.B \-G\ arguments
+.TP
+.B \-\-graphcairo\ arguments
+.br
+Use this option to use the cairo based graph drawing (if available)
+and to specify their arguments.
+
+Available arguments:
+    1st argument:  graph type
+.br
+        1 - dot, 2 - line, 3 - curve (default)
+.br
+    2nd argument:  viewport timeperiod
+.br
+        in N ticks, one tick - 10sec   (default - 6, i.e. 60sec)
+.br
+    3rd argument:  enable legend
+        0 - none, 1 - enable (default)
+.br
+    4th argument:  enable multipath
+        0 - none, 1 - enable (default)
+.br
+\",\" (comma) as argument separator
+.br
+Examples:
+.br
+    -G,         (default: 3,6,1,1  - curve, 1min, enable, enable)
+.br
+    -G2         (line, default, default, default)
+.br
+    -G,30,,0    (default, 5min, default, disable)
+.br
+
+Keys support: `dejnpqrtuyz+- '
 
 .TP
 .B \-p
