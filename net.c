@@ -18,6 +18,8 @@
 
 #include "config.h"
 
+#define BSD_COMP	// affects on Solaris
+
 #if defined(HAVE_SYS_XTI_H)
 #include <sys/xti.h>
 #endif
@@ -322,22 +324,25 @@ void net_send_tcp(int index)
   local.ss_family = af;
   remote.ss_family = af;
 
+  socklen_t namelen = sizeof(local);
   switch (af) {
   case AF_INET:
     addrcpy((void *) &local4->sin_addr, (void *) &ssa4->sin_addr, af);
     addrcpy((void *) &remote4->sin_addr, (void *) remoteaddress, af);
     remote4->sin_port = htons(remoteport);
+    namelen = sizeof(*local4);
     break;
 #ifdef ENABLE_IPV6
   case AF_INET6:
     addrcpy((void *) &local6->sin6_addr, (void *) &ssa6->sin6_addr, af);
     addrcpy((void *) &remote6->sin6_addr, (void *) remoteaddress, af);
     remote6->sin6_port = htons(remoteport);
+    namelen = sizeof(*local6);
     break;
 #endif
   }
 
-  if (bind(s, (struct sockaddr *) &local, sizeof (local))) {
+  if (bind(s, (struct sockaddr *) &local, namelen)) {
     display_clear();
     perror("bind()");
     exit(EXIT_FAILURE);
@@ -400,7 +405,7 @@ void net_send_tcp(int index)
   gettimeofday(&sequence[port].time, NULL);
   sequence[port].socket = s;
 
-  connect(s, (struct sockaddr *) &remote, sizeof (remote));
+  connect(s, (struct sockaddr *) &remote, namelen);
 }
 
 /*  Attempt to find the host at a particular number of hops away  */
