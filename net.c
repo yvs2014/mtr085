@@ -1516,6 +1516,33 @@ void net_add_fds(fd_set *writefd, int *maxfd)
   }
 }
 
+int err_slippage(int sock) {
+  struct sockaddr *addr = NULL;
+  socklen_t namelen;
+  switch (af) {
+    case AF_INET:
+      addr = (struct sockaddr *)rsa4;
+      namelen = sizeof(*rsa4);
+      break;
+#ifdef ENABLE_IPV6
+    case AF_INET6:
+      addr = (struct sockaddr *)rsa6;
+      namelen = sizeof(*rsa6);
+      break;
+#endif
+  }
+
+  int r = getpeername(sock, addr, &namelen);
+  if ((r < 0) && (errno == ENOTCONN)) {
+    r = read(sock, &namelen, 1);
+    if (r >= 0) // sanity lost
+      return -1;
+    r = errno;
+  } else
+    r = 0;
+  return r;
+}
+
 /* check if we got connection or error on any fds */
 void net_process_fds(fd_set *writefd)
 {
@@ -1533,7 +1560,12 @@ void net_process_fds(fd_set *writefd)
   for (at = 0; at < MaxSequence; at++) {
     fd = sequence[at].socket;
     if (fd > 0 && FD_ISSET(fd, writefd)) {
-      r = write(fd, "G", 1);
+      if (mtrtype != IPPROTO_TCP)
+        r = write(fd, "G", 1);
+      else {
+        errno = err_slippage(fd);
+        r = errno ? 0 : 1; // like write()
+      }
       /* if write was successful, or connection refused we have
        * (probably) reached the remote address. Anything else happens to the
        * connection, we write it off to avoid leaking sockets */
