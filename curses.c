@@ -540,7 +540,7 @@ void mtr_curses_graph(int startstat, int cols)
 
 	max = net_max();
 
-	for (at = display_offset; at < max; at++) {
+	for (at = net_min() + display_offset; at < max; at++) {
 		printw("%2d. ", at+1);
 
 		addr = net_addr(at);
