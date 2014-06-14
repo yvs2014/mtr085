@@ -217,7 +217,13 @@ extern int timeout;             /* timeout for TCP connections */
    ping */
 int calc_deltatime (float waittime)
 {
-  waittime /= numhosts;
+//  waittime /= numhosts;
+  int n = numhosts;
+  int f = fstTTL - 1;
+  if (f)
+    if (n > f)
+      n -= f;
+  waittime /= n;
   return 1000000 * waittime;
 }
 
