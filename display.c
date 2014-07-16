@@ -107,14 +107,10 @@ void display_open(void)
     gtk_open();
     break;
 #ifdef GRAPHCAIRO
-  case DisplayGraphCairo: {
-		int r = gc_open();
-		if (!r) {
-			fprintf(stderr, "gc_open() failed\n");
-			exit(r);
-		}
-	}
-	break;
+  case DisplayGraphCairo:
+    if (!gc_open())
+      exit(1);
+    break;
 #endif
   }
 }

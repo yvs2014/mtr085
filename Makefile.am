@@ -34,9 +34,14 @@ DEFAULT_INCLUDES += @graphcairo_CFLAGS@ -Igraphcairo
 mtr_LDADD += @graphcairo_LIBS@
 mtr_SOURCES += \
 	graphcairo/graphcairo.c graphcairo/graphcairo.h \
-	graphcairo/graphcairo-xcb.c graphcairo/graphcairo-xcb.h \
 	graphcairo/graphcairo-mtr.c graphcairo/graphcairo-mtr.h \
-	graphcairo/graphcairo-curses.c graphcairo/graphcairo-curses.h
+	graphcairo/graphcairo-backend.h
+if GRAPHCAIRO_XCB
+mtr_SOURCES += graphcairo/graphcairo-xcb.c
+endif
+if GRAPHCAIRO_XLIB
+mtr_SOURCES += graphcairo/graphcairo-xlib.c
+endif
 endif
 
 CLEANFILES = version.h

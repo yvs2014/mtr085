@@ -8,15 +8,13 @@
 #include <X11/keysymdef.h>
 
 #include <cairo/cairo-xcb.h>
-#include "graphcairo-xcb.h"
-
-static xcb_visualtype_t *visual_type;
-static xcb_atom_t delete_window_atom;
+#include "graphcairo-backend.h"
 
 static xcb_connection_t *connection;
-static xcb_screen_t *screen;
 static xcb_window_t window;
-
+static xcb_screen_t *screen;
+static xcb_visualtype_t *visual_type;
+static xcb_atom_t delete_window_atom;
 static frontend_resize_t frontend_resize;
 static int shiftkey_pressed;
 
@@ -39,14 +37,13 @@ cairo_surface_t* backend_create_surface(int width, int height) {
 	return cairo_xcb_surface_create(connection, window, visual_type, width, height);
 }
 
-int backend_create_window(int width, int height,
-	   	frontend_resize_t frontend_resize_func) {
+int backend_create_window(cairo_rectangle_int_t *rectangle, frontend_resize_t frontend_resize_func) {
 	frontend_resize = frontend_resize_func;
 
 	int screen_no;
 	connection = xcb_connect(NULL, &screen_no);
 	if (xcb_connection_has_error(connection)) {
-		fprintf(stderr, "ERROR: can't connect to an X server\n");
+		fprintf(stderr, "xcb backend_create_window(): can't connect to an X server\n");
 		return 0;
 	}
 
@@ -56,8 +53,8 @@ int backend_create_window(int width, int height,
 	for (screen_iter = xcb_setup_roots_iterator(setup); screen_iter.rem != 0;
 		--screen_no, xcb_screen_next(&screen_iter))
 		if (screen_no == 0) {
-	        screen = screen_iter.data;
-	        break;
+			screen = screen_iter.data;
+			break;
 		}
 
 	window = xcb_generate_id(connection);
@@ -67,20 +64,20 @@ int backend_create_window(int width, int height,
 	values[1] = XCB_EVENT_MASK_EXPOSURE | XCB_EVENT_MASK_STRUCTURE_NOTIFY | XCB_EVENT_MASK_KEY_PRESS | XCB_EVENT_MASK_KEY_RELEASE;
 
 	xcb_void_cookie_t cookie_window = xcb_create_window_checked(connection, XCB_COPY_FROM_PARENT,
-		window, screen->root, 0, 0, width, height, 0, XCB_WINDOW_CLASS_INPUT_OUTPUT,
-		screen->root_visual, mask, values);
+		window, screen->root, rectangle->x, rectangle->y, rectangle->width, rectangle->height, 0,
+	   	XCB_WINDOW_CLASS_INPUT_OUTPUT, screen->root_visual, mask, values);
 	xcb_void_cookie_t cookie_map = xcb_map_window_checked(connection, window);
 
 	xcb_generic_error_t *error = xcb_request_check(connection, cookie_window);
 	if (error) {
-		fprintf(stderr, "ERROR: can't create window : %d\n", error->error_code);
+		fprintf(stderr, "xcb backend_create_window(): can't create window : %d\n", error->error_code);
 		xcb_destroy_window(connection, window);
 		xcb_disconnect(connection);
 		return 0;
 	}
 	error = xcb_request_check(connection, cookie_map);
 	if (error) {
-		fprintf(stderr, "ERROR: can't map window : %d\n", error->error_code);
+		fprintf(stderr, "xcb backend_create_window(): can't map window : %d\n", error->error_code);
 		xcb_destroy_window(connection, window);
 		xcb_disconnect(connection);
 		return 0;
@@ -95,7 +92,7 @@ int backend_create_window(int width, int height,
 
 	xcb_flush(connection);
 	if (xcb_connection_has_error(connection)) {
-		fprintf(stderr, "ERROR: window_create() failed: xcb_connection_has_error()\n");
+		fprintf(stderr, "xcb backend_create_window() failed: xcb_connection_has_error()\n");
 		return 0;
 	}
 
@@ -111,10 +108,8 @@ int backend_create_window(int width, int height,
 }
 
 void backend_destroy_window(void) {
-	if (window)
-		xcb_destroy_window(connection, window);
-	if (connection)
-		xcb_disconnect(connection);
+	xcb_destroy_window(connection, window);
+	xcb_disconnect(connection);
 }
 
 void backend_flush(void) {
@@ -137,19 +132,22 @@ int keysym_to_char(xcb_keysym_t keysym) {
 	return c;
 }
 
-int keycode_to_char(xcb_key_release_event_t *ev, int typ) {
+int keycode_to_char(xcb_key_release_event_t *ev) {
 	static xcb_key_symbols_t *key_symbols;
 	if (!key_symbols)
 		key_symbols = xcb_key_symbols_alloc(connection);
+
 	xcb_keysym_t keysym = xcb_key_symbols_get_keysym(key_symbols, ev->detail, 0);
 	xcb_keysym_t keymod = xcb_key_symbols_get_keysym(key_symbols, ev->detail, ev->state & XCB_MOD_MASK_SHIFT);
-#if 0
-	printf("keysym=0x%x, keymod=0x%x\n", keysym, keymod);
-#endif
 
+	int typ = ev->response_type & ~0x80;
 	if ((keysym == XK_Shift_L) || (keysym == XK_Shift_R) ||
 		(keymod == XK_Shift_L) || (keymod == XK_Shift_R))
 		shiftkey_pressed = (typ == XCB_KEY_PRESS) ? 1 : 0;
+#if 0
+	printf("keysym=0x%x, keymod=0x%x, shiftkey=%d, type=%d\n",
+		(unsigned int)keysym, (unsigned int)keymod, shiftkey_pressed, typ);
+#endif
 
 	int c = 0;
 	if (typ == XCB_KEY_RELEASE)
@@ -159,8 +157,8 @@ int keycode_to_char(xcb_key_release_event_t *ev, int typ) {
 }
 
 int backend_dispatch_event(void) {
-	xcb_generic_event_t *ev;
 	int key = 0;
+	xcb_generic_event_t *ev;
 	while ((ev = xcb_poll_for_event(connection))) {
 		switch (ev->response_type & ~0x80) {
 			case XCB_CONFIGURE_NOTIFY:
@@ -175,7 +173,7 @@ int backend_dispatch_event(void) {
 				break;
 			case XCB_KEY_PRESS:
 			case XCB_KEY_RELEASE:
-				key = keycode_to_char((xcb_key_release_event_t *)ev, ev->response_type & ~0x80);
+				key = keycode_to_char((xcb_key_release_event_t *)ev);
 				break;
 			default:
 //printf("got event: %d\n", ev->response_type & ~0x80);
@@ -183,7 +181,6 @@ int backend_dispatch_event(void) {
 		}
 		free(ev);
 	}
-
 	return key;
 }
 

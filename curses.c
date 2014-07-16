@@ -319,6 +319,31 @@ int mtr_curses_keyaction(void)
   return ActionNone;          /* ignore unknown input */
 }
 
+void mtr_fill_data(int at, char *buf) {
+  int i, j;
+  int hd_len;
+
+      /* net_xxx returns times in usecs. Just display millisecs */
+      hd_len = 0;
+      for( i=0; i<MAXFLD; i++ ) {
+	/* Ignore options that don't exist */
+	/* On the other hand, we now check the input side. Shouldn't happen,
+	   can't be careful enough. */
+	j = fld_index[fld_active[i]];
+	if (j == -1) continue;
+
+	/* temporay hack for stats usec to ms... */
+	if( index( data_fields[j].format, 'f' ) ) {
+	  sprintf(buf + hd_len, data_fields[j].format,
+		data_fields[j].net_xxx(at) /1000.0 );
+	} else {
+	  sprintf(buf + hd_len, data_fields[j].format,
+		data_fields[j].net_xxx(at) );
+	}
+	hd_len +=  data_fields[j].length;
+      }
+      buf[hd_len] = 0;
+}
 
 void mtr_curses_hosts(int startstat) 
 {
@@ -329,8 +354,7 @@ void mtr_curses_hosts(int startstat)
   int y;
   char *name;
 
-  int i, j, k;
-  int hd_len;
+  int i, k;
   char buf[1024];
 
   max = net_max();
@@ -359,26 +383,7 @@ void mtr_curses_hosts(int startstat)
       getyx(stdscr, y, __unused_int);
       move(y, startstat);
 
-      /* net_xxx returns times in usecs. Just display millisecs */
-      hd_len = 0;
-      for( i=0; i<MAXFLD; i++ ) {
-	/* Ignore options that don't exist */
-	/* On the other hand, we now check the input side. Shouldn't happen, 
-	   can't be careful enough. */
-	j = fld_index[fld_active[i]];
-	if (j == -1) continue; 
-
-	/* temporay hack for stats usec to ms... */
-	if( index( data_fields[j].format, 'f' ) ) {
-	  sprintf(buf + hd_len, data_fields[j].format,
-		data_fields[j].net_xxx(at) /1000.0 );
-	} else {
-	  sprintf(buf + hd_len, data_fields[j].format,
-		data_fields[j].net_xxx(at) );
-	}
-	hd_len +=  data_fields[j].length;
-      }
-      buf[hd_len] = 0;
+      mtr_fill_data(at, buf);
       printw("%s", buf);
 
       for (k=0; k < mpls->labels && enablempls; k++) {
@@ -490,19 +495,30 @@ void mtr_curses_init() {
 }
 
 
-void mtr_print_scaled(int ms) 
+char mtr_print_scaled(int ms)
 {
 	int i;
 
 	for (i = 0; i < NUM_FACTORS; i++) {
 		if (ms <= scale[i]) {
-			printw("%c", block_map[i]);
-			return;
+			return block_map[i];
 		}
 	}
-	printw(">");
+	return '>';
 }
 
+char mtr_curses_saved_char(int saved_int) {
+	if (saved_int == -2)
+		return ' ';
+	if (saved_int == -1)
+		return '?';
+	if (display_mode != 1)
+		return mtr_print_scaled(saved_int);
+	if (saved_int > scale[6])
+		return block_map[NUM_FACTORS - 1];
+	else
+		return '.';
+}
 
 void mtr_fill_graph(int at, int cols) 
 {
@@ -511,23 +527,11 @@ void mtr_fill_graph(int at, int cols)
 
 	saved = net_saved_pings(at);
 	for (i = SAVED_PINGS-cols; i < SAVED_PINGS; i++) {
-		if (saved[i] == -2) {
-			printw(" ");
-		} else if (saved[i] == -1) {
+		if (saved[i] == -1)
 			attron(A_BOLD);
-			printw("?");
+		printw("%c", mtr_curses_saved_char(saved[i]));
+		if (saved[i] == -1)
 			attroff(A_BOLD);
-		} else {
-			if (display_mode == 1) {
-				if (saved[i] > scale[6]) {
-					printw("%c", block_map[NUM_FACTORS-1]);
-				} else {
-					printw(".");
-				}
-			} else {
-				mtr_print_scaled(saved[i]);
-			}
-		}
 	}
 }
 
@@ -571,6 +575,20 @@ void mtr_curses_graph(int startstat, int cols)
 	}
 }
 
+int mtr_curses_data_fields(char *buf) {
+    int i, j;
+    int hd_len = 0;
+    char fmt[16];
+    for (i=0; i < MAXFLD; i++ ) {
+	j = fld_index[fld_active[i]];
+	if (j < 0) continue;
+
+	sprintf( fmt, "%%%ds", data_fields[j].length );
+        sprintf( buf + hd_len, fmt, data_fields[j].title );
+	hd_len +=  data_fields[j].length;
+    }
+    return hd_len;
+}
 
 void mtr_curses_redraw(void)
 {
@@ -579,10 +597,9 @@ void mtr_curses_redraw(void)
   int rowstat;
   time_t t;
 
-  int i, j;
-  int  hd_len = 0;
+  int i;
+  int  hd_len;
   char buf[1024];
-  char fmt[16];
   
 
   erase();
@@ -622,14 +639,7 @@ void mtr_curses_redraw(void)
   attron(A_BOLD); printw("q"); attroff(A_BOLD); printw("uit\n");
   
   if (display_mode == 0) {
-    for (i=0; i < MAXFLD; i++ ) {
-	j = fld_index[fld_active[i]];
-	if (j < 0) continue;
-
-	sprintf( fmt, "%%%ds", data_fields[j].length );
-        sprintf( buf + hd_len, fmt, data_fields[j].title );
-	hd_len +=  data_fields[j].length;
-    }
+    hd_len = mtr_curses_data_fields(buf);
     attron(A_BOLD);
     mvprintw(rowstat - 1, 0, " Host");
     mvprintw(rowstat - 1, maxx-hd_len-1, "%s", buf);
@@ -641,7 +651,7 @@ void mtr_curses_redraw(void)
 
   } else {
     char msg[80];
-    startstat = 30;
+    startstat = STARTSTAT;
 #ifdef IPINFO
     if (enable_ipinfo)
       startstat += ii_getwidth();
@@ -695,3 +705,13 @@ void mtr_curses_clear(void)
   mtr_curses_close();
   mtr_curses_open();
 }
+
+#ifdef GRAPHCAIRO
+void mtr_curses_scale_desc(char *buf) {
+  int len = 0;
+  int i;
+  for (i = 0; i < NUM_FACTORS - 1; i++)
+    len += sprintf(buf + len, "  %c:%d ms", block_map[i], scale[i] / 1000);
+}
+#endif
+

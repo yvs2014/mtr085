@@ -22,3 +22,13 @@ void mtr_curses_close(void);
 void mtr_curses_redraw(void);
 int mtr_curses_keyaction(void);
 void mtr_curses_clear(void);
+
+#define STARTSTAT	30
+#ifdef GRAPHCAIRO
+void mtr_curses_init(void);
+void mtr_gen_scale(void);
+void mtr_curses_scale_desc(char *buf);
+char mtr_curses_saved_char(int saved_int);
+int mtr_curses_data_fields(char *buf);
+void mtr_fill_data(int at, char *buf);
+#endif

@@ -1,21 +1,31 @@
-In brief:
-
 
 To build mtr with graphcairo you need to install -
-  cairo pango xcb xcb-keysyms
-
-Ubuntu packages: libcairo2(-dev) libpango1.0(-dev) libxcb1(-dev) libxcb-keysyms1(-dev)
-
-FreeBSD packages: pango libxcb xcb-util-keysyms
-cairo >= 1.12 (see http://people.freebsd.org/~kwm/cairo-1.12-CFT.txt)
-
-NetBSD packages: cairo pango libxcb xcb-util-keysyms
+  XCB  backend:  cairo >= 1.12 pango cairo-xcb xcb xcb-keysyms
+  Xlib backend:  cairo pango cairo-xlib x11
 
 
+In my tests:
 
-then, for example
+Ubuntu packages:
+ XCB:  libcairo(-dev) libpango(-dev) libxcb(-dev) libxcb-keysyms(-dev)
+ Xlib: libcairo(-dev) libpango(-dev) libx11(-dev)
+
+FreeBSD packages:
+ XCB:  cairo >= 1.12 (see http://people.freebsd.org/~kwm/cairo-1.12-CFT.txt)
+       pango libxcb xcb-util-keysyms
+ Xlib: cairo pango libX11
+
+NetBSD packages:
+ XCB:  cairo pango libxcb xcb-util-keysyms
+ Xlib: cairo pango libX11
+
+OpenIndiana packages:
+ Xlib: cairo pango libx11
+
+
+Build and run instructions:
  ./bootstrap.sh
- ./configure --with-graphcairo --without-gtk
+ ./configure --with-graphcairo-xcb --without-gtk
  make
  ./mtr -G, hostname
 

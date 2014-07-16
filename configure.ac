@@ -48,10 +48,17 @@ AC_ARG_WITH([ipinfo],
 [ipinfo="${withval}"], [ipinfo=yes])
 AM_CONDITIONAL([IPINFO], [test "x$ipinfo" = "xyes"])
 
-AC_ARG_WITH([graphcairo],
-[  --with-graphcairo       Do try to use cairo graph],
-[graphcairo="${withval}"], [graphcairo=no])
-AM_CONDITIONAL([GRAPHCAIRO], [test x$graphcairo = xyes])
+AC_ARG_WITH([graphcairo_xcb],
+[  --with-graphcairo-xcb   Do try to use cairo graph with XCB backend],
+[graphcairo_xcb="${withval}"], [graphcairo_xcb=no])
+AM_CONDITIONAL([GRAPHCAIRO_XCB], [test "x$graphcairo_xcb" = "xyes"])
+
+AC_ARG_WITH([graphcairo_xlib],
+[  --with-graphcairo-xlib  Do try to use cairo graph with Xlib backend],
+[graphcairo_xlib="${withval}"], [graphcairo_xlib=no])
+AM_CONDITIONAL([GRAPHCAIRO_XLIB], [test "x$graphcairo_xlib" = "xyes"])
+
+AM_CONDITIONAL([GRAPHCAIRO], [test "x$graphcairo_xcb" = "xyes" -o "x$graphcairo_xlib" = "xyes"])
 
 AC_ARG_ENABLE(ipv6,
 [  --disable-ipv6          Do not enable IPv6],
@@ -64,7 +71,7 @@ m4_ifndef([AM_PATH_GTK_2_0], [m4_defun([AM_PATH_GTK_2_0], [AC_MSG_ERROR([
     ACLOCAL_PATH="/own/dir"
   or configure --without-gtk.
 ])])])
-   
+
 if test "x$WANTS_GTK" = "xyes"; then
         AM_PATH_GTK_2_0(2.6.0, CFLAGS="$CFLAGS $GTK_CFLAGS"
                            LIBS="$LIBS $GTK_LIBS -lm",
@@ -80,15 +87,35 @@ if test "x$ipinfo" = "xno"; then
 	AC_DEFINE([NO_IPINFO], [1], [Define to disable ipinfo lookup])
 fi
 
-if test "x$graphcairo" = "xyes"; then
+m4_ifndef([PKG_CHECK_MODULES], [m4_defun([PKG_CHECK_MODULES], [AC_MSG_ERROR([
+  Could not locate the pkg-config automake macros, these are usually located in
+    .../share/aclocal/pkg.m4
+  Before running bootstrap try setting the environment variable
+    ACLOCAL_PATH="/own/dir"
+  or configure --without-graphcairo-*
+])])])
+
+PKG_PROG_PKG_CONFIG
+
+AS_IF([test "x$graphcairo_xcb" = "xyes"], [
 	AC_DEFINE([GRAPHCAIRO], [1], [Define to enable cairo graph])
-	PKG_CHECK_MODULES([graphcairo], [cairo >= 1.12 pango pangocairo xcb xcb-keysyms cairo-xcb], [
+	PKG_CHECK_MODULES([graphcairo], [cairo >= 1.12 pango >= 1.10 pangocairo xcb xcb-keysyms cairo-xcb], [
 		LIBS="$LIBS -lm"
 		AC_SUBST(graphcairo_CFLAGS)
 		AC_SUBST(graphcairo_LIBS)
-		AC_DEFINE([ENABLE_GRAPHCAIRO_XCB], [1], [Define to enable XCB backend])
+		AC_DEFINE([GRAPHCAIRO_XCB], [1], [Define to enable cairo XCB backend])
 	])
-fi
+], [
+AS_IF([test "x$graphcairo_xlib" = "xyes"], [
+	AC_DEFINE([GRAPHCAIRO], [1], [Define to enable cairo graph])
+	PKG_CHECK_MODULES([graphcairo], [cairo pango >= 1.10 pangocairo x11 cairo-xlib], [
+		LIBS="$LIBS -lm"
+		AC_SUBST(graphcairo_CFLAGS)
+		AC_SUBST(graphcairo_LIBS)
+		AC_DEFINE([GRAPHCAIRO_XLIB], [1], [Define to enable cairo Xlib backend])
+	])
+])
+])
 
 AC_CANONICAL_HOST
 case "$host_os" in

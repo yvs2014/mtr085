@@ -8,17 +8,20 @@
 
 #include "config.h"
 #include "mtr.h"
+#include "mtr-curses.h"
 #include "net.h"
 #include "dns.h"
 #include "asn.h"
 #include "display.h"
 #include "graphcairo.h"
-#include "graphcairo-curses.h"	// for display_mode!=0 only
 
 #define GC_ARGS_SEP	','
 #define GC_ARGS_MAX	4
-#define PADDING	30	// curses.c:644 local padding = 30
-#define HOSTSTAT_LEN	(PADDING + PADDING + SAVED_PINGS)	// hostinfo + statistics
+#ifdef IPINFO
+#define HOSTSTAT_LEN	(3 * STARTSTAT + SAVED_PINGS)	// hostinfo + statistics
+#else
+#define HOSTSTAT_LEN	(STARTSTAT + SAVED_PINGS)	// hostname + statistics
+#endif
 
 #define	NUMHOSTS	10	// net.c:201 static numhosts = 10
 
@@ -38,7 +41,9 @@ static int flags;
 static int args[GC_ARGS_MAX];
 static int *data;
 static int num_pings;
-static char buf[PADDING + PADDING + SAVED_PINGS];
+static int curses_cols;
+static int hostinfo_max;
+static char buf[HOSTSTAT_LEN];
 
 enum {
 	LEGEND_HEADER_STATIC,
@@ -46,25 +51,13 @@ enum {
 	LEGEND_FOOTER
 };
 #define LEGEND_HD_NO    3
-static char legend_hd[LEGEND_HD_NO][SAVED_PINGS];
+static char legend_hd[LEGEND_HD_NO][HOSTSTAT_LEN];
 
-static int curses_cols;
-
-void get_legend_hd(void) {
+void gc_set_header(void) {
 	int len = 0;
-	snprintf(legend_hd[LEGEND_HEADER_STATIC], HOSTSTAT_LEN, "%s", "<b>"); len += 3;
-	char fmt[16];
-	int i;
-	for (i = 0; i < MAXFLD; i++) {	// curses.c:625-632
-		int j = fld_index[fld_active[i]];
-		if (j < 0)
-		   	continue;
-		snprintf(fmt, sizeof(fmt), "%%%ds", data_fields[j].length);
-		snprintf(legend_hd[LEGEND_HEADER_STATIC] + len, HOSTSTAT_LEN - len, fmt, data_fields[j].title);
-		len += data_fields[j].length;
-	}
-	snprintf(legend_hd[LEGEND_HEADER_STATIC] + len, HOSTSTAT_LEN - len, "%s", "</b>"); len += 4;
-	cr_restat(legend_hd[display_mode ? LEGEND_HEADER : LEGEND_HEADER_STATIC]);
+	len += sprintf(legend_hd[LEGEND_HEADER_STATIC], "%s", "<b>");
+	len += mtr_curses_data_fields(legend_hd[LEGEND_HEADER_STATIC] + len);
+	len += sprintf(legend_hd[LEGEND_HEADER_STATIC] + len, "%s", "</b>");
 }
 
 int gc_open(void) {
@@ -99,8 +92,9 @@ int gc_open(void) {
 		return 0;
 
 	if (flags & F_LEGEND) {
-		get_legend_hd();
-		gc_curses_init();
+		gc_set_header();
+		curses_cols = cr_recalc(hostinfo_max);
+		mtr_curses_init();
 	}
 	return 1;
 }
@@ -127,27 +121,45 @@ void gc_parsearg(char* arg) {
 		args[j] = -1;
 }
 
-void fill_hostinfo(ip_t *addr) {
-	int len = 0;
-	int sz = sizeof(buf);
+void fill_hostinfo(int at, ip_t *addr) {
+	int l, len = 0;
 	char *p = buf;
+	int sz;
 #ifdef IPINFO
 	if (enable_ipinfo) {
-		char *fmt_ii = fmt_ipinfo(addr);
-		snprintf(p, sz, "%s", fmt_ii);
-		len = strnlen(fmt_ii, sz);
-		p += len;
-		sz -= len;
+		sz = 2 * STARTSTAT;
+		l = snprintf(p, sz, "%s", fmt_ipinfo(addr));
+		if (l < 0)
+			sz = 0;
+		else if (l < sz)
+			sz = l;
+		else
+			sz -= 1;
+		len += sz;
+		p += sz;
 	}
 #endif
+	sz = STARTSTAT;
 	char *name = dns_lookup(addr);
 	if (name) {
 		if (show_ips)
-			snprintf(p, sz, "%s (%s)", name, strlongip(addr));
+			l = snprintf(p, sz, "%s (%s)", name, strlongip(addr));
 		else
-			snprintf(p, sz, "%s", name);
+			l = snprintf(p, sz, "%s", name);
 	} else
-		snprintf(p, sz, "%s", strlongip(addr));
+		l = snprintf(p, sz, "%s", strlongip(addr));
+
+	if (l < 0)
+		sz = 0;
+	else if (l < sz)
+		sz = l;
+	else
+		sz -= 1;
+	len += sz;
+
+	if ((at + 1) >= display_offset)
+		if (len > hostinfo_max)
+			hostinfo_max = len;
 }
 
 void gc_keyaction(int c) {
@@ -155,52 +167,43 @@ void gc_keyaction(int c) {
 		return;
 
 	if (c == ACTION_RESIZE) {
-		if (display_mode) {
-			curses_cols = cr_get_cols(0);
-			gc_curses_set_legend(curses_cols, HOSTSTAT_LEN,
-				legend_hd[LEGEND_HEADER], legend_hd[LEGEND_FOOTER]);
+		if (flags & F_LEGEND) {
+			curses_cols = cr_recalc(hostinfo_max);
+			if (display_mode)
+				sprintf(legend_hd[LEGEND_HEADER], "Last %d pings", curses_cols);
 		}
-		cr_restat(legend_hd[display_mode ? LEGEND_HEADER : LEGEND_HEADER_STATIC]);
 		return;
 	}
 
 	if (flags & F_LEGEND) {
 		switch (c) {
-			case '+':	// ScrollDown
-				if (display_offset > (net_max() - net_min()))
-					break;
+			case '+': {	// ScrollDown
+				int hops = net_max() - net_min();
 				display_offset += 5;
-				break;
-			case '-':	// ScrollUp
-				display_offset -= 5;
+				if (display_offset >= hops)
+					display_offset = hops - 1;
+				hostinfo_max = 0;
+			} break;
+			case '-': {	// ScrollUp
+				int rest = display_offset % 5;
+				if (rest)
+					display_offset -= rest;
+				else
+					display_offset -= 5;
 				if (display_offset < 0)
 					display_offset = 0;
-				break;
+				hostinfo_max = 0;
+			} break;
 		}
 		switch (tolower(c)) {
 			case 'd':	// Display
 				display_mode = (display_mode + 1) % 3;
 				if (display_mode == 1) {
-					int max = net_max();
-					int hostinfo_len = 0;
-					int i;
-					for (i = net_min(); i < max; i++) {
-						ip_t *addr = net_addr(i);
-						if (addrcmp((void *)addr, (void *)&unspec_addr, af) != 0) {
-							fill_hostinfo(addr);
-							int l = strnlen(buf, sizeof(buf));
-							if (l > hostinfo_len)
-								hostinfo_len = l;
-						}
-					}
-					curses_cols = cr_get_cols(hostinfo_len);
+					curses_cols = cr_recalc(hostinfo_max);
+					sprintf(legend_hd[LEGEND_HEADER], "Last %d pings", curses_cols);
 				}
-				if (display_mode)
-					gc_curses_set_legend(curses_cols, HOSTSTAT_LEN,
-						legend_hd[LEGEND_HEADER], legend_hd[LEGEND_FOOTER]);
-				cr_restat(legend_hd[display_mode ? LEGEND_HEADER : LEGEND_HEADER_STATIC]);
 				break;
-			case 'e': 	// MPLS
+			case 'e':	// MPLS
 				enablempls = !enablempls;
 				break;
 			case 'j':
@@ -208,20 +211,20 @@ void gc_keyaction(int c) {
 					strcpy(fld_active, "DR AGJMXI");
 				else
 					strcpy(fld_active, "LS NABWV");
-				get_legend_hd();
+				gc_set_header();
 				break;
 			case 'n':	// DNS
 				use_dns = !use_dns;
-				cr_restat(legend_hd[display_mode ? LEGEND_HEADER : LEGEND_HEADER_STATIC]);
+				hostinfo_max = 0;
 				break;
 #ifdef IPINFO
 			case 'y':	// IP Info
 				ii_action(0);
-				cr_restat(legend_hd[display_mode ? LEGEND_HEADER : LEGEND_HEADER_STATIC]);
+				hostinfo_max = 0;
 				break;
 			case 'z':	// ASN
 				ii_action(1);
-				cr_restat(legend_hd[display_mode ? LEGEND_HEADER : LEGEND_HEADER_STATIC]);
+				hostinfo_max = 0;
 				break;
 #endif
 		}
@@ -275,8 +278,8 @@ void gc_print_mpls(int i, int d, struct mplslen *mpls) {
 	if (mpls) {
 		int j;
 		for (j = 0; (j < mpls->labels) && (j < MAXLABELS); j++) {
-			snprintf(buf, sizeof(buf), "[MPLS: Lbl %lu Exp %u S %u TTL %u]",
-			   	mpls->label[j], mpls->exp[j], mpls->s[j], mpls->ttl[j]);
+			sprintf(buf, "[MPLS: Lbl %lu Exp %u S %u TTL %u]",
+				mpls->label[j], mpls->exp[j], mpls->s[j], mpls->ttl[j]);
 			cr_print_host(i, d, buf, NULL);
 		}
 	}
@@ -294,6 +297,8 @@ void gc_redraw(void) {
 	if (!hops)
 		hops++;
 
+	cr_set_hops(hops, min);
+
 	struct timeval now;
 	gettimeofday(&now, NULL);
 	int dt = (now.tv_sec - lasttime.tv_sec) * USECONDS + (now.tv_usec - lasttime.tv_usec);
@@ -310,57 +315,55 @@ void gc_redraw(void) {
 			return;
 	}
 
-	cr_set_hops(hops, min);
-
 	int enable_legend = flags & F_LEGEND;
 	int enable_multipath = flags & F_MULTIPATH;
-	if (enable_legend)
-		cr_init_print();
+	if (enable_legend) {
+		static int hi_max;
+		if (!hostinfo_max)
+			   hi_max = 0;
+		if (hostinfo_max > hi_max) {
+			hi_max = hostinfo_max;
+			curses_cols = cr_recalc(hostinfo_max);
+			if (display_mode)
+				sprintf(legend_hd[LEGEND_HEADER], "Last %d pings", curses_cols);
+		}
+		cr_init_legend();
+		cr_print_legend_header(display_mode ? legend_hd[LEGEND_HEADER] : legend_hd[LEGEND_HEADER_STATIC]);
+	}
 
 	for (i = 0, at = min; i < hops; i++, at++) {
 		ip_t *addr = net_addr(at);
 
 		if (addrcmp((void *)addr, (void *)&unspec_addr, af) != 0) {
 			int *saved = net_saved_pings(at);
+/*
 			int saved_int = saved[SAVED_PINGS - 1];
 			if (saved_int == -2)	// unsent
 				data[i] = net_up(at) ? net_last(at) : 0;
 			else
 				data[i] = (saved_int > 0) ? saved_int : 0;
+*/
+			int saved_int = saved[SAVED_PINGS - 2];	// waittime ago
+			data[i] = (saved_int > 0) ? saved_int : 0;
 
 			if (enable_legend) {
 				// line+hop
 				cr_print_hop(i);
 
 				// hostinfo
-				fill_hostinfo(addr);
+				fill_hostinfo(at, addr);
 
-				char *stat = buf + strnlen(buf, sizeof(buf)) + 1;
+				char *stat = buf + strlen(buf) + 1;
 				// statistics
 				if (display_mode) {
-					gc_curses_gen_scale();
+					mtr_gen_scale();
 					char *pos = stat;
 					int j;
 					for (j = SAVED_PINGS - curses_cols; j < SAVED_PINGS; j++)
-						*pos++ = gc_curses_saved_char(saved[j]);
+						*pos++ = mtr_curses_saved_char(saved[j]);
 					*pos = 0;
-				} else {
-					int len = 0, k;
-					for (k = 0; k < MAXFLD; k++) {	// curses.c:364-380
-						int j = fld_index[fld_active[k]];
-						if (j < 0)
-							continue;
-						const char *format = data_fields[j].format;
-						int net_xxx = data_fields[j].net_xxx(at);
-						if (index(format, 'f'))
-							snprintf(stat + len, SAVED_PINGS - len, format, net_xxx / 1000.0);
-						else
-							snprintf(stat + len, SAVED_PINGS - len, format, net_xxx);
-						len += data_fields[j].length;
-						if (len >= SAVED_PINGS)
-							break;
-					}
-				}
+				} else
+					mtr_fill_data(at, stat);
 				cr_print_host(i, data[i], buf, stat);
 
 				// mpls
@@ -376,18 +379,26 @@ void gc_redraw(void) {
 							continue;
 						if (addrcmp((void *)addrs, (void *)&unspec_addr, af) == 0)
 							break;
-						fill_hostinfo(addrs);
+						fill_hostinfo(at, addrs);
 						cr_print_host(i, data[i], buf, NULL);
 						if (enablempls)	// multipath+mpls
 							gc_print_mpls(i, data[i], net_mplss(at, j));
 					}
 				}
 			}
-		}
+		} else	// empty hop
+			if (enable_legend) {
+				cr_print_hop(i);
+				cr_print_host(i, 0, NULL, NULL);
+			}
 	}
 
-	if (enable_legend && display_mode)
-		cr_print_legend_footer(legend_hd[LEGEND_FOOTER]);
+	if (enable_legend)
+		if (display_mode) {
+			int len = sprintf(legend_hd[LEGEND_FOOTER], "<b>Scale:</b>");
+			mtr_curses_scale_desc(legend_hd[LEGEND_FOOTER] + len);
+			cr_print_legend_footer(legend_hd[LEGEND_FOOTER]);
+		}
 
 	cr_redraw(data);
 

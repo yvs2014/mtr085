@@ -7,7 +7,6 @@
 #endif
 /**/
 
-
 //#define ROUND(x)	((x)>=0?(int)((x)+0.5):(int)((x)-0.5))
 #define POS_ROUND(x)	((int)((x)+0.5))
 #define USECONDS	1000000
@@ -30,11 +29,12 @@ void cr_redraw(int *data);
 void cr_set_hops(int curr_hops, int min_hop);
 void cr_net_reset(int paused);
 
-int cr_get_cols(int len);
-void cr_restat(char *header);
-void cr_init_print(void);
+int cr_recalc(int hostinfo_max);
+void cr_init_legend(void);
+void cr_print_legend_header(char *header);
 void cr_print_legend_footer(char *footer);
 void cr_print_hop(int at);
 void cr_print_host(int at, int data, char *host, char *stat);
+int cr_display_offset(void);
 
 #endif
