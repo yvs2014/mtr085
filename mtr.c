@@ -486,7 +486,7 @@ void parse_arg (int argc, char **argv)
       ii_parsearg(optarg);
       break;
     case 'z':
-      ii_parsearg("2");	// routeviews.org origin
+      ii_parsearg("");
       break;
 #endif
 #ifdef GRAPHCAIRO

@@ -641,13 +641,13 @@ void mtr_curses_redraw(void)
 
   } else {
     char msg[80];
-    int padding = 30;
+    startstat = 30;
 #ifdef IPINFO
     if (enable_ipinfo)
-      padding += ii_getwidth();
+      startstat += ii_getwidth();
 #endif
-    int max_cols = maxx<=SAVED_PINGS+padding ? maxx-padding : SAVED_PINGS;
-    startstat = padding - 2;
+    int max_cols = maxx<=SAVED_PINGS+startstat ? maxx-startstat : SAVED_PINGS;
+    startstat -= 2;
 
     sprintf(msg, " Last %3d pings", max_cols);
     mvprintw(rowstat - 1, startstat, msg);

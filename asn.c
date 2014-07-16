@@ -160,13 +160,16 @@ char *ipinfo_lookup(const char *domain) {
 }
 
 int split_with_sep(char** args, int max, char sep) {
-    if (!args)
-        return -1;
+    if (!*args)
+        return 0;
 
     int i;
     char *p = *args, **a = args + 1;
-    for (i = 0; (p = strchr(p, sep)) && (i < max); i++, *a++ = p)
+    for (i = 0; (p = strchr(p, sep)) && (i < max); i++) {
         *p++ = 0;
+        if ((i + 1) < max)
+            *a++ = p;
+    }
     int j;
     for (j = 0; j < max; j++)
         if (args[j])
@@ -206,10 +209,11 @@ char* split_rec(char *rec, int ndx) {
 
     // special cases
     switch (origin_no) {
-      case 0: {	// cymru.com: MultiAS
+      case 0: // cymru.com: MultiAS
+        if (origins[0].as_prfx_ndx < i) {
         char *p = (*items)[origins[0].as_prfx_ndx];
         if (p) {
-            char *last = p + strnlen(p, NAMELEN) - 1;
+            char *last = p + strlen(p) - 1;
             while ((p = strchr(p, ' ')))
                 if (p != last)
                     *p = '/';
@@ -220,25 +224,20 @@ char* split_rec(char *rec, int ndx) {
       case 1: {	// originviews.org: unknown AS
 #define S_UINT32_MAX "4294967295"
         int j;
-        for (j = 0; (j < II_ITEM_MAX) && (*items)[j]; j++)
+        for (j = 0; (j < i) && (*items)[j]; j++)
             if (!strncmp((*items)[j], S_UINT32_MAX, sizeof(S_UINT32_MAX)))
                 (*items)[j] = UNKN;
       } break;
       case 2: {	// spameatingmonkey.net: unknown info
 #define Unknown "Unknown"
         int j;
-        for (j = 0; (j < II_ITEM_MAX) && (*items)[j]; j++)
+        for (j = 0; (j < i) && (*items)[j]; j++)
             if (!strncmp((*items)[j], Unknown, sizeof(Unknown)))
                 (*items)[j] = UNKN;
       } break;
     }
 
-    if (ipinfo_no[ndx] >= i) {
-        if (ipinfo_no[ndx] >= ipinfo_max)
-            ipinfo_no[ndx] = 0;
-        return (*items)[0];
-    } else
-        return (*items)[ipinfo_no[ndx]];
+    return (ipinfo_no[ndx] < i) ? (*items)[ipinfo_no[ndx]] : (*items)[0];
 }
 
 #ifdef ENABLE_IPV6
@@ -264,8 +263,7 @@ char *get_ipinfo(ip_t *addr, int ndx) {
         if (!origins[origin_no].ip6zone)
             return NULL;
         reverse_host6(addr, key);
-        if (snprintf(lookup_key, NAMELEN, "%s.%s", key, origins[origin_no].ip6zone) >= NAMELEN)
-            return NULL;
+        sprintf(lookup_key, "%s.%s", key, origins[origin_no].ip6zone);
 #else
 	return NULL;
 #endif
@@ -274,10 +272,8 @@ char *get_ipinfo(ip_t *addr, int ndx) {
             return NULL;
         unsigned char buff[4];
         memcpy(buff, addr, 4);
-        if (snprintf(key, NAMELEN, "%d.%d.%d.%d", buff[3], buff[2], buff[1], buff[0]) >= NAMELEN)
-            return NULL;
-        if (snprintf(lookup_key, NAMELEN, "%s.%s", key, origins[origin_no].ip4zone) >= NAMELEN)
-            return NULL;
+        sprintf(key, "%d.%d.%d.%d", buff[3], buff[2], buff[1], buff[0]);
+        sprintf(lookup_key, "%s.%s", key, origins[origin_no].ip4zone);
     }
 
     char *val = NULL;
@@ -308,15 +304,15 @@ char *get_ipinfo(ip_t *addr, int ndx) {
 #endif
             if (hash)
                 if ((item.key = strdup(key))) {
-                    item.data = items;
+                    item.data = (void*)items;
                     hsearch(item, ENTER);
 #ifdef IIDEBUG
                     {
                         char buff[NAMELEN] = {0};
                         int i, len = 0;
                         for (i = 0; (i < II_ITEM_MAX) && (*items)[i]; i++) {
-                            snprintf(buff + len, sizeof(buff) - len, "\"%s\" ", (*items)[i]);
-                            len = strnlen(buff, sizeof(buff));
+                            sprintf(buff + len, "\"%s\" ", (*items)[i]);
+                            len = strlen(buff);
                         }
                         syslog(LOG_INFO, "Insert into hash: \"%s\" => %s", key, buff);
                     }
@@ -340,30 +336,23 @@ int ii_getwidth(void) {
 
 char *fmt_ipinfo(ip_t *addr) {
     static char fmtinfo[NAMELEN];
+    char fmt[16];
     int len = 0;
     int i;
     for (i = 0; (i < II_ITEM_MAX) && (ipinfo_no[i] >= 0); i++) {
         char *ipinfo = get_ipinfo(addr, i);
-        char fmt[8];
         int width = origins[origin_no].width[ipinfo_no[i]];
-        if (ipinfo_no[i] != ipinfo_max) {
-          if (ipinfo) {
-            int l = strnlen(ipinfo, NAMELEN);
+        if (ipinfo) {
+            int l = strlen(ipinfo);
             if (!l)
-              ipinfo = UNKN;
-            if (l >= width)
-              width = strnlen(ipinfo, NAMELEN) + 1;	// +1 for space
-          } else
+                ipinfo = UNKN;
+            if ((l >= width) && (width > 0))
+                ipinfo[width - 1] = 0;
+        } else
             ipinfo = UNKN;
-          snprintf(fmt, sizeof(fmt), "%s%%-%ds",
-              (ipinfo_no[i] == origins[origin_no].as_prfx_ndx) ? "AS" : "", width);
-          snprintf(fmtinfo + len, sizeof(fmtinfo) - len, fmt, ipinfo);
-          len = strnlen(fmtinfo, sizeof(fmtinfo));
-        } else {	// empty item
-          snprintf(fmt, sizeof(fmt), "  %%-%ds", width);
-          snprintf(fmtinfo + len, sizeof(fmtinfo) - len, fmt, "");
-          len = strnlen(fmtinfo, sizeof(fmtinfo));
-        }
+        sprintf(fmt, "%s%%-%ds", (ipinfo_no[i] == origins[origin_no].as_prfx_ndx) ? "AS" : "", width);
+        sprintf(fmtinfo + len, fmt, ipinfo);
+        len = strlen(fmtinfo);
     }
     return fmtinfo;
 }
@@ -405,11 +394,11 @@ void ii_parsearg(char *arg) {
 
     int i, j;
     for (i = 1, j = 0; (j < II_ITEM_MAX) && (i <= II_ITEM_MAX); i++)
-		if (args[i]) {
-    	    int no = atoi(args[i]);
-       	    if ((no > 0) && (no <= origins[origin_no].fields))
-       	        ipinfo_no[j++] = no - 1;
-    	}
+        if (args[i]) {
+            int no = atoi(args[i]);
+            if ((no > 0) && (no <= origins[origin_no].fields))
+                ipinfo_no[j++] = no - 1;
+        }
     for (i = j; i < II_ITEM_MAX; i++)
         ipinfo_no[i] = -1;
     if (ipinfo_no[0] < 0)
@@ -423,20 +412,23 @@ void ii_parsearg(char *arg) {
 }
 
 void ii_action(int action_asn) {
-   if (!hash)
-       asn_open();
+    if (!hash)
+        asn_open();
 
-   if (ipinfo_no[0] >= 0) {
-       int i;
-       for (i = 0; (i < II_ITEM_MAX) && (ipinfo_no[i] >= 0); i++) {
-           ipinfo_no[i]++;
-           if (ipinfo_no[i] > ipinfo_max)
-               ipinfo_no[i] = 0;
-       }
-       enable_ipinfo = (ipinfo_no[0] != ipinfo_max) ? 1 : 0;
-   } else	// init
-       ii_parsearg(action_asn ? "2" : "");
-       // action asn:	origin 2:	asn.routeviews.org
-       // action ipinfo:	default origin:	origin.asn.cymru.com
+    if (ipinfo_no[0] >= 0) {
+        if (action_asn)
+            enable_ipinfo = !enable_ipinfo;
+        else {
+            int i;
+            for (i = 0; (i < II_ITEM_MAX) && (ipinfo_no[i] >= 0); i++) {
+                ipinfo_no[i]++;
+                if (!i)
+                    enable_ipinfo = (ipinfo_no[0] < ipinfo_max) ? 1 : 0;
+                if (ipinfo_no[i] >= ipinfo_max)
+                    ipinfo_no[i] = 0;
+            }
+        }
+    } else // init
+        ii_parsearg("");
 }
 

@@ -46,7 +46,7 @@ WANTS_GTK=$withval, WANTS_GTK=yes)
 AC_ARG_WITH([ipinfo],
 [  --without-ipinfo        Do not try to use ipinfo lookup at all],
 [ipinfo="${withval}"], [ipinfo=yes])
-AM_CONDITIONAL([IPINFO], [test x$ipinfo = xyes])
+AM_CONDITIONAL([IPINFO], [test "x$ipinfo" = "xyes"])
 
 AC_ARG_WITH([graphcairo],
 [  --with-graphcairo       Do try to use cairo graph],
