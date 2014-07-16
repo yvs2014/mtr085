@@ -18,8 +18,6 @@
 
 #include "config.h"
 
-#define BSD_COMP	// affects on Solaris
-
 #if defined(HAVE_SYS_XTI_H)
 #include <sys/xti.h>
 #endif

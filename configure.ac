@@ -90,6 +90,13 @@ if test "x$graphcairo" = "xyes"; then
 	])
 fi
 
+AC_CANONICAL_HOST
+case "$host_os" in
+  solaris*)
+    AC_DEFINE(BSD_COMP, 1, [enable BSD compatibility, affects on Solaris])
+  ;;
+esac
+
 AC_CHECK_FUNC(socket, , 
   AC_CHECK_LIB(socket, socket, , AC_MSG_ERROR(No socket library found)))
 
