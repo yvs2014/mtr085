@@ -25,6 +25,7 @@
 #include <ctype.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <unistd.h>
 #include <string.h>
 #include <sys/types.h>
 
@@ -38,7 +39,6 @@
 #ifdef NO_CURSES
 #include <sys/time.h>
 #include <sys/types.h>
-#include <unistd.h>
 #else
 /* Use the curses variant */
 
@@ -54,6 +54,12 @@
 
 #endif
 
+#ifdef NO_CURSES
+#define SPLIT_PRINT(x)	{ printf x; printf("\n"); }
+#else
+// like dns.c:restell()
+#define SPLIT_PRINT(x)	{ printf x; printf("\r\n"); }
+#endif
 
 extern char *Hostname;
 extern int WaitTime;
@@ -79,7 +85,7 @@ void split_redraw(void)
   int   i;
 
 #if DEBUG
-  fprintf(stderr, "split_redraw()\n"); 
+  SPLIT_PRINT(("split_redraw()"));
 #endif
 
   /* 
@@ -88,7 +94,7 @@ void split_redraw(void)
    */
   max = net_max();
   for (i=LineCount; i>max; i--) {
-    printf("-%d\n", i);
+    SPLIT_PRINT(("-%d", i));
     LineCount--;
   }
 
@@ -118,10 +124,10 @@ void split_redraw(void)
     if (strcmp(newLine, Lines[at]) == 0) {
       /* The same, so do nothing */
 #if DEBUG
-      printf("SAME LINE\n");
+      SPLIT_PRINT(("SAME LINE"));
 #endif
     } else {
-      printf("%d %s\n", at+1, newLine);
+      SPLIT_PRINT(("%d %s", at+1, newLine));
       fflush(stdout);
       strcpy(Lines[at], newLine);
       if (LineCount < (at+1)) {
@@ -142,11 +148,28 @@ void split_open(void)
   for (i=0; i<MAX_LINE_COUNT; i++) {
     strcpy(Lines[i], "???");
   }
+#ifndef NO_CURSES
+  FILE *stdout2 = fopen("/dev/tty", "w");
+  if (!stdout2)
+    fprintf(stderr, "split_open(): fopen() failed\n");
+  else {
+    SCREEN *screen;
+    if ((screen = newterm(NULL, stdout2, stdin))) {
+      set_term(screen);
+      raw();
+      noecho();
+    } else
+      fprintf(stderr, "split_open(): newterm() failed\n");
+  }
+#endif
 }
 
 
 void split_close(void)
 {
+#ifndef NO_CURSES
+  endwin();
+#endif
 #if DEBUG
   printf("split_close()\n");
 #endif
@@ -174,7 +197,7 @@ int split_keyaction(void)
 #endif
 
 #if DEBUG
-  printf("split_keyaction()\n");
+  SPLIT_PRINT(("split_keyaction()"));
 #endif
   if(tolower(c) == 'q')
     return ActionQuit;
