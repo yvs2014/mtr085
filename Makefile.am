@@ -44,6 +44,11 @@ mtr_SOURCES += graphcairo/graphcairo-xlib.c
 endif
 endif
 
+if LIBIDN
+DEFAULT_INCLUDES += @libidn_CFLAGS@
+mtr_LDADD += @libidn_LIBS@
+endif
+
 CLEANFILES = version.h
 BUILT_SOURCES = version.h
 

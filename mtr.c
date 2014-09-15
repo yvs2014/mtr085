@@ -35,6 +35,9 @@
 #include <assert.h>
 #include <fcntl.h>
 #include <sys/stat.h>
+#ifdef HAVE_LIBIDN
+#include <idna.h>
+#endif
 
 #include "mtr.h"
 #include "mtr-curses.h"
@@ -641,6 +644,16 @@ int main(int argc, char **argv)
     hints.ai_family = af;
     hints.ai_socktype = SOCK_DGRAM;
     error = getaddrinfo( Hostname, NULL, &hints, &res );
+#ifdef HAVE_LIBIDN
+    if (error) {
+      char *z_hostname;
+      if (idna_to_ascii_lz(Hostname, &z_hostname, 0) == IDNA_SUCCESS)
+        error = getaddrinfo(z_hostname, NULL, &hints, &res);
+      if (error)
+        if (idna_to_ascii_8z(Hostname, &z_hostname, 0) == IDNA_SUCCESS)
+          error = getaddrinfo(z_hostname, NULL, &hints, &res);
+    }
+#endif
     if ( error ) {
       if (error == EAI_SYSTEM)
          perror ("Failed to resolve host");

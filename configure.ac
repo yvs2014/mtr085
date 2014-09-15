@@ -60,6 +60,11 @@ AM_CONDITIONAL([GRAPHCAIRO_XLIB], [test "x$graphcairo_xlib" = "xyes"])
 
 AM_CONDITIONAL([GRAPHCAIRO], [test "x$graphcairo_xcb" = "xyes" -o "x$graphcairo_xlib" = "xyes"])
 
+AC_ARG_WITH([libidn],
+[  --with-libidn           Do try to use libidn],
+[libidn="${withval}"], [libidn=no])
+AM_CONDITIONAL([LIBIDN], [test "x$libidn" = "xyes"])
+
 AC_ARG_ENABLE(ipv6,
 [  --disable-ipv6          Do not enable IPv6],
 WANTS_IPV6=$enableval, WANTS_IPV6=yes)
@@ -115,6 +120,14 @@ AS_IF([test "x$graphcairo_xlib" = "xyes"], [
 		AC_DEFINE([GRAPHCAIRO_XLIB], [1], [Define to enable cairo Xlib backend])
 	])
 ])
+])
+
+AS_IF([test "x$libidn" = "xyes"], [
+	PKG_CHECK_MODULES([libidn], [libidn], [
+		AC_SUBST(libidn_CFLAGS)
+		AC_SUBST(libidn_LIBS)
+		AC_DEFINE([HAVE_LIBIDN], [1], [Define to enable libidn])
+	])
 ])
 
 AC_CANONICAL_HOST
