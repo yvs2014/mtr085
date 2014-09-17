@@ -48,6 +48,11 @@ enum {
 	GRAPHTYPE_CURVE
 };
 
+enum {
+	TM_MMSS,
+	TM_HHMM
+};
+
 #define DATAMAX		5000	// in usec	(y-axis)
 #define VIEWPORT_TIMEPERIOD	60	// in sec	(x-axis)
 
@@ -80,6 +85,7 @@ static cr_params_t params;
 #define SPLINE_POINTS	4
 static int x_point[SPLINE_POINTS];
 static int *y_point[SPLINE_POINTS];
+static long long *unclosed_data;
 
 static cairo_rectangle_int_t base_window = { 0, 0, 780, 520 };
 static cairo_rectangle_int_t vp;	// viewport
@@ -94,6 +100,7 @@ static int datamax, datamax_prev;
 static int hops, first_hop;
 static int x_point_in_usec;
 static int action;
+static int tm_fmt;
 static struct timeval lasttime;
 
 typedef struct {
@@ -251,7 +258,7 @@ void set_viewport_params() {
 	vp.width = cell.y * cell.width;
 	vp.height = cell.x * cell.height;
 
-	x_point_in_usec = (USECONDS * params.period) / vp.width;
+	x_point_in_usec = POS_ROUND((USECONDS * (double)params.period) / vp.width);
 	tick_size = cell.width / 8;
 	font_size = POS_ROUND(FONT_SIZE * cell.height);
 
@@ -275,7 +282,17 @@ void set_viewport_params() {
 	printf("viewport=(%d, %d, %d, %d), ", vp.x, vp.y, vp.width, vp.height);
 	if (params.enable_legend)
 		printf("legend=(%d, %d, %d, %d), ", legend.x, legend.y, legend.width, legend.height);
-	printf("x-point=%dusec\n", x_point_in_usec);
+	int xp = x_point_in_usec;
+	char scale = 'u';
+	if (xp > 10*1000000) {
+		xp = POS_ROUND((double)xp / 1000000);
+		scale = 0;
+	} else
+		if (xp > 10*1000) {
+			xp = POS_ROUND((double)xp / 1000);
+			scale = 'm';
+		}
+	printf("x-point=%d%csec\n", xp, scale);
 #endif
 }
 
@@ -639,25 +656,14 @@ void rescale(int max) {
 }
 
 void cr_redraw(int *data) {
+	static int unclosed_shifts;
 	static int cycle_datamax;
-	static int cycle_period;
+	static long long cycle_period;
 	if (!cycle_period)
-		cycle_period = POS_ROUND(USECONDS * params.period * CYCLE_FACTOR);
+		cycle_period = (long long)(USECONDS * (params.period * CYCLE_FACTOR) + 0.5);
+	int f_repaint = 0;
 
-	// max
-	int i, current_max = 0;
-	for (i = 0; i < hops; i++)
-		if (data[i] > current_max)
-			current_max = data[i];
-
-	if (current_max > cycle_datamax)
-		cycle_datamax = current_max;
-	if (current_max > datamax)
-		rescale(current_max);
-
-	for (i = 0; i < hops; i++)
-		y_point[0][i] = data_scale(data[i]);
-
+	// timing
 	int dt;
 	static int remaining_time;
 	struct timeval now;
@@ -676,11 +682,32 @@ void cr_redraw(int *data) {
 	int dx = unclosed_dt / x_point_in_usec;
 	remaining_time = unclosed_dt % x_point_in_usec;
 
-	cairo_t *cr;
-	if (dx) {
+	if (dx) {	// work
+		// mean
+		if (unclosed_shifts) {
+			int i;
+			for (i = 0; i < hops; i++)
+				data[i] = (data[i] + unclosed_data[i]) / (unclosed_shifts + 1);
+			unclosed_shifts = 0;
+			memset(unclosed_data, 0, maxTTL * sizeof(int));
+		}
+
+		// max
+		int i, current_max = 0;
+		for (i = 0; i < hops; i++) {
+			int d = data[i];
+			if (d > current_max)
+				current_max = d;
+			y_point[0][i] = data_scale(d);
+		}
+		if (current_max > cycle_datamax)
+			cycle_datamax = current_max;
+		if (current_max > datamax)
+			rescale(current_max);
+
 		// shift
 		if (dx < vp.width) {
-			cr = cairos[CR_TEMP].cairo;
+			cairo_t *cr = cairos[CR_TEMP].cairo;
 			cairo_set_source_surface(cr, cairos[CR_WORK].surface, -dx, 0);
 			cairo_rectangle(cr, 0, 0, vp.width - dx, vp.height);
 			cairo_fill(cr);
@@ -689,7 +716,7 @@ void cr_redraw(int *data) {
 			dx = vp.width;
 
 		// clearing
-		cr = cairos[CR_WORK].cairo;
+		cairo_t *cr = cairos[CR_WORK].cairo;
 		cairo_save(cr);
 		cairo_set_source_rgb(cr, 1, 1, 1);
 		int cl_dx = dx;
@@ -710,51 +737,84 @@ void cr_redraw(int *data) {
 		cairo_save(cr);
 		graph_func(cr);
 		cairo_restore(cr);
+
+		f_repaint = 1;
+	} else {	// accumulate
+		unclosed_shifts++;
+		int i;
+		for (i = 0; i < hops; i++)
+			unclosed_data[i] += data[i];
 	}
 
-	cr = cairos[CR_BASE].cairo;
-	PangoLayout *pl = cairos[CR_BASE].pango;
 
-	// x-labels
-	int label_w;
-	pango_layout_set_width(pl, vp.width * PANGO_SCALE);
-	pango_layout_set_alignment(pl, PANGO_ALIGN_CENTER);
-	pango_layout_set_text(pl, "00:00", -1);
-	pango_layout_get_pixel_size(pl, &label_w, NULL);
-	cairo_set_source_rgb(cr, 1, 1, 1);
-	cairo_rectangle(cr, vp.x, (vp.y - font_size) / 2, vp.width, font_size);	// systime
-	cairo_rectangle(cr, vp.x - label_w / 2, vp.y + vp.height, vp.width + label_w, 3 * font_size);	// x-labels
-	cairo_fill(cr);
-	// top
-	cairo_set_source_rgb(cr, 0, 0, 0);
-	cairo_move_to(cr, vp.x, (vp.y - font_size) / 2);
-	char buf[128], *c;
-	c = stpncpy(buf, asctime(localtime(&(now.tv_sec))), sizeof(buf));
-	*(--c) = 0;
-	pango_layout_set_text(pl, buf, -1);
-	pango_cairo_show_layout(cr, pl);
-	pango_layout_set_alignment(pl, PANGO_ALIGN_LEFT);
-	// bottom
-	int label_y = vp.y + vp.height + font_size / 2;
-	int a;
-	time_t t;
-	time_t actual_sec = now.tv_sec - POS_ROUND(WaitTime * USECONDS) / USECONDS;
-	if (now.tv_usec < (POS_ROUND(WaitTime * USECONDS) % USECONDS))
-		actual_sec--;
-	dt = POS_ROUND((2.0 * params.period) / cell.y);
-	for (i = 0, a = vp.x - label_w / 2, t = actual_sec - params.period; i <= (cell.y / 2); i++, a += 2 * cell.width, t += dt) {
-		struct tm *ltm = localtime(&t);
-		sprintf(buf, "%02d:%02d", ltm->tm_min, ltm->tm_sec);
+	if (unclosed_dt > USECONDS) {	// top: systime
+		cairo_t* cr = cairos[CR_BASE].cairo;
+		PangoLayout *pl = cairos[CR_BASE].pango;
+
+		pango_layout_set_width(pl, vp.width * PANGO_SCALE);
+		pango_layout_set_alignment(pl, PANGO_ALIGN_CENTER);
 		cairo_set_source_rgb(cr, 1, 1, 1);
-		cairo_rectangle(cr, a, label_y, label_w, 2 * font_size);
+		cairo_rectangle(cr, vp.x, (vp.y - font_size) / 2, vp.width, font_size);	// systime
 		cairo_fill(cr);
 		cairo_set_source_rgb(cr, 0, 0, 0);
-		cairo_move_to(cr, a, label_y);
+		cairo_move_to(cr, vp.x, (vp.y - font_size) / 2);
+		char buf[128], *c;
+		c = stpncpy(buf, asctime(localtime(&(now.tv_sec))), sizeof(buf));
+		*(--c) = 0;
 		pango_layout_set_text(pl, buf, -1);
 		pango_cairo_show_layout(cr, pl);
+		pango_layout_set_alignment(pl, PANGO_ALIGN_LEFT);
+		if (!f_repaint)
+			f_repaint = 1;
 	}
 
-	cr_paint();
+	if ((dx && (unclosed_dt > USECONDS)) ||
+		((tm_fmt == TM_MMSS) && (unclosed_dt > USECONDS)) ||
+		((tm_fmt == TM_HHMM) && (unclosed_dt > 60 * USECONDS))) {	// bottom: x-labels
+
+		cairo_t* cr = cairos[CR_BASE].cairo;
+		PangoLayout *pl = cairos[CR_BASE].pango;
+
+		int label_w;
+		pango_layout_set_text(pl, "00:00", -1);
+		pango_layout_get_pixel_size(pl, &label_w, NULL);
+		cairo_set_source_rgb(cr, 1, 1, 1);
+		cairo_rectangle(cr, vp.x - label_w / 2, vp.y + vp.height, vp.width + label_w, 3 * font_size);	// x-labels
+		cairo_fill(cr);
+
+		time_t actual_sec = now.tv_sec - POS_ROUND(WaitTime * USECONDS) / USECONDS;
+		if (now.tv_usec < (POS_ROUND(WaitTime * USECONDS) % USECONDS))
+			actual_sec--;
+		int label_y = vp.y + vp.height + font_size / 2;
+		int axis_dt = POS_ROUND((2.0 * params.period) / cell.y);
+		int i, a;
+		time_t t;
+		for (i = 0, a = vp.x - label_w / 2, t = actual_sec - params.period; i <= (cell.y / 2); i++, a += 2 * cell.width, t += axis_dt) {
+			struct tm *ltm = localtime(&t);
+			int lp, rp;
+			if (tm_fmt == TM_MMSS) {
+				lp = ltm->tm_min;
+				rp = ltm->tm_sec;
+			} else if (tm_fmt == TM_HHMM) {
+				lp = ltm->tm_hour;
+				rp = ltm->tm_min;
+			}
+			char buf[8];
+			sprintf(buf, "%02d:%02d", lp, rp);
+			cairo_set_source_rgb(cr, 1, 1, 1);
+			cairo_rectangle(cr, a, label_y, label_w, 2 * font_size);
+			cairo_fill(cr);
+			cairo_set_source_rgb(cr, 0, 0, 0);
+			cairo_move_to(cr, a, label_y);
+			pango_layout_set_text(pl, buf, -1);
+			pango_cairo_show_layout(cr, pl);
+		}
+		if (!f_repaint)
+			f_repaint = 1;
+	}
+
+	if (f_repaint)
+		cr_paint();
 }
 
 void cr_net_reset(int paused) {
@@ -790,9 +850,12 @@ void cr_net_reset(int paused) {
 	int i;
 	for (i = 0; i < SPLINE_POINTS; i++)
 		memset(y_point[i], 0, maxTTL * sizeof(int));
+
+	memset(unclosed_data, 0, maxTTL * sizeof(*unclosed_data));
 }
 
 void cr_close(void) {
+	free(unclosed_data);
 	int i;
 	for (i = 0; i < SPLINE_POINTS; i++)
 		free(y_point[i]);
@@ -937,6 +1000,7 @@ int cr_open(cr_params_t *cr_params) {
 #ifdef GCDEBUG
 	printf(", period=%dsec", params.period);
 #endif
+	tm_fmt = (params.period < 3600) ? TM_MMSS : TM_HHMM;
 
 	if (params.enable_legend)
 		base_window.height *= 1.6;
@@ -947,6 +1011,12 @@ int cr_open(cr_params_t *cr_params) {
 	set_source_rgb_func = (maxTTL < cr_colors_max) ? set_source_rgb_dir : set_source_rgb_mod;
 
 	if (backend_create_window(&base_window, cr_resize)) {
+		if (!(unclosed_data = malloc(maxTTL * sizeof(*unclosed_data)))) {
+			fprintf(stderr, "cr_open(): malloc failed\n");
+			return 0;
+		}
+		memset(unclosed_data, 0, maxTTL * sizeof(*unclosed_data));
+
 		int i;
 		for (i = 0; i < SPLINE_POINTS; i++) {
 			if (!(y_point[i] = malloc(maxTTL * sizeof(int)))) {
@@ -955,6 +1025,7 @@ int cr_open(cr_params_t *cr_params) {
 			}
 			memset(y_point[i], 0, maxTTL * sizeof(int));
 		}
+
 		datamax = datamax_prev = DATAMAX;
 		set_viewport_params();
 	} else
