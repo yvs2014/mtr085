@@ -80,12 +80,16 @@ graph_func_t graph_func;
 typedef void (*set_source_rgb_func_t)(cairo_t *cr, int i);
 set_source_rgb_func_t set_source_rgb_func;
 
-static cr_params_t params;
+static cr_params_t *params;
 
 #define SPLINE_POINTS	4
 static int x_point[SPLINE_POINTS];
 static int *y_point[SPLINE_POINTS];
-static long long *unclosed_data;
+typedef struct {
+	long long data;
+	int count;
+} unclosed_data_t;
+static unclosed_data_t *unclosed_data;
 
 static cairo_rectangle_int_t base_window = { 0, 0, 780, 520 };
 static cairo_rectangle_int_t vp;	// viewport
@@ -110,6 +114,7 @@ typedef struct {
 	int text_y;
 	int line_y;
 	int dy;
+	int label_w;
 	int stat_max;
 	int footer_max;
 } legend_coords_t;
@@ -191,7 +196,7 @@ int cr_recreate_surfaces(int save) {
 		return 0;
 	if (!cr_create_similar(CR_GRID, CR_BASE, &grid))
 		return 0;
-	if (params.enable_legend) {
+	if (params->enable_legend) {
 		if (!cr_create_similar(CR_LGND, CR_BASE, &legend))
 			return 0;
 	}
@@ -210,7 +215,7 @@ int cr_fill_base(int src) {
 void cr_paint(void) {
 	cr_fill_base(CR_WORK);
 	cr_fill_base(CR_GRID);
-	if (params.enable_legend)
+	if (params->enable_legend)
 		cr_fill_base(CR_LGND);
 	backend_flush();
 }
@@ -234,7 +239,7 @@ void set_viewport_params() {
 
 	double margin_right = MARGIN_RIGHT;
 	double margin_bottom = MARGIN_BOTTOM;
-	if (params.enable_legend)
+	if (params->enable_legend)
 		margin_bottom += 8;
 
 	double d;
@@ -258,7 +263,7 @@ void set_viewport_params() {
 	vp.width = cell.y * cell.width;
 	vp.height = cell.x * cell.height;
 
-	x_point_in_usec = POS_ROUND((USECONDS * (double)params.period) / vp.width);
+	x_point_in_usec = POS_ROUND((USECONDS * (double)params->period) / vp.width);
 	tick_size = cell.width / 8;
 	font_size = POS_ROUND(FONT_SIZE * cell.height);
 
@@ -270,7 +275,7 @@ void set_viewport_params() {
 	if (!x_point[0])
 		x_point[0] = vp.width - 1;
 
-	if (params.enable_legend) {
+	if (params->enable_legend) {
 		legend.x = vp.x;
 		legend.y = vp.y + vp.height + 3 * font_size;
 		legend.width = vp.width;
@@ -280,7 +285,7 @@ void set_viewport_params() {
 #ifdef GCDEBUG
 	printf("window=(%d, %d), ", base_window.width, base_window.height);
 	printf("viewport=(%d, %d, %d, %d), ", vp.x, vp.y, vp.width, vp.height);
-	if (params.enable_legend)
+	if (params->enable_legend)
 		printf("legend=(%d, %d, %d, %d), ", legend.x, legend.y, legend.width, legend.height);
 	int xp = x_point_in_usec;
 	char scale = 'u';
@@ -334,7 +339,7 @@ void draw_grid(void) {
 	}
 	cairo_stroke(cr);
 
-	// y-labels
+	// y-axis tick marks
 	int pl_width = vp.x - 3 * tick_size;
 	pango_layout_set_width(pl, pl_width * PANGO_SCALE);
 	pango_layout_set_alignment(pl, PANGO_ALIGN_RIGHT);
@@ -352,6 +357,54 @@ void draw_grid(void) {
 		pango_layout_set_text(pl, buf, -1);
 		pango_cairo_show_layout(cr, pl);
 	}
+
+	cairo_restore(cr);
+
+	// plus axis labels
+	cr = cairos[CR_BASE].cairo;
+	pl = cairos[CR_BASE].pango;
+	cairo_save(cr);
+
+	if (tm_fmt == TM_HHMM) {
+		cairo_set_source_rgb(cr, 1, 1, 1);
+		int xl_x = vp.x + vp.width + tick_size * 2;
+		int xl_y = vp.y + vp.height - font_size;
+		cairo_rectangle(cr, xl_x, xl_y, coords.label_w, font_size);
+		cairo_fill(cr);
+		pango_layout_set_alignment(pl, PANGO_ALIGN_LEFT);
+		cairo_set_source_rgb(cr, 0, 0, 0);
+		cairo_move_to(cr, xl_x, xl_y);
+		char  *x_label = "HH:MM";
+		pango_layout_set_text(pl, x_label, -1);
+		pango_cairo_show_layout(cr, pl);
+	} else if (tm_fmt == TM_MMSS) {
+		cairo_set_source_rgb(cr, 1, 1, 1);
+		int xl_x = vp.x + vp.width + tick_size * 2;
+		int xl_y = vp.y + vp.height - font_size;
+		cairo_rectangle(cr, xl_x, xl_y, coords.label_w, font_size);
+		cairo_fill(cr);
+		pango_layout_set_alignment(pl, PANGO_ALIGN_LEFT);
+		cairo_set_source_rgb(cr, 0, 0, 0);
+		cairo_move_to(cr, xl_x, xl_y);
+		pango_layout_set_text(pl, (tm_fmt == TM_HHMM) ? "HH:MM" : "Time", -1);
+		pango_cairo_show_layout(cr, pl);
+	};
+
+	cairo_move_to(cr, vp.x + tick_size, grid.y - font_size * 3 / 2);
+	cairo_set_source_rgb(cr, 1, 1, 1);
+	int yl_y = grid.y - font_size * 3 / 2;
+	cairo_rectangle(cr, 0, yl_y, vp.x + coords.label_w, font_size);
+	cairo_fill(cr);
+	pango_layout_set_alignment(pl, PANGO_ALIGN_LEFT);
+	cairo_set_source_rgb(cr, 0, 0, 0);
+	cairo_move_to(cr, vp.x + tick_size, yl_y);
+	pango_layout_set_text(pl, "msec", -1);
+	pango_cairo_show_layout(cr, pl);
+	pango_layout_set_width(pl, vp.x * PANGO_SCALE);
+	pango_layout_set_alignment(pl, PANGO_ALIGN_RIGHT);
+	cairo_move_to(cr, 0, yl_y);
+	pango_layout_set_text(pl, params->jitter_graph ? "Jitter," : "Latency,", -1);
+	pango_cairo_show_layout(cr, pl);
 
 	cairo_restore(cr);
 }
@@ -373,7 +426,7 @@ void scale_viewport(void) {
 }
 
 int data_scale(int data) {
-	return data ? POS_ROUND(vp.height * (1 - (double)data / datamax)) : 0;
+	return (data >= 0) ? POS_ROUND(vp.height * (1 - (double)data / datamax)) : 0;
 }
 
 void set_source_rgb_mod(cairo_t *cr, int i) {
@@ -549,6 +602,7 @@ int cr_recalc(int hostinfo_max) {
 	pango_layout_set_text(pl, ".", -1);
 	pango_layout_get_pixel_size(pl, &w, &h);
 	coords.dy = (h * 3) / 2;
+	coords.label_w = 5 * w;
 	coords.hop_x = cell.width + w;
 	coords.host_x = coords.hop_x + (w * 7) / 2;
 	coords.stat_x = coords.host_x + (hostinfo_max + 1) * w;
@@ -556,8 +610,8 @@ int cr_recalc(int hostinfo_max) {
 
 	if (coords.stat_max < 0)
 		coords.stat_max = 0;
-	if (coords.stat_max > params.cols_max)
-		coords.stat_max = params.cols_max;
+	if (coords.stat_max > params->cols_max)
+		coords.stat_max = params->cols_max;
 	coords.footer_max = legend.width / w;
 	return coords.stat_max;
 }
@@ -656,11 +710,10 @@ void rescale(int max) {
 }
 
 void cr_redraw(int *data) {
-	static int unclosed_shifts;
 	static int cycle_datamax;
 	static long long cycle_period;
 	if (!cycle_period)
-		cycle_period = (long long)(USECONDS * (params.period * CYCLE_FACTOR) + 0.5);
+		cycle_period = (long long)(USECONDS * (params->period * CYCLE_FACTOR) + 0.5);
 	int f_repaint = 0;
 
 	// timing
@@ -684,16 +737,19 @@ void cr_redraw(int *data) {
 
 	if (dx) {	// work
 		// mean
-		if (unclosed_shifts) {
-			int i;
-			for (i = 0; i < hops; i++)
-				data[i] = (data[i] + unclosed_data[i]) / (unclosed_shifts + 1);
-			unclosed_shifts = 0;
-			memset(unclosed_data, 0, maxTTL * sizeof(int));
-		}
+		int i;
+		for (i = 0; i < hops; i++)
+			if (unclosed_data[i].count) {
+				if (data[i] >= 0)
+					data[i] = (data[i] + unclosed_data[i].data) / (unclosed_data[i].count + 1);
+				else
+					data[i] = unclosed_data[i].data / unclosed_data[i].count;
+				unclosed_data[i].data = 0;
+				unclosed_data[i].count = 0;
+			}
 
 		// max
-		int i, current_max = 0;
+		int current_max = 0;
 		for (i = 0; i < hops; i++) {
 			int d = data[i];
 			if (d > current_max)
@@ -720,17 +776,17 @@ void cr_redraw(int *data) {
 		cairo_save(cr);
 		cairo_set_source_rgb(cr, 1, 1, 1);
 		int cl_dx = dx;
-		if (params.graph_type == GRAPHTYPE_CURVE)
+		if (params->graph_type == GRAPHTYPE_CURVE)
 			cl_dx += x_point[0] - x_point[1] + 1;
 		cairo_rectangle(cr, vp.width - cl_dx, 0, cl_dx, vp.height);
 		cairo_fill(cr);
 		cairo_restore(cr);
 
-		if (params.graph_type == GRAPHTYPE_CURVE) {
+		if (params->graph_type == GRAPHTYPE_CURVE) {
 			x_point[3] = x_point[2] - dx;
 			x_point[2] = x_point[1] - dx;
 			x_point[1] = x_point[0] - dx;
-		} else if (params.graph_type == GRAPHTYPE_LINE)
+		} else if (params->graph_type == GRAPHTYPE_LINE)
 			x_point[1] = x_point[0] - dx;
 
 		// fill new area
@@ -740,10 +796,12 @@ void cr_redraw(int *data) {
 
 		f_repaint = 1;
 	} else {	// accumulate
-		unclosed_shifts++;
 		int i;
 		for (i = 0; i < hops; i++)
-			unclosed_data[i] += data[i];
+			if (data[i] >= 0) {
+				unclosed_data[i].data += data[i];
+				unclosed_data[i].count++;
+			}
 	}
 
 
@@ -754,7 +812,7 @@ void cr_redraw(int *data) {
 		pango_layout_set_width(pl, vp.width * PANGO_SCALE);
 		pango_layout_set_alignment(pl, PANGO_ALIGN_CENTER);
 		cairo_set_source_rgb(cr, 1, 1, 1);
-		cairo_rectangle(cr, vp.x, (vp.y - font_size) / 2, vp.width, font_size);	// systime
+		cairo_rectangle(cr, vp.x + coords.label_w, (vp.y - font_size) / 2, vp.width - coords.label_w, font_size);
 		cairo_fill(cr);
 		cairo_set_source_rgb(cr, 0, 0, 0);
 		cairo_move_to(cr, vp.x, (vp.y - font_size) / 2);
@@ -770,26 +828,23 @@ void cr_redraw(int *data) {
 
 	if ((dx && (unclosed_dt > USECONDS)) ||
 		((tm_fmt == TM_MMSS) && (unclosed_dt > USECONDS)) ||
-		((tm_fmt == TM_HHMM) && (unclosed_dt > 60 * USECONDS))) {	// bottom: x-labels
+		((tm_fmt == TM_HHMM) && (unclosed_dt > 60 * USECONDS))) {	// bottom: x-axis tick marks
 
 		cairo_t* cr = cairos[CR_BASE].cairo;
 		PangoLayout *pl = cairos[CR_BASE].pango;
 
-		int label_w;
-		pango_layout_set_text(pl, "00:00", -1);
-		pango_layout_get_pixel_size(pl, &label_w, NULL);
 		cairo_set_source_rgb(cr, 1, 1, 1);
-		cairo_rectangle(cr, vp.x - label_w / 2, vp.y + vp.height, vp.width + label_w, 3 * font_size);	// x-labels
+		cairo_rectangle(cr, vp.x - coords.label_w / 2, vp.y + vp.height, vp.width + coords.label_w, 3 * font_size);
 		cairo_fill(cr);
 
 		time_t actual_sec = now.tv_sec - POS_ROUND(WaitTime * USECONDS) / USECONDS;
 		if (now.tv_usec < (POS_ROUND(WaitTime * USECONDS) % USECONDS))
 			actual_sec--;
 		int label_y = vp.y + vp.height + font_size / 2;
-		int axis_dt = POS_ROUND((2.0 * params.period) / cell.y);
+		int axis_dt = POS_ROUND((2.0 * params->period) / cell.y);
 		int i, a;
 		time_t t;
-		for (i = 0, a = vp.x - label_w / 2, t = actual_sec - params.period; i <= (cell.y / 2); i++, a += 2 * cell.width, t += axis_dt) {
+		for (i = 0, a = vp.x - coords.label_w / 2, t = actual_sec - params->period; i <= (cell.y / 2); i++, a += 2 * cell.width, t += axis_dt) {
 			struct tm *ltm = localtime(&t);
 			int lp, rp;
 			if (tm_fmt == TM_MMSS) {
@@ -802,7 +857,7 @@ void cr_redraw(int *data) {
 			char buf[8];
 			sprintf(buf, "%02d:%02d", lp, rp);
 			cairo_set_source_rgb(cr, 1, 1, 1);
-			cairo_rectangle(cr, a, label_y, label_w, 2 * font_size);
+			cairo_rectangle(cr, a, label_y, coords.label_w, 2 * font_size);
 			cairo_fill(cr);
 			cairo_set_source_rgb(cr, 0, 0, 0);
 			cairo_move_to(cr, a, label_y);
@@ -825,7 +880,7 @@ void cr_net_reset(int paused) {
 		struct timeval now;
 		gettimeofday(&now, NULL);
 		int dt = now.tv_sec - lasttime.tv_sec;
-		if (dt < params.period)	{ // more precisely
+		if (dt < params->period)	{ // more precisely
 			dx = (dt * USECONDS + (now.tv_usec - lasttime.tv_usec)) / x_point_in_usec;
 			// shift
 			cairo_t *cr = cairos[CR_TEMP].cairo;
@@ -860,7 +915,7 @@ void cr_close(void) {
 	for (i = 0; i < SPLINE_POINTS; i++)
 		free(y_point[i]);
 	for (i = 0; i < CAIRO_SURFACES; i++) {
-		if ((i == CR_LGND) && !params.enable_legend)
+		if ((i == CR_LGND) && !params->enable_legend)
 			continue;
 		if (cairos[i].pango)
 			g_object_unref(cairos[i].pango);
@@ -916,7 +971,7 @@ void cr_resize(int width, int height, int shift) {
 	}
 	int i;
 	for (i = 0; i < CAIRO_SURFACES; i++) {
-		if ((i == CR_LGND) && !params.enable_legend)
+		if ((i == CR_LGND) && !params->enable_legend)
 			continue;
 		pango_font_description_set_absolute_size(cairos[i].font_desc, font_size * PANGO_SCALE);
 	}
@@ -961,12 +1016,11 @@ void cr_resize(int width, int height, int shift) {
 }
 
 int cr_open(cr_params_t *cr_params) {
-	if (cr_params)
-		params = *cr_params;
+	params = cr_params;
 #ifdef GCDEBUG
 	printf("params: type=");
 #endif
-	switch (params.graph_type) {
+	switch (params->graph_type) {
 		case GRAPHTYPE_DOT:
 			graph_func = graph_dot;
 #ifdef GCDEBUG
@@ -986,27 +1040,27 @@ int cr_open(cr_params_t *cr_params) {
 #endif
 			break;
 		default:
-			params.graph_type = GRAPHTYPE_CURVE;
+			params->graph_type = GRAPHTYPE_CURVE;
 			graph_func = graph_curve;
 #ifdef GCDEBUG
 			printf("curve");
 #endif
 	}
 
-	if (params.period)
-		params.period *= GRIDLINES;
+	if (params->period)
+		params->period *= GRIDLINES;
 	else
-		params.period = VIEWPORT_TIMEPERIOD;
+		params->period = VIEWPORT_TIMEPERIOD;
 #ifdef GCDEBUG
-	printf(", period=%dsec", params.period);
+	printf(", period=%dsec", params->period);
 #endif
-	tm_fmt = (params.period < 3600) ? TM_MMSS : TM_HHMM;
+	tm_fmt = (params->period < 3600) ? TM_MMSS : TM_HHMM;
 
-	if (params.enable_legend)
+	if (params->enable_legend)
 		base_window.height *= 1.6;
 
 #ifdef GCDEBUG
-	printf(", legend=%d, multipath=%d\n", params.enable_legend, params.enable_multipath);
+	printf(", legend=%d, multipath=%d, jitter_graph=%d\n", params->enable_legend, params->enable_multipath, params->jitter_graph);
 #endif
 	set_source_rgb_func = (maxTTL < cr_colors_max) ? set_source_rgb_dir : set_source_rgb_mod;
 
@@ -1037,7 +1091,7 @@ int cr_open(cr_params_t *cr_params) {
 	}
 	int i;
 	for (i = 0; i < CAIRO_SURFACES; i++) {
-		if ((i == CR_LGND) && !params.enable_legend)
+		if ((i == CR_LGND) && !params->enable_legend)
 			continue;
 		if (!cr_pango_open(i)) {
 			fprintf(stderr, "cr_open(): cr_pango_open(%d) failed\n", i);

@@ -16,7 +16,7 @@
 #include "graphcairo.h"
 
 #define GC_ARGS_SEP	','
-#define GC_ARGS_MAX	4
+#define GC_ARGS_MAX	5
 #ifdef IPINFO
 #define HOSTSTAT_LEN	(3 * STARTSTAT + SAVED_PINGS)	// hostinfo + statistics
 #else
@@ -33,10 +33,13 @@ extern float WaitTime;
 static int timeout;
 static struct timeval lasttime;
 
-static int flags;
-#define F_PAUSED	0x01
-#define F_LEGEND	0x02
-#define F_MULTIPATH	0x04
+static int paused;
+static cr_params_t params;
+#define ARG_GRAPH_TYPE	0
+#define ARG_PERIOD	1
+#define ARG_LEGEND	2
+#define ARG_MULTIPATH	3
+#define ARG_JITTER_GRAPH	4
 
 static int args[GC_ARGS_MAX];
 static int *data;
@@ -61,16 +64,8 @@ void gc_set_header(void) {
 }
 
 int gc_open(void) {
-	flags |= F_LEGEND;
-	if (!args[2])
-		flags &= ~F_LEGEND;
-
-	flags |= F_MULTIPATH;
-	if (!args[3])
-		flags &= ~F_MULTIPATH;
-
 	if ((data = malloc(maxTTL * sizeof(int))))
-		memset(data, 0, maxTTL * sizeof(int));
+		memset(data, -1, maxTTL * sizeof(int));
 	else {
 		fprintf(stderr, "gc_open: malloc() failed\n");
 		return 0;
@@ -79,11 +74,11 @@ int gc_open(void) {
 	timeout = POS_ROUND(WaitTime * USECONDS);
 	gettimeofday(&lasttime, NULL);
 
-	cr_params_t params;
-	params.graph_type = (args[0] > 0) ? args[0] : 0;
-	params.period = (args[1] > 0) ? args[1] : 0;
-	params.enable_legend = (flags & F_LEGEND) ? 1 : 0;
-	params.enable_multipath = (flags & F_MULTIPATH) ? 1 : 0;
+	params.graph_type = (args[ARG_GRAPH_TYPE] > 0) ? args[ARG_GRAPH_TYPE] : 0;
+	params.period = (args[ARG_PERIOD] > 0) ? args[ARG_PERIOD] : 0;
+	params.enable_legend = args[ARG_LEGEND] ? 1 : 0;
+	params.enable_multipath = args[ARG_MULTIPATH] ? 1 : 0;
+	params.jitter_graph = (args[ARG_JITTER_GRAPH] > 0) ? 1 : 0;
 	params.cols_max = SAVED_PINGS;
 	params.path_max = MAXPATH;
 	params.label_max = MAXLABELS;
@@ -91,7 +86,9 @@ int gc_open(void) {
 	if (!cr_open(&params))
 		return 0;
 
-	if (flags & F_LEGEND) {
+	if (params.enable_legend) {
+		if (params.jitter_graph == 1)
+			strcpy(fld_active, "DR AGJMXI");
 		gc_set_header();
 		curses_cols = cr_recalc(hostinfo_max);
 		mtr_curses_init();
@@ -167,7 +164,7 @@ void gc_keyaction(int c) {
 		return;
 
 	if (c == ACTION_RESIZE) {
-		if (flags & F_LEGEND) {
+		if (params.enable_legend) {
 			curses_cols = cr_recalc(hostinfo_max);
 			if (display_mode)
 				sprintf(legend_hd[LEGEND_HEADER], "Last %d pings", curses_cols);
@@ -175,7 +172,7 @@ void gc_keyaction(int c) {
 		return;
 	}
 
-	if (flags & F_LEGEND) {
+	if (params.enable_legend) {
 		switch (c) {
 			case '+': {	// ScrollDown
 				int hops = net_max() - net_min();
@@ -236,13 +233,13 @@ void gc_keyaction(int c) {
 			exit(0);
 			break;
 		case ' ':	// Resume
-			flags &= ~F_PAUSED;
+			paused = 0;
 			cr_net_reset(1);
 			break;
 	}
 	switch (tolower(c)) {
 		case 'p':	// Pause
-			flags |= F_PAUSED;
+			paused = 1;
 			break;
 		case 'r':	// Reset
 			net_reset();
@@ -287,7 +284,7 @@ void gc_print_mpls(int i, int d, struct mplslen *mpls) {
 
 void gc_redraw(void) {
 	gc_keyaction(cr_dispatch_event());
-	if (flags & F_PAUSED)
+	if (paused)
 		return;
 
 	int i, at;
@@ -315,9 +312,7 @@ void gc_redraw(void) {
 			return;
 	}
 
-	int enable_legend = flags & F_LEGEND;
-	int enable_multipath = flags & F_MULTIPATH;
-	if (enable_legend) {
+	if (params.enable_legend) {
 		static int hi_max;
 		if (!hostinfo_max)
 			   hi_max = 0;
@@ -336,17 +331,19 @@ void gc_redraw(void) {
 
 		if (addrcmp((void *)addr, (void *)&unspec_addr, af) != 0) {
 			int *saved = net_saved_pings(at);
-/*
-			int saved_int = saved[SAVED_PINGS - 1];
-			if (saved_int == -2)	// unsent
-				data[i] = net_up(at) ? net_last(at) : 0;
-			else
-				data[i] = (saved_int > 0) ? saved_int : 0;
-*/
-			int saved_int = saved[SAVED_PINGS - 2];	// waittime ago
-			data[i] = (saved_int > 0) ? saved_int : 0;
+			int saved_ndx = SAVED_PINGS - 2;	// waittime ago
+			if (params.jitter_graph) {
+				// jitter, defined as "tN - tN-1" (net.c:634)
+				if ((saved[saved_ndx] < 0) || (saved[saved_ndx - 1] < 0))	// unsent, unknown, etc.
+					data[i] = -1;
+				else {
+					int saved_jttr = saved[saved_ndx] - saved[saved_ndx - 1];
+					data[i] = (saved_jttr < 0) ? -saved_jttr : saved_jttr;
+				}
+			} else
+				data[i] = (saved[saved_ndx] >= 0) ? saved[saved_ndx] : -1;
 
-			if (enable_legend) {
+			if (params.enable_legend) {
 				// line+hop
 				cr_print_hop(i);
 
@@ -371,7 +368,7 @@ void gc_redraw(void) {
 					gc_print_mpls(i, data[i], net_mpls(at));
 
 				// multipath
-				if (enable_multipath) {
+				if (params.enable_multipath) {
 					int j;
 					for (j = 0; j < MAXPATH; j++) {
 						ip_t *addrs = net_addrs(at, j);
@@ -387,13 +384,13 @@ void gc_redraw(void) {
 				}
 			}
 		} else	// empty hop
-			if (enable_legend) {
+			if (params.enable_legend) {
 				cr_print_hop(i);
 				cr_print_host(i, 0, NULL, NULL);
 			}
 	}
 
-	if (enable_legend)
+	if (params.enable_legend)
 		if (display_mode) {
 			int len = sprintf(legend_hd[LEGEND_FOOTER], "<b>Scale:</b>");
 			mtr_curses_scale_desc(legend_hd[LEGEND_FOOTER] + len);

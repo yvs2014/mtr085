@@ -337,15 +337,18 @@ Available arguments:
     4th argument:  enable multipath
         0 - none, 1 - enable (default)
 .br
+    5th argument:  jitter graph instead of latency graph
+        0 - none (default), 1 - enable
+.br
 \",\" (comma) as argument separator
 .br
 Examples:
 .br
-    -G,         (default: 3,6,1,1  - curve, 1min, enable, enable)
+    -G,         (default: 3,6,1,1,0  - curve, 1min, legend, multipath, latency)
 .br
-    -G2         (line, default, default, default)
+    -G2         (line, default, default, default, default)
 .br
-    -G,30,,0    (default, 5min, default, disable)
+    -G,30,,0    (default, 5min, default, disable, default)
 .br
 
 Keys: `dejnpqrtuyz+- '

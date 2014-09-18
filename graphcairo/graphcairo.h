@@ -17,6 +17,7 @@ typedef struct {
 	int period;
 	int enable_legend;
 	int enable_multipath;
+	int jitter_graph;
 	int cols_max;
 	int path_max;
 	int label_max;
