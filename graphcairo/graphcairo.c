@@ -853,7 +853,8 @@ void cr_redraw(int *data) {
 			} else if (tm_fmt == TM_HHMM) {
 				lp = ltm->tm_hour;
 				rp = ltm->tm_min;
-			}
+			} else
+				lp = rp = 0;
 			char buf[8];
 			sprintf(buf, "%02d:%02d", lp, rp);
 			cairo_set_source_rgb(cr, 1, 1, 1);

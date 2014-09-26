@@ -607,7 +607,7 @@ int main(int argc, char **argv)
            "\t\t[--aslookup|-z] [--ipinfo|-y origin,fields]\n"
 #endif
 #ifdef GRAPHCAIRO
-           "\t\t[--graphcairo|-G graphtype,timeperiod,enable_legend,enable_multipath]\n"
+           "\t\t[--graphcairo|-G graphtype,timeperiod,enable_legend,enable_multipath,jitter_graph]\n"
 #endif
            "\t\t[--psize=bytes/-s bytes] [--order fields]\n"            /* ok */
            "\t\t[--report-wide|-w] [--inet] [--inet6] [--max-ttl=NUM] [--first-ttl=NUM]\n"
@@ -695,6 +695,16 @@ int main(int argc, char **argv)
     alptr[1] = NULL;
 #else
       host = gethostbyname(Hostname);
+#ifdef HAVE_LIBIDN
+    if (host == NULL) {
+      char *z_hostname;
+      if (idna_to_ascii_lz(Hostname, &z_hostname, 0) == IDNA_SUCCESS)
+        host = gethostbyname(z_hostname);
+      if (host == NULL)
+        if (idna_to_ascii_8z(Hostname, &z_hostname, 0) == IDNA_SUCCESS)
+          host = gethostbyname(z_hostname);
+    }
+#endif
     if (host == NULL) {
       herror("mtr gethostbyname");
       if ( DisplayMode != DisplayCSV ) exit(EXIT_FAILURE);
