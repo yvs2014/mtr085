@@ -109,7 +109,7 @@ void gc_parsearg(char* arg) {
 			*n++ = 0;
 			args[i] = (*p) ? atoi(p) : -1;
 		}
-		if (p)
+		if (p && (i < GC_ARGS_MAX))
 			args[i++] = (*p) ? atoi(p) : -1;
 	}
 

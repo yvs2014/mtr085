@@ -28,9 +28,10 @@ enum {
 	CR_WORK,
 	CR_GRID,
 	CR_LGND,
+	CR_LAYR,
 	CR_TEMP
 };
-#define CAIRO_SURFACES	5
+#define CAIRO_SURFACES	6
 
 typedef struct {
 	cairo_t *cairo;
@@ -94,6 +95,7 @@ static unclosed_data_t *unclosed_data;
 static cairo_rectangle_int_t base_window = { 0, 0, 780, 520 };
 static cairo_rectangle_int_t vp;	// viewport
 static cairo_rectangle_int_t vp_prev;
+static cairo_rectangle_int_t vp_layer;
 static cairo_rectangle_int_t grid;
 static cairo_rectangle_int_t legend;
 static cairo_rectangle_int_t cell; // x,y: horizontal/vertical gridlines
@@ -196,10 +198,12 @@ int cr_recreate_surfaces(int save) {
 		return 0;
 	if (!cr_create_similar(CR_GRID, CR_BASE, &grid))
 		return 0;
-	if (params->enable_legend) {
+	if (params->enable_legend)
 		if (!cr_create_similar(CR_LGND, CR_BASE, &legend))
 			return 0;
-	}
+	if (params->graph_type == GRAPHTYPE_CURVE)
+		if (!cr_create_similar(CR_LAYR, CR_BASE, &vp_layer))
+			return 0;
 	return save ? 1 : cr_create_similar(CR_TEMP, CR_BASE, &vp);
 }
 
@@ -207,13 +211,15 @@ int cr_fill_base(int src) {
 	cairo_t *dst = cairos[CR_BASE].cairo;
 	cairo_set_source_surface(dst, cairos[src].surface, cairos[src].rectangle->x, cairos[src].rectangle->y);
 	cairo_rectangle(dst, cairos[src].rectangle->x, cairos[src].rectangle->y,
-			cairos[src].rectangle->width, cairos[src].rectangle->height);
+		cairos[src].rectangle->width, cairos[src].rectangle->height);
 	cairo_fill(dst);
 	return cr_check_status(dst, "cr_fill_base()");
 }
 
 void cr_paint(void) {
 	cr_fill_base(CR_WORK);
+	if (params->graph_type == GRAPHTYPE_CURVE)
+		cr_fill_base(CR_LAYR);
 	cr_fill_base(CR_GRID);
 	if (params->enable_legend)
 		cr_fill_base(CR_LGND);
@@ -262,6 +268,7 @@ void set_viewport_params() {
 	vp.y = POS_ROUND(MARGIN_TOP  * cell.height);
 	vp.width = cell.y * cell.width;
 	vp.height = cell.x * cell.height;
+	vp_layer = vp;
 
 	x_point_in_usec = POS_ROUND((USECONDS * (double)params->period) / vp.width);
 	tick_size = cell.width / 8;
@@ -273,7 +280,7 @@ void set_viewport_params() {
 	grid.height = font_size + vp.height + tick_size;
 
 	if (!x_point[0])
-		x_point[0] = vp.width - 1;
+		x_point[0] = vp.width;
 
 	if (params->enable_legend) {
 		legend.x = vp.x;
@@ -304,8 +311,6 @@ void set_viewport_params() {
 void draw_grid(void) {
 	cairo_t *cr = cairos[CR_GRID].cairo;
 	PangoLayout *pl = cairos[CR_GRID].pango;
-
-	cairo_save(cr);
 
 	// x-axis, y-axis
 	cairo_set_source_rgb(cr, 0, 0, 0);
@@ -358,12 +363,9 @@ void draw_grid(void) {
 		pango_cairo_show_layout(cr, pl);
 	}
 
-	cairo_restore(cr);
-
 	// plus axis labels
 	cr = cairos[CR_BASE].cairo;
 	pl = cairos[CR_BASE].pango;
-	cairo_save(cr);
 
 	if (tm_fmt == TM_HHMM) {
 		cairo_set_source_rgb(cr, 1, 1, 1);
@@ -405,8 +407,6 @@ void draw_grid(void) {
 	cairo_move_to(cr, 0, yl_y);
 	pango_layout_set_text(pl, params->jitter_graph ? "Jitter," : "Latency,", -1);
 	pango_cairo_show_layout(cr, pl);
-
-	cairo_restore(cr);
 }
 
 void scale_viewport(void) {
@@ -549,7 +549,7 @@ b2 = ---------------------------------------------------
 			set_source_rgb_func(cr, i);
 			cairo_move_to(cr, x1, y1);
 			cairo_curve_to(cr, ax, ay, bx, by, x2, y2);
-			cairo_line_to(cr, x3, y3);
+//			cairo_line_to(cr, x3, y3);
 			cairo_stroke(cr);
 		} else if (y1 && y2)
 			draw_line(cr, i, x1, y1, x2, y2);
@@ -559,6 +559,14 @@ b2 = ---------------------------------------------------
 			cairo_set_line_width(cr, DOT_SIZE);
 			draw_dot(cr, i, x2, y2);
 			cairo_restore(cr);
+		}
+
+		if (y2 && y3) {
+			cairo_t *cl = cairos[CR_LAYR].cairo;
+			set_source_rgb_func(cl, i);
+			cairo_move_to(cl, 0, y2);
+			cairo_line_to(cl, x3 - x2, y3);
+			cairo_stroke(cl);
 		}
 	}
 
@@ -620,10 +628,8 @@ void cr_init_legend(void) {
 	coords.text_y = coords.dy;
 	coords.line_y = coords.text_y + font_size / 2 + 1;
 	cairo_t *cr = cairos[CR_LGND].cairo;
-	cairo_save(cr);
 	cairo_set_source_rgb(cr, 1, 1, 1);
 	cairo_paint(cr);
-	cairo_restore(cr);
 }
 
 void cr_print_legend_header(char *header) {
@@ -772,15 +778,19 @@ void cr_redraw(int *data) {
 			dx = vp.width;
 
 		// clearing
-		cairo_t *cr = cairos[CR_WORK].cairo;
-		cairo_save(cr);
-		cairo_set_source_rgb(cr, 1, 1, 1);
 		int cl_dx = dx;
-		if (params->graph_type == GRAPHTYPE_CURVE)
-			cl_dx += x_point[0] - x_point[1] + 1;
+		if (params->graph_type == GRAPHTYPE_CURVE) {
+			vp_layer.width = x_point[0] - x_point[1];
+			cl_dx += vp_layer.width;
+			vp_layer.x = vp.x + vp.width - vp_layer.width;
+			cairo_t *cr = cairos[CR_LAYR].cairo;
+			cairo_set_source_rgb(cr, 1, 1, 1);
+			cairo_paint(cr);
+		}
+		cairo_t *cr = cairos[CR_WORK].cairo;
+		cairo_set_source_rgb(cr, 1, 1, 1);
 		cairo_rectangle(cr, vp.width - cl_dx, 0, cl_dx, vp.height);
 		cairo_fill(cr);
-		cairo_restore(cr);
 
 		if (params->graph_type == GRAPHTYPE_CURVE) {
 			x_point[3] = x_point[2] - dx;
@@ -789,11 +799,7 @@ void cr_redraw(int *data) {
 		} else if (params->graph_type == GRAPHTYPE_LINE)
 			x_point[1] = x_point[0] - dx;
 
-		// fill new area
-		cairo_save(cr);
-		graph_func(cr);
-		cairo_restore(cr);
-
+		graph_func(cr);	// fill new area
 		f_repaint = 1;
 	} else {	// accumulate
 		int i;
@@ -918,6 +924,8 @@ void cr_close(void) {
 	for (i = 0; i < CAIRO_SURFACES; i++) {
 		if ((i == CR_LGND) && !params->enable_legend)
 			continue;
+		if ((i == CR_LAYR) && (params->graph_type != GRAPHTYPE_CURVE))
+			continue;
 		if (cairos[i].pango)
 			g_object_unref(cairos[i].pango);
 		if (cairos[i].font_desc)
@@ -1006,7 +1014,7 @@ void cr_resize(int width, int height, int shift) {
 				y_point[i][j] = POS_ROUND(y);
 			}
 	}
-	x_point[0] = vp.width - 1;
+	x_point[0] = vp.width;
 
 	if (!cr_create_similar(CR_TEMP, CR_BASE, &vp)) {
 		fprintf(stderr, "cr_resize(): cr_create_similar() failed\n");
@@ -1093,6 +1101,8 @@ int cr_open(cr_params_t *cr_params) {
 	int i;
 	for (i = 0; i < CAIRO_SURFACES; i++) {
 		if ((i == CR_LGND) && !params->enable_legend)
+			continue;
+		if ((i == CR_LAYR) && (params->graph_type != GRAPHTYPE_CURVE))
 			continue;
 		if (!cr_pango_open(i)) {
 			fprintf(stderr, "cr_open(): cr_pango_open(%d) failed\n", i);
