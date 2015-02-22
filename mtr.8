@@ -29,6 +29,9 @@ mtr \- a network diagnostic tool
 .B \-\-curses\c
 ]
 [\c
+.BI \-\-displaymode\ MODE\c
+]
+[\c
 .B \-\-split\c
 ]
 [\c
@@ -260,6 +263,13 @@ I%Interarrival Jitter
 
 Example:
 -o "LSD NBAW"
+.TP
+.B \-\-displaymode \fIMODE
+Use this option to select the initial display mode: 0 (default)
+selects statistics, 1 selects the stripchart without latency
+information, and 2 selects the stripchart with latency
+information, and 3 selects the unicode histogram,
+4-7 - reserved, 4th bit - toggle color on/off
 .TP
 .B \-g
 .TP

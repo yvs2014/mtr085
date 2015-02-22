@@ -50,3 +50,20 @@ graphcairo arguments (-G args):
 
 graphcairo keys support: `dejnpqrtuyz+- '
 
+
+   ----------------------------
+
+IDN support:
+./configure --with-libidn ...
+...
+% mtr köthe.de
+% mtr 海外送金.みんな
+
+   ----------------------------
+
+Unicode histogram support:
+./configure --with-unicode ...
+...
+% mtr -d3 ...
+% mtr -d11 ...
+

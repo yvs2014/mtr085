@@ -23,7 +23,7 @@
 #define HOSTSTAT_LEN	(STARTSTAT + SAVED_PINGS)	// hostname + statistics
 #endif
 
-#define	NUMHOSTS	10	// net.c:201 static numhosts = 10
+#define	NUMHOSTS	10	// net.c static numhosts = 10
 
 extern int af;			// mtr.c
 extern int mtrtype;
@@ -93,6 +93,9 @@ int gc_open(void) {
 		curses_cols = cr_recalc(hostinfo_max);
 		mtr_curses_init();
 	}
+
+	if (display_mode > 2)	// temp: whithout unicode histogram
+		display_mode = 0;
 	return 1;
 }
 
@@ -194,8 +197,8 @@ void gc_keyaction(int c) {
 		}
 		switch (tolower(c)) {
 			case 'd':	// Display
-				display_mode = (display_mode + 1) % 3;
-				if (display_mode == 1) {
+				display_mode = (display_mode + 1) % 3; // temp: without unicode histogram
+				if (display_mode) {
 					curses_cols = cr_recalc(hostinfo_max);
 					sprintf(legend_hd[LEGEND_HEADER], "Last %d pings", curses_cols);
 				}
@@ -333,7 +336,7 @@ void gc_redraw(void) {
 			int *saved = net_saved_pings(at);
 			int saved_ndx = SAVED_PINGS - 2;	// waittime ago
 			if (params.jitter_graph) {
-				// jitter, defined as "tN - tN-1" (net.c:634)
+				// jitter, defined as "tN - tN-1" (net.c)
 				if ((saved[saved_ndx] < 0) || (saved[saved_ndx - 1] < 0))	// unsent, unknown, etc.
 					data[i] = -1;
 				else {
@@ -353,7 +356,7 @@ void gc_redraw(void) {
 				char *stat = buf + strlen(buf) + 1;
 				// statistics
 				if (display_mode) {
-					mtr_gen_scale();
+					mtr_gen_scale_gc();
 					char *pos = stat;
 					int j;
 					for (j = SAVED_PINGS - curses_cols; j < SAVED_PINGS; j++)

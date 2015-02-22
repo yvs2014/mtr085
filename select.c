@@ -41,6 +41,7 @@ extern int ForceMaxPing;
 extern float WaitTime;
 double dnsinterval;
 extern int mtrtype;
+extern int display_mode_max;
 
 static struct timeval intervaltime;
 int display_offset = 0;
@@ -217,7 +218,7 @@ void select_loop(void) {
 	net_reset();
 	break;
       case ActionDisplay:
-        display_mode = (display_mode+1) % 3;
+        display_mode = (display_mode + 1) % display_mode_max;
 	break;
       case ActionClear:
 	display_clear();

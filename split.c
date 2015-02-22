@@ -42,6 +42,19 @@
 #else
 /* Use the curses variant */
 
+#if defined(UNICODE)
+#define _XOPEN_SOURCE_EXTENDED
+#if defined (HAVE_NCURSESW_NCURSES_H)
+#  include <ncursesw/ncurses.h>
+#elif defined (HAVE_NCURSESW_CURSES_H)
+#  include <ncursesw/curses.h>
+#elif defined (HAVE_CURSES_H)
+#  include <curses.h>
+#else
+#  error No ncursesw header file available
+#endif
+#else
+
 #if defined(HAVE_NCURSES_H)
 #  include <ncurses.h>
 #elif defined(HAVE_NCURSES_CURSES_H)
@@ -52,6 +65,7 @@
 #  error No curses header file available
 #endif
 
+#endif
 #endif
 
 #ifdef NO_CURSES
@@ -199,12 +213,12 @@ int split_keyaction(void)
 #if DEBUG
   SPLIT_PRINT(("split_keyaction()"));
 #endif
-  if(tolower(c) == 'q')
+  if(tolower((int)c) == 'q')
     return ActionQuit;
   if(c==3)
     return ActionQuit;
-  if(tolower(c) == 'r')
+  if(tolower((int)c) == 'r')
     return ActionReset;
-  
+
   return 0;
 }

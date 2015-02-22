@@ -39,6 +39,18 @@
 #include <idna.h>
 #endif
 
+#ifdef UNICODE
+#ifdef HAVE_WCTYPE_H
+#include <wctype.h>
+#endif
+#ifdef HAVE_LOCALE_H
+#include <locale.h>
+#endif
+#ifdef HAVE_LANGINFO_H
+#include <langinfo.h>
+#endif
+#endif
+
 #include "mtr.h"
 #include "mtr-curses.h"
 #include "getopt.h"
@@ -67,6 +79,8 @@
 
 int   DisplayMode;
 int   display_mode;
+int   display_mode_max = 3;
+int   color_mode;
 int   Interactive = 1;
 int   PrintVersion = 0;
 int   PrintHelp = 0;
@@ -133,8 +147,8 @@ trim(char * s) {
   char * p = s;
   int l = strlen(p);
 
-  while(isspace(p[l-1]) && l) p[--l] = 0;
-  while(*p && isspace(*p) && l) ++p, --l;
+  while(isspace((int)p[l-1]) && l) p[--l] = 0;
+  while(*p && isspace((int)*p) && l) ++p, --l;
 
   return p;
 }
@@ -148,7 +162,7 @@ append_to_names(const char* progname, const char* item) {
     exit(EXIT_FAILURE);
   }
   // prepared for adding NULL name, but decided against that in the end.
-  name->name = item?strdup(item):item;
+  name->name = strdup(item);
   name->next = names;
   names = name;
 }
@@ -292,6 +306,7 @@ void parse_arg (int argc, char **argv)
     { "gtk", 0, 0, 'g' },
     { "raw", 0, 0, 'l' },
     { "csv", 0, 0, 'C' },
+    { "displaymode", 1, 0, 'd' },
     { "split", 0, 0, 'p' },     /* BL */
     				/* maybe above should change to -d 'x' */
 
@@ -366,7 +381,10 @@ void parse_arg (int argc, char **argv)
     case 'x':
       DisplayMode = DisplayXML;
       break;
-
+    case 'd':
+      display_mode = (atoi(optarg)) % display_mode_max;
+      color_mode = ((atoi(optarg)) & 8) ? 1 : 0;
+      break;
     case 'c':
       MaxPing = atoi (optarg);
       ForceMaxPing = 1;
@@ -573,11 +591,27 @@ int main(int argc, char **argv)
   srand (getpid());
 
   display_detect(&argc, &argv);
+  display_mode = 0;
 
   /* The field options are now in a static array all together,
      but that requires a run-time initialization. */
   init_fld_options ();
 
+#ifdef UNICODE
+  int dm_histogram = 0;
+  char *lc_ctype = setlocale(LC_CTYPE, NULL);
+  setlocale(LC_CTYPE, "");
+  if (strcasecmp("UTF-8", nl_langinfo(CODESET)) == 0) {
+    if (iswprint(L'▁'))
+      dm_histogram = 1;
+    else
+      fprintf(stderr, "Oops: Unicode block elements are not printable\n");
+  }
+  if (dm_histogram)
+    display_mode_max++;
+  else
+    setlocale(LC_CTYPE, lc_ctype);
+#endif
   parse_mtr_options (getenv ("MTR_OPTIONS"));
 
   parse_arg (argc, argv);
@@ -599,8 +633,9 @@ int main(int argc, char **argv)
   }
 
   if (PrintHelp) {
-    printf("usage: %s [-BfhvrwctglxspQomniuT46] [--help] [--version] [--report]\n"
-	   "\t\t[--report-wide] [--report-cycles=COUNT] [--curses] [--gtk]\n"
+    printf("usage: %s [-BfhvrwctglxspQomniuT46] [--help] [--version]\n"
+           "\t\t[--report] [--report-wide] [--report-cycles=COUNT]\n"
+           "\t\t[--curses] [--displaymode|-d MODE] [--gtk]\n"
            "\t\t[--csv|-C] [--raw] [--xml] [--split] [--mpls] [--no-dns] [--show-ips]\n"
            "\t\t[--address interface] [--filename=FILE|-F]\n" /* BL */
 #ifdef IPINFO
@@ -737,10 +772,7 @@ int main(int argc, char **argv)
     lock(argv[0], stdout);
       display_open();
       dns_open();
-
-      display_mode = 0;
       display_loop();
-
       net_end_transit();
       display_close(now);
     unlock(argv[0], stdout);

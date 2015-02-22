@@ -18,8 +18,28 @@ AC_CHECK_SIZEOF(unsigned short, 2)
 AC_CHECK_SIZEOF(unsigned int, 4)
 AC_CHECK_SIZEOF(unsigned long, 4)
 
-AC_CHECK_HEADERS(ncurses.h ncurses/curses.h curses.h cursesX.h sys/types.h fcntl.h)
-AC_CHECK_HEADERS(socket.h sys/socket.h sys/xti.h arpa/nameser_compat.h)
+AC_CHECK_HEADERS(sys/types.h fcntl.h socket.h sys/socket.h sys/xti.h arpa/nameser_compat.h)
+
+AC_ARG_WITH(unicode,
+[  --with-unicode          Do try to use unicode],
+[unicode=${withval}], [unicode=no])
+AS_IF([test "x$unicode" = "xyes"], [
+	CURSESW_LIB=ncursesw
+	AC_CHECK_HEADERS([ncursesw/cursesw.h ncursesw/curses.h curses.h], break)
+	AC_CHECK_HEADERS([wchar.h wctype.h locale.h langinfo.h])
+	AC_CHECK_LIB([${CURSESW_LIB}], [add_wch], [], [
+		# X/Open curses provide add_wch()
+		AC_CHECK_LIB([curses], [add_wch], [CURSESW_LIB=curses],
+			AC_MSG_ERROR([No ncursesw library found]))
+	])
+	# don't leak ncursesw/curses in LIBS
+	AC_SEARCH_LIBS([tgetent], [${CURSESW_LIB} termcap tinfo])
+	AC_CHECK_LIB([${CURSESW_LIB}], [use_default_colors],
+		AC_DEFINE([HAVE_USE_DEFAULT_COLORS], [1], [Define this if your curses library has the use_default_colors() command.]))
+	AC_DEFINE([UNICODE], [1], [Define to enable unicode])
+], [
+
+AC_CHECK_HEADERS(ncurses.h ncurses/curses.h curses.h cursesX.h, break)
 
 # We don't refer to any symbols in termcap, but -lcurses on SunOS does.
 # We have to trust the linker not to mess things up... (It should not
@@ -28,12 +48,16 @@ AC_CHECK_LIB(termcap, tgetent)
 AC_CHECK_LIB(tinfo, tgetent)
 
 AC_CHECK_FUNC(initscr, , 
-  AC_CHECK_LIB(ncurses, initscr, , 
+  AC_CHECK_LIB(ncurses, initscr, ,
     AC_CHECK_LIB(curses, initscr, , 
       AC_CHECK_LIB(cursesX, initscr, , 
 	AC_MSG_WARN(Building without curses display support)
 	AC_DEFINE(NO_CURSES, 1, Define if you don't have the curses libraries available.)
 	CURSES_OBJ=))))
+
+AC_CHECK_LIB(ncurses, use_default_colors,
+  AC_DEFINE(HAVE_USE_DEFAULT_COLORS, 1, [Define this if your curses library has the use_default_colors() command.]))
+])
 
 AC_CHECK_FUNCS(attron fcntl)
 
@@ -134,6 +158,9 @@ AC_CANONICAL_HOST
 case "$host_os" in
   solaris*)
     AC_DEFINE(BSD_COMP, 1, [enable BSD compatibility, affects on Solaris])
+  ;;
+  netbsd*)
+    AC_DEFINE(NETBSD_CURSES, 1, [NetBSD: a hybrid of BSD-curses with X/Open curses])
   ;;
 esac
 

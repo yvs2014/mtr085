@@ -26,7 +26,7 @@ void mtr_curses_clear(void);
 #define STARTSTAT	30
 #ifdef GRAPHCAIRO
 void mtr_curses_init(void);
-void mtr_gen_scale(void);
+void mtr_gen_scale_gc(void);
 void mtr_curses_scale_desc(char *buf);
 char mtr_curses_saved_char(int saved_int);
 int mtr_curses_data_fields(char *buf);

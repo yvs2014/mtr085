@@ -38,6 +38,34 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 
+#if defined(UNICODE)
+#define _XOPEN_SOURCE_EXTENDED
+#if defined (HAVE_NCURSESW_NCURSES_H)
+#  include <ncursesw/ncurses.h>
+#elif defined (HAVE_NCURSESW_CURSES_H)
+#  include <ncursesw/curses.h>
+#elif defined (HAVE_CURSES_H)
+#  include <curses.h>
+#else
+#  error No ncursesw header file available
+#endif
+#if defined(HAVE_WCHAR_H)
+#  include <wchar.h>
+#endif
+#ifdef NETBSD_CURSES
+#define CCHAR_attr attributes
+#define CCHAR_chars vals
+/*
+#elif defined OPENSOLARIS_CURSES
+#define CCHAR_attr _at
+#define CCHAR_chars _wc
+*/
+#else
+#define CCHAR_attr attr
+#define CCHAR_chars chars
+#endif
+#else
+
 #if defined(HAVE_NCURSES_H)
 #  include <ncurses.h>
 #elif defined(HAVE_NCURSES_CURSES_H)
@@ -50,9 +78,11 @@
 #  error No curses header file available
 #endif
 
+#endif
+
 #ifndef HAVE_ATTRON
-#define attron(x) 
-#define attroff(x) 
+#define attron(x)
+#define attroff(x)
 #endif
 
 #ifndef getmaxyx
@@ -80,10 +110,11 @@ extern int tos;
 extern float WaitTime;
 extern int af;
 extern int mtrtype;
+extern int color_mode;
 
 static int __unused_int;
 
-void pwcenter(char *str) 
+void pwcenter(char *str)
 {
   int maxx;
   int cx;
@@ -91,15 +122,28 @@ void pwcenter(char *str)
   getmaxyx(stdscr, __unused_int, maxx);
   cx = (signed)(maxx - strlen(str)) / 2;
   while(cx-- > 0)
-    printw(" ");
+    addch(' ');
   printw(str);
 }
 
+void mtr_fill_buf(int y, char *buf) {
+	move(2, y);
+	int curs = curs_set(1);
+	refresh();
+	int c;
+	int i = 0;
+	while ((c=getch()) != '\n' && i < MAXFLD) {
+		addch(c | A_BOLD); refresh();
+		buf[i++] = c;   /* need more checking on 'c' */
+	}
+	if (curs != ERR)
+		curs_set(curs);
+	buf[i] = '\0';
+}
 
 int mtr_curses_keyaction(void)
 {
   int c = getch();
-  int i=0;
   float f = 0.0;
   char buf[MAXFLD+1];
 
@@ -135,41 +179,23 @@ int mtr_curses_keyaction(void)
   if (tolower(c) == 's') {
     mvprintw(2, 0, "Change Packet Size: %d\n", cpacketsize );
     mvprintw(3, 0, "Size Range: %d-%d, < 0:random.\n", MINPACKET, MAXPACKET);
-    move(2,20);
-    refresh();
-    while ( (c=getch ()) != '\n' && i < MAXFLD ) {
-      attron(A_BOLD); printw("%c", c); attroff(A_BOLD); refresh ();
-      buf[i++] = c;   /* need more checking on 'c' */
-    }
-    buf[i] = '\0';
-    cpacketsize = atoi ( buf );
+    mtr_fill_buf(20, buf);
+    cpacketsize = atoi(buf);
     return ActionNone;
   }
   if (tolower(c) == 'b') {
     mvprintw(2, 0, "Ping Bit Pattern: %d\n", bitpattern );
     mvprintw(3, 0, "Pattern Range: 0(0x00)-255(0xff), <0 random.\n");
-    move(2,18);
-    refresh();
-    while ( (c=getch ()) != '\n' && i < MAXFLD ) {
-      attron(A_BOLD); printw("%c", c); attroff(A_BOLD); refresh ();
-      buf[i++] = c;   /* need more checking on 'c' */
-    }
-    buf[i] = '\0';
-    bitpattern = atoi ( buf );
+    mtr_fill_buf(18, buf);
+    bitpattern = atoi(buf);
     if( bitpattern > 255 ) { bitpattern = -1; }
     return ActionNone;
   }
   if ( c == 'Q') {    /* can not be tolower(c) */
     mvprintw(2, 0, "Type of Service(tos): %d\n", tos );
     mvprintw(3, 0, "default 0x00, min cost 0x02, rel 0x04,, thr 0x08, low del 0x10...\n");
-    move(2,22);
-    refresh();
-    while ( (c=getch ()) != '\n' && i < MAXFLD ) {
-      attron(A_BOLD); printw("%c", c); attroff(A_BOLD); refresh();
-      buf[i++] = c;   /* need more checking on 'c' */
-    }
-    buf[i] = '\0';
-    tos = atoi ( buf );
+    mtr_fill_buf(22, buf);
+    tos = atoi(buf);
     if( tos > 255 || tos <0 ) {
       tos = 0;
     }
@@ -177,15 +203,8 @@ int mtr_curses_keyaction(void)
   }
   if (tolower(c) == 'i') {
     mvprintw(2, 0, "Interval : %0.0f\n\n", WaitTime );
-    move(2,11);
-    refresh();
-    while ( (c=getch ()) != '\n' && i < MAXFLD ) {
-      attron(A_BOLD); printw("%c", c); attroff(A_BOLD); refresh();
-      buf[i++] = c;   /* need more checking on 'c' */
-    }
-    buf[i] = '\0';
-
-    f = atof( buf );
+    mtr_fill_buf(11, buf);
+    f = atof(buf);
 
     if (f <= 0.0) return ActionNone;
     if (getuid() != 0 && f < 1.0)
@@ -196,14 +215,8 @@ int mtr_curses_keyaction(void)
   }
   if (tolower(c) == 'f') {
     mvprintw(2, 0, "First TTL: %d\n\n", fstTTL );
-    move(2,11);
-    refresh();
-    while ( (c=getch ()) != '\n' && i < MAXFLD ) {
-      attron(A_BOLD); printw("%c", c); attroff(A_BOLD); refresh();
-      buf[i++] = c;   /* need more checking on 'c' */
-    }
-    buf[i] = '\0';
-    i = atoi( buf );
+    mtr_fill_buf(11, buf);
+    int i = atoi(buf);
 
     if ( i < 1 || i> maxTTL ) return ActionNone;
     fstTTL = i;
@@ -212,14 +225,8 @@ int mtr_curses_keyaction(void)
   }
   if (tolower(c) == 'm') {
     mvprintw(2, 0, "Max TTL: %d\n\n", maxTTL );
-    move(2,9);
-    refresh();
-    while ( (c=getch ()) != '\n' && i < MAXFLD ) {
-      attron(A_BOLD); printw("%c", c); attroff(A_BOLD); refresh();
-      buf[i++] = c;   /* need more checking on 'c' */
-    }
-    buf[i] = '\0';
-    i = atoi( buf );
+    mtr_fill_buf(9, buf);
+    int i = atoi(buf);
 
     if ( i < fstTTL || i>(MaxHost-1) ) return ActionNone;
     maxTTL = i;
@@ -230,23 +237,27 @@ int mtr_curses_keyaction(void)
   if (tolower(c) == 'o') {
     mvprintw(2, 0, "Fields: %s\n\n", fld_active );
 
+    int i;
     for( i=0; i<MAXFLD; i++ ){
       if( data_fields[i].descr != NULL )
-          printw( "  %s\n", data_fields[i].descr);
+          printw("  %s\n", data_fields[i].descr);
     }
-    printw("\n");
+    addch('\n');
     move(2,8);                /* length of "Fields: " */
     refresh();
 
     i = 0;
+    int curs = curs_set(1);
     while ( (c=getch ()) != '\n' && i < MAXFLD ) {
       if( strchr(available_options, c) ) {
-        attron(A_BOLD); printw("%c", c); attroff(A_BOLD); refresh();
+        addch(c | A_BOLD); refresh();
         buf[i++] = c; /* Only permit values in "available_options" be entered */
       } else {
         printf("\a"); /* Illegal character. Beep, ring the bell. */
       }
     }
+    if (curs != ERR)
+      curs_set(curs);
     buf[i] = '\0';
     if ( strlen( buf ) > 0 ) strcpy( fld_active, buf );
 
@@ -286,6 +297,7 @@ int mtr_curses_keyaction(void)
   }
   /* reserve to display help message -Min */
   if (tolower(c) == '?'|| tolower(c) == 'h') {
+    erase();
     int pressanykey_row = 20;
     mvprintw(2, 0, "Command:\n" );
     printw("  ?|h     help\n" );
@@ -309,7 +321,7 @@ int mtr_curses_keyaction(void)
     printw("  z       toggle ASN info on/off\n");
     pressanykey_row += 2;
 #endif
-    printw("\n");
+    addch('\n');
     mvprintw(pressanykey_row, 0, " press any key to go back..." );
 
     getch();                  /* get any key */
@@ -345,7 +357,7 @@ void mtr_fill_data(int at, char *buf) {
       buf[hd_len] = 0;
 }
 
-void mtr_curses_hosts(int startstat) 
+void mtr_curses_hosts(int startstat)
 {
   int max;
   int at;
@@ -426,17 +438,29 @@ void mtr_curses_hosts(int startstat)
       printw("???");
     }
 
-    printw("\n");
+    addch('\n');
   }
   move(2, 0);
 }
 
-#define NUM_FACTORS 8
-static double factors[NUM_FACTORS];
-static int scale[NUM_FACTORS];
 static int low_ms, high_ms;
 
-void mtr_gen_scale(void) 
+static chtype map1[] = {'.' | A_NORMAL, '>' | COLOR_PAIR(1)};
+#define NUM_FACTORS2	8
+static chtype map2[NUM_FACTORS2];
+static double factors2[NUM_FACTORS2];
+static int scale2[NUM_FACTORS2];
+static int dm2_color_base;
+#ifdef UNICODE
+#define NUM_FACTORS3_MONO	7	// without trailing char
+#define NUM_FACTORS3		22
+static cchar_t map3[NUM_FACTORS3];
+static double factors3[NUM_FACTORS3];
+static int scale3[NUM_FACTORS3];
+static int dm3_color_base;
+#endif
+
+void mtr_gen_scale(int num_factors, int *scale, double *factors)
 {
 	int *saved, i, max, at;
 	int range;
@@ -444,7 +468,7 @@ void mtr_gen_scale(void)
 	low_ms = 1000000;
 	high_ms = -1;
 
-	for (i = 0; i < NUM_FACTORS; i++) {
+	for (i = 0; i < num_factors; i++) {
 		scale[i] = 0;
 	}
 	max = net_max();
@@ -461,50 +485,101 @@ void mtr_gen_scale(void)
 		}
 	}
 	range = high_ms - low_ms;
-	for (i = 0; i < NUM_FACTORS; i++) {
+	for (i = 0; i < num_factors; i++) {
 		scale[i] = low_ms + ((double)range * factors[i]);
 	}
 }
 
-
-static char block_map[NUM_FACTORS];
-
-void mtr_curses_init() {
-	int i;
-	int block_split;
-
+void mtr_curses_factors_init(int num_factors, double *factors) {
 	/* Initialize factors to a log scale. */
-	for (i = 0; i < NUM_FACTORS; i++) {
-		factors[i] = ((double)1 / NUM_FACTORS) * (i + 1);
+	int i;
+	for (i = 0; i < num_factors; i++) {
+		factors[i] = ((double)1 / num_factors) * (i + 1);
 		factors[i] *= factors[i]; /* Squared. */
 	}
+}
+
+void mtr_curses_init(void) {
+	// display mode 2
+	mtr_curses_factors_init(NUM_FACTORS2, factors2);
+#ifdef UNICODE
+	// display mode 3
+	mtr_curses_factors_init(color_mode ? NUM_FACTORS3 : (NUM_FACTORS3_MONO + 1), factors3);
+#endif
 
 	/* Initialize block_map. */
-	block_split = (NUM_FACTORS - 2) / 2;
+	int block_split;
+	block_split = (NUM_FACTORS2 - 2) / 2;
 	if (block_split > 9) {
 		block_split = 9;
 	}
+	int i;
 	for (i = 1; i <= block_split; i++) {
-		block_map[i] = '0' + i;
+		map2[i] = '0' + i;
 	}
-	for (i = block_split+1; i < NUM_FACTORS-1; i++) {
-		block_map[i] = 'a' + i - block_split - 1;
+	for (i = block_split + 1; i < NUM_FACTORS2 - 1; i++) {
+		map2[i] = 'a' + i - block_split - 1;
 	}
-	block_map[0] = '.';
-	block_map[NUM_FACTORS-1] = '>';
+	map2[0] = map1[0];
+	for (i = 1; i < NUM_FACTORS2 - 1; i++)
+		map2[i] |= COLOR_PAIR(dm2_color_base + i - 1);
+	map2[NUM_FACTORS2 - 1] = map1[1] & A_CHARTEXT;
+	map2[NUM_FACTORS2 - 1] |= (map2[NUM_FACTORS2 - 2] & A_ATTRIBUTES) | A_BOLD;
+
+#ifdef UNICODE
+	for (i = 0; i < NUM_FACTORS3_MONO; i++)
+		map3[i].CCHAR_chars[0] = L'▁' + i;
+
+	if (color_mode) {
+		for (i = 0; i < NUM_FACTORS3 - 1; i++) {
+			int base = i / NUM_FACTORS3_MONO;
+			map3[i].CCHAR_attr = COLOR_PAIR(dm3_color_base + base);
+			if (i >= NUM_FACTORS3_MONO) {
+				wcsncpy(map3[i].CCHAR_chars, map3[i % NUM_FACTORS3_MONO].CCHAR_chars, sizeof(wchar_t));
+				map3[i].CCHAR_chars[1] = L'\0';
+			}
+		}
+		map3[NUM_FACTORS3 - 1].CCHAR_chars[0] = map1[1] & A_CHARTEXT;
+		map3[NUM_FACTORS3 - 1].CCHAR_attr = map3[NUM_FACTORS3 - 2].CCHAR_attr | A_BOLD;
+	} else
+		map3[NUM_FACTORS3_MONO].CCHAR_chars[0] = map1[1] & A_CHARTEXT;
+#endif
 }
 
-
-char mtr_print_scaled(int ms)
-{
-	int i;
-
-	for (i = 0; i < NUM_FACTORS; i++) {
-		if (ms <= scale[i]) {
-			return block_map[i];
-		}
+void mtr_print_char_scaled(int saved_int) {
+	if (saved_int == -2) {	// unsent
+		addch(' ');
+		return;
 	}
-	return '>';
+	if (saved_int == -1) { // not responded
+		addch('?' | (color_mode ? (map2[NUM_FACTORS2 - 1] & A_ATTRIBUTES) : A_BOLD));
+		return;
+	}
+
+	if (display_mode == 1) {
+		int ndx = (saved_int <= scale2[NUM_FACTORS2 - 2]) ? 0 : 1;
+		addch(map1[ndx]);
+		return;
+	} else if (display_mode == 2) {
+		int i;
+		for (i = 0; i < NUM_FACTORS2; i++)
+			if (saved_int <= scale2[i]) {
+				addch(map2[i]);
+				return;
+			}
+	}
+#ifdef UNICODE
+	else if (display_mode == 3) {
+		int num_factors = color_mode ? NUM_FACTORS3 : (NUM_FACTORS3_MONO + 1);
+		int i;
+		for (i = 0; i < num_factors; i++)
+			if (saved_int <= scale3[i]) {
+				add_wch(&map3[i]);
+				return;
+			}
+	}
+#endif
+	addch('>' | A_BOLD);	// ???
 }
 
 char mtr_curses_saved_char(int saved_int) {
@@ -512,31 +587,40 @@ char mtr_curses_saved_char(int saved_int) {
 		return ' ';
 	if (saved_int == -1)
 		return '?';
-	if (display_mode != 1)
-		return mtr_print_scaled(saved_int);
-	if (saved_int > scale[6])
-		return block_map[NUM_FACTORS - 1];
+	if (display_mode != 1) {
+		int i;
+		for (i = 0; i < NUM_FACTORS2; i++)
+			if (saved_int <= scale2[i])
+				return map2[i];
+		return '>';
+	}
+	if (saved_int > scale2[NUM_FACTORS2 - 2])
+		return map2[NUM_FACTORS2 - 1];
 	else
 		return '.';
 }
 
-void mtr_fill_graph(int at, int cols) 
+void mtr_fill_graph(int at, int cols)
 {
 	int* saved;
 	int i;
 
 	saved = net_saved_pings(at);
-	for (i = SAVED_PINGS-cols; i < SAVED_PINGS; i++) {
-		if (saved[i] == -1)
-			attron(A_BOLD);
-		printw("%c", mtr_curses_saved_char(saved[i]));
-		if (saved[i] == -1)
-			attroff(A_BOLD);
+	for (i = SAVED_PINGS - cols; i < SAVED_PINGS; i++) {
+			if (color_mode)
+				mtr_print_char_scaled(saved[i]);
+			else {
+#ifdef UNICODE
+				if (display_mode == 3)
+					mtr_print_char_scaled(saved[i]);
+				else
+#endif
+					addch(mtr_curses_saved_char(saved[i]));
+			}
 	}
 }
 
-
-void mtr_curses_graph(int startstat, int cols) 
+void mtr_curses_graph(int startstat, int cols)
 {
 	int max, at, y;
 	ip_t * addr;
@@ -569,9 +653,9 @@ void mtr_curses_graph(int startstat, int cols)
 		getyx(stdscr, y, __unused_int);
 		move(y, startstat);
 
-		printw(" ");
+		addch(' ');
 		mtr_fill_graph(at, cols);
-		printw("\n");
+		addch('\n');
 	}
 }
 
@@ -600,7 +684,7 @@ void mtr_curses_redraw(void)
   int i;
   int  hd_len;
   char buf[1024];
-  
+
 
   erase();
   getmaxyx(stdscr, __unused_int, maxx);
@@ -613,31 +697,16 @@ void mtr_curses_redraw(void)
   attroff(A_BOLD);
 
   mvprintw(1, 0, "%s (%s)", LocalHostname, net_localaddr());
-  /*
-  printw("(tos=0x%X ", tos);
-  printw("psize=%d ", packetsize );
-  printw("bitpattern=0x%02X)", (unsigned char)(abs(bitpattern)));
-  if( cpacketsize > 0 ){
-    printw("psize=%d ", cpacketsize);
-  } else {
-    printw("psize=rand(%d,%d) ",MINPACKET, -cpacketsize);
-  }
-  if( bitpattern>=0 ){
-    printw("bitpattern=0x%02X)", (unsigned char)(bitpattern));
-  } else {
-    printw("bitpattern=rand(0x00-FF))");
-  }
-  */
   time(&t);
   mvprintw(1, maxx-25, ctime(&t));
 
   printw("Keys:  ");
-  attron(A_BOLD); printw("H"); attroff(A_BOLD); printw("elp   ");
-  attron(A_BOLD); printw("D"); attroff(A_BOLD); printw("isplay mode   ");
-  attron(A_BOLD); printw("R"); attroff(A_BOLD); printw("estart statistics   ");
-  attron(A_BOLD); printw("O"); attroff(A_BOLD); printw("rder of fields   ");
-  attron(A_BOLD); printw("q"); attroff(A_BOLD); printw("uit\n");
-  
+  attron(A_BOLD); addch('H'); attroff(A_BOLD); printw("elp   ");
+  attron(A_BOLD); addch('D'); attroff(A_BOLD); printw("isplay mode   ");
+  attron(A_BOLD); addch('R'); attroff(A_BOLD); printw("estart statistics   ");
+  attron(A_BOLD); addch('O'); attroff(A_BOLD); printw("rder of fields   ");
+  attron(A_BOLD); addch('q'); attroff(A_BOLD); printw("uit\n");
+
   if (display_mode == 0) {
     hd_len = mtr_curses_data_fields(buf);
     attron(A_BOLD);
@@ -661,41 +730,134 @@ void mtr_curses_redraw(void)
 
     sprintf(msg, " Last %3d pings", max_cols);
     mvprintw(rowstat - 1, startstat, msg);
-    
+
     attroff(A_BOLD);
     move(rowstat, 0);
 
-    mtr_gen_scale();
+#ifdef UNICODE
+    if (display_mode == 3)
+      mtr_gen_scale(color_mode ? NUM_FACTORS3 : (NUM_FACTORS3_MONO + 1), scale3, factors3);
+    else
+#endif
+      mtr_gen_scale(NUM_FACTORS2, scale2, factors2);
     mtr_curses_graph(startstat, max_cols);
 
-    printw("\n");
+    addch('\n');
     attron(A_BOLD);
     printw("Scale:");
     attroff(A_BOLD);
-    
-    for (i = 0; i < NUM_FACTORS-1; i++) {
-      printw("  %c:%d ms", block_map[i], scale[i]/1000);
+
+    if (display_mode == 1) {
+      addstr("  ");
+      addch(map1[0] | A_BOLD);
+      printw(" less than %dms   ", scale2[NUM_FACTORS2 - 2] / 1000);
+      if (color_mode)
+        addch(map1[1]);
+      else
+        addch(map1[1] | A_BOLD);
+      addstr(" greater than ");
+      addch(map1[0] | A_BOLD);
+      addstr("   ");
+      addch('?' | (color_mode ? (map2[NUM_FACTORS2 - 1] & A_ATTRIBUTES) : A_BOLD));
+      addstr(" Unknown");
+    } else if (display_mode == 2) {
+      if (color_mode) {
+        for (i = 0; i < NUM_FACTORS2 - 1; i++) {
+          addstr("  ");
+          addch(map2[i]);
+          printw(":%dms", scale2[i] / 1000);
+        }
+        addstr("  ");
+        addch(map2[NUM_FACTORS2 - 1]);
+      } else {
+        for (i = 0; i < NUM_FACTORS2 - 1; i++)
+          printw("  %c:%dms", map2[i] & A_CHARTEXT, scale2[i] / 1000);
+        printw("  %c", map2[NUM_FACTORS2 - 1] & A_CHARTEXT);
+      }
     }
+#ifdef UNICODE
+    else if (display_mode == 3) {
+      if (color_mode) {
+//        for (i = 0; i < NUM_FACTORS3 - 1; i++) {
+        for (i = 1; i < NUM_FACTORS3 - 1; i += 2) {
+          addstr("  ");
+          add_wch(&map3[i]);
+          int sc = scale3[i] / 1000;
+          if (sc)
+            printw(":%dms", sc);
+          else
+            printw(":%.1fms", (double)scale3[i] / 1000);
+        }
+        addstr("  ");
+        add_wch(&map3[NUM_FACTORS3 - 1]);
+      } else {
+        for (i = 0; i < NUM_FACTORS3_MONO; i++) {
+//          printw("  %lc:%dms", map3[i].CCHAR_chars[0], scale3[i] / 1000);
+          addstr("  ");
+          add_wch(&map3[i]);
+          printw(":%dms", scale3[i] / 1000);
+	}
+//        printw("  %lc", map3[NUM_FACTORS3_MONO].CCHAR_chars[0]);
+        addstr("  ");
+        add_wch(&map3[NUM_FACTORS3_MONO]);
+      }
+    }
+#endif
   }
 
   refresh();
 }
 
-
 void mtr_curses_open(void)
 {
   initscr();
   raw();
-  noecho(); 
+  noecho();
+
+  if (color_mode)
+    if (!has_colors())
+      color_mode = 0;
+
+  if (color_mode) {
+    start_color();
+    int bg_col = 0;
+#ifdef HAVE_USE_DEFAULT_COLORS
+    use_default_colors();
+    if (use_default_colors() == OK)
+      bg_col = -1;
+#endif
+    int i = 1;
+    // display_mode 1
+    init_pair(i++, COLOR_YELLOW, bg_col);
+    // display_mode 2
+    dm2_color_base = i;
+    init_pair(i++, COLOR_GREEN, bg_col);
+    init_pair(i++, COLOR_CYAN, bg_col);
+    init_pair(i++, COLOR_BLUE, bg_col);
+    init_pair(i++, COLOR_YELLOW, bg_col);
+    init_pair(i++, COLOR_MAGENTA, bg_col);
+    init_pair(i++, COLOR_RED, bg_col);
+#ifdef UNICODE
+    // display mode 3
+    dm3_color_base = i;
+    init_pair(i++, COLOR_GREEN, bg_col);
+//    init_pair(i++, COLOR_YELLOW, COLOR_GREEN);
+    init_pair(i++, COLOR_YELLOW, bg_col);
+//    init_pair(i++, COLOR_RED, COLOR_YELLOW);
+    init_pair(i++, COLOR_RED, bg_col);
+    init_pair(i++, COLOR_RED, bg_col);
+#endif
+  }
 
   mtr_curses_init();
   mtr_curses_redraw();
+  curs_set(0);
 }
 
 
 void mtr_curses_close(void)
-{  
-  printw("\n");
+{
+  addch('\n');
   endwin();
 }
 
@@ -708,10 +870,19 @@ void mtr_curses_clear(void)
 
 #ifdef GRAPHCAIRO
 void mtr_curses_scale_desc(char *buf) {
-  int len = 0;
-  int i;
-  for (i = 0; i < NUM_FACTORS - 1; i++)
-    len += sprintf(buf + len, "  %c:%d ms", block_map[i], scale[i] / 1000);
+	if (display_mode == 1)
+		sprintf(buf, "  %c less than %dms   %c greater than %c   ? Unknown", (char)(map1[0] & A_CHARTEXT),
+			scale2[NUM_FACTORS2 - 2] / 1000, (char)(map1[1] & A_CHARTEXT), (char)(map1[0] & A_CHARTEXT));
+	else if (display_mode == 2) {
+		int len = 0;
+		int i;
+		for (i = 0; i < NUM_FACTORS2 - 1; i++)
+			len += sprintf(buf + len, "  %c:%dms", (char)(map2[i] & A_CHARTEXT), scale2[i] / 1000);
+	}
+}
+
+void mtr_gen_scale_gc(void) {
+	mtr_gen_scale(NUM_FACTORS2, scale2, factors2);
 }
 #endif
 
