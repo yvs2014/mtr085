@@ -15,3 +15,8 @@ MTR with graphcairo
 
 ![ii-screenshot01](https://github.com/yvs2014/mtr/raw/master/img/ii-screenshot01.png)
 
+
+## color/histogram
+
+![ch-screenshot01](https://github.com/yvs2014/mtr/raw/master/img/ch-screenshot01.png)
+
