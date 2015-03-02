@@ -7,6 +7,12 @@
 #endif
 /**/
 
+#ifdef GCDEBUG
+#define GCDEBUG_MSG(x)	printf x
+#else
+#define GCDEBUG_MSG(x)	
+#endif
+
 //#define ROUND(x)	((x)>=0?(int)((x)+0.5):(int)((x)-0.5))
 #define POS_ROUND(x)	((int)((x)+0.5))
 #define USECONDS	1000000

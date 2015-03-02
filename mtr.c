@@ -382,7 +382,7 @@ void parse_arg (int argc, char **argv)
       DisplayMode = DisplayXML;
       break;
     case 'd':
-      display_mode = (atoi(optarg)) % display_mode_max;
+      display_mode = ((atoi(optarg)) & ~8) % display_mode_max;
       color_mode = ((atoi(optarg)) & 8) ? 1 : 0;
       break;
     case 'c':

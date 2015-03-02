@@ -9,6 +9,13 @@
 #include <pango/pangocairo.h>
 
 #include "config.h"
+
+#ifdef UNICODE
+#ifdef HAVE_WCHAR_H
+#include <wchar.h>
+#endif
+#endif
+
 #include "graphcairo.h"
 #include "graphcairo-backend.h"
 
@@ -577,20 +584,34 @@ b2 = ---------------------------------------------------
 	y_point[0] = tmp;
 }
 
+#ifdef UNICODE
+void print_legend_desc(int x, int y, char *desc, int desc_max, int is_wide) {
+#else
 void print_legend_desc(int x, int y, char *desc, int desc_max) {
+#endif
 	if (desc) {
 		cairo_t *cr = cairos[CR_LGND].cairo;
 		PangoLayout *pl = cairos[CR_LGND].pango;
-		pango_layout_set_width(pl, (legend.width - x) * PANGO_SCALE);
-		pango_layout_set_alignment(pl, PANGO_ALIGN_RIGHT);
 
-//		pango_layout_set_markup(pl, desc, -1);
+		char *s;
+#ifdef UNICODE
+		if (is_wide == 1) {
+			static char mbs[1024];
+			wcstombs(mbs, (wchar_t*)desc, 1024);
+			s = mbs;
+		} else
+#endif
+			s = desc;
+
 		char *txt;
 		PangoAttrList *attrs;
-		pango_parse_markup(desc, -1, 0, &attrs, &txt, NULL, NULL);
-		if (txt)
-			if (strlen(txt) > desc_max)
-				txt[desc_max] = 0;
+		pango_parse_markup(s, -1, 0, &attrs, &txt, NULL, NULL);
+		if (!txt)
+			return;
+		if (strlen(txt) > desc_max)
+			txt[desc_max] = 0;
+		pango_layout_set_width(pl, (legend.width - x) * PANGO_SCALE);
+		pango_layout_set_alignment(pl, PANGO_ALIGN_RIGHT);
 		pango_layout_set_text(pl, txt, -1);
 		pango_layout_set_attributes(pl, attrs);
 
@@ -633,11 +654,19 @@ void cr_init_legend(void) {
 }
 
 void cr_print_legend_header(char *header) {
+#ifdef UNICODE
+	print_legend_desc(coords.stat_x, 0, header, coords.stat_max, 0);
+#else
 	print_legend_desc(coords.stat_x, 0, header, coords.stat_max);
+#endif
 }
 
 void cr_print_legend_footer(char *footer) {
+#ifdef UNICODE
+	print_legend_desc(0, coords.text_y, footer, coords.footer_max, (display_mode == 3) ? 1 : 0);
+#else
 	print_legend_desc(0, coords.text_y, footer, coords.footer_max);
+#endif
 }
 
 void cr_print_hop(int at) {
@@ -677,8 +706,6 @@ void cr_print_host(int at, int data, char *host, char *stat) {
 	pango_cairo_show_layout(cr, pl);
 
 	if (stat) {
-		if (strlen(stat) > coords.stat_max)
-			stat[coords.stat_max] = 0;
 		pango_layout_set_width(pl, (legend.width - coords.stat_x) * PANGO_SCALE);
 		pango_layout_set_alignment(pl, PANGO_ALIGN_RIGHT);
 
@@ -687,7 +714,23 @@ void cr_print_host(int at, int data, char *host, char *stat) {
 		else
 			cairo_set_source_rgb(cr, 0, 0, 0);
 		cairo_move_to(cr, coords.stat_x, coords.text_y);
-		pango_layout_set_text(pl, stat, -1);
+
+		char *s;
+#ifdef UNICODE
+		if (display_mode == 3) {
+			if (wcslen((wchar_t*)stat) > coords.stat_max)
+				*(((wchar_t*)stat) + coords.stat_max) = L'\0';
+			static char mbs[1024];
+			wcstombs(mbs, (wchar_t*)stat, 1024);
+			s = mbs;
+		} else
+#endif
+		{
+			if (strlen(stat) > coords.stat_max)
+				stat[coords.stat_max] = 0;
+			s = stat;
+		}
+		pango_layout_set_text(pl, s, -1);
 		pango_cairo_show_layout(cr, pl);
 
 		pango_layout_set_width(pl, -1);
@@ -944,15 +987,9 @@ void cr_resize(int width, int height, int shift) {
 		return;
 	if (!cairos[CR_BASE].cairo)
 		return;
-#ifdef GCDEBUG
-	if (shift)
-		printf("shift+");
-	printf("resize: (%d, %d) => (%d, %d)\n", base_window.width, base_window.height, width, height);
-#endif
+	GCDEBUG_MSG(("%sresize: (%d, %d) => (%d, %d)\n", shift ? "shift+" : "", base_window.width, base_window.height, width, height));
 	if (shift) {
-#ifdef GCDEBUG
-		printf("legend: (%d, %d, %d, %d) => ", legend.x, legend.y, legend.width, legend.height);
-#endif
+		GCDEBUG_MSG(("legend: (%d, %d, %d, %d) => ", legend.x, legend.y, legend.width, legend.height));
 		legend.width += width - base_window.width;
 		if (legend.width < 0)
 			legend.width = 0;
@@ -960,9 +997,7 @@ void cr_resize(int width, int height, int shift) {
 		legend.height += height - base_window.height;
 		if (legend.height < 0)
 			legend.height = 0;
-#ifdef GCDEBUG
-		printf("(%d, %d, %d, %d)\n", legend.x, legend.y, legend.width, legend.height);
-#endif
+		GCDEBUG_MSG(("(%d, %d, %d, %d)\n", legend.x, legend.y, legend.width, legend.height));
 		base_window.width = width;
 		base_window.height = height;
 		return;
@@ -1026,51 +1061,37 @@ void cr_resize(int width, int height, int shift) {
 
 int cr_open(cr_params_t *cr_params) {
 	params = cr_params;
-#ifdef GCDEBUG
-	printf("params: type=");
-#endif
+	GCDEBUG_MSG(("params: type="));
 	switch (params->graph_type) {
 		case GRAPHTYPE_DOT:
 			graph_func = graph_dot;
-#ifdef GCDEBUG
-			printf("dot");
-#endif
+			GCDEBUG_MSG(("dot"));
 			break;
 		case GRAPHTYPE_LINE:
 			graph_func = graph_line;
-#ifdef GCDEBUG
-			printf("line");
-#endif
+			GCDEBUG_MSG(("line"));
 			break;
 		case GRAPHTYPE_CURVE:
 			graph_func = graph_curve;
-#ifdef GCDEBUG
-			printf("curve");
-#endif
+			GCDEBUG_MSG(("curve"));
 			break;
 		default:
 			params->graph_type = GRAPHTYPE_CURVE;
 			graph_func = graph_curve;
-#ifdef GCDEBUG
-			printf("curve");
-#endif
+			GCDEBUG_MSG(("curve"));
 	}
 
 	if (params->period)
 		params->period *= GRIDLINES;
 	else
 		params->period = VIEWPORT_TIMEPERIOD;
-#ifdef GCDEBUG
-	printf(", period=%dsec", params->period);
-#endif
+	GCDEBUG_MSG((", period=%dsec", params->period));
 	tm_fmt = (params->period < 3600) ? TM_MMSS : TM_HHMM;
 
 	if (params->enable_legend)
 		base_window.height *= 1.6;
 
-#ifdef GCDEBUG
-	printf(", legend=%d, multipath=%d, jitter_graph=%d\n", params->enable_legend, params->enable_multipath, params->jitter_graph);
-#endif
+	GCDEBUG_MSG((", legend=%d, multipath=%d, jitter_graph=%d\n", params->enable_legend, params->enable_multipath, params->jitter_graph));
 	set_source_rgb_func = (maxTTL < cr_colors_max) ? set_source_rgb_dir : set_source_rgb_mod;
 
 	if (backend_create_window(&base_window, cr_resize)) {

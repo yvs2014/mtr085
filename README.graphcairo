@@ -57,7 +57,7 @@ IDN support:
 ./configure --with-libidn ...
 ...
 % mtr köthe.de
-% mtr 海外送金.みんな
+% mtr はじめよう.みんな
 
    ----------------------------
 

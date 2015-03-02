@@ -7,6 +7,13 @@
 #include <sys/time.h>
 
 #include "config.h"
+
+#ifdef UNICODE
+#ifdef HAVE_WCHAR_H
+#include <wchar.h>
+#endif
+#endif
+
 #include "mtr.h"
 #include "mtr-curses.h"
 #include "net.h"
@@ -17,10 +24,17 @@
 
 #define GC_ARGS_SEP	','
 #define GC_ARGS_MAX	5
-#ifdef IPINFO
-#define HOSTSTAT_LEN	(3 * STARTSTAT + SAVED_PINGS)	// hostinfo + statistics
+
+#ifdef UNICODE
+#define U_FACTOR	sizeof(wchar_t)
 #else
-#define HOSTSTAT_LEN	(STARTSTAT + SAVED_PINGS)	// hostname + statistics
+#define U_FACTOR	1
+#endif
+
+#ifdef IPINFO
+#define HOSTSTAT_LEN	(3 * STARTSTAT + U_FACTOR * SAVED_PINGS)	// hostinfo + statistics
+#else
+#define HOSTSTAT_LEN	(STARTSTAT + U_FACTOR * SAVED_PINGS)		// hostname + statistics
 #endif
 
 #define	NUMHOSTS	10	// net.c static numhosts = 10
@@ -29,6 +43,7 @@ extern int af;			// mtr.c
 extern int mtrtype;
 extern int maxTTL;
 extern float WaitTime;
+extern int display_mode_max;
 
 static int timeout;
 static struct timeval lasttime;
@@ -77,7 +92,7 @@ int gc_open(void) {
 	params.graph_type = (args[ARG_GRAPH_TYPE] > 0) ? args[ARG_GRAPH_TYPE] : 0;
 	params.period = (args[ARG_PERIOD] > 0) ? args[ARG_PERIOD] : 0;
 	params.enable_legend = args[ARG_LEGEND] ? 1 : 0;
-	params.enable_multipath = args[ARG_MULTIPATH] ? 1 : 0;
+	params.enable_multipath = (args[ARG_MULTIPATH] > 0) ? 1 : 0;
 	params.jitter_graph = (args[ARG_JITTER_GRAPH] > 0) ? 1 : 0;
 	params.cols_max = SAVED_PINGS;
 	params.path_max = MAXPATH;
@@ -94,8 +109,6 @@ int gc_open(void) {
 		mtr_curses_init();
 	}
 
-	if (display_mode > 2)	// temp: whithout unicode histogram
-		display_mode = 0;
 	return 1;
 }
 
@@ -162,6 +175,11 @@ void fill_hostinfo(int at, ip_t *addr) {
 			hostinfo_max = len;
 }
 
+void  pr_lastd(void) {
+	if (display_mode)
+		sprintf(legend_hd[LEGEND_HEADER], "Last %d pings", curses_cols);
+}
+
 void gc_keyaction(int c) {
 	if (!c)
 		return;
@@ -169,8 +187,7 @@ void gc_keyaction(int c) {
 	if (c == ACTION_RESIZE) {
 		if (params.enable_legend) {
 			curses_cols = cr_recalc(hostinfo_max);
-			if (display_mode)
-				sprintf(legend_hd[LEGEND_HEADER], "Last %d pings", curses_cols);
+			pr_lastd();
 		}
 		return;
 	}
@@ -183,6 +200,7 @@ void gc_keyaction(int c) {
 				if (display_offset >= hops)
 					display_offset = hops - 1;
 				hostinfo_max = 0;
+				GCDEBUG_MSG(("display_offset=%d\n", display_offset));
 			} break;
 			case '-': {	// ScrollUp
 				int rest = display_offset % 5;
@@ -193,18 +211,20 @@ void gc_keyaction(int c) {
 				if (display_offset < 0)
 					display_offset = 0;
 				hostinfo_max = 0;
+				GCDEBUG_MSG(("display_offset=%d\n", display_offset));
 			} break;
 		}
 		switch (tolower(c)) {
 			case 'd':	// Display
-				display_mode = (display_mode + 1) % 3; // temp: without unicode histogram
-				if (display_mode) {
+				display_mode = (display_mode + 1) % display_mode_max;
+				if (display_mode)
 					curses_cols = cr_recalc(hostinfo_max);
-					sprintf(legend_hd[LEGEND_HEADER], "Last %d pings", curses_cols);
-				}
+				pr_lastd();
+				GCDEBUG_MSG(("display_mode=%d\n", display_mode));
 				break;
 			case 'e':	// MPLS
 				enablempls = !enablempls;
+				GCDEBUG_MSG(("enable_mpls=%d\n", enablempls));
 				break;
 			case 'j':
 				if (index(fld_active, 'N'))
@@ -212,19 +232,23 @@ void gc_keyaction(int c) {
 				else
 					strcpy(fld_active, "LS NABWV");
 				gc_set_header();
+				GCDEBUG_MSG(("toggle latency/jitter stats\n"));
 				break;
 			case 'n':	// DNS
 				use_dns = !use_dns;
 				hostinfo_max = 0;
+				GCDEBUG_MSG(("use_dns=%d\n", use_dns));
 				break;
 #ifdef IPINFO
 			case 'y':	// IP Info
 				ii_action(0);
 				hostinfo_max = 0;
+				GCDEBUG_MSG(("switching ip info\n"));
 				break;
 			case 'z':	// ASN
 				ii_action(1);
 				hostinfo_max = 0;
+				GCDEBUG_MSG(("toggle asn info\n"));
 				break;
 #endif
 		}
@@ -233,30 +257,36 @@ void gc_keyaction(int c) {
 	switch (c) {
 		case 'q':	// Quit
 			gc_close();
+			GCDEBUG_MSG(("bye-bye\n"));
 			exit(0);
 			break;
 		case ' ':	// Resume
 			paused = 0;
 			cr_net_reset(1);
+			GCDEBUG_MSG(("...resume\n"));
 			break;
 	}
 	switch (tolower(c)) {
 		case 'p':	// Pause
 			paused = 1;
+			GCDEBUG_MSG(("pause...\n"));
 			break;
 		case 'r':	// Reset
 			net_reset();
 			cr_net_reset(0);
 			num_pings = 0;
+			GCDEBUG_MSG(("net reset\n"));
 			break;
 		case 't':	// TCP and ICMP ECHO
 			switch (mtrtype) {
 				case IPPROTO_ICMP:
 				case IPPROTO_UDP:
 					mtrtype = IPPROTO_TCP;
+					GCDEBUG_MSG(("tcp_syn packets\n"));
 					break;
 				case IPPROTO_TCP:
 					mtrtype = IPPROTO_ICMP;
+					GCDEBUG_MSG(("icmp_echo packets\n"));
 					break;
 			}
 			break;
@@ -264,10 +294,12 @@ void gc_keyaction(int c) {
 			switch (mtrtype) {
 				case IPPROTO_ICMP:
 				case IPPROTO_TCP:
+					GCDEBUG_MSG(("udp datagrams\n"));
 					mtrtype = IPPROTO_UDP;
 					break;
 				case IPPROTO_UDP:
 					mtrtype = IPPROTO_ICMP;
+					GCDEBUG_MSG(("icmp_echo packets\n"));
 					break;
 			}
 			break;
@@ -322,8 +354,7 @@ void gc_redraw(void) {
 		if (hostinfo_max > hi_max) {
 			hi_max = hostinfo_max;
 			curses_cols = cr_recalc(hostinfo_max);
-			if (display_mode)
-				sprintf(legend_hd[LEGEND_HEADER], "Last %d pings", curses_cols);
+			pr_lastd();
 		}
 		cr_init_legend();
 		cr_print_legend_header(display_mode ? legend_hd[LEGEND_HEADER] : legend_hd[LEGEND_HEADER_STATIC]);
@@ -359,9 +390,20 @@ void gc_redraw(void) {
 					mtr_gen_scale_gc();
 					char *pos = stat;
 					int j;
-					for (j = SAVED_PINGS - curses_cols; j < SAVED_PINGS; j++)
-						*pos++ = mtr_curses_saved_char(saved[j]);
-					*pos = 0;
+#ifdef UNICODE
+					if (display_mode == 3) {
+						for (j = SAVED_PINGS - curses_cols; j < SAVED_PINGS; j++) {
+							*(wchar_t*)pos = mtr_curses_saved_wch(saved[j]);
+							pos += sizeof(wchar_t);
+						}
+						*(wchar_t*)pos = L'\0';
+					} else
+#endif
+					{
+						for (j = SAVED_PINGS - curses_cols; j < SAVED_PINGS; j++)
+							*pos++ = mtr_curses_saved_ch(saved[j]);
+						*pos = 0;
+					}
 				} else
 					mtr_fill_data(at, stat);
 				cr_print_host(i, data[i], buf, stat);
@@ -395,8 +437,18 @@ void gc_redraw(void) {
 
 	if (params.enable_legend)
 		if (display_mode) {
-			int len = sprintf(legend_hd[LEGEND_FOOTER], "<b>Scale:</b>");
-			mtr_curses_scale_desc(legend_hd[LEGEND_FOOTER] + len);
+			int len;
+			static char scale_hs[] = "<b>Scale:</b>";
+#ifdef UNICODE
+			if (display_mode == 3) {
+				len = swprintf((wchar_t*)(legend_hd[LEGEND_FOOTER]), 16, L"%s", scale_hs);
+				mtr_curses_scale_desc((char*)(((wchar_t*)legend_hd[LEGEND_FOOTER]) + len));
+			} else
+#endif
+			{
+				len = sprintf(legend_hd[LEGEND_FOOTER], "%s", scale_hs);
+				mtr_curses_scale_desc(legend_hd[LEGEND_FOOTER] + len);
+			}
 			cr_print_legend_footer(legend_hd[LEGEND_FOOTER]);
 		}
 

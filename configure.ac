@@ -24,19 +24,14 @@ AC_ARG_WITH(unicode,
 [  --with-unicode          Do try to use unicode],
 [unicode=${withval}], [unicode=no])
 AS_IF([test "x$unicode" = "xyes"], [
-	CURSESW_LIB=ncursesw
 	AC_CHECK_HEADERS([ncursesw/cursesw.h ncursesw/curses.h curses.h], break)
 	AC_CHECK_HEADERS([wchar.h wctype.h locale.h langinfo.h])
-	AC_CHECK_LIB([${CURSESW_LIB}], [add_wch], [], [
-		# X/Open curses provide add_wch()
-		AC_CHECK_LIB([curses], [add_wch], [CURSESW_LIB=curses],
-			AC_MSG_ERROR([No ncursesw library found]))
-	])
-	# don't leak ncursesw/curses in LIBS
-	AC_SEARCH_LIBS([tgetent], [${CURSESW_LIB} termcap tinfo])
-	AC_CHECK_LIB([${CURSESW_LIB}], [use_default_colors],
+	AC_SEARCH_LIBS([add_wch], [ncursesw curses],	# Ncursesw and X/Open curses provide add_wch()
+		AC_DEFINE([UNICODE], [1], [Define to enable unicode]),
+		AC_MSG_ERROR([No wide-character curses library found]))
+	AC_SEARCH_LIBS([tgetent], [ncursesw curses termcap tinfo])	# don't leak ncursesw/curses in LIBS
+	AC_SEARCH_LIBS([use_default_colors], [ncursesw curses],
 		AC_DEFINE([HAVE_USE_DEFAULT_COLORS], [1], [Define this if your curses library has the use_default_colors() command.]))
-	AC_DEFINE([UNICODE], [1], [Define to enable unicode])
 ], [
 
 AC_CHECK_HEADERS(ncurses.h ncurses/curses.h curses.h cursesX.h, break)
@@ -55,7 +50,7 @@ AC_CHECK_FUNC(initscr, ,
 	AC_DEFINE(NO_CURSES, 1, Define if you don't have the curses libraries available.)
 	CURSES_OBJ=))))
 
-AC_CHECK_LIB(ncurses, use_default_colors,
+AC_SEARCH_LIBS([use_default_colors], [ncurses curses],
   AC_DEFINE(HAVE_USE_DEFAULT_COLORS, 1, [Define this if your curses library has the use_default_colors() command.]))
 ])
 

@@ -451,6 +451,7 @@ static chtype map2[NUM_FACTORS2];
 static double factors2[NUM_FACTORS2];
 static int scale2[NUM_FACTORS2];
 static int dm2_color_base;
+static chtype map_na2[] = { ' ', '?', '>' | A_BOLD};
 #ifdef UNICODE
 #define NUM_FACTORS3_MONO	7	// without trailing char
 #define NUM_FACTORS3		22
@@ -458,6 +459,7 @@ static cchar_t map3[NUM_FACTORS3];
 static double factors3[NUM_FACTORS3];
 static int scale3[NUM_FACTORS3];
 static int dm3_color_base;
+static cchar_t map_na3[3];
 #endif
 
 void mtr_gen_scale(int num_factors, int *scale, double *factors)
@@ -488,6 +490,15 @@ void mtr_gen_scale(int num_factors, int *scale, double *factors)
 	for (i = 0; i < num_factors; i++) {
 		scale[i] = low_ms + ((double)range * factors[i]);
 	}
+}
+
+void mtr_gen_scale_gc(void) {
+#ifdef UNICODE
+    if (display_mode == 3)
+      mtr_gen_scale(color_mode ? NUM_FACTORS3 : (NUM_FACTORS3_MONO + 1), scale3, factors3);
+    else
+#endif
+      mtr_gen_scale(NUM_FACTORS2, scale2, factors2);
 }
 
 void mtr_curses_factors_init(int num_factors, double *factors) {
@@ -526,6 +537,8 @@ void mtr_curses_init(void) {
 	map2[NUM_FACTORS2 - 1] = map1[1] & A_CHARTEXT;
 	map2[NUM_FACTORS2 - 1] |= (map2[NUM_FACTORS2 - 2] & A_ATTRIBUTES) | A_BOLD;
 
+	map_na2[1] |= color_mode ? (map2[NUM_FACTORS2 - 1] & A_ATTRIBUTES) : A_BOLD;
+
 #ifdef UNICODE
 	for (i = 0; i < NUM_FACTORS3_MONO; i++)
 		map3[i].CCHAR_chars[0] = L'▁' + i;
@@ -534,91 +547,51 @@ void mtr_curses_init(void) {
 		for (i = 0; i < NUM_FACTORS3 - 1; i++) {
 			int base = i / NUM_FACTORS3_MONO;
 			map3[i].CCHAR_attr = COLOR_PAIR(dm3_color_base + base);
-			if (i >= NUM_FACTORS3_MONO) {
-				wcsncpy(map3[i].CCHAR_chars, map3[i % NUM_FACTORS3_MONO].CCHAR_chars, sizeof(wchar_t));
-				map3[i].CCHAR_chars[1] = L'\0';
-			}
+			if (i >= NUM_FACTORS3_MONO)
+				map3[i].CCHAR_chars[0] = map3[i % NUM_FACTORS3_MONO].CCHAR_chars[0];
 		}
 		map3[NUM_FACTORS3 - 1].CCHAR_chars[0] = map1[1] & A_CHARTEXT;
 		map3[NUM_FACTORS3 - 1].CCHAR_attr = map3[NUM_FACTORS3 - 2].CCHAR_attr | A_BOLD;
 	} else
 		map3[NUM_FACTORS3_MONO].CCHAR_chars[0] = map1[1] & A_CHARTEXT;
+
+	for (i = 0; i < (sizeof(map_na2) / sizeof(map_na2[0])); i++)
+		map_na3[i].CCHAR_chars[0] = map_na2[i] & A_CHARTEXT;
+	map_na3[1].CCHAR_attr = color_mode ? map3[NUM_FACTORS3 - 1].CCHAR_attr : A_BOLD;
+	map_na3[2].CCHAR_attr = A_BOLD;
 #endif
 }
 
-void mtr_print_char_scaled(int saved_int) {
-	if (saved_int == -2) {	// unsent
-		addch(' ');
-		return;
-	}
-	if (saved_int == -1) { // not responded
-		addch('?' | (color_mode ? (map2[NUM_FACTORS2 - 1] & A_ATTRIBUTES) : A_BOLD));
-		return;
-	}
-
-	if (display_mode == 1) {
-		int ndx = (saved_int <= scale2[NUM_FACTORS2 - 2]) ? 0 : 1;
-		addch(map1[ndx]);
-		return;
-	} else if (display_mode == 2) {
-		int i;
-		for (i = 0; i < NUM_FACTORS2; i++)
-			if (saved_int <= scale2[i]) {
-				addch(map2[i]);
-				return;
-			}
-	}
-#ifdef UNICODE
-	else if (display_mode == 3) {
-		int num_factors = color_mode ? NUM_FACTORS3 : (NUM_FACTORS3_MONO + 1);
-		int i;
-		for (i = 0; i < num_factors; i++)
-			if (saved_int <= scale3[i]) {
-				add_wch(&map3[i]);
-				return;
-			}
-	}
-#endif
-	addch('>' | A_BOLD);	// ???
-}
-
-char mtr_curses_saved_char(int saved_int) {
+chtype mtr_saved_ch(int saved_int) {
 	if (saved_int == -2)
-		return ' ';
+		return map_na2[0];	// unsent
 	if (saved_int == -1)
-		return '?';
-	if (display_mode != 1) {
+		return map_na2[1];	// has not responded
+	if (display_mode == 1) {
+		return map1[(saved_int <= scale2[NUM_FACTORS2 - 2]) ? 0 : 1];
+	} else if (display_mode == 2) {
 		int i;
 		for (i = 0; i < NUM_FACTORS2; i++)
 			if (saved_int <= scale2[i])
 				return map2[i];
-		return '>';
 	}
-	if (saved_int > scale2[NUM_FACTORS2 - 2])
-		return map2[NUM_FACTORS2 - 1];
-	else
-		return '.';
+	return map_na2[2];	// ???
 }
 
-void mtr_fill_graph(int at, int cols)
-{
-	int* saved;
-	int i;
-
-	saved = net_saved_pings(at);
-	for (i = SAVED_PINGS - cols; i < SAVED_PINGS; i++) {
-			if (color_mode)
-				mtr_print_char_scaled(saved[i]);
-			else {
 #ifdef UNICODE
-				if (display_mode == 3)
-					mtr_print_char_scaled(saved[i]);
-				else
-#endif
-					addch(mtr_curses_saved_char(saved[i]));
-			}
-	}
+cchar_t* mtr_saved_cc(int saved_int) {
+	if (saved_int == -2)
+		return &map_na3[0];
+	if (saved_int == -1)
+		return &map_na3[1];
+	int num_factors = color_mode ? NUM_FACTORS3 : (NUM_FACTORS3_MONO + 1);
+	int i;
+	for (i = 0; i < num_factors; i++)
+		if (saved_int <= scale3[i])
+			return &map3[i];
+	return &map_na3[2];	// ???
 }
+#endif
 
 void mtr_curses_graph(int startstat, int cols)
 {
@@ -654,7 +627,16 @@ void mtr_curses_graph(int startstat, int cols)
 		move(y, startstat);
 
 		addch(' ');
-		mtr_fill_graph(at, cols);
+		int *saved = net_saved_pings(at);
+		int i;
+#ifdef UNICODE
+		if (display_mode == 3)
+			for (i = SAVED_PINGS - cols; i < SAVED_PINGS; i++)
+				add_wch(mtr_saved_cc(saved[i]));
+		else
+#endif
+			for (i = SAVED_PINGS - cols; i < SAVED_PINGS; i++)
+				addch(mtr_saved_ch(saved[i]));
 		addch('\n');
 	}
 }
@@ -673,6 +655,24 @@ int mtr_curses_data_fields(char *buf) {
     }
     return hd_len;
 }
+
+#ifdef UNICODE
+void mtr_print_scale3(int num_factors, int i0, int di) {
+	int i;
+	for (i = i0; i < num_factors; i += di) {
+//		printw("  %lc:%dms", map3[i].CCHAR_chars[0], scale3[i] / 1000);
+		addstr("  ");
+		add_wch(&map3[i]);
+		int sc = scale3[i] / 1000;
+		if (sc)
+			printw(":%dms", sc);
+		else
+			printw(":%.1fms", (double)scale3[i] / 1000);
+	}
+	addstr("  ");
+	add_wch(&map3[num_factors]);
+}
+#endif
 
 void mtr_curses_redraw(void)
 {
@@ -734,12 +734,7 @@ void mtr_curses_redraw(void)
     attroff(A_BOLD);
     move(rowstat, 0);
 
-#ifdef UNICODE
-    if (display_mode == 3)
-      mtr_gen_scale(color_mode ? NUM_FACTORS3 : (NUM_FACTORS3_MONO + 1), scale3, factors3);
-    else
-#endif
-      mtr_gen_scale(NUM_FACTORS2, scale2, factors2);
+    mtr_gen_scale_gc();
     mtr_curses_graph(startstat, max_cols);
 
     addch('\n');
@@ -751,10 +746,7 @@ void mtr_curses_redraw(void)
       addstr("  ");
       addch(map1[0] | A_BOLD);
       printw(" less than %dms   ", scale2[NUM_FACTORS2 - 2] / 1000);
-      if (color_mode)
-        addch(map1[1]);
-      else
-        addch(map1[1] | A_BOLD);
+      addch(map1[1] | (color_mode ? 0 : A_BOLD));
       addstr(" greater than ");
       addch(map1[0] | A_BOLD);
       addstr("   ");
@@ -777,30 +769,10 @@ void mtr_curses_redraw(void)
     }
 #ifdef UNICODE
     else if (display_mode == 3) {
-      if (color_mode) {
-//        for (i = 0; i < NUM_FACTORS3 - 1; i++) {
-        for (i = 1; i < NUM_FACTORS3 - 1; i += 2) {
-          addstr("  ");
-          add_wch(&map3[i]);
-          int sc = scale3[i] / 1000;
-          if (sc)
-            printw(":%dms", sc);
-          else
-            printw(":%.1fms", (double)scale3[i] / 1000);
-        }
-        addstr("  ");
-        add_wch(&map3[NUM_FACTORS3 - 1]);
-      } else {
-        for (i = 0; i < NUM_FACTORS3_MONO; i++) {
-//          printw("  %lc:%dms", map3[i].CCHAR_chars[0], scale3[i] / 1000);
-          addstr("  ");
-          add_wch(&map3[i]);
-          printw(":%dms", scale3[i] / 1000);
-	}
-//        printw("  %lc", map3[NUM_FACTORS3_MONO].CCHAR_chars[0]);
-        addstr("  ");
-        add_wch(&map3[NUM_FACTORS3_MONO]);
-      }
+      if (color_mode)
+        mtr_print_scale3(NUM_FACTORS3 - 1, 1, 2);
+	  else
+        mtr_print_scale3(NUM_FACTORS3_MONO, 0, 1);
     }
 #endif
   }
@@ -869,20 +841,39 @@ void mtr_curses_clear(void)
 }
 
 #ifdef GRAPHCAIRO
+
 void mtr_curses_scale_desc(char *buf) {
 	if (display_mode == 1)
-		sprintf(buf, "  %c less than %dms   %c greater than %c   ? Unknown", (char)(map1[0] & A_CHARTEXT),
-			scale2[NUM_FACTORS2 - 2] / 1000, (char)(map1[1] & A_CHARTEXT), (char)(map1[0] & A_CHARTEXT));
+		sprintf(buf, "  <b>%c</b> less than %dms   <b>%c</b> greater than <b>%c</b>   <b>%c</b> Unknown",
+			(char)(map1[0] & A_CHARTEXT), scale2[NUM_FACTORS2 - 2] / 1000, (char)(map1[1] & A_CHARTEXT),
+			(char)(map1[0] & A_CHARTEXT), (char)(map_na2[1] & A_CHARTEXT));
 	else if (display_mode == 2) {
 		int len = 0;
 		int i;
 		for (i = 0; i < NUM_FACTORS2 - 1; i++)
 			len += sprintf(buf + len, "  %c:%dms", (char)(map2[i] & A_CHARTEXT), scale2[i] / 1000);
+		sprintf(buf + len, "  %c", (char)(map2[NUM_FACTORS2 - 1] & A_CHARTEXT));
 	}
+#ifdef UNICODE
+	else if (display_mode == 3) {
+		int len = 0;
+		int i;
+		for (i = 0; i < NUM_FACTORS3_MONO; i++)
+			len += swprintf(((wchar_t*)buf) + len, 16, L"  %lc:%dms", map3[i].CCHAR_chars[0], scale3[i] / 1000);
+		swprintf(((wchar_t*)buf) + len, 4, L"  %c", map3[NUM_FACTORS3_MONO].CCHAR_chars[0]);
+	}
+#endif
 }
 
-void mtr_gen_scale_gc(void) {
-	mtr_gen_scale(NUM_FACTORS2, scale2, factors2);
+#ifdef UNICODE
+wchar_t mtr_curses_saved_wch(int saved_int) {
+	cchar_t *cc = mtr_saved_cc(saved_int);
+	return cc->CCHAR_chars[0];
 }
 #endif
 
+char mtr_curses_saved_ch(int saved_int) {
+	return (char)(mtr_saved_ch(saved_int) & A_CHARTEXT);
+}
+
+#endif
