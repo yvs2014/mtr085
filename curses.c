@@ -843,12 +843,13 @@ void mtr_curses_clear(void)
 #ifdef GRAPHCAIRO
 
 void mtr_curses_scale_desc(char *buf) {
+	static char scale_hs[] = "Scale:";
 	if (display_mode == 1)
-		sprintf(buf, "  <b>%c</b> less than %dms   <b>%c</b> greater than <b>%c</b>   <b>%c</b> Unknown",
+		sprintf(buf, "%s  %c less than %dms   %c greater than %c   %c Unknown", scale_hs,
 			(char)(map1[0] & A_CHARTEXT), scale2[NUM_FACTORS2 - 2] / 1000, (char)(map1[1] & A_CHARTEXT),
 			(char)(map1[0] & A_CHARTEXT), (char)(map_na2[1] & A_CHARTEXT));
 	else if (display_mode == 2) {
-		int len = 0;
+		int len = sprintf(buf, "%s", scale_hs);
 		int i;
 		for (i = 0; i < NUM_FACTORS2 - 1; i++)
 			len += sprintf(buf + len, "  %c:%dms", (char)(map2[i] & A_CHARTEXT), scale2[i] / 1000);
@@ -856,7 +857,7 @@ void mtr_curses_scale_desc(char *buf) {
 	}
 #ifdef UNICODE
 	else if (display_mode == 3) {
-		int len = 0;
+		int len = swprintf((wchar_t*)buf, 16, L"%s", scale_hs);
 		int i;
 		for (i = 0; i < NUM_FACTORS3_MONO; i++)
 			len += swprintf(((wchar_t*)buf) + len, 16, L"  %lc:%dms", map3[i].CCHAR_chars[0], scale3[i] / 1000);

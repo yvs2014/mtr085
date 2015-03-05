@@ -71,13 +71,6 @@ enum {
 #define LEGEND_HD_NO    3
 static char legend_hd[LEGEND_HD_NO][HOSTSTAT_LEN];
 
-void gc_set_header(void) {
-	int len = 0;
-	len += sprintf(legend_hd[LEGEND_HEADER_STATIC], "%s", "<b>");
-	len += mtr_curses_data_fields(legend_hd[LEGEND_HEADER_STATIC] + len);
-	len += sprintf(legend_hd[LEGEND_HEADER_STATIC] + len, "%s", "</b>");
-}
-
 int gc_open(void) {
 	if ((data = malloc(maxTTL * sizeof(int))))
 		memset(data, -1, maxTTL * sizeof(int));
@@ -104,7 +97,7 @@ int gc_open(void) {
 	if (params.enable_legend) {
 		if (params.jitter_graph == 1)
 			strcpy(fld_active, "DR AGJMXI");
-		gc_set_header();
+		mtr_curses_data_fields(legend_hd[LEGEND_HEADER_STATIC]);
 		curses_cols = cr_recalc(hostinfo_max);
 		mtr_curses_init();
 	}
@@ -120,13 +113,14 @@ void gc_close(void) {
 void gc_parsearg(char* arg) {
 	int i = 0;
 	if (arg) {
-		char *n, *p = strdup(arg);
-		for (; (n = strchr(p, GC_ARGS_SEP)) && (i < GC_ARGS_MAX); i++, p = n) {
+		char *n, *p, *h = strdup(arg);
+		for (p = h; (n = strchr(p, GC_ARGS_SEP)) && (i < GC_ARGS_MAX); i++, p = n) {
 			*n++ = 0;
 			args[i] = (*p) ? atoi(p) : -1;
 		}
 		if (p && (i < GC_ARGS_MAX))
 			args[i++] = (*p) ? atoi(p) : -1;
+		free(h);
 	}
 
 	int j;
@@ -231,7 +225,7 @@ void gc_keyaction(int c) {
 					strcpy(fld_active, "DR AGJMXI");
 				else
 					strcpy(fld_active, "LS NABWV");
-				gc_set_header();
+				mtr_curses_data_fields(legend_hd[LEGEND_HEADER_STATIC]);
 				GCDEBUG_MSG(("toggle latency/jitter stats\n"));
 				break;
 			case 'n':	// DNS
@@ -437,18 +431,7 @@ void gc_redraw(void) {
 
 	if (params.enable_legend)
 		if (display_mode) {
-			int len;
-			static char scale_hs[] = "<b>Scale:</b>";
-#ifdef UNICODE
-			if (display_mode == 3) {
-				len = swprintf((wchar_t*)(legend_hd[LEGEND_FOOTER]), 16, L"%s", scale_hs);
-				mtr_curses_scale_desc((char*)(((wchar_t*)legend_hd[LEGEND_FOOTER]) + len));
-			} else
-#endif
-			{
-				len = sprintf(legend_hd[LEGEND_FOOTER], "%s", scale_hs);
-				mtr_curses_scale_desc(legend_hd[LEGEND_FOOTER] + len);
-			}
+			mtr_curses_scale_desc(legend_hd[LEGEND_FOOTER]);
 			cr_print_legend_footer(legend_hd[LEGEND_FOOTER]);
 		}
 

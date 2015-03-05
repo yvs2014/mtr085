@@ -65,12 +65,13 @@ int backend_create_window(cairo_rectangle_int_t *rectangle, frontend_resize_t fr
 
 	xcb_void_cookie_t cookie_window = xcb_create_window_checked(connection, XCB_COPY_FROM_PARENT,
 		window, screen->root, rectangle->x, rectangle->y, rectangle->width, rectangle->height, 0,
-	   	XCB_WINDOW_CLASS_INPUT_OUTPUT, screen->root_visual, mask, values);
+		XCB_WINDOW_CLASS_INPUT_OUTPUT, screen->root_visual, mask, values);
 	xcb_void_cookie_t cookie_map = xcb_map_window_checked(connection, window);
 
 	xcb_generic_error_t *error = xcb_request_check(connection, cookie_window);
 	if (error) {
 		fprintf(stderr, "xcb backend_create_window(): can't create window : %d\n", error->error_code);
+		free(error);
 		xcb_destroy_window(connection, window);
 		xcb_disconnect(connection);
 		return 0;
@@ -78,6 +79,7 @@ int backend_create_window(cairo_rectangle_int_t *rectangle, frontend_resize_t fr
 	error = xcb_request_check(connection, cookie_map);
 	if (error) {
 		fprintf(stderr, "xcb backend_create_window(): can't map window : %d\n", error->error_code);
+		free(error);
 		xcb_destroy_window(connection, window);
 		xcb_disconnect(connection);
 		return 0;
@@ -85,10 +87,16 @@ int backend_create_window(cairo_rectangle_int_t *rectangle, frontend_resize_t fr
 
 	xcb_intern_atom_cookie_t cookie = xcb_intern_atom(connection, 1, 12, "WM_PROTOCOLS");
 	xcb_intern_atom_reply_t* reply = xcb_intern_atom_reply(connection, cookie, 0);
-	xcb_intern_atom_cookie_t cookie2 = xcb_intern_atom(connection, 0, 16, "WM_DELETE_WINDOW");
-	xcb_intern_atom_reply_t* reply2 = xcb_intern_atom_reply(connection, cookie2, 0);
-	xcb_change_property(connection, XCB_PROP_MODE_REPLACE, window, (*reply).atom, 4, 32, 1, &(*reply2).atom);
-	delete_window_atom = (*reply2).atom;
+	if (reply) {
+		xcb_intern_atom_cookie_t cookie2 = xcb_intern_atom(connection, 0, 16, "WM_DELETE_WINDOW");
+		xcb_intern_atom_reply_t* reply2 = xcb_intern_atom_reply(connection, cookie2, 0);
+		if (reply2) {
+			xcb_change_property(connection, XCB_PROP_MODE_REPLACE, window, (*reply).atom, 4, 32, 1, &(*reply2).atom);
+			delete_window_atom = (*reply2).atom;
+			free(reply2);
+		}
+		free(reply);
+	}
 
 	xcb_flush(connection);
 	if (xcb_connection_has_error(connection)) {

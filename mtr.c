@@ -507,7 +507,7 @@ void parse_arg (int argc, char **argv)
       ii_parsearg(optarg);
       break;
     case 'z':
-      ii_parsearg("");
+      ii_parsearg(NULL);
       break;
 #endif
 #ifdef GRAPHCAIRO

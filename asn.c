@@ -43,9 +43,15 @@
 /*
 #ifndef IIDEBUG
 #define IIDEBUG
-#include <syslog.h>
 #endif
 */
+
+#ifdef IIDEBUG
+#include <syslog.h>
+#define IIDEBUG_MSG(x)	syslog x
+#else
+#define IIDEBUG_MSG(x)	
+#endif
 
 #define II_ARGS_SEP	','
 #define II_ITEM_SEP	'|'
@@ -180,22 +186,16 @@ int split_with_sep(char** args, int max, char sep) {
 
 char* split_rec(char *rec, int ndx) {
     if (!rec)
-	return NULL;
+        return NULL;
     if (hash) {
-#ifdef IIDEBUG
-        syslog(LOG_INFO, "Malloc-tbl: %s", rec);
-#endif
+        IIDEBUG_MSG((LOG_INFO, "Malloc-tbl: %s", rec));
         if (!(items = malloc(sizeof(*items)))) {
-#ifdef IIDEBUG
-            syslog(LOG_INFO, "Free-txt(%p)", rec);
-#endif
+            IIDEBUG_MSG((LOG_INFO, "Free-txt(%p)", rec));
             free(rec);
             return NULL;
         }
     } else {
-#ifdef IIDEBUG
-        syslog(LOG_INFO, "Not hashed: %s", rec);
-#endif
+        IIDEBUG_MSG((LOG_INFO, "Not hashed: %s", rec));
         static items_t nothashed_items;
         items = &nothashed_items;
 	}
@@ -280,28 +280,20 @@ char *get_ipinfo(ip_t *addr, int ndx) {
     ENTRY item;
 
     if (hash) {
-#ifdef IIDEBUG
-        syslog(LOG_INFO, ">> Search: %s", key);
-#endif
+        IIDEBUG_MSG((LOG_INFO, ">> Search: %s", key));
         item.key = key;
         ENTRY *found_item;
         if ((found_item = hsearch(item, FIND))) {
             if (!(val = (*((items_t*)found_item->data))[ipinfo_no[ndx]]))
                 val = (*((items_t*)found_item->data))[0];
-#ifdef IIDEBUG
-        syslog(LOG_INFO, "Found (hashed): %s", val);
-#endif
+            IIDEBUG_MSG((LOG_INFO, "Found (hashed): %s", val));
         }
     }
 
     if (!val) {
-#ifdef IIDEBUG
-        syslog(LOG_INFO, "Lookup: %s", key);
-#endif
+        IIDEBUG_MSG((LOG_INFO, "Lookup: %s", key));
         if ((val = split_rec(ipinfo_lookup(lookup_key), ndx))) {
-#ifdef IIDEBUG
-            syslog(LOG_INFO, "Looked up: %s", key);
-#endif
+            IIDEBUG_MSG((LOG_INFO, "Looked up: %s", key));
             if (hash)
                 if ((item.key = strdup(key))) {
                     item.data = (void*)items;
@@ -359,9 +351,7 @@ char *fmt_ipinfo(ip_t *addr) {
 
 void asn_open(void) {
     if (!hash) {
-#ifdef IIDEBUG
-        syslog(LOG_INFO, "hcreate(%d)", maxTTL);
-#endif
+        IIDEBUG_MSG((LOG_INFO, "hcreate(%d)", maxTTL));
         if (!(hash = hcreate(maxTTL)))
             perror("ipinfo hash");
     }
@@ -369,9 +359,7 @@ void asn_open(void) {
 
 void asn_close(void) {
     if (hash) {
-#ifdef IIDEBUG
-        syslog(LOG_INFO, "hdestroy()");
-#endif
+        IIDEBUG_MSG((LOG_INFO, "hdestroy()"));
         hdestroy();
         hash = enable_ipinfo = 0;
     }
@@ -383,10 +371,9 @@ void ii_parsearg(char *arg) {
 
     char* args[II_ITEM_MAX + 1];
     memset(args, 0, sizeof(args));
-    args[0] = strdup(arg);
-    split_with_sep((char**)&args, II_ITEM_MAX + 1, II_ARGS_SEP);
-
-    if (args[0]) {
+    if (arg) {
+        args[0] = strdup(arg);
+        split_with_sep((char**)&args, II_ITEM_MAX + 1, II_ARGS_SEP);
         int no = atoi(args[0]);
         if ((no > 0) && (no <= (sizeof(origins)/sizeof(origins[0]))))
             origin_no = no - 1;
@@ -404,11 +391,10 @@ void ii_parsearg(char *arg) {
     if (ipinfo_no[0] < 0)
         ipinfo_no[0] = 0;
 
-    free(args[0]);
+    if (args[0])
+        free(args[0]);
     enable_ipinfo = 1;
-#ifdef IIDEBUG
-    syslog(LOG_INFO, "ii origin: \"%s\" \"%s\"", origins[origin_no].ip4zone, origins[origin_no].ip6zone);
-#endif
+    IIDEBUG_MSG((LOG_INFO, "ii origin: \"%s\" \"%s\"", origins[origin_no].ip4zone, origins[origin_no].ip6zone));
 }
 
 void ii_action(int action_asn) {
@@ -429,6 +415,6 @@ void ii_action(int action_asn) {
             }
         }
     } else // init
-        ii_parsearg("");
+        ii_parsearg(NULL);
 }
 

@@ -374,30 +374,16 @@ void draw_grid(void) {
 	cr = cairos[CR_BASE].cairo;
 	pl = cairos[CR_BASE].pango;
 
-	if (tm_fmt == TM_HHMM) {
-		cairo_set_source_rgb(cr, 1, 1, 1);
-		int xl_x = vp.x + vp.width + tick_size * 2;
-		int xl_y = vp.y + vp.height - font_size;
-		cairo_rectangle(cr, xl_x, xl_y, coords.label_w, font_size);
-		cairo_fill(cr);
-		pango_layout_set_alignment(pl, PANGO_ALIGN_LEFT);
-		cairo_set_source_rgb(cr, 0, 0, 0);
-		cairo_move_to(cr, xl_x, xl_y);
-		char  *x_label = "HH:MM";
-		pango_layout_set_text(pl, x_label, -1);
-		pango_cairo_show_layout(cr, pl);
-	} else if (tm_fmt == TM_MMSS) {
-		cairo_set_source_rgb(cr, 1, 1, 1);
-		int xl_x = vp.x + vp.width + tick_size * 2;
-		int xl_y = vp.y + vp.height - font_size;
-		cairo_rectangle(cr, xl_x, xl_y, coords.label_w, font_size);
-		cairo_fill(cr);
-		pango_layout_set_alignment(pl, PANGO_ALIGN_LEFT);
-		cairo_set_source_rgb(cr, 0, 0, 0);
-		cairo_move_to(cr, xl_x, xl_y);
-		pango_layout_set_text(pl, (tm_fmt == TM_HHMM) ? "HH:MM" : "Time", -1);
-		pango_cairo_show_layout(cr, pl);
-	};
+	cairo_set_source_rgb(cr, 1, 1, 1);
+	int xl_x = vp.x + vp.width + tick_size * 2;
+	int xl_y = vp.y + vp.height - font_size;
+	cairo_rectangle(cr, xl_x, xl_y, coords.label_w, font_size);
+	cairo_fill(cr);
+	pango_layout_set_alignment(pl, PANGO_ALIGN_LEFT);
+	cairo_set_source_rgb(cr, 0, 0, 0);
+	cairo_move_to(cr, xl_x, xl_y);
+	pango_layout_set_text(pl, (tm_fmt == TM_HHMM) ? "HH:MM" : "Time", -1);
+	pango_cairo_show_layout(cr, pl);
 
 	cairo_move_to(cr, vp.x + tick_size, grid.y - font_size * 3 / 2);
 	cairo_set_source_rgb(cr, 1, 1, 1);
@@ -603,6 +589,7 @@ void print_legend_desc(int x, int y, char *desc, int desc_max) {
 #endif
 			s = desc;
 
+/*
 		char *txt;
 		PangoAttrList *attrs;
 		pango_parse_markup(s, -1, 0, &attrs, &txt, NULL, NULL);
@@ -610,15 +597,21 @@ void print_legend_desc(int x, int y, char *desc, int desc_max) {
 			return;
 		if (strlen(txt) > desc_max)
 			txt[desc_max] = 0;
+*/
+		if (strlen(s) > desc_max)
+			s[desc_max] = 0;
 		pango_layout_set_width(pl, (legend.width - x) * PANGO_SCALE);
 		pango_layout_set_alignment(pl, PANGO_ALIGN_RIGHT);
-		pango_layout_set_text(pl, txt, -1);
-		pango_layout_set_attributes(pl, attrs);
+		pango_layout_set_text(pl, s, -1);
+//		pango_layout_set_text(pl, txt, -1);
+//		pango_layout_set_attributes(pl, attrs);
 
 		cairo_move_to(cr, x, y);
 		cairo_set_source_rgb(cr, 0, 0, 0);
 		pango_cairo_show_layout(cr, pl);
 		pango_layout_set_attributes(pl, NULL);	// unref
+//		pango_attr_list_unref(attrs);
+//		free(txt);
 
 		pango_layout_set_width(pl, -1);
 		pango_layout_set_alignment(pl, PANGO_ALIGN_LEFT);
