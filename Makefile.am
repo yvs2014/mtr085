@@ -12,40 +12,48 @@ mtr_SOURCES = mtr.c \
               split.c split.h \
               display.c display.h \
               report.c report.h \
-              getopt.c getopt1.c getopt.h \
               select.c select.h \
               mtr-curses.h \
               mtr-gtk.h
+
+nodist_mtr_SOURCES = version.h
+EXTRA_mtr_SOURCES = curses.c \
+                    gtk.c
+AM_CPPFLAGS =
+mtr_DEPENDENCIES = $(GTK_OBJ) $(CURSES_OBJ)
+mtr_LDFLAGS = $(GTK_OBJ) $(CURSES_OBJ)
+mtr_LDADD = $(RESOLV_LIBS)
+
+if LOCAL_GETOPT
+mtr_SOURCES += getopt/getopt.c getopt/getopt1.c getopt/getopt.h
+AM_CPPFLAGS += -Igetopt
+endif
 
 if IPINFO
 mtr_SOURCES += asn.c asn.h
 endif
 
-nodist_mtr_SOURCES = version.h
-EXTRA_mtr_SOURCES = curses.c \
-                    gtk.c
-DEFAULT_INCLUDES= $(GLIB_CFLAGS) -I.
-mtr_DEPENDENCIES = $(GTK_OBJ) $(CURSES_OBJ)
-mtr_LDFLAGS = $(GTK_OBJ) $(CURSES_OBJ)
-mtr_LDADD = $(GLIB_LIBS) $(RESOLV_LIBS)
-
 if GRAPHCAIRO
-DEFAULT_INCLUDES += @graphcairo_CFLAGS@ -Igraphcairo
-mtr_LDADD += @graphcairo_LIBS@
-mtr_SOURCES += \
+mtr_LDADD += libgraphcairo.a
+noinst_LIBRARIES = libgraphcairo.a
+libgraphcairo_a_SOURCES = \
 	graphcairo/graphcairo.c graphcairo/graphcairo.h \
 	graphcairo/graphcairo-mtr.c graphcairo/graphcairo-mtr.h \
 	graphcairo/graphcairo-backend.h
 if GRAPHCAIRO_XCB
-mtr_SOURCES += graphcairo/graphcairo-xcb.c
+libgraphcairo_a_SOURCES += graphcairo/graphcairo-xcb.c
 endif
 if GRAPHCAIRO_XLIB
-mtr_SOURCES += graphcairo/graphcairo-xlib.c
+libgraphcairo_a_SOURCES += graphcairo/graphcairo-xlib.c
 endif
+libgraphcairo_a_CPPFLAGS = @graphcairo_CFLAGS@ -Igraphcairo
+AM_CPPFLAGS += -Igraphcairo
+mtr_LDADD += @graphcairo_LIBS@
+mtr_SOURCES += $(graphcairo_a_SOURCES)
 endif
 
 if LIBIDN
-DEFAULT_INCLUDES += @libidn_CFLAGS@
+AM_CPPFLAGS += @libidn_CFLAGS@
 mtr_LDADD += @libidn_LIBS@
 endif
 

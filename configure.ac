@@ -12,6 +12,7 @@ CURSES_OBJ=curses.o
 
 AC_PROG_CC
 AM_PROG_CC_C_O
+AC_PROG_RANLIB
 
 AC_CHECK_SIZEOF(unsigned char, 1)
 AC_CHECK_SIZEOF(unsigned short, 2)
@@ -84,6 +85,11 @@ AC_ARG_WITH([libidn],
 [libidn="${withval}"], [libidn=no])
 AM_CONDITIONAL([LIBIDN], [test "x$libidn" = "xyes"])
 
+AC_ARG_WITH([sys_getopt],
+[  --with-sys-getopt       Do try to use system getopt],
+[sys_getopt="${withval}"], [sys_getopt=no])
+AM_CONDITIONAL([LOCAL_GETOPT], [test "x$sys_getopt" = "xno"])
+
 AC_ARG_ENABLE(ipv6,
 [  --disable-ipv6          Do not enable IPv6],
 WANTS_IPV6=$enableval, WANTS_IPV6=yes)
@@ -147,6 +153,11 @@ AS_IF([test "x$libidn" = "xyes"], [
 		AC_SUBST(libidn_LIBS)
 		AC_DEFINE([HAVE_LIBIDN], [1], [Define to enable libidn])
 	])
+])
+
+AS_IF([test "x$sys_getopt" = "xyes"], [
+	AC_CHECK_HEADERS([getopt.h])
+	AC_CHECK_FUNCS([getopt_long], AC_DEFINE([HAVE_GETOPT_LONG]), AC_MSG_ERROR([No system getopt_long found]))
 ])
 
 AC_CANONICAL_HOST
