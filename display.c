@@ -250,22 +250,7 @@ void display_loop(void)
   }
 }
 
-
-void display_clear(void)
-{
-  switch(DisplayMode) {
-  case DisplayCurses:
+void display_clear(void) {
+  if (DisplayMode == DisplayCurses)
     mtr_curses_clear();
-    break;
-  case DisplayReport:
-  case DisplayTXT:
-  case DisplayXML:
-  case DisplayCSV:
-  case DisplaySplit:
-  case DisplayRaw:
-    break;
-
-  case DisplayGTK:
-    break;
-  }
 }

@@ -50,6 +50,7 @@ gchar* getSelectedHost(GtkTreePath *path);
 extern char *Hostname;
 extern float WaitTime;
 extern int af;
+extern int mtrtype;
 static int tag;
 static GtkWidget *Pause_Button;
 static GtkWidget *Entry;
@@ -572,11 +573,12 @@ int gtk_keyaction(void)
 }
 
 
-gint gtk_ping(UNUSED gpointer data) 
+gint gtk_ping(UNUSED gpointer data)
 {
   gtk_redraw();
   net_send_batch();
-  net_harvest_fds();
+  if (mtrtype == IPPROTO_TCP)
+    net_harvest_fds();
   g_source_remove (tag);
   gtk_add_ping_timeout ();
   return TRUE;

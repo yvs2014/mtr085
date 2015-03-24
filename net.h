@@ -30,7 +30,7 @@ int net_preopen(void);
 int net_selectsocket(void);
 int net_open(struct hostent *host);
 void net_reopen(struct hostent *address);
-int net_set_interfaceaddress (char *InterfaceAddress); 
+int net_set_interfaceaddress (char *InterfaceAddress);
 void net_reset(void);
 void net_close(void);
 int net_waitfd(void);
@@ -56,7 +56,7 @@ int net_jworst(int at);
 int net_javg(int at);
 int net_jinta(int at);
 ip_t * net_addrs(int at, int i);
-char *net_localaddr(void); 
+char *net_localaddr(void);
 
 int net_send_batch(void);
 void net_end_transit(void);
@@ -86,11 +86,10 @@ void net_process_fds(fd_set *writefd);
 #define MaxHost 256
 #define MinSequence 33000
 #define MaxSequence 65536
-#define MinPort 1024
 
 #define MAXPACKET 4470		/* largest test packet size */
 #define MINPACKET 28		/* 20 bytes IP header and 8 bytes ICMP or UDP */
-#define MAXLABELS 8 		/* http://kb.juniper.net/KB2190 (+ 3 just in case) */
+#define MAXLABELS 8		/* http://kb.juniper.net/KB2190 (+ 3 just in case) */
 
 /* stuff used by display such as report, curses... */
 #define MAXFLD 20		/* max stats fields to display */

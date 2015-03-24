@@ -99,6 +99,7 @@ int   tos = 0;
 int   reportwide = 0;
 int af = DEFAULT_AF;
 int mtrtype = IPPROTO_ICMP;     /* Use ICMP as default packet type */
+pid_t mypid;
 
                                 /* begin ttl windows addByMin */
 int  fstTTL = 1;                /* default start at first hop */
@@ -216,7 +217,7 @@ lock(const char* progname, FILE *f) {
     lock.l_start = 0;
     lock.l_whence = SEEK_END;
     lock.l_len = 0;
-    lock.l_pid = getpid();
+    lock.l_pid = mypid;
 
     fd = fileno(f);
     if ((fstat(fd, &buf) == 0) && S_ISREG(buf.st_mode)) {
@@ -244,7 +245,7 @@ unlock(const char* progname, FILE *f) {
     lock.l_start = 0;
     lock.l_whence = SEEK_END;
     lock.l_len = 0;
-    lock.l_pid = getpid();
+    lock.l_pid = mypid;
 
     fd = fileno(f);
     if ((fstat(fd, &buf) == 0) && S_ISREG(buf.st_mode)) {
@@ -587,8 +588,10 @@ int main(int argc, char **argv)
     exit(1);
   }
 
+  mypid = getpid();
+
   /* reset the random seed */
-  srand (getpid());
+  srand(mypid);
 
   display_detect(&argc, &argv);
   display_mode = 0;

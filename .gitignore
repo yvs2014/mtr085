@@ -11,12 +11,14 @@ confinc
 confmf
 conftest.*
 depcomp
+compile
 install-sh
 missing
 stamp-h1*
 
 /autom4te.cache/
-/.deps/
+**/.deps/
+**/.dirstamp
 /ChangeLog
 /INSTALL
 /mtr
