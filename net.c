@@ -524,6 +524,13 @@ void net_send_query(int index)
   first = 0;
 }
 
+#define TCP_SEQ_CLOSE(at) { \
+  sequence[at].transit = 0; \
+  if (sequence[at].socket > 0) { \
+    close(sequence[at].socket); \
+    sequence[at].socket = 0; \
+  } \
+}
 
 /*   We got a return on something we sent out.  Record the address and
      time.  */
@@ -548,12 +555,7 @@ void net_process_ping(int seq, struct mplslen mpls, void * addr, struct timeval 
 
   if (!sequence[seq].transit)
     return;
-  sequence[seq].transit = 0;
-
-  if (sequence[seq].socket > 0) {
-    close(sequence[seq].socket);
-    sequence[seq].socket = 0;
-  }
+  TCP_SEQ_CLOSE(seq);
 
   index = sequence[seq].index;
 
@@ -749,7 +751,6 @@ void net_process_return(void)
       break;
 #endif
       }
-//syslog(LOG_INFO,"udp pid=%d portpid=%d srcport=%d", mypid, portpid, ntohs(uh->srcport));
       if (ntohs(uh->uh_sport) != portpid)
         return;
       sequence = ntohs(uh->uh_dport);
@@ -1205,13 +1206,8 @@ void net_reset(void)
     host[at].saved_seq_offset = -SAVED_PINGS+2;
   }
 
-  for (at = 0; at < MaxSequence; at++) {
-    sequence[at].transit = 0;
-    if (sequence[at].socket > 0) {
-      close(sequence[at].socket);
-      sequence[at].socket = 0;
-    }
-  }
+  for (at = 0; at < MaxSequence; at++)
+    TCP_SEQ_CLOSE(at);
 
   gettimeofday(&reset, NULL);
 }
@@ -1474,17 +1470,13 @@ void net_process_fds(fd_set *writefd)
        * connection, we write it off to avoid leaking sockets */
       if (r == 1 || errno == ECONNREFUSED)
         net_process_ping(at, mpls, remoteaddress, now);
-      else if (errno != EAGAIN) {
-        close(fd);
-        sequence[at].socket = 0;
-      }
+      else if (errno != EAGAIN)
+        TCP_SEQ_CLOSE(at);
     }
     if (fd > 0) {
       utime = sequence[at].time.tv_sec * 1000000L + sequence[at].time.tv_usec;
-      if (unow - utime > timeout) {
-        close(fd);
-        sequence[at].socket = 0;
-      }
+      if (unow - utime > timeout)
+        TCP_SEQ_CLOSE(at);
     }
   }
 }
