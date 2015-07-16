@@ -225,14 +225,13 @@ void report_close(void)
       if (mpls->labels && z == 1 && enablempls)
         print_mpls(mpls);
     } else {
-#else
+#endif
     if(mpls->labels && z == 1 && enablempls) {
       int k;
       for (k=0; k < mpls->labels; k++) {
         printf("    |   +-- [MPLS: Lbl %lu Exp %u S %u TTL %u]\n", mpls->label[k], mpls->exp[k], mpls->s[k], mpls->ttl[k]);
       }
     }
-#endif
 #ifdef IPINFO
     }
 #endif
