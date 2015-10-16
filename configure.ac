@@ -162,8 +162,11 @@ AS_IF([test "x$sys_getopt" = "xyes"], [
 
 AC_CANONICAL_HOST
 case "$host_os" in
+  linux*)
+    AC_DEFINE(_BSD_SOURCE, 1, [enable BSD derived definitions])
+  ;;
   solaris*)
-    AC_DEFINE(BSD_COMP, 1, [enable BSD compatibility, affects on Solaris])
+    AC_DEFINE(BSD_COMP, 1, [enable BSD compatibility])
   ;;
   netbsd*)
     AC_DEFINE(NETBSD_CURSES, 1, [NetBSD: a hybrid of BSD-curses with X/Open curses])
