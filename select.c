@@ -46,6 +46,8 @@ extern int display_mode_max;
 static struct timeval intervaltime;
 int display_offset = 0;
 
+fd_set tcp_fds;
+int maxfd;
 
 #define GRACETIME (5 * 1000*1000)
 
@@ -53,7 +55,6 @@ void select_loop(void) {
   fd_set readfd;
   fd_set writefd;
   int anyset = 0;
-  int maxfd = 0;
   int dnsfd, netfd;
 #ifdef ENABLE_IPV6
   int dnsfd6;
@@ -67,7 +68,7 @@ void select_loop(void) {
   int graceperiod = 0;
 
   memset(&startgrace, 0, sizeof(startgrace));
-
+  FD_ZERO(&tcp_fds);
   gettimeofday(&lasttime, NULL);
 
   while(1) {
@@ -76,13 +77,11 @@ void select_loop(void) {
     intervaltime.tv_usec = dt % 1000000;
 
     FD_ZERO(&readfd);
-    FD_ZERO(&writefd);
-
-    maxfd = 0;
 
     if(Interactive) {
       FD_SET(0, &readfd);
-      maxfd = 1;
+      if (maxfd == 0)
+        maxfd++;
     }
 
 #ifdef ENABLE_IPV6
@@ -108,9 +107,6 @@ void select_loop(void) {
     FD_SET(netfd, &readfd);
     if(netfd >= maxfd) maxfd = netfd + 1;
 
-    if (mtrtype == IPPROTO_TCP)
-      net_add_fds(&writefd, &maxfd);
-
     do {
       if(anyset || paused) {
 	/* Set timeout to 0.1s.
@@ -119,9 +115,11 @@ void select_loop(void) {
 	 * this prevents mtr from hogging 100% CPU time on one core.
 	 */
 	selecttime.tv_sec = 0;
-	selecttime.tv_usec = paused?100000:0; 
-      
-	rv = select(maxfd, (void *)&readfd, &writefd, NULL, &selecttime);
+	selecttime.tv_usec = paused?100000:0;
+
+	if (mtrtype == IPPROTO_TCP)
+	  writefd = tcp_fds;
+	rv = select(maxfd, &readfd, &writefd, NULL, &selecttime);
 
       } else {
 	if(Interactive) display_redraw();
@@ -174,7 +172,9 @@ void select_loop(void) {
 	  }
 	}
 
-	rv = select(maxfd, (void *)&readfd, NULL, NULL, &selecttime);
+	if (mtrtype == IPPROTO_TCP)
+	  writefd = tcp_fds;
+	rv = select(maxfd, &readfd, &writefd, NULL, &selecttime);
       }
     } while ((rv < 0) && (errno == EINTR));
 
@@ -262,7 +262,7 @@ void select_loop(void) {
 
     /* Check for activity on open sockets */
     if (mtrtype == IPPROTO_TCP)
-      net_process_fds(&writefd);
+      anyset = net_process_fds();
   }
   return;
 }

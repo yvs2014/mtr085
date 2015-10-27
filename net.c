@@ -197,6 +197,8 @@ extern int af;			/* address family of remote target */
 extern int mtrtype;		/* type of query packet used */
 extern int remoteport;          /* target port for TCP tracing */
 extern int timeout;             /* timeout for TCP connections */
+extern fd_set tcp_fds;		/* TCP sockets */
+extern int maxfd;
 extern pid_t mypid;
 static int portpid;
 
@@ -380,6 +382,9 @@ void net_send_tcp(int index)
   sequence[port].socket = s;
 
   connect(s, (struct sockaddr *) &remote, namelen);
+  FD_SET(s, &tcp_fds);
+  if (s >= maxfd)
+    maxfd = s + 1;
 }
 
 /*  Attempt to find the host at a particular number of hops away  */
@@ -525,10 +530,13 @@ void net_send_query(int index)
 }
 
 #define TCP_SEQ_CLOSE(at) { \
-  sequence[at].transit = 0; \
-  if (sequence[at].socket > 0) { \
-    close(sequence[at].socket); \
+  int fd = sequence[at].socket; \
+  if (fd > 0) { \
     sequence[at].socket = 0; \
+    close(fd); \
+    FD_CLR(fd, &tcp_fds); \
+    if ((fd + 1) == maxfd) \
+      maxfd--; \
   } \
 }
 
@@ -555,7 +563,9 @@ void net_process_ping(int seq, struct mplslen mpls, void * addr, struct timeval 
 
   if (!sequence[seq].transit)
     return;
-  TCP_SEQ_CLOSE(seq);
+  sequence[seq].transit = 0;
+  if (mtrtype == IPPROTO_TCP)
+    TCP_SEQ_CLOSE(seq);
 
   index = sequence[seq].index;
 
@@ -1206,8 +1216,11 @@ void net_reset(void)
     host[at].saved_seq_offset = -SAVED_PINGS+2;
   }
 
-  for (at = 0; at < MaxSequence; at++)
-    TCP_SEQ_CLOSE(at);
+  for (at = 0; at < MaxSequence; at++) {
+    sequence[at].transit = 0;
+    if (mtrtype == IPPROTO_TCP)
+      TCP_SEQ_CLOSE(at);
+  }
 
   gettimeofday(&reset, NULL);
 }
@@ -1404,20 +1417,6 @@ void decodempls(int num, char *packet, struct mplslen *mpls, int offset) {
   }
 }
 
-/* Add open sockets to select() */
-void net_add_fds(fd_set *writefd, int *maxfd)
-{
-  int at, fd;
-  for (at = 0; at < MaxSequence; at++) {
-    fd = sequence[at].socket;
-    if (fd > 0) {
-      FD_SET(fd, writefd);
-      if (fd >= *maxfd)
-        *maxfd = fd + 1;
-    }
-  }
-}
-
 int err_slippage(int sock) {
   struct sockaddr *addr = NULL;
   socklen_t namelen;
@@ -1446,9 +1445,9 @@ int err_slippage(int sock) {
 }
 
 /* check if we got connection or error on any fds */
-void net_process_fds(fd_set *writefd)
+int net_process_fds(void)
 {
-  int at, fd, r;
+  int at, fd, r, ret = 0;
   struct timeval now;
   uint64_t unow, utime;
 
@@ -1461,38 +1460,53 @@ void net_process_fds(fd_set *writefd)
 
   for (at = 0; at < MaxSequence; at++) {
     fd = sequence[at].socket;
-    if (fd > 0 && FD_ISSET(fd, writefd)) {
+    if (fd > 0 && FD_ISSET(fd, &tcp_fds)) {
 //      r = write(fd, "G", 1);
       errno = err_slippage(fd);
       r = errno ? 0 : 1; // like write()
       /* if write was successful, or connection refused we have
        * (probably) reached the remote address. Anything else happens to the
        * connection, we write it off to avoid leaking sockets */
-      if (r == 1 || errno == ECONNREFUSED)
+      if (r == 1 || errno == ECONNREFUSED) {
         net_process_ping(at, mpls, remoteaddress, now);
-      else if (errno != EAGAIN)
-        TCP_SEQ_CLOSE(at);
+        ret = 1;
+//      } else if ((errno != EAGAIN) && (errno != EHOSTUNREACH)) {
+//        sequence[at].transit = 0;
+//        TCP_SEQ_CLOSE(at);
+      }
     }
     if (fd > 0) {
       utime = sequence[at].time.tv_sec * 1000000L + sequence[at].time.tv_usec;
-      if (unow - utime > timeout)
+      if (unow - utime > timeout) {
+        sequence[at].transit = 0;
         TCP_SEQ_CLOSE(at);
+      }
     }
   }
+  return ret;
 }
 
 /* for GTK frontend */
 void net_harvest_fds(void)
 {
-  fd_set writefd;
-  int maxfd = 0;
+  maxfd = 0;
   struct timeval tv;
 
-  FD_ZERO(&writefd);
+  FD_ZERO(&tcp_fds);
   tv.tv_sec = 0;
   tv.tv_usec = 0;
-  net_add_fds(&writefd, &maxfd);
-  select(maxfd, NULL, &writefd, NULL, &tv);
-  net_process_fds(&writefd);
+/* previous type of processing */
+  /* Add open sockets to select() */
+  int at, fd;
+  for (at = 0; at < MaxSequence; at++) {
+    fd = sequence[at].socket;
+    if (fd > 0) {
+      FD_SET(fd, &tcp_fds);
+      if (fd >= maxfd)
+        maxfd = fd + 1;
+    }
+  }
+  select(maxfd, NULL, &tcp_fds, NULL, &tv);
+  net_process_fds();
 }
 

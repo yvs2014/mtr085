@@ -79,8 +79,7 @@ void sockaddrtop( struct sockaddr * saddr, char * strptr, size_t len );
 int addrcmp( char * a, char * b, int af );
 void addrcpy( char * a, char * b, int af );
 
-void net_add_fds(fd_set *writefd, int *maxfd);
-void net_process_fds(fd_set *writefd);
+int net_process_fds(void);
 
 #define MAXPATH 8
 #define MaxHost 256
