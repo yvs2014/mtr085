@@ -529,15 +529,15 @@ void net_send_query(int index)
   first = 0;
 }
 
-#define TCP_SEQ_CLOSE(at) { \
-  int fd = sequence[at].socket; \
-  if (fd > 0) { \
-    sequence[at].socket = 0; \
-    close(fd); \
-    FD_CLR(fd, &tcp_fds); \
-    if ((fd + 1) == maxfd) \
-      maxfd--; \
-  } \
+void tcp_seq_close(int at) {
+  int fd = sequence[at].socket;
+  if (fd > 0) {
+    sequence[at].socket = 0;
+    close(fd);
+    FD_CLR(fd, &tcp_fds);
+    if ((fd + 1) == maxfd)
+      maxfd--;
+  }
 }
 
 /*   We got a return on something we sent out.  Record the address and
@@ -565,7 +565,7 @@ void net_process_ping(int seq, struct mplslen mpls, void * addr, struct timeval 
     return;
   sequence[seq].transit = 0;
   if (mtrtype == IPPROTO_TCP)
-    TCP_SEQ_CLOSE(seq);
+    tcp_seq_close(seq);
 
   index = sequence[seq].index;
 
@@ -1219,7 +1219,7 @@ void net_reset(void)
   for (at = 0; at < MaxSequence; at++) {
     sequence[at].transit = 0;
     if (mtrtype == IPPROTO_TCP)
-      TCP_SEQ_CLOSE(at);
+      tcp_seq_close(at);
   }
 
   gettimeofday(&reset, NULL);
@@ -1445,7 +1445,7 @@ int err_slippage(int sock) {
 }
 
 /* check if we got connection or error on any fds */
-int net_process_fds(void)
+int net_process_tcp_fds(void)
 {
   int at, fd, r, ret = 0;
   struct timeval now;
@@ -1472,41 +1472,17 @@ int net_process_fds(void)
         ret = 1;
 //      } else if ((errno != EAGAIN) && (errno != EHOSTUNREACH)) {
 //        sequence[at].transit = 0;
-//        TCP_SEQ_CLOSE(at);
+//        tcp_seq_close(at);
       }
     }
     if (fd > 0) {
       utime = sequence[at].time.tv_sec * 1000000L + sequence[at].time.tv_usec;
       if (unow - utime > timeout) {
         sequence[at].transit = 0;
-        TCP_SEQ_CLOSE(at);
+        tcp_seq_close(at);
       }
     }
   }
   return ret;
-}
-
-/* for GTK frontend */
-void net_harvest_fds(void)
-{
-  maxfd = 0;
-  struct timeval tv;
-
-  FD_ZERO(&tcp_fds);
-  tv.tv_sec = 0;
-  tv.tv_usec = 0;
-/* previous type of processing */
-  /* Add open sockets to select() */
-  int at, fd;
-  for (at = 0; at < MaxSequence; at++) {
-    fd = sequence[at].socket;
-    if (fd > 0) {
-      FD_SET(fd, &tcp_fds);
-      if (fd >= maxfd)
-        maxfd = fd + 1;
-    }
-  }
-  select(maxfd, NULL, &tcp_fds, NULL, &tv);
-  net_process_fds();
 }
 

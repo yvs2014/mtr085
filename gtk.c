@@ -51,10 +51,18 @@ extern char *Hostname;
 extern float WaitTime;
 extern int af;
 extern int mtrtype;
+extern fd_set tcp_fds;
+extern int maxfd;
 static int tag;
 static GtkWidget *Pause_Button;
 static GtkWidget *Entry;
 static GtkWidget *main_window;
+
+typedef struct {
+  guint id;
+  GIOChannel *ch;
+} ConnectionWatch;
+static ConnectionWatch tcp_watches[MaxHost];
 
 void gtk_add_ping_timeout (void)
 {
@@ -62,6 +70,19 @@ void gtk_add_ping_timeout (void)
 
   dt = calc_deltatime (WaitTime);
   tag = g_timeout_add(dt / 1000, gtk_ping, NULL);
+
+  if (mtrtype == IPPROTO_TCP) {
+    net_process_tcp_fds();
+    int fd, m = (maxfd > MaxHost) ? MaxHost : maxfd;
+    for (fd = 0; fd < m; fd++)
+      if (!FD_ISSET(fd, &tcp_fds))
+        if (tcp_watches[fd].id) {
+          g_source_remove(tcp_watches[fd].id);
+          tcp_watches[fd].id = 0;
+          g_io_channel_unref(tcp_watches[fd].ch);
+          tcp_watches[fd].ch = NULL;
+        }
+   }
 }
 
 
@@ -572,13 +593,32 @@ int gtk_keyaction(void)
   return 0;
 }
 
+gboolean gtk_tcp_data(GIOChannel *channel, UNUSED GIOCondition cond, UNUSED gpointer data) {
+  net_process_tcp_fds();
+  int fd = g_io_channel_unix_get_fd(channel);
+  g_source_remove(tcp_watches[fd].id);
+  tcp_watches[fd].id = 0;
+  g_io_channel_unref(channel);
+  tcp_watches[fd].ch = NULL;
+  return TRUE;
+}
+
+void gtk_add_tcp_fds(void) {
+  int fd, m = (maxfd > MaxHost) ? MaxHost : maxfd;
+  for (fd = 0; fd < m; fd++)
+    if (FD_ISSET(fd, &tcp_fds))
+      if (!tcp_watches[fd].id) {
+        tcp_watches[fd].ch = g_io_channel_unix_new(fd);
+        tcp_watches[fd].id = g_io_add_watch(tcp_watches[fd].ch, G_IO_IN | G_IO_OUT, gtk_tcp_data, NULL);
+      }
+}
 
 gint gtk_ping(UNUSED gpointer data)
 {
   gtk_redraw();
   net_send_batch();
   if (mtrtype == IPPROTO_TCP)
-    net_harvest_fds();
+    gtk_add_tcp_fds();
   g_source_remove (tag);
   gtk_add_ping_timeout ();
   return TRUE;
@@ -624,6 +664,9 @@ void gtk_loop(void)
 #endif
   dns_iochannel = g_io_channel_unix_new(dns_waitfd());
   g_io_add_watch(dns_iochannel, G_IO_IN, gtk_dns_data, NULL);
+
+  if (mtrtype == IPPROTO_TCP)
+    bzero(tcp_watches, sizeof(tcp_watches));
 
   gtk_main();
 }

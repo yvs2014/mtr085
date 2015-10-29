@@ -53,7 +53,7 @@ int maxfd;
 
 void select_loop(void) {
   fd_set readfd;
-  fd_set writefd;
+  fd_set writefd, *p_writefd = NULL;
   int anyset = 0;
   int dnsfd, netfd;
 #ifdef ENABLE_IPV6
@@ -70,6 +70,9 @@ void select_loop(void) {
   memset(&startgrace, 0, sizeof(startgrace));
   FD_ZERO(&tcp_fds);
   gettimeofday(&lasttime, NULL);
+
+  if (mtrtype == IPPROTO_TCP)
+    p_writefd = &writefd;
 
   while(1) {
     dt = calc_deltatime (WaitTime);
@@ -119,7 +122,7 @@ void select_loop(void) {
 
 	if (mtrtype == IPPROTO_TCP)
 	  writefd = tcp_fds;
-	rv = select(maxfd, &readfd, &writefd, NULL, &selecttime);
+	rv = select(maxfd, &readfd, p_writefd, NULL, &selecttime);
 
       } else {
 	if(Interactive) display_redraw();
@@ -174,7 +177,7 @@ void select_loop(void) {
 
 	if (mtrtype == IPPROTO_TCP)
 	  writefd = tcp_fds;
-	rv = select(maxfd, &readfd, &writefd, NULL, &selecttime);
+	rv = select(maxfd, &readfd, p_writefd, NULL, &selecttime);
       }
     } while ((rv < 0) && (errno == EINTR));
 
@@ -262,7 +265,7 @@ void select_loop(void) {
 
     /* Check for activity on open sockets */
     if (mtrtype == IPPROTO_TCP)
-      anyset = net_process_fds();
+      anyset = net_process_tcp_fds();
   }
   return;
 }
