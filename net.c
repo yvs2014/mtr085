@@ -189,6 +189,7 @@ static int numhosts = 10;
 
 extern int fstTTL;		/* initial hub(ttl) to ping byMin */
 extern int maxTTL;		/* last hub to ping byMin*/
+extern int endpoint_mode;	/* -fz option */
 extern int cpacketsize;		/* packet size used by ping */
 static int packetsize;		/* packet size used by ping */
 extern int bitpattern;		/* packet bit pattern used by ping */
@@ -900,9 +901,13 @@ int net_max(void)
   for(at = 0; at < maxTTL-1; at++) {
     if ( addrcmp( (void *) &(host[at].addr),
                   (void *) remoteaddress, af ) == 0 ) {
+      if (endpoint_mode)
+        fstTTL = at + 1;
       return at + 1;
     } else if ( addrcmp( (void *) &(host[at].addr),
 			 (void *) &unspec_addr, af ) != 0 ) {
+      if (endpoint_mode)
+        fstTTL = at + 1;
       max = at + 2;
     }
   }

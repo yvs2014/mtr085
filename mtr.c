@@ -103,6 +103,7 @@ pid_t mypid;
 
                                 /* begin ttl windows addByMin */
 int  fstTTL = 1;                /* default start at first hop */
+int  endpoint_mode = 0;         /* 1: -fz option */
 /*int maxTTL = MaxHost-1;  */     /* max you can go is 255 hops */
 int   maxTTL = 30;              /* inline with traceroute */
                                 /* end ttl window stuff. */
@@ -414,6 +415,10 @@ void parse_arg (int argc, char **argv)
       }
       break;
     case 'f':
+      if (optarg[0] == 'z') {
+        endpoint_mode = 1;
+        break;
+      }
       fstTTL = atoi (optarg);
       if (fstTTL > maxTTL) {
 	fstTTL = maxTTL;

@@ -39,8 +39,6 @@
 extern int dns;
 extern char LocalHostname[];
 extern char *Hostname;
-extern int fstTTL;
-extern int maxTTL;
 extern int cpacketsize;
 extern int bitpattern;
 extern int tos;
