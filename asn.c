@@ -55,7 +55,7 @@
 
 #define II_ARGS_SEP	','
 #define II_ITEM_SEP	'|'
-#define II_ITEM_MAX	5
+#define II_ITEM_MAX	7
 #define NAMELEN	128
 #define UNKN	"???"
 
@@ -84,8 +84,14 @@ static origin_t origins[] = {
     { "origin.asn.cymru.com", "origin6.asn.cymru.com", 0, 5, { 6, 17, 4, 8, 11 } },
 // ASN
     { "asn.routeviews.org", NULL, 0, 1, { 6 } },
+// ASN Network Network_Prefix
+//    { "asn.routeviews.org", NULL, 0, 3, { 6, 15, 3 } },
 // Route | "AS"ASN | Organization | Allocated | CC
-    { "origin.asn.spameatingmonkey.net", NULL, -1, 5, { 17, 8, 17, 11, 4 } },
+    { "origin.asn.spameatingmonkey.net", NULL, -1, 5, { 17, 8, 30, 11, 4 } },
+// "AS"ASN
+    { "ip2asn.sasm4.net", NULL, -1, 1, { 8 } },
+// Peers | ASN | Route | AS Name | CC | Website | Organization
+    { "peer.asn.shadowserver.org", NULL, 1, 7, { 36, 6, 17, 20, 4, 20, 30 } },
 };
 
 char *ipinfo_lookup(const char *domain) {
@@ -184,6 +190,14 @@ int split_with_sep(char** args, int max, char sep) {
     return (i + 1);
 }
 
+void fill_unkn(char* unkn, int n) {
+	int len = strlen(unkn);
+	int j;
+	for (j = 0; (j < n) && (*items)[j]; j++)
+		if (!strncmp((*items)[j], unkn, len))
+			(*items)[j] = UNKN;
+}
+
 char* split_rec(char *rec, int ndx) {
     if (!rec)
         return NULL;
@@ -221,20 +235,15 @@ char* split_rec(char *rec, int ndx) {
                     break;
         }
       } break;
-      case 1: {	// originviews.org: unknown AS
-#define S_UINT32_MAX "4294967295"
-        int j;
-        for (j = 0; (j < i) && (*items)[j]; j++)
-            if (!strncmp((*items)[j], S_UINT32_MAX, sizeof(S_UINT32_MAX)))
-                (*items)[j] = UNKN;
-      } break;
-      case 2: {	// spameatingmonkey.net: unknown info
-#define Unknown "Unknown"
-        int j;
-        for (j = 0; (j < i) && (*items)[j]; j++)
-            if (!strncmp((*items)[j], Unknown, sizeof(Unknown)))
-                (*items)[j] = UNKN;
-      } break;
+      case 1:	// originviews.org: unknown AS
+	fill_unkn("4294967295", i);
+	break;
+      case 2:	// spameatingmonkey.net: unknown info
+	fill_unkn("Unknown", i);
+	break;
+      case 3:	// ip2asn.sasm4.net: no record
+	fill_unkn("No Record", i);
+	break;
     }
 
     return (ipinfo_no[ndx] < i) ? (*items)[ipinfo_no[ndx]] : (*items)[0];
