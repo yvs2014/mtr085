@@ -22,8 +22,8 @@ AC_CHECK_SIZEOF(unsigned long, 4)
 AC_CHECK_HEADERS(sys/types.h fcntl.h socket.h sys/socket.h sys/xti.h arpa/nameser_compat.h)
 
 AC_ARG_WITH(unicode,
-[  --with-unicode          Do try to use unicode],
-[unicode=${withval}], [unicode=no])
+[  --without-unicode       Without Unicode histogram],
+[unicode=${withval}], [unicode=yes])
 AS_IF([test "x$unicode" = "xyes"], [
 	AC_CHECK_HEADERS([ncursesw/cursesw.h ncursesw/curses.h curses.h], break)
 	AC_CHECK_HEADERS([wchar.h wctype.h locale.h langinfo.h])
@@ -59,9 +59,10 @@ AC_CHECK_FUNCS(attron fcntl)
 
 AC_CHECK_LIB(m, floor, , AC_MSG_ERROR(No math library found))
 
-AC_ARG_WITH(gtk,
-[  --without-gtk           Do not try to use GTK+ at all],
-WANTS_GTK=$withval, WANTS_GTK=yes)
+AC_ARG_WITH([gtk],
+[  --with-gtk              With GTK UI],
+[gtk="${withval}"], [gtk=no])
+AM_CONDITIONAL([WANTS_GTK], [test "x$gtk" = "xyes"])
 
 AC_ARG_WITH([ipinfo],
 [  --without-ipinfo        Do not try to use ipinfo lookup at all],
@@ -69,25 +70,25 @@ AC_ARG_WITH([ipinfo],
 AM_CONDITIONAL([IPINFO], [test "x$ipinfo" = "xyes"])
 
 AC_ARG_WITH([graphcairo_xcb],
-[  --with-graphcairo-xcb   Do try to use cairo graph with XCB backend],
+[  --with-graphcairo-xcb   Cairo graph with XCB backend],
 [graphcairo_xcb="${withval}"], [graphcairo_xcb=no])
 AM_CONDITIONAL([GRAPHCAIRO_XCB], [test "x$graphcairo_xcb" = "xyes"])
 
 AC_ARG_WITH([graphcairo_xlib],
-[  --with-graphcairo-xlib  Do try to use cairo graph with Xlib backend],
+[  --with-graphcairo-xlib  Cairo graph with Xlib backend],
 [graphcairo_xlib="${withval}"], [graphcairo_xlib=no])
 AM_CONDITIONAL([GRAPHCAIRO_XLIB], [test "x$graphcairo_xlib" = "xyes"])
 
 AM_CONDITIONAL([GRAPHCAIRO], [test "x$graphcairo_xcb" = "xyes" -o "x$graphcairo_xlib" = "xyes"])
 
 AC_ARG_WITH([libidn],
-[  --with-libidn           Do try to use libidn],
+[  --with-libidn           With libidn],
 [libidn="${withval}"], [libidn=no])
 AM_CONDITIONAL([LIBIDN], [test "x$libidn" = "xyes"])
 
 AC_ARG_WITH([sys_getopt],
-[  --with-sys-getopt       Do try to use system getopt],
-[sys_getopt="${withval}"], [sys_getopt=no])
+[  --without-sys-getopt    Do not try to use system getopt],
+[sys_getopt="${withval}"], [sys_getopt=yes])
 AM_CONDITIONAL([LOCAL_GETOPT], [test "x$sys_getopt" = "xno"])
 
 AC_ARG_ENABLE(ipv6,

@@ -75,23 +75,24 @@ static items_t* items;
 typedef struct {
     char* ip4zone;
     char* ip6zone;
+    char* unkn;
     int as_prfx_ndx;
     int fields;
     int width[II_ITEM_MAX];
 } origin_t;
 static origin_t origins[] = {
 // ASN [ASN ..] | Route | CC | Registry | Allocated
-    { "origin.asn.cymru.com", "origin6.asn.cymru.com", 0, 5, { 6, 17, 4, 8, 11 } },
+    { "origin.asn.cymru.com", "origin6.asn.cymru.com", NULL, 0, 5, { 6, 17, 4, 8, 11 } },
 // ASN
-    { "asn.routeviews.org", NULL, 0, 1, { 6 } },
+    { "asn.routeviews.org", NULL, "4294967295", 0, 1, { 6 } },
 // ASN Network Network_Prefix
 //    { "asn.routeviews.org", NULL, 0, 3, { 6, 15, 3 } },
 // Route | "AS"ASN | Organization | Allocated | CC
-    { "origin.asn.spameatingmonkey.net", NULL, -1, 5, { 17, 8, 30, 11, 4 } },
+    { "origin.asn.spameatingmonkey.net", NULL, "Unknown", -1, 5, { 17, 8, 30, 11, 4 } },
 // "AS"ASN
-    { "ip2asn.sasm4.net", NULL, -1, 1, { 8 } },
+    { "ip2asn.sasm4.net", NULL, "No Record", -1, 1, { 8 } },
 // Peers | ASN | Route | AS Name | CC | Website | Organization
-    { "peer.asn.shadowserver.org", NULL, 1, 7, { 36, 6, 17, 20, 4, 20, 30 } },
+    { "peer.asn.shadowserver.org", NULL, NULL, 1, 7, { 36, 6, 17, 20, 4, 20, 30 } },
 };
 
 char *ipinfo_lookup(const char *domain) {
@@ -190,14 +191,6 @@ int split_with_sep(char** args, int max, char sep) {
     return (i + 1);
 }
 
-void fill_unkn(char* unkn, int n) {
-	int len = strlen(unkn);
-	int j;
-	for (j = 0; (j < n) && (*items)[j]; j++)
-		if (!strncmp((*items)[j], unkn, len))
-			(*items)[j] = UNKN;
-}
-
 char* split_rec(char *rec, int ndx) {
     if (!rec)
         return NULL;
@@ -235,15 +228,15 @@ char* split_rec(char *rec, int ndx) {
                     break;
         }
       } break;
-      case 1:	// originviews.org: unknown AS
-	fill_unkn("4294967295", i);
-	break;
-      case 2:	// spameatingmonkey.net: unknown info
-	fill_unkn("Unknown", i);
-	break;
-      case 3:	// ip2asn.sasm4.net: no record
-	fill_unkn("No Record", i);
-	break;
+    }
+
+    char *unkn = origins[origin_no].unkn;
+    if (unkn) {
+        int len = strlen(unkn);
+        int j;
+        for (j = 0; (j < i) && (*items)[j]; j++)
+            if (!strncmp((*items)[j], unkn, len))
+                (*items)[j] = UNKN;
     }
 
     return (ipinfo_no[ndx] < i) ? (*items)[ipinfo_no[ndx]] : (*items)[0];
