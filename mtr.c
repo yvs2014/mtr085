@@ -90,6 +90,7 @@ float WaitTime = 1.0;
 char *Hostname = NULL;
 char *InterfaceAddress = NULL;
 char  LocalHostname[128];
+char  mtr_args[1024]; // posix/susvn: 4096+
 int   dns = 1;
 int   show_ips = 0;
 int   enablempls = 0;
@@ -623,6 +624,11 @@ int main(int argc, char **argv)
   parse_mtr_options (getenv ("MTR_OPTIONS"));
 
   parse_arg (argc, argv);
+
+  { int sz, i;
+    for (sz = 0, i = 1; i < argc; i++)
+      sz += snprintf(mtr_args + sz, sizeof(mtr_args) - sz, " %s", argv[i]);
+  }
 
   while (optind < argc) {
     char* name = argv[optind++];

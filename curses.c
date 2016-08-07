@@ -102,6 +102,7 @@
 #include <time.h>
 
 extern char LocalHostname[];
+extern char mtr_args[];
 extern int fstTTL;
 extern int maxTTL;
 extern int cpacketsize;
@@ -113,18 +114,6 @@ extern int mtrtype;
 extern int color_mode;
 
 static int __unused_int;
-
-void pwcenter(char *str)
-{
-  int maxx;
-  int cx;
-
-  getmaxyx(stdscr, __unused_int, maxx);
-  cx = (signed)(maxx - strlen(str)) / 2;
-  while(cx-- > 0)
-    addch(' ');
-  printw(str);
-}
 
 void mtr_fill_buf(int y, char *buf) {
 	move(2, y);
@@ -693,7 +682,8 @@ void mtr_curses_redraw(void)
 
   move(0, 0);
   attron(A_BOLD);
-  pwcenter("My traceroute  [v" MTR_VERSION "]");
+  snprintf(buf, sizeof(buf), "mtr-%s%s", MTR_VERSION, mtr_args);
+  printw("%*s", (getmaxx(stdscr) + strlen(buf)) / 2, buf);
   attroff(A_BOLD);
 
   mvprintw(1, 0, "%s (%s)", LocalHostname, net_localaddr());
