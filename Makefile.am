@@ -13,16 +13,20 @@ mtr_SOURCES = mtr.c \
               display.c display.h \
               report.c report.h \
               select.c select.h \
-              mtr-curses.h \
-              mtr-gtk.h
+              mtr-curses.h
 
 nodist_mtr_SOURCES = version.h
-EXTRA_mtr_SOURCES = curses.c \
-                    gtk.c
+EXTRA_mtr_SOURCES = curses.c
+
 AM_CPPFLAGS =
-mtr_DEPENDENCIES = $(GTK_OBJ) $(CURSES_OBJ)
-mtr_LDFLAGS = $(GTK_OBJ) $(CURSES_OBJ)
+mtr_DEPENDENCIES = $(CURSES_OBJ)
+mtr_LDFLAGS = $(CURSES_OBJ)
 mtr_LDADD = $(RESOLV_LIBS)
+
+if WANTS_GTK
+mtr_SOURCES += gtk/gtk.c gtk/mtr-gtk.h
+AM_CPPFLAGS += -Igtk
+endif
 
 if LOCAL_GETOPT
 mtr_SOURCES += getopt/getopt.c getopt/getopt1.c getopt/getopt.h

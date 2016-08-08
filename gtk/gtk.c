@@ -25,7 +25,6 @@
 #include <sys/time.h>
 #include <sys/types.h>
 
-#ifndef NO_GTK
 #include <string.h>
 #include <sys/types.h>
 #include <gtk/gtk.h>
@@ -37,7 +36,6 @@
 #include "version.h"
 
 #include "img/mtr_icon.xpm"
-#endif
 
 gint gtk_ping(gpointer data);
 gint Copy_activate(GtkWidget *widget, gpointer data);

@@ -16,6 +16,9 @@
     Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 */
 
+#ifndef MTR_GTK_H
+#define MTR_GTK_H
+
 /*  Prototypes for gtk.c  */
 int gtk_detect(int *argc, char ***argv);
 void gtk_open(void);
@@ -23,3 +26,5 @@ void gtk_close(void);
 void gtk_redraw(void);
 int gtk_keyaction(void);
 void gtk_loop(void);
+
+#endif

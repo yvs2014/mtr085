@@ -4,10 +4,8 @@ AM_INIT_AUTOMAKE([foreign subdir-objects])
 
 AC_CONFIG_FILES([version.h.tmp:version.h.in])
 
-AC_SUBST(GTK_OBJ)
 AC_SUBST(CURSES_OBJ)
 
-GTK_OBJ=gtk.o
 CURSES_OBJ=curses.o
 
 AC_PROG_CC
@@ -103,15 +101,12 @@ m4_ifndef([AM_PATH_GTK_2_0], [m4_defun([AM_PATH_GTK_2_0], [AC_MSG_ERROR([
   or configure --without-gtk.
 ])])])
 
-if test "x$WANTS_GTK" = "xyes"; then
+if test "x$gtk" = "xyes"; then
         AM_PATH_GTK_2_0(2.6.0, CFLAGS="$CFLAGS $GTK_CFLAGS"
-                           LIBS="$LIBS $GTK_LIBS -lm",
+                           LIBS="$LIBS $GTK_LIBS -lm"
+                           AC_DEFINE(GTK, 1, [Define to build mtr with a GTK interface]),
                            AC_MSG_WARN(Building without GTK2 display support)
-                   AC_DEFINE(NO_GTK, 1, [Define if you don't have the GTK+ libraries available.])
-                           GTK_OBJ="")
-else
-	AC_DEFINE(NO_GTK)
-	GTK_OBJ=""
+                       )
 fi
 
 if test "x$ipinfo" = "xno"; then

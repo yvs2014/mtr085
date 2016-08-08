@@ -306,7 +306,9 @@ void parse_arg (int argc, char **argv)
     { "report-wide", 0, 0, 'w' },
     { "xml", 0, 0, 'x' },
     { "curses", 0, 0, 't' },
+#ifdef GTK
     { "gtk", 0, 0, 'g' },
+#endif
     { "raw", 0, 0, 'l' },
     { "csv", 0, 0, 'C' },
     { "displaymode", 1, 0, 'd' },
@@ -369,9 +371,11 @@ void parse_arg (int argc, char **argv)
     case 't':
       DisplayMode = DisplayCurses;
       break;
+#ifdef GTK
     case 'g':
       DisplayMode = DisplayGTK;
       break;
+#endif
     case 'p':                 /* BL */
       DisplayMode = DisplaySplit;
       break;
@@ -647,9 +651,13 @@ int main(int argc, char **argv)
   }
 
   if (PrintHelp) {
-    printf("usage: %s [-BfhvrwctglxspQomniuT46] [--help] [--version]\n"
+    printf("usage: %s [-BfhvrwctlxspQomniuT46] [--help] [--version]\n"
            "\t\t[--report] [--report-wide] [--report-cycles=COUNT]\n"
-           "\t\t[--curses] [--displaymode|-d MODE] [--gtk]\n"
+           "\t\t[--curses] [--displaymode|-d MODE]"
+#ifdef GTK
+           " [--gtk|-g]"
+#endif
+           "\n"
            "\t\t[--csv|-C] [--raw] [--xml] [--split] [--mpls] [--no-dns] [--show-ips]\n"
            "\t\t[--address interface] [--filename=FILE|-F]\n" /* BL */
 #ifdef IPINFO

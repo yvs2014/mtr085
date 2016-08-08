@@ -25,7 +25,6 @@
 #include "mtr.h"
 #include "display.h"
 #include "mtr-curses.h"
-#include "mtr-gtk.h"
 #include "report.h"
 #include "select.h"
 #include "raw.h"
@@ -47,13 +46,7 @@ extern int DisplayMode;
 #include "mtr-curses.h"
 #endif
 
-#ifdef NO_GTK
-#define gtk_open()
-#define gtk_close()
-#define gtk_redraw()
-#define gtk_keyaction() 0
-#define gtk_loop() {fprintf (stderr, "No GTK support. Sorry.\n"); exit (1); } 
-#else
+#ifdef GTK
 #include "mtr-gtk.h"
 #endif
 
@@ -73,7 +66,7 @@ void display_detect(int *argc, char ***argv) {
   DisplayMode = DisplayCurses;
 #endif
 
-#ifndef NO_GTK
+#ifdef GTK
   if(gtk_detect(argc, argv)) {
     DisplayMode = DisplayGTK;
   }
@@ -103,9 +96,11 @@ void display_open(void)
   case DisplaySplit:
     split_open();
     break;
+#ifdef GTK
   case DisplayGTK:
     gtk_open();
     break;
+#endif
 #ifdef GRAPHCAIRO
   case DisplayGraphCairo:
     if (!gc_open())
@@ -140,9 +135,11 @@ void display_close(time_t now)
   case DisplaySplit:
     split_close();
     break;
+#ifdef GTK
   case DisplayGTK:
     gtk_close();
     break;
+#endif
 #ifdef GRAPHCAIRO
   case DisplayGraphCairo:
 	gc_close();  
@@ -164,9 +161,11 @@ void display_redraw(void)
     split_redraw();
     break;
 
+#ifdef GTK
   case DisplayGTK:
     gtk_redraw();
     break;
+#endif
 
 #ifdef GRAPHCAIRO
   case DisplayGraphCairo:
@@ -186,8 +185,10 @@ int display_keyaction(void)
   case DisplaySplit:
     return split_keyaction();
 
+#ifdef GTK
   case DisplayGTK:
     return gtk_keyaction();
+#endif
   }
   return 0;
 }
@@ -244,9 +245,11 @@ void display_loop(void)
 #endif
     select_loop();
     break;
+#ifdef GTK
   case DisplayGTK:
     gtk_loop();
     break;
+#endif
   }
 }
 
