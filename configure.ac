@@ -4,10 +4,6 @@ AM_INIT_AUTOMAKE([foreign subdir-objects])
 
 AC_CONFIG_FILES([version.h.tmp:version.h.in])
 
-AC_SUBST(CURSES_OBJ)
-
-CURSES_OBJ=curses.o
-
 AC_PROG_CC
 AM_PROG_CC_C_O
 AC_PROG_RANLIB
@@ -19,9 +15,22 @@ AC_CHECK_SIZEOF(unsigned long, 4)
 
 AC_CHECK_HEADERS(sys/types.h fcntl.h socket.h sys/socket.h sys/xti.h arpa/nameser_compat.h)
 
+AC_ARG_WITH(curses,
+[  --without-curses        Without Curses support],
+[curses=${withval}], [curses=yes])
+AM_CONDITIONAL([CURSES], [test "x$curses" = "xyes"])
+
+AC_ARG_WITH(splitmode,
+[  --without-splitmode     Without split-mode],
+[splitmode=${withval}], [splitmode=yes])
+AM_CONDITIONAL([SPLITMODE], [test "x$splitmode" = "xyes"])
+AS_IF([test "x$splitmode" = "xyes"], [AC_DEFINE([SPLITMODE], [1], [Define to enable split-mode])])
+
 AC_ARG_WITH(unicode,
 [  --without-unicode       Without Unicode histogram],
 [unicode=${withval}], [unicode=yes])
+AS_IF([test "x$curses" = "xno"], [unicode=no])
+
 AS_IF([test "x$unicode" = "xyes"], [
 	AC_CHECK_HEADERS([ncursesw/cursesw.h ncursesw/curses.h curses.h], break)
 	AC_CHECK_HEADERS([wchar.h wctype.h locale.h langinfo.h])
@@ -31,8 +40,10 @@ AS_IF([test "x$unicode" = "xyes"], [
 	AC_SEARCH_LIBS([tgetent], [ncursesw curses termcap tinfo])	# don't leak ncursesw/curses in LIBS
 	AC_SEARCH_LIBS([use_default_colors], [ncursesw curses],
 		AC_DEFINE([HAVE_USE_DEFAULT_COLORS], [1], [Define this if your curses library has the use_default_colors() command.]))
+	AC_DEFINE(CURSES, 1, Build with curses support)
 ], [
 
+AS_IF([test "x$curses" = "xyes"], [
 AC_CHECK_HEADERS(ncurses.h ncurses/curses.h curses.h cursesX.h, break)
 
 # We don't refer to any symbols in termcap, but -lcurses on SunOS does.
@@ -44,13 +55,13 @@ AC_CHECK_LIB(tinfo, tgetent)
 AC_CHECK_FUNC(initscr, , 
   AC_CHECK_LIB(ncurses, initscr, ,
     AC_CHECK_LIB(curses, initscr, , 
-      AC_CHECK_LIB(cursesX, initscr, , 
-	AC_MSG_WARN(Building without curses display support)
-	AC_DEFINE(NO_CURSES, 1, Define if you don't have the curses libraries available.)
-	CURSES_OBJ=))))
+      AC_CHECK_LIB(cursesX, initscr,
+	AC_DEFINE(CURSES, 1, Build with curses support),
+	AC_MSG_WARN(Building without curses display support)))))
 
 AC_SEARCH_LIBS([use_default_colors], [ncurses curses],
   AC_DEFINE(HAVE_USE_DEFAULT_COLORS, 1, [Define this if your curses library has the use_default_colors() command.]))
+])
 ])
 
 AC_CHECK_FUNCS(attron fcntl)
@@ -60,21 +71,24 @@ AC_CHECK_LIB(m, floor, , AC_MSG_ERROR(No math library found))
 AC_ARG_WITH([gtk],
 [  --with-gtk              With GTK UI],
 [gtk="${withval}"], [gtk=no])
-AM_CONDITIONAL([WANTS_GTK], [test "x$gtk" = "xyes"])
+AM_CONDITIONAL([GTK], [test "x$gtk" = "xyes"])
 
 AC_ARG_WITH([ipinfo],
 [  --without-ipinfo        Do not try to use ipinfo lookup at all],
 [ipinfo="${withval}"], [ipinfo=yes])
 AM_CONDITIONAL([IPINFO], [test "x$ipinfo" = "xyes"])
+AS_IF([test "x$ipinfo" = "xyes"], [AC_DEFINE([IPINFO], [1], [Define to enable ipinfo lookup])])
 
 AC_ARG_WITH([graphcairo_xcb],
 [  --with-graphcairo-xcb   Cairo graph with XCB backend],
 [graphcairo_xcb="${withval}"], [graphcairo_xcb=no])
+AS_IF([test "x$curses" = "xno"], [graphcairo_xcb=no])
 AM_CONDITIONAL([GRAPHCAIRO_XCB], [test "x$graphcairo_xcb" = "xyes"])
 
 AC_ARG_WITH([graphcairo_xlib],
 [  --with-graphcairo-xlib  Cairo graph with Xlib backend],
 [graphcairo_xlib="${withval}"], [graphcairo_xlib=no])
+AS_IF([test "x$curses" = "xno"], [graphcairo_xlib=no])
 AM_CONDITIONAL([GRAPHCAIRO_XLIB], [test "x$graphcairo_xlib" = "xyes"])
 
 AM_CONDITIONAL([GRAPHCAIRO], [test "x$graphcairo_xcb" = "xyes" -o "x$graphcairo_xlib" = "xyes"])
@@ -101,17 +115,13 @@ m4_ifndef([AM_PATH_GTK_2_0], [m4_defun([AM_PATH_GTK_2_0], [AC_MSG_ERROR([
   or configure --without-gtk.
 ])])])
 
-if test "x$gtk" = "xyes"; then
+AS_IF([test "x$gtk" = "xyes"], [
         AM_PATH_GTK_2_0(2.6.0, CFLAGS="$CFLAGS $GTK_CFLAGS"
                            LIBS="$LIBS $GTK_LIBS -lm"
                            AC_DEFINE(GTK, 1, [Define to build mtr with a GTK interface]),
                            AC_MSG_WARN(Building without GTK2 display support)
                        )
-fi
-
-if test "x$ipinfo" = "xno"; then
-	AC_DEFINE([NO_IPINFO], [1], [Define to disable ipinfo lookup])
-fi
+])
 
 m4_ifndef([PKG_CHECK_MODULES], [m4_defun([PKG_CHECK_MODULES], [AC_MSG_ERROR([
   Could not locate the pkg-config automake macros, these are usually located in

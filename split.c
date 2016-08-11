@@ -35,13 +35,8 @@
 
 #include "net.h"
 #include "split.h"
-
-#ifdef NO_CURSES
-#include <sys/time.h>
-#include <sys/types.h>
-#else
-/* Use the curses variant */
-
+/*
+#ifdef CURSES
 #if defined(UNICODE)
 #define _XOPEN_SOURCE_EXTENDED
 #if defined (HAVE_NCURSESW_NCURSES_H)
@@ -66,14 +61,26 @@
 #endif
 
 #endif
-#endif
 
-#ifdef NO_CURSES
-#define SPLIT_PRINT(x)	{ printf x; printf("\n"); }
 #else
+*/
+#include <sys/time.h>
+#include <sys/types.h>
+#include <termios.h>
+/*
+#endif
+*/
+
+/*
+#ifdef CURSES
 // like dns.c:restell()
 #define SPLIT_PRINT(x)	{ printf x; printf("\r\n"); }
+#else
+*/
+#define SPLIT_PRINT(x)	{ printf x; printf("\n"); }
+/*
 #endif
+*/
 
 extern char *Hostname;
 extern int WaitTime;
@@ -162,28 +169,49 @@ void split_open(void)
   for (i=0; i<MAX_LINE_COUNT; i++) {
     strcpy(Lines[i], "???");
   }
-#ifndef NO_CURSES
+/*
+#ifdef CURSES
   FILE *stdout2 = fopen("/dev/tty", "w");
   if (!stdout2)
-    fprintf(stderr, "split_open(): fopen() failed\n");
-  else {
-    SCREEN *screen;
-    if ((screen = newterm(NULL, stdout2, stdin))) {
-      set_term(screen);
-      raw();
-      noecho();
-    } else
-      fprintf(stderr, "split_open(): newterm() failed\n");
+    return;
+  SCREEN *screen;
+  if ((screen = newterm(NULL, stdout2, stdin))) {
+    set_term(screen);
+    raw();
+    noecho();
   }
+#else
+*/
+  struct termios t;
+  if (tcgetattr(0, &t) < 0)
+    return;
+  t.c_lflag &= ~ICANON;
+  t.c_lflag &= ~ECHO;
+  t.c_cc[VMIN] = 1;
+  t.c_cc[VTIME] = 0;
+  (void)tcsetattr(0, TCSANOW, &t);
+/*
 #endif
+*/
 }
 
 
 void split_close(void)
 {
-#ifndef NO_CURSES
+/*
+#ifdef CURSES
   endwin();
+#else
+*/
+  struct termios t;
+  if (tcgetattr(0, &t) < 0)
+    return;
+  t.c_lflag |= ICANON;
+  t.c_lflag |= ECHO;
+  (void)tcsetattr(0, TCSADRAIN, &t);
+/*
 #endif
+*/
 #if DEBUG
   printf("split_close()\n");
 #endif
@@ -192,23 +220,17 @@ void split_close(void)
 
 int split_keyaction(void) 
 {
-#ifdef NO_CURSES
-  fd_set readfds;
-  struct timeval tv;
   char c;
-
-  FD_ZERO (&readfds);
-  FD_SET (0, &readfds);
-  tv.tv_sec = 0;
-  tv.tv_usec = 0;
-
-  if (select (1, &readfds, NULL, NULL, &tv) > 0) {
-    read (0, &c, 1);
-  } else 
-    return 0;
+/*
+#ifdef CURSES
+  c = getch();
 #else
-  char c = getch();
+*/
+  if (read(0, &c, 1) < 0)
+    return 0;
+/*
 #endif
+*/
 
 #if DEBUG
   SPLIT_PRINT(("split_keyaction()"));

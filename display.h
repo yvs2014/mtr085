@@ -18,6 +18,8 @@
 
 #include <netinet/in.h>
 
+#include "config.h"
+
 /* Don't put a trailing comma in enumeration lists. Some compilers 
    (notably the one on Irix 5.2) do not like that. */ 
 enum { ActionNone,  ActionQuit,  ActionReset,  ActionDisplay, 
@@ -43,5 +45,3 @@ int display_keyaction(void);
 void display_loop(void);
 void display_clear(void);
 
-extern int display_mode;
-extern int display_offset; /* only used in text mode */

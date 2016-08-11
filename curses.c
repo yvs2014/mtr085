@@ -21,7 +21,6 @@
 #include <strings.h>
 #include <unistd.h>
 
-#ifndef NO_CURSES
 #include <ctype.h>
 #include <stdlib.h>
 #include <string.h>
@@ -78,7 +77,7 @@
 #  error No curses header file available
 #endif
 
-#endif
+#endif // UNICODE endif
 
 #ifndef HAVE_ATTRON
 #define attron(x)
@@ -93,11 +92,12 @@
 #include "mtr-curses.h"
 #include "net.h"
 #include "dns.h"
+#ifdef IPINFO
 #include "asn.h"
+#endif
 #include "display.h"
 
 #include "version.h"
-#endif
 
 #include <time.h>
 
@@ -111,6 +111,8 @@ extern int tos;
 extern float WaitTime;
 extern int af;
 extern int mtrtype;
+extern int display_offset;
+extern int display_mode;
 extern int color_mode;
 
 static int __unused_int;

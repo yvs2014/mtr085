@@ -32,7 +32,9 @@
 #include "mtr.h"
 #include "dns.h"
 #include "net.h"
+#ifdef IPINFO
 #include "asn.h"
+#endif
 #include "display.h"
 
 extern int Interactive;
@@ -41,7 +43,10 @@ extern int ForceMaxPing;
 extern float WaitTime;
 double dnsinterval;
 extern int mtrtype;
+#if defined(CURSES) || defined(GRAPHCAIRO)
+extern int display_mode;
 extern int display_mode_max;
+#endif
 
 static struct timeval intervaltime;
 int display_offset = 0;
@@ -220,9 +225,11 @@ void select_loop(void) {
       case ActionReset:
 	net_reset();
 	break;
+#if defined(CURSES) || defined(GRAPHCAIRO)
       case ActionDisplay:
         display_mode = (display_mode + 1) % display_mode_max;
 	break;
+#endif
       case ActionClear:
 	display_clear();
 	break;

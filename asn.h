@@ -27,9 +27,6 @@
 // Similarly, this include file should be included unconditially. 
 // It will evaluate to nothing if we don't need it. 
 
-#ifndef NO_IPINFO
-#define IPINFO
-
 extern int enable_ipinfo;
 void asn_close();
 char *fmt_ipinfo(ip_t *addr);
@@ -37,5 +34,4 @@ void ii_parsearg(char *arg);
 void ii_action(int action_asn);
 int ii_getwidth(void);
 
-#endif
 #endif

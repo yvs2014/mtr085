@@ -24,45 +24,34 @@
 
 #include "mtr.h"
 #include "display.h"
+#ifdef CURSES
 #include "mtr-curses.h"
+#endif
 #include "report.h"
 #include "select.h"
 #include "raw.h"
 #include "dns.h"
+#ifdef IPINFO
 #include "asn.h"
+#endif
 #ifdef GRAPHCAIRO
 #include "graphcairo-mtr.h"
 #endif
 
 extern int DisplayMode;
 
-#ifdef NO_CURSES
-#define mtr_curses_open()
-#define mtr_curses_close()
-#define mtr_curses_redraw()
-#define mtr_curses_keyaction()
-#define mtr_curses_clear()
-#else
-#include "mtr-curses.h"
-#endif
-
 #ifdef GTK
 #include "mtr-gtk.h"
 #endif
 
-#ifdef NO_SPLIT
-#define split_open()
-#define split_close()
-#define split_redraw()
-#define split_keyaction() 0
-#else
+#ifdef SPLITMODE
 #include "split.h"
 #endif
 
 void display_detect(int *argc, char ***argv) {
   DisplayMode = DisplayReport;
 
-#ifndef NO_CURSES
+#ifdef CURSES
   DisplayMode = DisplayCurses;
 #endif
 
@@ -90,12 +79,16 @@ void display_open(void)
   case DisplayCSV:
     csv_open();
     break;
+#ifdef CURSES
   case DisplayCurses:
     mtr_curses_open();  
     break;
+#endif
+#ifdef SPLITMODE
   case DisplaySplit:
     split_open();
     break;
+#endif
 #ifdef GTK
   case DisplayGTK:
     gtk_open();
@@ -126,15 +119,19 @@ void display_close(time_t now)
   case DisplayCSV:
     csv_close(now);
     break;
+#ifdef CURSES
   case DisplayCurses:
     mtr_curses_close();
 #ifdef IPINFO
     asn_close();
 #endif
     break;
+#endif
+#ifdef SPLITMODE
   case DisplaySplit:
     split_close();
     break;
+#endif
 #ifdef GTK
   case DisplayGTK:
     gtk_close();
@@ -152,21 +149,21 @@ void display_close(time_t now)
 void display_redraw(void)
 {
   switch(DisplayMode) {
-
+#ifdef CURSES
   case DisplayCurses:
     mtr_curses_redraw();
     break;
-
+#endif
+#ifdef SPLITMODE
   case DisplaySplit:
     split_redraw();
     break;
-
+#endif
 #ifdef GTK
   case DisplayGTK:
     gtk_redraw();
     break;
 #endif
-
 #ifdef GRAPHCAIRO
   case DisplayGraphCairo:
 	gc_redraw();
@@ -179,12 +176,14 @@ void display_redraw(void)
 int display_keyaction(void)
 {
   switch(DisplayMode) {
+#ifdef CURSES
   case DisplayCurses:
     return mtr_curses_keyaction();
-
+#endif
+#ifdef SPLITMODE
   case DisplaySplit:
     return split_keyaction();
-
+#endif
 #ifdef GTK
   case DisplayGTK:
     return gtk_keyaction();
@@ -254,6 +253,8 @@ void display_loop(void)
 }
 
 void display_clear(void) {
+#ifdef CURSES
   if (DisplayMode == DisplayCurses)
     mtr_curses_clear();
+#endif
 }

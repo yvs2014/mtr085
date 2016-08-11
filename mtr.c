@@ -52,17 +52,21 @@
 #endif
 
 #include "mtr.h"
+#ifdef CURSES
 #include "mtr-curses.h"
+#endif
 #include "getopt.h"
 #include "display.h"
 #include "dns.h"
 #include "report.h"
 #include "net.h"
+#ifdef IPINFO
 #include "asn.h"
-#include "version.h"
+#endif
 #ifdef GRAPHCAIRO
 #include "graphcairo-mtr.h"
 #endif
+#include "version.h"
 
 
 #ifdef ENABLE_IPV6
@@ -78,9 +82,11 @@
 
 
 int   DisplayMode;
+#if defined(CURSES) || defined(GRAPHCAIRO)
 int   display_mode;
 int   display_mode_max = 3;
 int   color_mode;
+#endif
 int   Interactive = 1;
 int   PrintVersion = 0;
 int   PrintHelp = 0;
@@ -305,18 +311,21 @@ void parse_arg (int argc, char **argv)
     { "report", 0, 0, 'r' },
     { "report-wide", 0, 0, 'w' },
     { "xml", 0, 0, 'x' },
+#ifdef CURSES
     { "curses", 0, 0, 't' },
+#endif
+#if defined(CURSES) || defined(GRAPHCAIRO)
+    { "displaymode", 1, 0, 'd' },
+#endif
 #ifdef GTK
     { "gtk", 0, 0, 'g' },
 #endif
     { "raw", 0, 0, 'l' },
     { "csv", 0, 0, 'C' },
-    { "displaymode", 1, 0, 'd' },
-    { "split", 0, 0, 'p' },     /* BL */
-    				/* maybe above should change to -d 'x' */
-
+#ifdef SPLITMODE
+    { "split", 0, 0, 'p' },
+#endif
     { "order", 1, 0, 'o' },	/* fileds to display & their order */
-
     { "interval", 1, 0, 'i' },
     { "report-cycles", 1, 0, 'c' },
     { "psize", 1, 0, 's' },	/* changed 'p' to 's' to match ping option
@@ -368,17 +377,21 @@ void parse_arg (int argc, char **argv)
       reportwide = 1;
       DisplayMode = DisplayReport;
       break;
+#ifdef CURSES
     case 't':
       DisplayMode = DisplayCurses;
       break;
+#endif
 #ifdef GTK
     case 'g':
       DisplayMode = DisplayGTK;
       break;
 #endif
-    case 'p':                 /* BL */
+#ifdef SPLITMODE
+    case 'p':
       DisplayMode = DisplaySplit;
       break;
+#endif
     case 'l':
       DisplayMode = DisplayRaw;
       break;
@@ -388,10 +401,12 @@ void parse_arg (int argc, char **argv)
     case 'x':
       DisplayMode = DisplayXML;
       break;
+#if defined(CURSES) || defined(GRAPHCAIRO)
     case 'd':
       display_mode = ((atoi(optarg)) & ~8) % display_mode_max;
       color_mode = ((atoi(optarg)) & 8) ? 1 : 0;
       break;
+#endif
     case 'c':
       MaxPing = atoi (optarg);
       ForceMaxPing = 1;
@@ -604,7 +619,9 @@ int main(int argc, char **argv)
   srand(mypid);
 
   display_detect(&argc, &argv);
+#if defined(CURSES) || defined(GRAPHCAIRO)
   display_mode = 0;
+#endif
 
   /* The field options are now in a static array all together,
      but that requires a run-time initialization. */
@@ -651,14 +668,23 @@ int main(int argc, char **argv)
   }
 
   if (PrintHelp) {
-    printf("usage: %s [-BfhvrwctlxspQomniuT46] [--help] [--version]\n"
+    printf("usage: %s [-BfhvrwclxsQomniuT46] [--help] [--version]\n"
            "\t\t[--report] [--report-wide] [--report-cycles=COUNT]\n"
-           "\t\t[--curses] [--displaymode|-d MODE]"
+           "\t\t"
+#ifdef CURSES
+           "[--curses|-t] "
+#endif
+#if defined(CURSES) || defined(GRAPHCAIRO)
+           "[--displaymode|-d MODE] "
+#endif
 #ifdef GTK
-           " [--gtk|-g]"
+           "[--gtk|-g] "
+#endif
+#ifdef SPLITMODE
+           "[--split|-p] "
 #endif
            "\n"
-           "\t\t[--csv|-C] [--raw] [--xml] [--split] [--mpls] [--no-dns] [--show-ips]\n"
+           "\t\t[--csv|-C] [--raw] [--xml] [--mpls] [--no-dns] [--show-ips]\n"
            "\t\t[--address interface] [--filename=FILE|-F]\n" /* BL */
 #ifdef IPINFO
            "\t\t[--aslookup|-z] [--ipinfo|-y origin,fields]\n"

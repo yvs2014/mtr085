@@ -31,6 +31,10 @@
 #define U_FACTOR	1
 #endif
 
+#ifndef STARTSTAT
+#define STARTSTAT	30
+#endif
+
 #ifdef IPINFO
 #define HOSTSTAT_LEN	(3 * STARTSTAT + U_FACTOR * SAVED_PINGS)	// hostinfo + statistics
 #else
@@ -43,6 +47,8 @@ extern int af;			// mtr.c
 extern int mtrtype;
 extern int maxTTL;
 extern float WaitTime;
+extern int display_offset;
+extern int display_mode;
 extern int display_mode_max;
 
 static int timeout;
@@ -383,9 +389,9 @@ void gc_redraw(void) {
 				if (display_mode) {
 					mtr_gen_scale_gc();
 					char *pos = stat;
-					int j;
 #ifdef UNICODE
 					if (display_mode == 3) {
+						int j;
 						for (j = SAVED_PINGS - curses_cols; j < SAVED_PINGS; j++) {
 							*(wchar_t*)pos = mtr_curses_saved_wch(saved[j]);
 							pos += sizeof(wchar_t);
@@ -394,6 +400,7 @@ void gc_redraw(void) {
 					} else
 #endif
 					{
+						int j;
 						for (j = SAVED_PINGS - curses_cols; j < SAVED_PINGS; j++)
 							*pos++ = mtr_curses_saved_ch(saved[j]);
 						*pos = 0;

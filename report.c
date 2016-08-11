@@ -32,7 +32,9 @@
 #include "report.h"
 #include "net.h"
 #include "dns.h"
+#ifdef IPINFO
 #include "asn.h"
+#endif
 
 #define MAXLOADBAL 5
 

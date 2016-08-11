@@ -9,23 +9,26 @@ mtr_SOURCES = mtr.c \
               net.c net.h \
               dns.c dns.h \
               raw.c raw.h \
-              split.c split.h \
               display.c display.h \
               report.c report.h \
-              select.c select.h \
-              mtr-curses.h
+              select.c select.h
 
 nodist_mtr_SOURCES = version.h
-EXTRA_mtr_SOURCES = curses.c
 
 AM_CPPFLAGS =
-mtr_DEPENDENCIES = $(CURSES_OBJ)
-mtr_LDFLAGS = $(CURSES_OBJ)
 mtr_LDADD = $(RESOLV_LIBS)
 
-if WANTS_GTK
+if GTK
 mtr_SOURCES += gtk/gtk.c gtk/mtr-gtk.h
 AM_CPPFLAGS += -Igtk
+endif
+
+if CURSES
+mtr_SOURCES += curses.c mtr-curses.h
+endif
+
+if SPLITMODE
+mtr_SOURCES += split.c split.h
 endif
 
 if LOCAL_GETOPT
