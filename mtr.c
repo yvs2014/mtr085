@@ -150,14 +150,16 @@ typedef struct names {
 } names_t;
 static names_t *names = NULL;
 
-char *
-trim(char * s) {
-
+#define QUOTATION	'"'
+char* trim(char * s) {
   char * p = s;
   int l = strlen(p);
 
   while(isspace((int)p[l-1]) && l) p[--l] = 0;
   while(*p && isspace((int)*p) && l) ++p, --l;
+
+  if (((int)p[l-1] == QUOTATION) && l) p[--l] = 0;
+  if (*p && ((int)*p == QUOTATION) && l) ++p, --l;
 
   return p;
 }

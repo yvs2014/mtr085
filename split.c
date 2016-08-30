@@ -65,7 +65,6 @@
 #else
 */
 #include <sys/time.h>
-#include <sys/types.h>
 #include <termios.h>
 /*
 #endif
