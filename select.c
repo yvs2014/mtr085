@@ -38,6 +38,7 @@
 #include "display.h"
 
 extern int Interactive;
+extern int DisplayMode;
 extern int MaxPing;
 extern int ForceMaxPing;
 extern float WaitTime;
@@ -144,6 +145,11 @@ void select_loop(void) {
 
       } else {
 	if(Interactive) display_redraw();
+#ifdef IPINFO
+	if (enable_ipinfo)
+	  if (DisplayMode == DisplayReport)
+            query_ipinfo();
+#endif
 
 	gettimeofday(&thistime, NULL);
 

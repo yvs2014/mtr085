@@ -603,3 +603,25 @@ void ii_action(int action_asn) {
         ii_open();
 }
 
+void query_iiaddr(ip_t *addr) {
+  int i;
+  for (i = 0; (i < II_ITEM_MAX) && (ipinfo_no[i] >= 0); i++)
+    get_ipinfo(addr, i);
+}
+
+void query_ipinfo(void) {
+  int at, max = net_max();
+  for (at = net_min(); at < max; at++) {
+    ip_t *addr = net_addr(at);
+    if (addrcmp((void *)addr, (void *)&unspec_addr, af) != 0) {
+      query_iiaddr(addr);
+      int i;
+      for (i=0; i < MAXPATH; i++) {
+        ip_t *addrs = net_addrs(at, i);
+        if (addrcmp((void *)addrs, (void *)&unspec_addr, af) != 0)
+          query_iiaddr(addrs);
+      }
+    }
+  }
+}
+

@@ -75,23 +75,31 @@ static size_t snprint_addr(char *dst, size_t dst_len, ip_t *addr)
   } else return snprintf(dst, dst_len, "%s", "???");
 }
 
-
-#ifdef IPINFO
 void print_mpls(struct mplslen *mpls) {
   int k;
   for (k=0; k < mpls->labels; k++)
     printf("       [MPLS: Lbl %lu Exp %u S %u TTL %u]\n", mpls->label[k], mpls->exp[k], mpls->s[k], mpls->ttl[k]);
 }
-#endif
+
+#define ACTIVE_FLD_LOOP(statement) { \
+  int i; \
+  for (i=0; i < MAXFLD; i++) { \
+    int j = fld_index[fld_active[i]]; \
+    if (j < 0) \
+      continue; \
+    statement; \
+  } \
+  printf("%s\n", buf); \
+}
 
 void report_close(void) 
 {
-  int i, j, at, max, z, w;
+  static char buf[1024];
+  int at, max, z, w;
   struct mplslen *mpls, *mplss;
   ip_t *addr;
   ip_t *addr2 = NULL;  
   char name[81];
-  char buf[1024];
   char fmt[16];
   int len=0;
   int len_hosts = 33;
@@ -111,25 +119,19 @@ void report_close(void)
     }
   }
   
-#ifdef IPINFO
   int len_tmp = len_hosts;
+#ifdef IPINFO
   if (enable_ipinfo && reportwide)
     len_tmp += ii_getwidth() - 1;
-  snprintf( fmt, sizeof(fmt), "HOST: %%-%ds", len_tmp);
-#else
-  snprintf( fmt, sizeof(fmt), "HOST: %%-%ds", len_hosts);
 #endif
+  snprintf(fmt, sizeof(fmt), "HOST: %%-%ds", len_tmp);
   snprintf(buf, sizeof(buf), fmt, LocalHostname);
   len = reportwide ? strlen(buf) : len_hosts;
-  for( i=0; i<MAXFLD; i++ ) {
-    j = fld_index[fld_active[i]];
-    if (j < 0) continue;
-
-    snprintf( fmt, sizeof(fmt), "%%%ds", data_fields[j].length );
-    snprintf( buf + len, sizeof(buf), fmt, data_fields[j].title );
-    len +=  data_fields[j].length;
-  }
-  printf("%s\n",buf);
+  ACTIVE_FLD_LOOP(
+    snprintf(fmt, sizeof(fmt), "%%%ds", data_fields[j].length);
+    snprintf(buf + len, sizeof(buf), fmt, data_fields[j].title);
+    len += data_fields[j].length;
+  );
 
   max = net_max();
   at  = net_min();
@@ -144,27 +146,22 @@ void report_close(void)
       snprintf(buf, sizeof(buf), fmt, at+1, fmt_ipinfo(addr), name);
     } else {
 #endif
-    snprintf( fmt, sizeof(fmt), " %%2d.|-- %%-%ds", len_hosts);
+    snprintf(fmt, sizeof(fmt), " %%2d. %%-%ds ", len_hosts);
     snprintf(buf, sizeof(buf), fmt, at+1, name);
 #ifdef IPINFO
     }
 #endif
-    len = reportwide ? strlen(buf) : len_hosts;  
-    for( i=0; i<MAXFLD; i++ ) {
-      j = fld_index[fld_active [i]];
-      if (j < 0) continue;
 
+    len = reportwide ? strlen(buf) : len_hosts;
+#define DFLD_PR(factor) { snprintf(buf + len, sizeof(buf) - len, data_fields[j].format, data_fields[j].net_xxx(at) factor); }
+    ACTIVE_FLD_LOOP(
       /* 1000.0 is a temporay hack for stats usec to ms, impacted net_loss. */
-      if( index( data_fields[j].format, 'f' ) ) {
-        snprintf( buf + len, sizeof(buf), data_fields[j].format,
-		data_fields[j].net_xxx(at) /1000.0 );
-      } else {
-        snprintf( buf + len, sizeof(buf), data_fields[j].format,
-		data_fields[j].net_xxx(at) );
-      }
-      len +=  data_fields[j].length;
-    }
-    printf("%s\n",buf);
+      if (index(data_fields[j].format, 'f'))
+        DFLD_PR(/1000.0)
+      else
+        DFLD_PR();
+      len += data_fields[j].length;
+    )
 
     /* This feature shows 'loadbalances' on routes */
 
@@ -183,61 +180,26 @@ void report_close(void)
         }   
 
       if (!found) {
-  
+        if (mpls->labels && z == 1 && enablempls)
+          print_mpls(mpls);
 #ifdef IPINFO
         if (enable_ipinfo) {
-          if (mpls->labels && z == 1 && enablempls)
-            print_mpls(mpls);
           snprint_addr(name, sizeof(name), addr2);
           printf("     %s%s\n", fmt_ipinfo(addr2), name);
-          if (enablempls)
-            print_mpls(mplss);
-        } else {
+        } else
 #else
-        int k;
-        if (mpls->labels && z == 1 && enablempls) {
-          for (k=0; k < mpls->labels; k++) {
-            printf("    |  |+-- [MPLS: Lbl %lu Exp %u S %u TTL %u]\n", mpls->label[k], mpls->exp[k], mpls->s[k], mpls->ttl[k]);
-          }
-        }
-
-        if (z == 1) {
-          printf ("    |  `|-- %s\n", strlongip(addr2));
-          for (k=0; k < mplss->labels && enablempls; k++) {
-            printf("    |   +-- [MPLS: Lbl %lu Exp %u S %u TTL %u]\n", mplss->label[k], mplss->exp[k], mplss->s[k], mplss->ttl[k]);
-          }
-        } else {
-          printf ("    |   |-- %s\n", strlongip(addr2));
-          for (k=0; k < mplss->labels && enablempls; k++) {
-            printf("    |   +-- [MPLS: Lbl %lu Exp %u S %u TTL %u]\n", mplss->label[k], mplss->exp[k], mplss->s[k], mplss->ttl[k]);
-          }
-        }
+          printf("     %s \n", strlongip(addr2));
 #endif
-#ifdef IPINFO
-        }
-#endif
+        if (enablempls)
+          print_mpls(mplss);
       }
     }
 
     /* No multipath */
-#ifdef IPINFO
-    if (enable_ipinfo) {
-      if (mpls->labels && z == 1 && enablempls)
-        print_mpls(mpls);
-    } else {
-#endif
-    if(mpls->labels && z == 1 && enablempls) {
-      int k;
-      for (k=0; k < mpls->labels; k++) {
-        printf("    |   +-- [MPLS: Lbl %lu Exp %u S %u TTL %u]\n", mpls->label[k], mpls->exp[k], mpls->s[k], mpls->ttl[k]);
-      }
-    }
-#ifdef IPINFO
-    }
-#endif
+    if (mpls->labels && z == 1 && enablempls)
+      print_mpls(mpls);
   }
 }
-
 
 void txt_open(void)
 {
