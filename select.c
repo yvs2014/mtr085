@@ -64,6 +64,9 @@ void select_loop(void) {
 #ifdef ENABLE_IPV6
   int dnsfd6;
 #endif
+#ifdef IPINFO
+  int iifd;
+#endif
   int NumPing = 0;
   int paused = 0;
   struct timeval lasttime, thistime, selecttime;
@@ -110,6 +113,16 @@ void select_loop(void) {
       if(dnsfd >= maxfd) maxfd = dnsfd + 1;
     } else
       dnsfd = 0;
+
+#ifdef IPINFO
+    if (enable_ipinfo) {
+      iifd = ii_waitfd();
+      FD_SET(iifd, &readfd);
+      if (iifd >= maxfd)
+        maxfd = iifd + 1;
+    } else
+      iifd = 0;
+#endif
 
     netfd = net_waitfd();
     FD_SET(netfd, &readfd);
@@ -215,6 +228,13 @@ void select_loop(void) {
       dns_ack();
       anyset = 1;
     }
+
+#ifdef IPINFO
+    if (enable_ipinfo && iifd && FD_ISSET(iifd, &readfd)) {
+      ii_ack();
+      anyset = 1;
+    }
+#endif
 
     /*  Has a key been pressed?  */
     if(FD_ISSET(0, &readfd)) {

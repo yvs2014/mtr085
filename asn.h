@@ -28,10 +28,12 @@
 // It will evaluate to nothing if we don't need it. 
 
 extern int enable_ipinfo;
-void asn_close();
+void ii_close();
 char *fmt_ipinfo(ip_t *addr);
 void ii_parsearg(char *arg);
 void ii_action(int action_asn);
 int ii_getwidth(void);
+int ii_waitfd(void);
+void ii_ack(void);
 
 #endif

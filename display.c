@@ -123,7 +123,7 @@ void display_close(time_t now)
   case DisplayCurses:
     mtr_curses_close();
 #ifdef IPINFO
-    asn_close();
+    ii_close();
 #endif
     break;
 #endif
