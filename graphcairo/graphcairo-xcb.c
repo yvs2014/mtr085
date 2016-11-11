@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <ctype.h>
 #include <xcb/xcb.h>
 #include <xcb/xcb_keysyms.h>
 
@@ -127,11 +128,15 @@ void backend_flush(void) {
 int keysym_to_char(xcb_keysym_t keysym) {
 	int c = 0;
 	// [a-zA-Z\-\+ ]
-	if ((keysym >= XK_a) && (keysym <= XK_z))
+	if ((keysym >= XK_a) && (keysym <= XK_z)) {
 		c = (int)'a' + (keysym - XK_a);
-	else if ((keysym >= XK_A) && (keysym <= XK_Z))
+		if (shiftkey_pressed)
+			c = toupper(c);
+	} else if ((keysym >= XK_A) && (keysym <= XK_Z)) {
 		c = (int)'A' + (keysym - XK_A);
-	else if (keysym == XK_space)
+		if (shiftkey_pressed)
+			c = tolower(c);
+	} else if (keysym == XK_space)
 		c = (int)' ';
 	else if ((keysym == XK_plus) || (keysym == XK_KP_Add))
 		c = (int)'+';

@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <ctype.h>
 #include <X11/Xlib.h>
 
 #define XK_LATIN1
@@ -58,11 +59,15 @@ void backend_flush(void) {
 int keysym_to_char(KeySym keysym) {
 	int c = 0;
 	// [a-zA-Z\-\+ ]
-	if ((keysym >= XK_a) && (keysym <= XK_z))
+	if ((keysym >= XK_a) && (keysym <= XK_z)) {
 		c = (int)'a' + (keysym - XK_a);
-	else if ((keysym >= XK_A) && (keysym <= XK_Z))
+		if (shiftkey_pressed)
+			c = toupper(c);
+	} else if ((keysym >= XK_A) && (keysym <= XK_Z)) {
 		c = (int)'A' + (keysym - XK_A);
-	else if (keysym == XK_space)
+		if (shiftkey_pressed)
+			c = tolower(c);
+	} else if (keysym == XK_space)
 		c = (int)' ';
 	else if (keysym == XK_KP_Add)
 		c = (int)'+';

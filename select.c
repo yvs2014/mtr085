@@ -65,9 +65,6 @@ void select_loop(void) {
 #ifdef ENABLE_IPV6
   int dnsfd6;
 #endif
-#ifdef IPINFO
-  int iifd;
-#endif
   int NumPing = 0;
   int paused = 0;
   struct timeval lasttime, thistime, selecttime;
@@ -116,13 +113,12 @@ void select_loop(void) {
       dnsfd = 0;
 
 #ifdef IPINFO
-    if (enable_ipinfo) {
-      iifd = ii_waitfd();
+    int iifd;
+    if ((iifd = ii_waitfd())) {
       FD_SET(iifd, &readfd);
       if (iifd >= maxfd)
         maxfd = iifd + 1;
-    } else
-      iifd = 0;
+    }
 #endif
 
     netfd = net_waitfd();
@@ -146,8 +142,8 @@ void select_loop(void) {
       } else {
 	if(Interactive) display_redraw();
 #ifdef IPINFO
-	if (enable_ipinfo)
-	  if (DisplayMode == DisplayReport)
+	if (DisplayMode == DisplayReport)
+	  if (ii_ready())
             query_ipinfo();
 #endif
 
@@ -236,15 +232,17 @@ void select_loop(void) {
     }
 
 #ifdef IPINFO
-    if (enable_ipinfo && iifd && FD_ISSET(iifd, &readfd)) {
-      ii_ack();
-      anyset = 1;
-    }
+    if (ii_waitfd())
+      if (FD_ISSET(iifd, &readfd)) {
+        ii_ack();
+        anyset = 1;
+      }
 #endif
 
     /*  Has a key been pressed?  */
     if(FD_ISSET(0, &readfd)) {
-      switch (display_keyaction()) {
+      int action = display_keyaction();
+      switch (action) {
       case ActionQuit: 
 	return;
 	break;
@@ -276,12 +274,11 @@ void select_loop(void) {
 	}
 	break;
 #ifdef IPINFO
-	case ActionII:
-		ii_action(0);
-		break;
-	case ActionAS:
-		ii_action(1);
-		break;
+      case ActionAS:
+      case ActionII:
+      case ActionII_Map:
+	ii_action(action);
+	break;
 #endif
       case ActionScrollDown:
         display_offset += 5;

@@ -121,7 +121,7 @@ void report_close(void)
   
   int len_tmp = len_hosts;
 #ifdef IPINFO
-  if (enable_ipinfo && reportwide)
+  if (ii_ready() && reportwide)
     len_tmp += ii_getwidth() - 1;
 #endif
   snprintf(fmt, sizeof(fmt), "HOST: %%-%ds", len_tmp);
@@ -141,7 +141,7 @@ void report_close(void)
     snprint_addr(name, sizeof(name), addr);
 
 #ifdef IPINFO
-    if (enable_ipinfo) {
+    if (ii_ready()) {
       snprintf(fmt, sizeof(fmt), " %%2d. %%s%%-%ds", len_hosts);
       snprintf(buf, sizeof(buf), fmt, at+1, fmt_ipinfo(addr), name);
     } else {
@@ -183,7 +183,7 @@ void report_close(void)
         if (mpls->labels && z == 1 && enablempls)
           print_mpls(mpls);
 #ifdef IPINFO
-        if (enable_ipinfo) {
+        if (ii_ready()) {
           snprint_addr(name, sizeof(name), addr2);
           printf("     %s%s\n", fmt_ipinfo(addr2), name);
         } else
@@ -294,15 +294,11 @@ void csv_close(time_t now)
 
     int last = net_last(at);
 #ifdef IPINFO
-    if(enable_ipinfo) {
-      char* fmtinfo = fmt_ipinfo(addr);
-      if (fmtinfo != NULL) fmtinfo = trim(fmtinfo);
-      printf("MTR.%s;%lld;%s;%s;%d;%s;%s;%d", MTR_VERSION, (long long)now, "OK", Hostname,
-             at+1, name, fmtinfo, last);
-    } else
+    if (ii_ready())
+      printf("MTR.%s;%lld;%s;%s;%d;%s;%s;%d", MTR_VERSION, (long long)now, "OK", Hostname, at+1, name, fmt_ipinfo(addr), last);
+    else
 #endif
-      printf("MTR.%s;%lld;%s;%s;%d;%s;%d", MTR_VERSION, (long long)now, "OK", Hostname,
-             at+1, name, last);
+      printf("MTR.%s;%lld;%s;%s;%d;%s;%d", MTR_VERSION, (long long)now, "OK", Hostname, at+1, name, last);
 
     for( i=0; i<MAXFLD; i++ ) {
       j = fld_index[fld_active[j]];

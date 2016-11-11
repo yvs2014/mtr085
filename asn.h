@@ -27,13 +27,13 @@
 // Similarly, this include file should be included unconditially. 
 // It will evaluate to nothing if we don't need it. 
 
-extern int enable_ipinfo;
 void ii_close();
 void ii_parsearg(char *arg);
 void ii_action(int action_asn);
+void ii_ack(void);
 int ii_getwidth(void);
 int ii_waitfd(void);
-void ii_ack(void);
+int ii_ready(void);
 char *fmt_ipinfo(ip_t *addr);
 void query_ipinfo(void);
 

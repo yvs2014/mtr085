@@ -25,7 +25,7 @@
 enum { ActionNone,  ActionQuit,  ActionReset,  ActionDisplay, 
        ActionClear, ActionPause, ActionResume, ActionMPLS, ActionDNS, 
 #ifdef IPINFO
-       ActionII, ActionAS,
+       ActionAS, ActionII, ActionII_Map,
 #endif
        ActionScrollDown, ActionScrollUp  };
 enum { DisplayReport, DisplayCurses, DisplayGTK, DisplaySplit, 

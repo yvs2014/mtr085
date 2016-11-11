@@ -139,7 +139,7 @@ void fill_hostinfo(int at, ip_t *addr) {
 	char *p = buf;
 	int sz;
 #ifdef IPINFO
-	if (enable_ipinfo) {
+	if (ii_ready()) {
 		sz = 2 * STARTSTAT;
 		l = snprintf(p, sz, "%s", fmt_ipinfo(addr));
 		if (l < 0)
@@ -213,6 +213,19 @@ void gc_keyaction(int c) {
 				hostinfo_max = 0;
 				GCDEBUG_MSG(("display_offset=%d\n", display_offset));
 			} break;
+#ifdef IPINFO
+			case 'y':	// IP Info
+				ii_action(ActionII);
+				hostinfo_max = 0;
+				GCDEBUG_MSG(("switching ip info\n"));
+				break;
+			case 'Y':	// on Google Maps
+				ii_action(ActionII_Map);
+				hostinfo_max = 0;
+				GCDEBUG_MSG(("show on google maps\n"));
+				break;
+#endif
+
 		}
 		switch (tolower(c)) {
 			case 'd':	// Display
@@ -240,13 +253,8 @@ void gc_keyaction(int c) {
 				GCDEBUG_MSG(("use_dns=%d\n", use_dns));
 				break;
 #ifdef IPINFO
-			case 'y':	// IP Info
-				ii_action(0);
-				hostinfo_max = 0;
-				GCDEBUG_MSG(("switching ip info\n"));
-				break;
 			case 'z':	// ASN
-				ii_action(1);
+				ii_action(ActionAS);
 				hostinfo_max = 0;
 				GCDEBUG_MSG(("toggle asn info\n"));
 				break;

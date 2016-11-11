@@ -157,8 +157,10 @@ int mtr_curses_keyaction(void)
   if (tolower(c) == 'n')
     return ActionDNS;
 #ifdef IPINFO
-  if (tolower(c) == 'y')
+  if (c == 'y')
     return ActionII;
+  if (c == 'Y')
+    return ActionII_Map;
   if (tolower(c) == 'z')
     return ActionAS;
 #endif
@@ -310,6 +312,7 @@ int mtr_curses_keyaction(void)
 #ifdef IPINFO
     printw("  y       switching IP info\n");
     printw("  z       toggle ASN info on/off\n");
+    printw("  Z       show hops on GoogleMaps (in -y6 mode)\n");
     pressanykey_row += 2;
 #endif
     addch('\n');
@@ -372,7 +375,7 @@ void mtr_curses_hosts(int startstat)
       if (! net_up(at))
 	attron(A_BOLD);
 #ifdef IPINFO
-      if (enable_ipinfo)
+      if (ii_ready())
         printw(fmt_ipinfo(addr));
 #endif
       if(name != NULL) {
@@ -410,7 +413,7 @@ void mtr_curses_hosts(int startstat)
         if (! net_up(at)) attron(A_BOLD);
         printw("\n    ");
 #ifdef IPINFO
-        if (enable_ipinfo)
+        if (ii_ready())
           printw(fmt_ipinfo(addrs));
 #endif
         if (name != NULL) {
@@ -605,8 +608,8 @@ void mtr_curses_graph(int startstat, int cols)
 			attron(A_BOLD);
 		if (addrcmp((void *) addr, (void *) &unspec_addr, af)) {
 #ifdef IPINFO
-			if (enable_ipinfo)
-				printw(fmt_ipinfo(addr));
+                if (ii_ready())
+                  printw(fmt_ipinfo(addr));
 #endif
 			name = dns_lookup(addr);
 			printw("%s", name?name:strlongip(addr));
@@ -714,10 +717,10 @@ void mtr_curses_redraw(void)
     char msg[80];
     startstat = STARTSTAT;
 #ifdef IPINFO
-    if (enable_ipinfo)
+    if (ii_ready())
       startstat += ii_getwidth();
 #endif
-    int max_cols = maxx<=SAVED_PINGS+startstat ? maxx-startstat : SAVED_PINGS;
+    int max_cols = (maxx <= (SAVED_PINGS + startstat)) ? (maxx - startstat) : SAVED_PINGS;
     startstat -= 2;
 
     sprintf(msg, " Last %3d pings", max_cols);

@@ -741,9 +741,9 @@ int main(int argc, char **argv)
 #endif
     if ( error ) {
       if (error == EAI_SYSTEM)
-         perror ("Failed to resolve host");
+         perror(Hostname);
       else
-         fprintf (stderr, "Failed to resolve host: %s\n", gai_strerror(error));
+         fprintf(stderr, "Failed to resolve \"%s\": %s\n", Hostname, gai_strerror(error));
 
       if ( DisplayMode != DisplayCSV ) exit(EXIT_FAILURE);
       else {
