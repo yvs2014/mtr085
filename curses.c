@@ -311,8 +311,8 @@ int mtr_curses_keyaction(void)
     printw("  u       switch between ICMP ECHO and UDP datagrams\n" );
 #ifdef IPINFO
     printw("  y       switching IP info\n");
+    printw("  Y       show hops on GoogleMaps (in -y6/y7 modes)\n");
     printw("  z       toggle ASN info on/off\n");
-    printw("  Z       show hops on GoogleMaps (in -y6 mode)\n");
     pressanykey_row += 2;
 #endif
     addch('\n');

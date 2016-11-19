@@ -301,6 +301,7 @@ Key: `z' toggle ASN info on/off
 Use this option to specify the IP info origin and their fields and order.
 
 Available origins and their fields:
+.br
     1 - origin.asn.cymru.com (both IPv4 and IPv6):
 .br
             ASN, Route, CC, Registry, Allocated
@@ -311,7 +312,7 @@ Available origins and their fields:
 .br
     3 - origin.asn.spameatingmonkey.net (IPv4 only):
 .br
-            Route, ASN, Organization, Allocated, CC
+            Route, ASN, Org, Allocated, CC
 .br
     4 - ip2asn.sasm4.net (IPv4 only):
 .br
@@ -319,13 +320,17 @@ Available origins and their fields:
 .br
     5 - peer.asn.shadowserver.org (IPv4 only):
 .br
-            Peers, ASN, Route, AS Name, CC, Website, Organization
+            Peers, ASN, Route, AS Name, CC, Website, Org
 .br
     6 - freegeoip.net (IPv4 only):
 .br
-            Country Code, Country, Region Code, Region, City, Zip, TimeZone, Lat, Long, Metro Code
+            CC, Country, RC, Region, City, Zip, TZ, Lat, Long, MC
 .br
-Default: 1,1
+    7 - ip-api.com (IPv4 only):
+.br
+            Country, CC, RC, Region, City, Zip, TZ, Lat, Long, MC
+.br
+Abbreviations: CC - Country Code, RC - Region Code, MC - Metro Code, Org - Organization, TZ - TimeZone
 .br
 Examples:
 .br
@@ -334,7 +339,7 @@ Examples:
     -y,        (origin.asn.cymru.com: ASN)
 .br
 
-Key: `y' switching IP info
+Keys: `y' switching IP info, `Y' show on Google Maps
 
 .TP
 .B \-G\ arguments
@@ -373,7 +378,7 @@ Examples:
     -G,30,,0    (default, 5min, default, disable, default)
 .br
 
-Keys: `dejnpqrtuyz+- '
+Keys: `dejnpqrtuyYz+- '
 
 .TP
 .B \-p
