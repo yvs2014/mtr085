@@ -31,9 +31,10 @@ void ii_close();
 void ii_parsearg(char *arg);
 void ii_action(int action_asn);
 void ii_ack(void);
-int ii_getwidth(void);
 int ii_waitfd(void);
 int ii_ready(void);
+int ii_getwidth(void);
+char* ii_getheader(void);
 char *fmt_ipinfo(ip_t *addr);
 void query_ipinfo(void);
 

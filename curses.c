@@ -311,7 +311,7 @@ int mtr_curses_keyaction(void)
     printw("  u       switch between ICMP ECHO and UDP datagrams\n" );
 #ifdef IPINFO
     printw("  y       switching IP info\n");
-    printw("  Y       show hops on GoogleMaps (in -y6/y7 modes)\n");
+    printw("  Y       show hops on GoogleMaps (in -y[6-9] modes)\n");
     printw("  z       toggle ASN info on/off\n");
     pressanykey_row += 2;
 #endif
@@ -703,9 +703,19 @@ void mtr_curses_redraw(void)
   attron(A_BOLD); addch('q'); attroff(A_BOLD); printw("uit\n");
 
   if (display_mode == 0) {
+    startstat = 1;
     hd_len = mtr_curses_data_fields(buf);
     attron(A_BOLD);
-    mvprintw(rowstat - 1, 0, " Host");
+#ifdef IPINFO
+    if (ii_ready()) {
+        char *header = ii_getheader();
+        startstat = 4;	// `NN. '
+        if (header)
+            mvprintw(rowstat - 1, startstat, "%s", header);
+        startstat += ii_getwidth(); // `NN. ' + IPINFO
+    }
+#endif
+    mvprintw(rowstat - 1, startstat, "Host");
     mvprintw(rowstat - 1, maxx-hd_len-1, "%s", buf);
     mvprintw(rowstat - 2, maxx-hd_len-1, "   Packets               Pings");
     attroff(A_BOLD);

@@ -289,7 +289,7 @@ for more information about GTK+.
 .TP
 .B \-\-aslookup
 .br
-Turn on ASN lookups. Origin - asn.routeviews.org (IPv4 only).
+Turn on ASN lookups. Origin - origin.asn.cymru.com.
 
 Key: `z' toggle ASN info on/off
 
@@ -306,32 +306,44 @@ Available origins and their fields:
 .br
             ASN, Route, CC, Registry, Allocated
 .br
-    2 - asn.routeviews.org (IPv4 only):
+    2 - asn.routeviews.org:
 .br
             ASN
 .br
-    3 - origin.asn.spameatingmonkey.net (IPv4 only):
+    3 - origin.asn.spameatingmonkey.net:
 .br
             Route, ASN, Org, Allocated, CC
 .br
-    4 - ip2asn.sasm4.net (IPv4 only):
+    4 - ip2asn.sasm4.net:
 .br
             ASN
 .br
-    5 - peer.asn.shadowserver.org (IPv4 only):
+    5 - peer.asn.shadowserver.org:
 .br
             Peers, ASN, Route, AS Name, CC, Website, Org
 .br
-    6 - freegeoip.net (IPv4 only):
+    6 - freegeoip.net:
 .br
             CC, Country, RC, Region, City, Zip, TZ, Lat, Long, MC
 .br
-    7 - ip-api.com (IPv4 only):
+    7 - ip-api.com:
 .br
             Country, CC, RC, Region, City, Zip, TZ, Lat, Long, MC
 .br
-Abbreviations: CC - Country Code, RC - Region Code, MC - Metro Code, Org - Organization, TZ - TimeZone
+    8 - getcitydetails.geobytes.com:
 .br
+            Certainty, Internet, Country, RLC, Region, RC, LC, DMA,
+            City, CityID, FQCN, Lat, Long, Capital, TZ, Nationality,
+            Population, MapReference, Currency, CurrencyCode, Title
+.br
+    9 - ipinfo.io:
+.br
+            City, Region, CC, Location(Lat, Long), ASName, Postal
+.br
+
+Abbreviations: CC/RC/MC/LC - Country/Region/Metro/Local Code, Org - Organization, TZ - TimeZone, DMA - Designated Market Area
+.br
+
 Examples:
 .br
     -y3,5,2,3  (origin.asn.spameatingmonkey.net: CC ASN ORG)
