@@ -225,6 +225,7 @@ void add_rec(char *hkey) {
     int i;
     for (i = 0; (i < II_ITEM_MAX) && (*items)[i]; i++) {
         int ilen = strnlen((*items)[i], NAMELEN);
+//        int ilen = mbstowcs(NULL, (*items)[i], 0);	// utf8
         if (origins[origin_no].width[i] < ilen)
             origins[origin_no].width[i] = ilen;
 #ifdef IIDEBUG

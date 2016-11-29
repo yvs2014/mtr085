@@ -59,9 +59,9 @@ char *get_time_string (void)
   return t;
 }
 
-void report_open(void)
-{
-  printf ("Start: %s\n", get_time_string ());
+void report_open(void) {
+  printf("Local host: %s\n", LocalHostname);
+  printf("Start time: %s\n", get_time_string());
 }
 
 static size_t snprint_addr(char *dst, size_t dst_len, ip_t *addr)
@@ -92,67 +92,82 @@ void print_mpls(struct mplslen *mpls) {
   printf("%s\n", buf); \
 }
 
-void report_close(void) 
-{
-  static char buf[1024];
-  int at, max, z, w;
-  struct mplslen *mpls, *mplss;
-  ip_t *addr;
-  ip_t *addr2 = NULL;  
-  char name[81];
-  char fmt[16];
-  int len=0;
-  int len_hosts = 33;
+#define AT_HOST_LOOP(statement) { \
+  int max = net_max(), at; \
+  for (at = net_min(); at < max; at++) { \
+    statement; \
+  } \
+}
 
-  if (reportwide)
-  {
-    // get the longest hostname
-    len_hosts = strlen(LocalHostname);
-    max = net_max();
-    at  = net_min();
-    for (; at < max; at++) {
+void report_close(void) {
+  static char buf[1024];
+  static char name[81];
+  int len_hosts;
+#define HOST	"Host"
+
+  if (reportwide) { // get the longest hostname
+    len_hosts = strlen(HOST);
+    AT_HOST_LOOP(
       int nlen;
-      addr = net_addr(at);
-      if ((nlen = snprint_addr(name, sizeof(name), addr)))
+      if ((nlen = snprint_addr(name, sizeof(name), net_addr(at))))
         if (len_hosts < nlen)
           len_hosts = nlen;
+    );
+    if (len_hosts > sizeof(buf))
+      len_hosts = sizeof(buf);
+  } else
+    len_hosts = 32;
+
+  int l0 = 4;	// 2d._
+  int l1 = l0 + len_hosts;
+  int len = l0;
+  memset(buf, ' ', sizeof(buf));
+  buf[sizeof(buf) - 1] = 0;
+#ifdef IPINFO
+  if (ii_ready()) {
+    char *ii = ii_getheader();
+    if (ii) {
+      int di = ii_getwidth();
+      if (di > (sizeof(buf) - l0))
+        di = sizeof(buf) - l0;
+      memcpy(buf + l0, ii, di);
+      len += di;
     }
   }
-  
-  int len_tmp = len_hosts;
-#ifdef IPINFO
-  if (ii_ready() && reportwide)
-    len_tmp += ii_getwidth() - 1;
 #endif
-  snprintf(fmt, sizeof(fmt), "HOST: %%-%ds", len_tmp);
-  snprintf(buf, sizeof(buf), fmt, LocalHostname);
-  len = reportwide ? strlen(buf) : len_hosts;
+  int lh = strlen(HOST);
+  memcpy(buf + len, HOST, lh);
+  len += lh;
+  if (!reportwide)
+    len = len_hosts;
+  if (len < l1)
+    len = l1;
+
+  char fmt[16];
   ACTIVE_FLD_LOOP(
     snprintf(fmt, sizeof(fmt), "%%%ds", data_fields[j].length);
     snprintf(buf + len, sizeof(buf), fmt, data_fields[j].title);
     len += data_fields[j].length;
   );
 
-  max = net_max();
-  at  = net_min();
-  for(; at < max; at++) {
-    addr = net_addr(at);
-    mpls = net_mpls(at);
+  AT_HOST_LOOP(
+    ip_t *addr = net_addr(at);
+    struct mplslen *mpls = net_mpls(at);
     snprint_addr(name, sizeof(name), addr);
 
 #ifdef IPINFO
     if (ii_ready()) {
-      snprintf(fmt, sizeof(fmt), " %%2d. %%s%%-%ds", len_hosts);
+      snprintf(fmt, sizeof(fmt), "%%2d. %%s%%-%ds", len_hosts);
       snprintf(buf, sizeof(buf), fmt, at+1, fmt_ipinfo(addr), name);
     } else {
 #endif
-    snprintf(fmt, sizeof(fmt), " %%2d. %%-%ds ", len_hosts);
+    snprintf(fmt, sizeof(fmt), "%%2d. %%-%ds", len_hosts);
     snprintf(buf, sizeof(buf), fmt, at+1, name);
 #ifdef IPINFO
     }
 #endif
 
-    len = reportwide ? strlen(buf) : len_hosts;
+    len = reportwide ? strlen(buf) : l1;
 #define DFLD_PR(factor) { snprintf(buf + len, sizeof(buf) - len, data_fields[j].format, data_fields[j].net_xxx(at) factor); }
     ACTIVE_FLD_LOOP(
       /* 1000.0 is a temporay hack for stats usec to ms, impacted net_loss. */
@@ -161,17 +176,19 @@ void report_close(void)
       else
         DFLD_PR();
       len += data_fields[j].length;
-    )
+    );
 
     /* This feature shows 'loadbalances' on routes */
 
     /* z is starting at 1 because addrs[0] is the same that addr */
+    int z;
     for (z = 1; z < MAXPATH ; z++) {
-      addr2 = net_addrs(at, z);
-      mplss = net_mplss(at, z);
-      int found = 0;
+      ip_t *addr2 = net_addrs(at, z);
+      struct mplslen *mplss = net_mplss(at, z);
       if ((addrcmp ((void *) &unspec_addr, (void *) addr2, af)) == 0)
         break;
+      int found = 0;
+      int w;
       for (w = 0; w < z; w++)
         /* Ok... checking if there are ips repeated on same hop */
         if ((addrcmp ((void *) addr2, (void *) net_addrs (at,w), af)) == 0) {
@@ -182,14 +199,13 @@ void report_close(void)
       if (!found) {
         if (mpls->labels && z == 1 && enablempls)
           print_mpls(mpls);
+        printf("    ");	// 2d._
 #ifdef IPINFO
-        if (ii_ready()) {
-          snprint_addr(name, sizeof(name), addr2);
-          printf("     %s%s\n", fmt_ipinfo(addr2), name);
-        } else
-#else
-          printf("     %s \n", strlongip(addr2));
+        if (ii_ready())
+          printf("%s", fmt_ipinfo(addr2));
 #endif
+        snprint_addr(name, sizeof(name), addr2);
+        printf("%s\n", name);
         if (enablempls)
           print_mpls(mplss);
       }
@@ -198,7 +214,7 @@ void report_close(void)
     /* No multipath */
     if (mpls->labels && z == 1 && enablempls)
       print_mpls(mpls);
-  }
+  )
 }
 
 void txt_open(void)
