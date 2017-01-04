@@ -169,7 +169,8 @@ AS_IF([test "x$sys_getopt" = "xyes"], [
 AC_CANONICAL_HOST
 case "$host_os" in
   linux*)
-    AC_DEFINE(_BSD_SOURCE, 1, [enable BSD derived definitions])
+    AC_DEFINE(_BSD_SOURCE, 1, [enable BSD derived definitions (deprecated since glibc 2.20)])
+    AC_DEFINE(_DEFAULT_SOURCE, 1, [enable "default" definitions (since glibc 2.20)])
   ;;
   solaris*)
     AC_DEFINE(BSD_COMP, 1, [enable BSD compatibility])

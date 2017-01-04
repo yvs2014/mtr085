@@ -530,9 +530,11 @@ void dns_open(void)
   if (resfd6 == -1) {
     // consider making removing this warning. For now leave it in to see 
     // new code activated. -- REW
+    if (debug) {
     fprintf(stderr,
             "Unable to allocate IPv6 socket for nameserver communication: %s\n",
 	    strerror(errno));
+    }
     //    exit(-1);
   }
 #endif
@@ -1228,18 +1230,18 @@ void parserespacket(byte *s, int l)
 	    case T_CNAME:
 	      *namestring = '\0';
 	      r = dn_expand(s,s + l,c,namestring,MAXDNAME);
+	      if (debug) {
 	      if (r == -1) {
 		restell("Resolver error: dn_expand() failed while expanding domain in rdata.");
 		return;
 	      }
-	      if (debug) {
 		snprintf(tempstring, sizeof(tempstring), "Resolver: Answered domain: \"%s\"",namestring);
 		restell(tempstring);
-	      }
 	      if (r > HostnameLength) {
 		restell("Resolver error: Domain name too long.");
 		failrp(rp);
 		return;
+	      }
 	      }
 	      if (datatype == T_CNAME) {
 		strcpy(stackstring,namestring);
@@ -1258,10 +1260,12 @@ void parserespacket(byte *s, int l)
 	      }
 	      break;
 	    default:
+	      if (debug) {
 	      snprintf(tempstring, sizeof(tempstring), "Resolver error: Received unimplemented data type: %u (%s)",
 		      datatype,datatype < ResourcetypeCount ?
 		      resourcetypes[datatype] : resourcetypes[ResourcetypeCount]);
 	      restell(tempstring);
+	      }
 	    }
 	} else {
 	  if (debug) {
@@ -1283,10 +1287,12 @@ void parserespacket(byte *s, int l)
     failrp(rp);
     break;
   default:
+    if (debug) {
     snprintf(tempstring, sizeof(tempstring), "Resolver: Received error response %u. (%s)",
 	    getheader_rcode(hp),getheader_rcode(hp) < ResponsecodeCount ?
 	    responsecodes[getheader_rcode(hp)] : responsecodes[ResponsecodeCount]);
     restell(tempstring);
+    }
     res_nserror++;
   }
 }
