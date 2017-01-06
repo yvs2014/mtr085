@@ -37,7 +37,7 @@ AM_CPPFLAGS += -Igetopt
 endif
 
 if IPINFO
-mtr_SOURCES += asn.c asn.h
+mtr_SOURCES += ipinfo.c ipinfo.h
 endif
 
 if GRAPHCAIRO

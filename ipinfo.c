@@ -45,7 +45,7 @@
 #include "net.h"
 #include "dns.h"
 #include "display.h"
-#include "asn.h"
+#include "ipinfo.h"
 
 //#define IIDEBUG
 #ifdef IIDEBUG

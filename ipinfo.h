@@ -16,8 +16,8 @@
     Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 */
 
-#ifndef ASN_H
-#define ASN_H
+#ifndef IPINFO_H
+#define IPINFO_H
 
 // The autoconf system provides us with the NO_IPINFO define. 
 // Littering the code with #ifndef NO_IPINFO (double negative)

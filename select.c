@@ -33,7 +33,7 @@
 #include "dns.h"
 #include "net.h"
 #ifdef IPINFO
-#include "asn.h"
+#include "ipinfo.h"
 #endif
 #include "display.h"
 

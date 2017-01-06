@@ -93,7 +93,7 @@
 #include "net.h"
 #include "dns.h"
 #ifdef IPINFO
-#include "asn.h"
+#include "ipinfo.h"
 #endif
 #include "display.h"
 

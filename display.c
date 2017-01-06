@@ -32,7 +32,7 @@
 #include "raw.h"
 #include "dns.h"
 #ifdef IPINFO
-#include "asn.h"
+#include "ipinfo.h"
 #endif
 #ifdef GRAPHCAIRO
 #include "graphcairo-mtr.h"

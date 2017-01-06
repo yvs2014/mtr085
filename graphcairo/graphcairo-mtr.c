@@ -18,7 +18,9 @@
 #include "mtr-curses.h"
 #include "net.h"
 #include "dns.h"
-#include "asn.h"
+#ifdef IPINFO
+#include "ipinfo.h"
+#endif
 #include "display.h"
 #include "graphcairo.h"
 

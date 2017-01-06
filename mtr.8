@@ -289,9 +289,7 @@ for more information about GTK+.
 .TP
 .B \-\-aslookup
 .br
-Turn on ASN lookups. Origin - origin.asn.cymru.com.
-
-Key: `z' toggle ASN info on/off
+Turn on ASN lookups. Use `z' to toggle ASN info on/off. The data source is origin.asn.cymru.com.
 
 .TP
 .B \-y\ origin,fields
@@ -300,62 +298,104 @@ Key: `z' toggle ASN info on/off
 .br
 Use this option to specify the IP info origin and their fields and order.
 
+.RS
 Available origins and their fields:
-.br
-    1 - origin.asn.cymru.com (both IPv4 and IPv6):
-.br
-            ASN, Route, CC, Registry, Allocated
-.br
-    2 - asn.routeviews.org:
-.br
-            ASN
-.br
-    3 - origin.asn.spameatingmonkey.net:
-.br
-            Route, ASN, Org, Allocated, CC
-.br
-    4 - ip2asn.sasm4.net:
-.br
-            ASN
-.br
-    5 - peer.asn.shadowserver.org:
-.br
-            Peers, ASN, Route, AS Name, CC, Website, Org
-.br
-    6 - freegeoip.net:
-.br
-            CC, Country, RC, Region, City, Zip, TZ, Lat, Long, MC
-.br
-    7 - ip-api.com:
-.br
-            Country, CC, RC, Region, City, Zip, TZ, Lat, Long, MC
-.br
-    8 - getcitydetails.geobytes.com:
-.br
-            Certainty, Internet, Country, RLC, Region, RC, LC, DMA,
-            City, CityID, FQCN, Lat, Long, Capital, TZ, Nationality,
-            Population, MapReference, Currency, CurrencyCode, Title
-.br
-    9 - ipinfo.io:
-.br
-            City, Region, CC, Location(Lat, Long), ASName, Postal
-.br
-   10 - riswhois.ripe.net:
-.br
-            Route, ASN, Description
-.br
 
-Abbreviations: CC/RC/MC/LC - Country/Region/Metro/Local Code, Org - Organization, TZ - TimeZone, DMA - Designated Market Area
-.br
+.RS
+.B 1 - origin.asn.cymru.com (both IPv4 and IPv6)
+.RS
+ASN, Route, CC, Registry, Allocated
+.RE
+.RE
 
+.RS
+.B 2 - asn.routeviews.org
+.RS
+ASN
+.RE
+.RE
+
+.RS
+.B 3 - origin.asn.spameatingmonkey.net
+.RS
+Route, ASN, Org, Allocated, CC
+.RE
+.RE
+
+.RS
+.B 4 - ip2asn.sasm4.net:
+.RS
+ASN
+.RE
+.RE
+
+.RS
+.B 5 - peer.asn.shadowserver.org
+.RS
+Peers, ASN, Route, AS Name, CC, Website, Org
+.RE
+.RE
+
+.RS
+.B 6 - freegeoip.net
+.RS
+CC, Country, RC, Region, City, Zip, TZ, Lat, Long, MC
+.RE
+.RE
+
+.RS
+.B 7 - ip-api.com
+.RS
+Country, CC, RC, Region, City, Zip, TZ, Lat, Long, MC
+.RE
+.RE
+
+.RS
+.B 8 - getcitydetails.geobytes.com
+.RS
+Certainty, Internet, Country, RLC, Region, RC, LC, DMA, City, CityID, FQCN, Lat, Long, Capital, TZ, Nationality, Population, MapReference, Currency, CurrencyCode, Title
+.RE
+.RE
+
+.RS
+.B 9 - ipinfo.io
+.RS
+City, Region, CC, Location(Lat, Long), ASName, Postal
+.RE
+.RE
+
+.RS
+.B 10 - riswhois.ripe.net
+.RS
+Route, ASN, Org, CC
+.RE
+.RE
+.RE
+
+.RS
+Abbreviations:
+.RS
+CC/RC/MC/LC - Country/Region/Metro/Local Code, Org - Organization, TZ - TimeZone, DMA - Designated Market Area
+.RE
+.RE
+
+.RS
 Examples:
+.RS
+-y3,5,2,3  (origin.asn.spameatingmonkey.net: CC ASN ORG)
 .br
-    -y3,5,2,3  (origin.asn.spameatingmonkey.net: CC ASN ORG)
-.br
-    -y,        (origin.asn.cymru.com: ASN)
-.br
+-y,        (origin.asn.cymru.com: ASN)
+.RE
+.RE
 
-Keys: `y' switching IP info, `Y' show on Google Maps
+.RS
+Keys:
+.RS
+`y' switching IP info
+.br
+`Y' show on Google Maps
+.RE
+.RE
 
 .TP
 .B \-G\ arguments
@@ -365,36 +405,62 @@ Keys: `y' switching IP info, `Y' show on Google Maps
 Use this option to use the cairo based graph drawing (if available)
 and to specify their arguments.
 
+.RS
 Available arguments:
-    1st argument:  graph type
-.br
-        1 - dot, 2 - line, 3 - curve (default)
-.br
-    2nd argument:  viewport period
-.br
-        in N ticks, one tick - 10sec (default - 6, i.e. 60sec)
-.br
-    3rd argument:  enable legend
-        0 - none, 1 - enable (default)
-.br
-    4th argument:  enable multipath
-        0 - none (default), 1 - enable
-.br
-    5th argument:  jitter graph instead of latency graph
-        0 - none (default), 1 - enable
-.br
-\",\" (comma) as argument separator
-.br
-Examples:
-.br
-    -G,         (default: 3,6,1,1,0  - curve, 1min, legend, multipath, latency)
-.br
-    -G2         (line, default, default, default, default)
-.br
-    -G,30,,0    (default, 5min, default, disable, default)
-.br
 
-Keys: `dejnpqrtuyYz+- '
+.RS
+1st - graph type
+.RS
+1 - dot, 2 - line, 3 - curve (default)
+.RE
+.RE
+
+.RS
+2nd - viewport period
+.RS
+in N ticks, one tick - 10sec (default - 6, i.e. 60sec)
+.RE
+.RE
+
+.RS
+3rd - enable legend
+.RS
+0 - none, 1 - enable (default)
+.RE
+.RE
+
+.RS
+4th - enable multipath
+.RS
+0 - none (default), 1 - enable
+.RE
+.RE
+
+.RS
+5th - jitter graph instead of latency graph
+.RS
+0 - none (default), 1 - enable
+.RE
+.RE
+
+Use `,' (comma) as argument separator
+
+Examples:
+.RS
+-G,         (default: 3,6,1,1,0  - curve, 1min, legend, multipath, latency)
+.br
+-G2         (line, default, default, default, default)
+.br
+-G,30,,0    (default, 5min, default, disable, default)
+.br
+.RE
+
+Keys:
+.RS
+`dejnpqrtuyYz+- '
+.RE
+
+.RE
 
 .TP
 .B \-p
