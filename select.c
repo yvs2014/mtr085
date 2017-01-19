@@ -3,7 +3,7 @@
     Copyright (C) 1997,1998  Matt Kimball
 
     This program is free software; you can redistribute it and/or modify
-    it under the terms of the GNU General Public License version 2 as 
+    it under the terms of the GNU General Public License version 2 as
     published by the Free Software Foundation.
 
     This program is distributed in the hope that it will be useful,
@@ -42,7 +42,6 @@ extern int DisplayMode;
 extern int MaxPing;
 extern int ForceMaxPing;
 extern float WaitTime;
-double dnsinterval;
 extern int mtrtype;
 #if defined(CURSES) || defined(GRAPHCAIRO)
 extern int display_mode;
@@ -81,7 +80,7 @@ void select_loop(void) {
     p_writefd = &writefd;
 
   while(1) {
-    dt = calc_deltatime (WaitTime);
+    dt = calc_deltatime(WaitTime);
     intervaltime.tv_sec  = dt / 1000000;
     intervaltime.tv_usec = dt % 1000000;
 
@@ -93,24 +92,27 @@ void select_loop(void) {
         maxfd++;
     }
 
+#define SET_DNSFD(fd, family) { \
+  fd = dns_waitfd(family); \
+  if (fd >= 0) { \
+    FD_SET(fd, &readfd); \
+    if (fd >= maxfd) \
+      maxfd = dnsfd + 1; \
+  } else \
+    fd = 0; \
+}
+
+    if (enable_dns) {
+      SET_DNSFD(dnsfd, AF_INET);
 #ifdef ENABLE_IPV6
-    if (dns) {
-      dnsfd6 = dns_waitfd6();
-      if (dnsfd6 >= 0) {
-        FD_SET(dnsfd6, &readfd);
-        if(dnsfd6 >= maxfd) maxfd = dnsfd6 + 1;
-      } else {
-        dnsfd6 = 0;
-      }
-    } else
+      SET_DNSFD(dnsfd6, AF_INET6);
+#endif
+	} else {
+      dnsfd = 0;
+#ifdef ENABLE_IPV6
       dnsfd6 = 0;
 #endif
-    if (dns) {
-      dnsfd = dns_waitfd();
-      FD_SET(dnsfd, &readfd);
-      if(dnsfd >= maxfd) maxfd = dnsfd + 1;
-    } else
-      dnsfd = 0;
+    }
 
 #ifdef IPINFO
     int iifd;
@@ -186,15 +188,6 @@ void select_loop(void) {
 	  selecttime.tv_usec += 1000000;
 	}
 
-	if (dns) {
-	  if ((selecttime.tv_sec > (time_t)dnsinterval) ||
-	      ((selecttime.tv_sec == (time_t)dnsinterval) &&
-	       (selecttime.tv_usec > ((time_t)(dnsinterval * 1000000) % 1000000)))) {
-	    selecttime.tv_sec = (time_t)dnsinterval;
-	    selecttime.tv_usec = (time_t)(dnsinterval * 1000000) % 1000000;
-	  }
-	}
-
 	if (mtrtype == IPPROTO_TCP)
 	  writefd = tcp_fds;
 	rv = select(maxfd, &readfd, p_writefd, NULL, &selecttime);
@@ -213,22 +206,18 @@ void select_loop(void) {
       anyset = 1;
     }
 
-    if (dns) {
-      /* Handle any pending resolver events */
-      dnsinterval = WaitTime;
-      dns_events(&dnsinterval);
-    }
-
     /*  Have we finished a nameservice lookup?  */
+    if (enable_dns) {
+      if (dnsfd && FD_ISSET(dnsfd, &readfd)) {
+        dns_ack(dnsfd, AF_INET);
+        anyset = 1;
+      }
 #ifdef ENABLE_IPV6
-    if(dns && dnsfd6 && FD_ISSET(dnsfd6, &readfd)) {
-      dns_ack6();
-      anyset = 1;
-    }
+      if (dnsfd6 && FD_ISSET(dnsfd6, &readfd)) {
+        dns_ack(dnsfd6, AF_INET6);
+        anyset = 1;
+      }
 #endif
-    if(dns && dnsfd && FD_ISSET(dnsfd, &readfd)) {
-      dns_ack();
-      anyset = 1;
     }
 
 #ifdef IPINFO
@@ -243,52 +232,50 @@ void select_loop(void) {
     if(FD_ISSET(0, &readfd)) {
       int action = display_keyaction();
       switch (action) {
-      case ActionQuit: 
-	return;
-	break;
-      case ActionReset:
-	net_reset();
-	break;
+        case ActionQuit: 
+          return;
+          break;
+        case ActionReset:
+          net_reset();
+          break;
 #if defined(CURSES) || defined(GRAPHCAIRO)
-      case ActionDisplay:
-        display_mode = (display_mode + 1) % display_mode_max;
-	break;
+        case ActionDisplay:
+          display_mode = (display_mode + 1) % display_mode_max;
+          break;
 #endif
-      case ActionClear:
-	display_clear();
-	break;
-      case ActionPause:
-	paused=1;
-	break;
-      case  ActionResume:
-	paused=0;
-	break;
-      case ActionMPLS:
-	   enablempls = !enablempls;
-	   display_clear();
-	break;
-      case ActionDNS:
-	if (dns) {
-	  use_dns = !use_dns;
-	  display_clear();
-	}
-	break;
+        case ActionClear:
+          display_clear();
+          break;
+        case ActionPause:
+          paused = 1;
+          break;
+        case  ActionResume:
+          paused = 0;
+          break;
+        case ActionMPLS:
+          enablempls = !enablempls;
+          display_clear();
+          break;
+        case ActionDNS:
+          enable_dns = !enable_dns;
+          dns_open();
+          display_clear();
+          break;
 #ifdef IPINFO
-      case ActionAS:
-      case ActionII:
-      case ActionII_Map:
-	ii_action(action);
-	break;
+        case ActionAS:
+        case ActionII:
+        case ActionII_Map:
+          ii_action(action);
+          break;
 #endif
-      case ActionScrollDown:
-        display_offset += 5;
-	break;
-      case ActionScrollUp:
-        display_offset -= 5;
-	if (display_offset < 0) {
-	  display_offset = 0;
-	}
-	break;
+        case ActionScrollDown:
+          display_offset += 5;
+          break;
+        case ActionScrollUp:
+          display_offset -= 5;
+          if (display_offset < 0)
+            display_offset = 0;
+          break;
       }
       anyset = 1;
     }

@@ -47,7 +47,6 @@ gchar* getSelectedHost(GtkTreePath *path);
 
 extern char *Hostname;
 extern float WaitTime;
-extern int af;
 extern int mtrtype;
 extern fd_set tcp_fds;
 extern int maxfd;
@@ -472,7 +471,7 @@ void update_tree_row(int row, GtkTreeIter *iter)
   char str[256]="???", *name=str;
 
   addr = net_addr(row);
-  if (addrcmp( (void *) addr, (void *) &unspec_addr, af)) {
+  if (unaddrcmp(addr)) {
     if ((name = dns_lookup(addr))) {
       if (show_ips) {
         snprintf(str, sizeof(str), "%s (%s)", name, strlongip(addr));

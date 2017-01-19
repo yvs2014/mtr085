@@ -3,7 +3,7 @@
     Copyright (C) 1997,1998  Matt Kimball
 
     This program is free software; you can redistribute it and/or modify
-    it under the terms of the GNU General Public License version 2 as 
+    it under the terms of the GNU General Public License version 2 as
     published by the Free Software Foundation.
 
     This program is distributed in the hope that it will be useful,
@@ -15,6 +15,9 @@
     along with this program; if not, write to the Free Software
     Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 */
+
+#ifndef NET_H
+#define NET_H
 
 /*  Prototypes for functions in net.c  */
 #include <netdb.h>
@@ -73,12 +76,21 @@ int* net_saved_pings(int at);
 void net_save_xmit(int at);
 void net_save_return(int at, int seq, int ms);
 int net_duplicate(int at, int seq);
+int net_process_tcp_fds(void);
 
 void sockaddrtop( struct sockaddr * saddr, char * strptr, size_t len );
-int addrcmp( char * a, char * b, int af );
-void addrcpy( char * a, char * b, int af );
 
-int net_process_tcp_fds(void);
+int af;
+ip_t unspec_addr;	// zero by definition
+int (*unaddrcmp)(const void *);
+int (*addrcmp)(const void *a, const void *b);
+int addr4cmp(const void *a, const void *b);
+int addr6cmp(const void *a, const void *b);
+void* (*addrcpy)(void *a, const void *b);
+void* addr4cpy(void *a, const void *b);
+void* addr6cpy(void *a, const void *b);
+void net_init(int ipv6_mode);
+const char *strlongip(ip_t *ip);
 
 #define MAXPATH 8
 #define MaxHost 256
@@ -120,8 +132,6 @@ extern int fld_index[];
 extern unsigned char fld_active[];
 extern char available_options[];
 
-ip_t unspec_addr;
-
 /* MPLS label object */
 struct mplslen {
   unsigned long label[MAXLABELS]; /* label value */
@@ -132,3 +142,5 @@ struct mplslen {
 };
 
 void decodempls(int, char *, struct mplslen *, int);
+
+#endif

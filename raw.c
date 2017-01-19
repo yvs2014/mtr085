@@ -5,7 +5,7 @@
     raw.c -- raw output (for logging for later analysis)
 
     This program is free software; you can redistribute it and/or modify
-    it under the terms of the GNU General Public License version 2 as 
+    it under the terms of the GNU General Public License version 2 as
     published by the Free Software Foundation.
 
     This program is distributed in the hope that it will be useful,
@@ -35,7 +35,6 @@
 
 static int havename[MaxHost];
 
-extern int af;
 
 #if 0
 static char *addr_to_str(ip_t addr)
@@ -49,10 +48,8 @@ static char *addr_to_str(ip_t addr)
 
 void raw_rawping (int host, int msec)
 {
-  char *name;
-
-  if (dns && !havename[host]) {
-    name = dns_lookup2(net_addr(host));
+  if (!havename[host]) {
+    const char *name = dns_lookup(net_addr(host));
     if (name) {
       havename[host]++;
       printf ("d %d %s\n", host, name);

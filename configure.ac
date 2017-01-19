@@ -103,6 +103,24 @@ AC_ARG_WITH([sys_getopt],
 [sys_getopt="${withval}"], [sys_getopt=yes])
 AM_CONDITIONAL([LOCAL_GETOPT], [test "x$sys_getopt" = "xno"])
 
+AC_ARG_ENABLE([syslog_debug],
+[  --enable-syslog-debug   Syslog debug on],
+[syslog_debug="${enableval}"], [syslog_debug=no])
+
+AS_IF([test "x$syslog_debug" != "xno"], [
+	AC_DEFINE([MTR_SYSLOG], [LOG_INFO], [Define syslog level])
+	AS_IF([test "x$syslog_debug" == "xyes"], [
+		AC_DEFINE([LOG_DNS], 1, [Enable DNS debug logging])
+		AC_DEFINE([LOG_IPINFO], 1, [Enable IPinfo logging])
+	], [AS_IF([test "x$syslog_debug" == "xdns"], [
+		AC_DEFINE([LOG_DNS], 1, [Enable DNS debug logging])
+	], [AS_IF([test "x$syslog_debug" != "xipinfo"], [
+		AC_DEFINE([LOG_IPINFO], 1, [Enable IPinfo logging])
+	])
+	])
+	])
+])
+
 AC_ARG_ENABLE(ipv6,
 [  --disable-ipv6          Do not enable IPv6],
 WANTS_IPV6=$enableval, WANTS_IPV6=yes)
@@ -235,9 +253,6 @@ if test "x$RESOLV_LIB_NONE" = "x"; then
 	LIBS="$STASH_LIBS"
 fi
 
-AC_CHECK_FUNC(herror, , AC_DEFINE(NO_HERROR, 1, [Define if you don't have the herror() function available.]))
-AC_CHECK_FUNC(strerror, , AC_DEFINE(NO_STRERROR, 1, [Define if you don't have the strerror() function available.]))
-
 USES_IPV6=
 AC_CHECK_FUNC(getaddrinfo,
 [if test "$WANTS_IPV6" = "yes"; then
@@ -295,11 +310,6 @@ if test "x$USES_IPV6" = "xyes"; then
 			[AC_MSG_RESULT([no])
 			AC_MSG_ERROR(Need definition for struct __res_state_ext but unable to define it.)])])
 fi
-
-AC_CHECK_DECLS(errno, , , [[
-#include <errno.h>
-#include <sys/errno.h>
-]] )
 
 AC_CHECK_TYPE(socklen_t, AC_DEFINE([HAVE_SOCKLEN_T], [], [Define if your system has socklen_t]) , , [[
 #include <netinet/in.h>

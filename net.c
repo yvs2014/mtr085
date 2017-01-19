@@ -3,7 +3,7 @@
     Copyright (C) 1997,1998  Matt Kimball
 
     This program is free software; you can redistribute it and/or modify
-    it under the terms of the GNU General Public License version 2 as 
+    it under the terms of the GNU General Public License version 2 as
     published by the Free Software Foundation.
 
     This program is distributed in the hope that it will be useful,
@@ -188,13 +188,11 @@ static int batch_at = 0;
 static int numhosts = 10;
 
 extern int fstTTL;		/* initial hub(ttl) to ping byMin */
-extern int maxTTL;		/* last hub to ping byMin*/
 extern int endpoint_mode;	/* -fz option */
 extern int cpacketsize;		/* packet size used by ping */
 static int packetsize;		/* packet size used by ping */
 extern int bitpattern;		/* packet bit pattern used by ping */
 extern int tos;			/* type of service set in ping packet*/
-extern int af;			/* address family of remote target */
 extern int mtrtype;		/* type of query packet used */
 extern int remoteport;          /* target port for TCP tracing */
 extern int timeout;             /* timeout for TCP connections */
@@ -324,15 +322,15 @@ void net_send_tcp(int index)
   socklen_t namelen = sizeof(local);
   switch (af) {
   case AF_INET:
-    addrcpy((void *) &local4->sin_addr, (void *) &ssa4->sin_addr, af);
-    addrcpy((void *) &remote4->sin_addr, (void *) remoteaddress, af);
+    addrcpy(&local4->sin_addr, &ssa4->sin_addr);
+    addrcpy(&remote4->sin_addr, remoteaddress);
     remote4->sin_port = htons(remoteport);
     namelen = sizeof(*local4);
     break;
 #ifdef ENABLE_IPV6
   case AF_INET6:
-    addrcpy((void *) &local6->sin6_addr, (void *) &ssa6->sin6_addr, af);
-    addrcpy((void *) &remote6->sin6_addr, (void *) remoteaddress, af);
+    addrcpy(&local6->sin6_addr, &ssa6->sin6_addr);
+    addrcpy(&remote6->sin6_addr, remoteaddress);
     remote6->sin6_port = htons(remoteport);
     namelen = sizeof(*local6);
     break;
@@ -441,8 +439,8 @@ void net_send_query(int index)
   ip->check = 0;
 
   /* BSD needs the source address here, Linux & others do not... */
-    addrcpy( (void *) &(ip->saddr), (void *) &(ssa4->sin_addr), AF_INET );
-    addrcpy( (void *) &(ip->daddr), (void *) remoteaddress, AF_INET );
+    addrcpy(&(ip->saddr), &(ssa4->sin_addr));
+    addrcpy(&(ip->daddr), remoteaddress);
 #endif
     echotype = ICMP_ECHO;
     salen = sizeof (struct sockaddr_in);
@@ -557,7 +555,7 @@ void net_process_ping(int seq, struct mplslen mpls, void * addr, struct timeval 
 #endif
 
   /* Copy the from address ASAP because it can be overwritten */
-  addrcpy( (void *) &addrcopy, addr, af );
+  addrcpy(&addrcopy, addr);
 
   if (seq < 0 || seq >= MaxSequence)
     return;
@@ -574,27 +572,23 @@ void net_process_ping(int seq, struct mplslen mpls, void * addr, struct timeval 
             (now.tv_usec - sequence[seq].time.tv_usec);
   /* impossible? if( totusec < 0 ) totusec = 0 */;
 
-  if ( addrcmp( (void *) &(host[index].addr),
-		(void *) &unspec_addr, af ) == 0 ) {
+  if (!unaddrcmp(&(host[index].addr))) {
     /* should be out of if as addr can change */
-    addrcpy( (void *) &(host[index].addr), addrcopy, af );
+    addrcpy(&(host[index].addr), addrcopy);
     host[index].mpls = mpls;
     display_rawhost(index, (void *) &(host[index].addr));
 
   /* multi paths */
-    addrcpy( (void *) &(host[index].addrs[0]), addrcopy, af );
+    addrcpy(&(host[index].addrs[0]), addrcopy);
     host[index].mplss[0] = mpls;
   } else {
     for( i=0; i<MAXPATH; ) {
-      if( addrcmp( (void *) &(host[index].addrs[i]), (void *) &addrcopy,
-                   af ) == 0 ||
-          addrcmp( (void *) &(host[index].addrs[i]),
-		   (void *) &unspec_addr, af ) == 0 ) break;
+      if (!addrcmp(&(host[index].addrs[i]), &addrcopy) || !unaddrcmp(&(host[index].addrs[i])))
+        break;
       i++;
     }
-    if( addrcmp( (void *) &(host[index].addrs[i]), addrcopy, af ) != 0 &&
-        i<MAXPATH ) {
-      addrcpy( (void *) &(host[index].addrs[i]), addrcopy, af );
+    if (addrcmp(&(host[index].addrs[i]), addrcopy) && (i < MAXPATH)) {
+      addrcpy(&(host[index].addrs[i]), addrcopy);
       host[index].mplss[i] = mpls;
       display_rawhost(index, (void *) &(host[index].addrs[i]));
     }
@@ -899,13 +893,11 @@ int net_max(void)
   max = 0;
   /* for(at = 0; at < MaxHost-2; at++) { */
   for(at = 0; at < maxTTL-1; at++) {
-    if ( addrcmp( (void *) &(host[at].addr),
-                  (void *) remoteaddress, af ) == 0 ) {
+    if (!addrcmp(&(host[at].addr), remoteaddress)) {
       if (endpoint_mode)
         fstTTL = at + 1;
       return at + 1;
-    } else if ( addrcmp( (void *) &(host[at].addr),
-			 (void *) &unspec_addr, af ) != 0 ) {
+    } else if (unaddrcmp(&(host[at].addr))) {
       if (endpoint_mode)
         fstTTL = at + 1;
       max = at + 2;
@@ -993,7 +985,7 @@ int net_send_batch(void)
   net_send_query(batch_at);
 
   for (i=fstTTL-1;i<batch_at;i++) {
-    if ( addrcmp( (void *) &(host[i].addr), (void *) &unspec_addr, af ) == 0 )
+    if (!unaddrcmp(&(host[i].addr)))
       n_unknown++;
 
     /* The second condition in the next "if" statement was added in mtr-0.56,
@@ -1001,20 +993,15 @@ int net_send_batch(void)
 	hosts. Removed in 0.65.
 	If the line proves neccesary, it should at least NOT trigger that line
 	when host[i].addr == 0 */
-    if ( ( addrcmp( (void *) &(host[i].addr),
-                    (void *) remoteaddress, af ) == 0 )
+    if (!addrcmp(&(host[i].addr), remoteaddress)
 	/* || (host[i].addr == host[batch_at].addr)  */)
       n_unknown = MaxHost; /* Make sure we drop into "we should restart" */
   }
 
-  if (	/* success in reaching target */
-     ( addrcmp( (void *) &(host[batch_at].addr),
-                (void *) remoteaddress, af ) == 0 ) ||
-      /* fail in consecuitive MAX_UNKNOWN_HOSTS (firewall?) */
-      (n_unknown > MAX_UNKNOWN_HOSTS) ||
-      /* or reach limit  */
-      (batch_at >= maxTTL-1)) {
-    numhosts = batch_at+1;
+  if (!addrcmp(&(host[batch_at].addr), remoteaddress) // success in reaching target
+     || (n_unknown > MAX_UNKNOWN_HOSTS) // fail in consecuitive MAX_UNKNOWN_HOSTS (firewall?)
+     || (batch_at >= (maxTTL - 1))) { // or reach limit
+    numhosts = batch_at + 1;
     batch_at = fstTTL - 1;
     return 1;
   }
@@ -1111,7 +1098,6 @@ int net_selectsocket(void)
  return 0;
 }
 
-
 int net_open(struct hostent * host)
 {
 #ifdef ENABLE_IPV6
@@ -1130,7 +1116,7 @@ int net_open(struct hostent * host)
   case AF_INET:
     sendsock = sendsock4;
     recvsock = recvsock4;
-    addrcpy( (void *) &(rsa4->sin_addr), host->h_addr, AF_INET );
+    addr4cpy(&(rsa4->sin_addr), host->h_addr);
     sourceaddress = (ip_t *) &(ssa4->sin_addr);
     remoteaddress = (ip_t *) &(rsa4->sin_addr);
     break;
@@ -1142,7 +1128,7 @@ int net_open(struct hostent * host)
     }
     sendsock = sendsock6;
     recvsock = recvsock6;
-    addrcpy( (void *) &(rsa6->sin6_addr), host->h_addr, AF_INET6 );
+    addr6cpy(&(rsa6->sin6_addr), host->h_addr);
     sourceaddress = (ip_t *) &(ssa6->sin6_addr);
     remoteaddress = (ip_t *) &(rsa6->sin6_addr);
     break;
@@ -1160,25 +1146,19 @@ int net_open(struct hostent * host)
   return 0;
 }
 
-
-void net_reopen(struct hostent * addr)
-{
-  int at;
-
-  for(at = 0; at < MaxHost; at++) {
-    memset(&host[at], 0, sizeof(host[at]));
-  }
-
+void net_reopen(struct hostent * addr) {
+  memset(host, 0, sizeof(host));
   remotesockaddr->sa_family = addr->h_addrtype;
-  addrcpy( (void *) remoteaddress, addr->h_addr, addr->h_addrtype );
 
-  switch ( addr->h_addrtype ) {
+  switch (addr->h_addrtype) {
   case AF_INET:
-    addrcpy( (void *) &(rsa4->sin_addr), addr->h_addr, AF_INET );
+    addr4cpy(remoteaddress, addr->h_addr);
+    addr4cpy(&(rsa4->sin_addr), addr->h_addr);
     break;
 #ifdef ENABLE_IPV6
   case AF_INET6:
-    addrcpy( (void *) &(rsa6->sin6_addr), addr->h_addr, AF_INET6 );
+    addr6cpy(remoteaddress, addr->h_addr);
+    addr6cpy(&(rsa6->sin6_addr), addr->h_addr);
     break;
 #endif
   default:
@@ -1350,39 +1330,6 @@ void sockaddrtop( struct sockaddr * saddr, char * strptr, size_t len ) {
   }
 }
 
-/* Address comparison. */
-int addrcmp( char * a, char * b, int af ) {
-  int rc = -1;
-
-  switch ( af ) {
-  case AF_INET:
-    rc = memcmp( a, b, sizeof (struct in_addr) );
-    break;
-#ifdef ENABLE_IPV6
-  case AF_INET6:
-    rc = memcmp( a, b, sizeof (struct in6_addr) );
-    break;
-#endif
-  }
-
-  return rc;
-}
-
-/* Address copy. */
-void addrcpy( char * a, char * b, int af ) {
-
-  switch ( af ) {
-  case AF_INET:
-    memcpy( a, b, sizeof (struct in_addr) );
-    break;
-#ifdef ENABLE_IPV6
-  case AF_INET6:
-    memcpy( a, b, sizeof (struct in6_addr) );
-    break;
-#endif
-  }
-}
-
 /* Decode MPLS */
 void decodempls(int num, char *packet, struct mplslen *mpls, int offset) {
 
@@ -1489,5 +1436,52 @@ int net_process_tcp_fds(void)
     }
   }
   return ret;
+}
+
+int unaddr4cmp(const void *a) { // comparison to unspecified IPv4 address
+  return memcmp(a, &unspec_addr, sizeof(struct in_addr));
+}
+int addr4cmp(const void *a, const void *b) { // IPv4 address comparison
+  return memcmp(a, b, sizeof(struct in_addr));
+}
+void* addr4cpy(void *a, const void *b) { // IPv4 address copy
+  return memcpy(a, b, sizeof(struct in_addr));
+}
+
+#ifdef ENABLE_IPV6
+int unaddr6cmp(const void *a) { // comparison to unspecified IPv6 address
+  return memcmp(a, &unspec_addr, sizeof(struct in6_addr));
+}
+int addr6cmp(const void *a, const void *b) { // IPv6 address comparison
+  return memcmp(a, b, sizeof(struct in6_addr));
+}
+void* addr6cpy(void *a, const void *b) { // IPv6 address copy
+  return memcpy(a, b, sizeof(struct in6_addr));
+}
+#endif
+
+void net_init(int ipv6_mode) {
+#ifdef ENABLE_IPV6
+  if (ipv6_mode) {
+    af = AF_INET6;
+    unaddrcmp = unaddr6cmp;
+    addrcmp = addr6cmp;
+    addrcpy = addr6cpy;
+  } else
+#endif
+  { // IPv4 by default
+    af = AF_INET;
+    unaddrcmp = unaddr4cmp;
+    addrcmp = addr4cmp;
+    addrcpy = addr4cpy;
+  }
+}
+
+const char *strlongip(ip_t *ip) {
+#ifndef INET6_ADDRSTRLEN
+#define INET6_ADDRSTRLEN        46
+#endif
+  static char addrstr[INET6_ADDRSTRLEN];
+  return inet_ntop(af, ip, addrstr, sizeof(addrstr));
 }
 

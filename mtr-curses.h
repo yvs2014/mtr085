@@ -3,7 +3,7 @@
     Copyright (C) 1997,1998  Matt Kimball
 
     This program is free software; you can redistribute it and/or modify
-    it under the terms of the GNU General Public License version 2 as 
+    it under the terms of the GNU General Public License version 2 as
     published by the Free Software Foundation.
 
     This program is distributed in the hope that it will be useful,
@@ -15,6 +15,9 @@
     along with this program; if not, write to the Free Software
     Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 */
+
+#ifndef MTR_CURSES_H
+#define MTR_CURSES_H
 
 /*  Prototypes for curses.c  */
 void mtr_curses_open(void);
@@ -34,4 +37,6 @@ void mtr_fill_data(int at, char *buf);
 #ifdef UNICODE
 wchar_t mtr_curses_saved_wch(int saved_int);
 #endif
+#endif
+
 #endif

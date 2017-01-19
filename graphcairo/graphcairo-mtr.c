@@ -45,7 +45,6 @@
 
 #define	NUMHOSTS	10	// net.c static numhosts = 10
 
-extern int af;			// mtr.c
 extern int mtrtype;
 extern int maxTTL;
 extern float WaitTime;
@@ -155,12 +154,11 @@ void fill_hostinfo(int at, ip_t *addr) {
 	}
 #endif
 	sz = STARTSTAT;
-	char *name = dns_lookup(addr);
+	const char *name = dns_lookup(addr);
 	if (name) {
+		l = snprintf(p, sz, "%s", name);
 		if (show_ips)
-			l = snprintf(p, sz, "%s (%s)", name, strlongip(addr));
-		else
-			l = snprintf(p, sz, "%s", name);
+			l += snprintf(p + l, sz - l, " (%s)", strlongip(addr));
 	} else
 		l = snprintf(p, sz, "%s", strlongip(addr));
 
@@ -250,9 +248,9 @@ void gc_keyaction(int c) {
 				GCDEBUG_MSG(("toggle latency/jitter stats\n"));
 				break;
 			case 'n':	// DNS
-				use_dns = !use_dns;
+				enable_dns = !enable_dns;
 				hostinfo_max = 0;
-				GCDEBUG_MSG(("use_dns=%d\n", use_dns));
+				GCDEBUG_MSG(("enable_dns=%d\n", enable_dns));
 				break;
 #ifdef IPINFO
 			case 'z':	// ASN
@@ -373,7 +371,7 @@ void gc_redraw(void) {
 	for (i = 0, at = min; i < hops; i++, at++) {
 		ip_t *addr = net_addr(at);
 
-		if (addrcmp((void *)addr, (void *)&unspec_addr, af) != 0) {
+		if (unaddrcmp(addr)) {
 			int *saved = net_saved_pings(at);
 			int saved_ndx = SAVED_PINGS - 2;	// waittime ago
 			if (params.jitter_graph) {
@@ -428,9 +426,9 @@ void gc_redraw(void) {
 					int j;
 					for (j = 0; j < MAXPATH; j++) {
 						ip_t *addrs = net_addrs(at, j);
-						if (addrcmp((void *)addrs, (void *)addr, af) == 0)
+						if (!addrcmp(addrs, addr))
 							continue;
-						if (addrcmp((void *)addrs, (void *)&unspec_addr, af) == 0)
+						if (!unaddrcmp(addrs))
 							break;
 						fill_hostinfo(at, addrs);
 						cr_print_host(i, data[i], buf, NULL);

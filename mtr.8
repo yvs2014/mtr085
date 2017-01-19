@@ -2,242 +2,210 @@
 
 
 .SH NAME
-mtr \- a network diagnostic tool
+mtr - a network diagnostic tool
 
 
 .SH SYNOPSIS
-.B mtr 
-[\c
-.B \-BfhvrctglxspQemniuTP46yzG\c
-]
-[\c
-.B \-\-help\c
-]
-[\c
-.B \-\-version\c
-]
-[\c
-.B \-\-report\c
-]
-[\c
-.B \-\-report-wide\c
-]
-[\c
-.B \-\-report\-cycles\ COUNT\c
-]
-[\c
-.B \-\-curses\c
-]
-[\c
-.BI \-\-displaymode\ MODE\c
-]
-[\c
-.B \-\-split\c
-]
-[\c
-.B \-\-raw\c
-]
-[
-.B \-\-xml\c
-]
-[\c
-.B \-\-mpls\c
-]
-[\c
-.B \-\-no-dns\c
-]
-[\c
-.B \-\-show-ips\c
-]
-[\c
-.B \-\-gtk\c
-]
-[\c
-.B \-\-address\ IP.ADD.RE.SS\c
-]
-[\c
-.B \-\-interval\ SECONDS\c
-]
-[\c
-.B \-\-max-ttl\ NUM\c
-]
-[\c
-.B \-\-first-ttl\ NUM\c
-]
-[\c
-.B \-\-bitpattern\ NUM\c
-]
-[\c
-.B \-\-tos\ NUM\c
-]
-[\c
-.B \-\-psize\ BYTES | -s BYTES\c
-]
-[\c
-.B \-\-tcp\c
-]
-[\c
-.B \-\-udp\c
-]
-[\c
-.B \-\-port\ PORT\c
-]
-[\c
-.B \-\-timeout\ SECONDS\c
-]
-.B HOSTNAME [PACKETSIZE]
-
+.B mtr [-abBcCdefFgGilmnopPQrstTuvwxyzZ46] HOSTNAME ...
 
 .SH DESCRIPTION
 
-.B mtr 
-combines the functionality of the 
+.B mtr
+combines the functionality of the
 .B traceroute
-and 
+and
 .B ping
 programs in a single network diagnostic tool.
 
 .PP
-As 
-.B mtr 
-starts, it investigates the network connection between the host 
+As
 .B mtr
-runs on and 
-.BR HOSTNAME . 
-by sending packets with purposely low TTLs.  It continues to send
-packets with low TTL, noting the response time of the intervening
-routers.  This allows 
-.B mtr 
-to print the response percentage and response times of the internet
-route to 
-.BR HOSTNAME . 
-A sudden increase in packet loss or response time is often an indication
-of a bad (or simply overloaded) link. 
+starts, it investigates the network connection between the host
+.B mtr
+runs on and
+.BR HOSTNAME
+by sending packets with purposely low TTLs.  It continues to send packets with low TTL, noting the response time of the intervening routers.  This allows
+.B mtr
+to print the response percentage and response times of the internet route to
+.BR HOSTNAME.
+A sudden increase in packet loss or response time is often an indication of a bad (or simply overloaded) link.
 
 .PP
-The results are usually reported as round-trip-response times in miliseconds 
-and the percentage of packetloss. 
+The results are usually reported as round-trip-response times in miliseconds and the percentage of packetloss.
 
 .SH OPTIONS
 
 .TP
-.B \-h
-.TP
-.B \-\-help
-.br
-Print the summary of command line argument options.
+.B -a, --address IP.ADD.RE.SS
+Use this option to bind outgoing packets' socket to specific interface, so that any packet will be sent through this interface.  NOTE that this option doesn't apply to DNS requests (which could be and could not be what you want).
 
 .TP
-.B \-v
-.TP
-.B \-\-version
-.br
-Print the installed version of mtr.  
-
-.TP
-.B \-r
-.TP
-.B \-\-report
-.br
-This option puts 
-.B mtr
-into 
-.B report
-mode.  When in this mode,
-.B mtr
-will run for the number of cycles specified by the 
-.B \-c
-option, and then print statistics and exit.  
-.TP
-\c
-This mode is useful for generating statistics about network quality.  
-Note that each running instance of 
-.B mtr
-generates a significant amount of network traffic.  Using 
-.B mtr
-to measure the quality of your network may result in decreased
-network performance.  
-
-.TP
-.B \-w
-.TP
-.B \-\-report-wide
-.br
-This option puts 
-.B mtr
-into 
-.B wide report
-mode.  When in this mode,
-.B mtr
-will not cut hostnames in the report. 
-
-.TP
-.B \-c\ COUNT
-.TP
-.B \-\-report\-cycles\ COUNT
-Use this option to set the number of pings sent to determine
-both the machines on the network and the reliability of 
-those machines.  Each cycle lasts one second.
-
-.TP
-.B \-s\ BYTES
-.TP
-.B \-\-psize\ BYTES
-.TP
-.B PACKETSIZE
-These options or a trailing PACKETSIZE on the command line sets 
-the packet size used for probing.
-It is in bytes inclusive IP and ICMP headers
-
-If set to a negative number, every iteration will use a different, random
-packet size upto that number. 
-.TP
-.B \-t
-.TP
-.B \-\-curses
-.br
-Use this option to force 
-.B mtr 
-to use the curses based terminal
-interface (if available).
-
-.TP
-.B \-e
-.TP
-.B \-\-mpls
-.br
-Use this option to tell 
-.B mtr 
-to display information from ICMP extensions for MPLS (RFC 4950)
-that are encoded in the response packets.
-
-.TP
-.B \-n
-.TP
-.B \-\-no-dns
-.br
-Use this option to force 
-.B mtr 
-to display numeric IP numbers and not try to resolve the
-host names. 
-
-.TP
-.B \-b
-.TP
-.B \-\-show-ips
-.br
+.B -b, --show-ips
 Use this option to tell
 .B mtr
-to display both the host names and numeric IP numbers.  In split mode
-this adds an extra field to the output.  In report mode, there is usually
-too little space to add the IPs, and they will be truncated.  Use the
-wide report (-w) mode to see the IPs in report mode. 
+to display both the host names and numeric IP numbers.  In split mode this adds an extra field to the output.  In report mode, there is usually too little space to add the IPs, and they will be truncated.  Use the wide report mode
+.B -w
+to see the IPs in report mode.
 
 .TP
-.B \-o\ fields\ order
+.B -B, --bitpattern NUM
+Specifies bit pattern to use in payload.  Should be within range 0 - 255.
+
 .TP
-.B \-\-order\ fields\ order
+.B -c, --report-cycles COUNT
+Use this option to set the number of pings sent to determine both the machines on the network and the reliability of those machines.  Each cycle lasts one second.
+
+.TP
+.B -C, --csv
+Use this option to tell
+.B mtr
+to use the
+.B CSV
+output format.  This format is better suited for automated processing.
+
+.TP
+.B -d, --displaymode MODE
+Use this option to select the initial display mode:
+.RS
+.RS
+.B 0
+default
+.RE
+
+.RS
+.B 1
+without latency information
+.RE
+
+.RS
+.B 2
+with latency information
+.RE
+
+.RS
+.B 3
+the unicode histogram
+.RE
+
+.RS
+.B 4-7
+reserved
+.RE
+
+.RS
+.B 4th bit
+toggle color on/off
+.RE
+.RE
+
+.TP
+.B -e, --mpls
+Use this option to tell
+.B mtr
+to display information from ICMP extensions for MPLS (RFC 4950) that are encoded in the response packets.
+
+.TP
+.B -f, --first-ttl NUM
+Specifies with what TTL to start.  Defaults to 1, `z' means
+.B mtr
+destination.
+
+.TP
+.B -F, --filename FILE
+Reads the list of HOSTNAMEs from the FILE.
+
+.TP
+.B -g, --gtk
+Use this option to force
+.B mtr
+to use the GTK+ based X11 window interface (if available).  GTK+ must have been available on the system when
+.B mtr
+was built for this to work.  See the GTK+ web page at
+.B http://www.gtk.org/
+for more information about GTK+.
+
+.TP
+.B -G, --graphcairo ARGUMENTS
+Use this option to use the cairo based graph drawing (if available).
+
+.RS
+Available arguments by order:
+
+.RS
+.B 1st arg: graph type
+.RS
+1 - dot, 2 - line, 3 - curve (default)
+.RE
+.RE
+
+.RS
+.B 2nd arg: viewport period
+.RS
+in N ticks, one tick - 10sec (default - 6, i.e. 60sec)
+.RE
+.RE
+
+.RS
+.B 3rd arg: legend on/off
+.RS
+0 - none, 1 - enable (default)
+.RE
+.RE
+
+.RS
+.B 4th arg: multipath on/off
+.RS
+0 - none (default), 1 - enable
+.RE
+.RE
+
+.RS
+.B 5th arg: latency or jitter graph
+.RS
+0 - latency (default), 1 - jitter
+.RE
+.RE
+
+Use `,' (comma) as argument separator
+
+Examples:
+.RS
+-G,         (default: 3,6,1,1,0  - curve, 1min, legend, multipath, latency)
 .br
+-G2         (line, default, default, default, default)
+.br
+-G,30,,0    (default, 5min, default, disable, default)
+.br
+.RE
+
+Keys:
+.RS
+`dejnpqrtuyYz+- '
+.RE
+.RE
+
+.TP
+.B -i, --interval SECONDS
+Use this option to specify the positive number of seconds between ICMP ECHO requests.  The default value for this parameter is one second.  The root user may choose values between zero and one.
+
+.TP
+.B -l, --raw
+Use this option to tell
+.B mtr
+to use the raw output format.  This format is better suited for archival of the measurement results.  It could be parsed to be presented into any of the other display methods.
+
+.TP
+.B -m, --max-ttl NUM
+Specifies the maximum number of hops (max time-to-live value) traceroute will probe.  Default is 30.
+
+.TP
+.B -n, --no-dns
+Use this option to force
+.B mtr
+to display numeric IP numbers and not try to resolve the host names.
+
+.TP
+.B -o, --order FIELD-ORDER
 Use this option to specify the fields and their order when loading mtr.
 .br
 Available fields:
@@ -263,40 +231,83 @@ I%Interarrival Jitter
 
 Example:
 -o "LSD NBAW"
+
 .TP
-.B \-\-displaymode \fIMODE
-Use this option to select the initial display mode: 0 (default)
-selects statistics, 1 selects the stripchart without latency
-information, and 2 selects the stripchart with latency
-information, and 3 selects the unicode histogram,
-4-7 - reserved, 4th bit - toggle color on/off
+.B -p, --split
+Use this option to set
+.B mtr
+to spit out a format that is suitable for a split-user interface.
+
 .TP
-.B \-g
+.B -P, --port PORT
+The target port number for TCP traces.
+
 .TP
-.B \-\-gtk
-.br
+.B -Q, --tos NUM
+Specifies value for type of service field in IP header.  Should be within range 0 - 255.
+
+.TP
+.B -r, --report
+This option puts
+.B mtr
+into report mode.  When in this mode,
+.B mtr
+will run for the number of cycles specified by the
+.B -c
+option, and then print statistics and exit.
+
+This mode is useful for generating statistics about network quality.
+
+Note that each running instance of
+.B mtr
+generates a significant amount of network traffic.  Using
+.B mtr
+to measure the quality of your network may result in decreased network performance.
+
+.TP
+.B -s, --psize BYTES
+This option sets the packet size used for probing.  It is in bytes inclusive IP and ICMP headers
+
+If set to a negative number, every iteration will use a different, random packet size upto that number.
+
+.TP
+.B -t, --curses
 Use this option to force
-.B mtr 
-to use the GTK+ based X11 window interface (if available).  
-GTK+ must have been available on the system when 
-.B mtr 
-was built for this to work.  See the GTK+ web page at 
-.B http://www.gtk.org/
-for more information about GTK+.
+.B mtr
+to use the curses based terminal interface (if available).
 
 .TP
-.B \-z
-.TP
-.B \-\-aslookup
-.br
-Turn on ASN lookups. Use `z' to toggle ASN info on/off. The data source is origin.asn.cymru.com.
+.B -T, --tcp
+Use TCP SYN packets instead of ICMP ECHO.
 
 .TP
-.B \-y\ origin,fields
+.B -u, --udp
+Use UDP datagrams instead of ICMP ECHO.
+
 .TP
-.B \-\-ipinfo\ origin,fields
+.B -v, --version
 .br
-Use this option to specify the IP info origin and their fields and order.
+Print the installed version of mtr.
+
+.TP
+.B -w, --report-wide
+This option puts
+.B mtr
+into wide report mode.  When in this mode,
+.B mtr
+will not cut hostnames in the report.
+
+.TP
+.B -x, --xml
+Use this option to tell
+.B mtr
+to use the
+.B XML
+output format.  This format is better suited for automated processing of the measurement results.
+
+.TP
+.B -y, --ipinfo ORIGIN,FIELDS
+Use this option to specify the IP info origin and its fields.
 
 .RS
 Available origins and their fields:
@@ -365,7 +376,7 @@ City, Region, CC, Location(Lat, Long), ASName, Postal
 .RE
 
 .RS
-.B 10 - riswhois.ripe.net
+.B 10 - riswhois.ripe.net (both IPv4 and IPv6)
 .RS
 Route, ASN, Org, CC
 .RE
@@ -398,213 +409,40 @@ Keys:
 .RE
 
 .TP
-.B \-G\ arguments
-.TP
-.B \-\-graphcairo\ arguments
-.br
-Use this option to use the cairo based graph drawing (if available)
-and to specify their arguments.
-
-.RS
-Available arguments:
-
-.RS
-1st - graph type
-.RS
-1 - dot, 2 - line, 3 - curve (default)
-.RE
-.RE
-
-.RS
-2nd - viewport period
-.RS
-in N ticks, one tick - 10sec (default - 6, i.e. 60sec)
-.RE
-.RE
-
-.RS
-3rd - enable legend
-.RS
-0 - none, 1 - enable (default)
-.RE
-.RE
-
-.RS
-4th - enable multipath
-.RS
-0 - none (default), 1 - enable
-.RE
-.RE
-
-.RS
-5th - jitter graph instead of latency graph
-.RS
-0 - none (default), 1 - enable
-.RE
-.RE
-
-Use `,' (comma) as argument separator
-
-Examples:
-.RS
--G,         (default: 3,6,1,1,0  - curve, 1min, legend, multipath, latency)
-.br
--G2         (line, default, default, default, default)
-.br
--G,30,,0    (default, 5min, default, disable, default)
-.br
-.RE
-
-Keys:
-.RS
-`dejnpqrtuyYz+- '
-.RE
-
-.RE
+.B -z, --aslookup
+Turn on ASN lookups. Use the `z' key to toggle ASN info on/off. The data source is
+.B riswhois.ripe.net
 
 .TP
-.B \-p
-.TP
-.B \-\-split
-.br
-Use this option to set
-.B mtr 
-to spit out a format that is suitable for a split-user interface.
+.B -Z, --timeout SECONDS
+The number of seconds to keep the TCP socket open before giving up on the connection.  This will only affect the final hop.  Using large values for this, especially combined with a short interval, will use up a lot of file descriptors.
 
 .TP
-.B \-l
-.TP
-.B \-\-raw
-.br
-Use this option to tell
-.B mtr
-to use the raw output format.  This format is better suited for
-archival of the measurement results.  It could be parsed to 
-be presented into any of the other display methods. 
-
-.TP
-.B \-x
-.TP
-.B \-\-xml
-.br
-Use this option to tell
-.B mtr
-to use the xml output format.  This format is better suited for
-automated processing of the measurement results.
-
-.TP
-.B \-a\ IP.ADD.RE.SS
-.TP
-.B \-\-address\ IP.ADD.RE.SS
-.br
-Use this option to bind outgoing packets' socket to specific interface,
-so that any packet will be sent through this interface.  NOTE that this
-option doesn't apply to DNS requests (which could be and could not be 
-what you want).
-
-.TP
-.B \-i\ SECONDS
-.TP
-.B \-\-interval\ SECONDS
-.br
-Use this option to specify the positive number of seconds between ICMP
-ECHO requests.  The default value for this parameter is one second.  The
-root user may choose values between zero and one.
-
-.TP
-.B \-m\ NUM
-.TP
-.B \-\-max-ttl\ NUM
-.br
-Specifies the maximum number of hops (max time-to-live value) traceroute will
-probe.  Default is 30.
-
-.TP
-.B \-f\ NUM
-.TP
-.B \-\-first-ttl\ NUM
-.br
-Specifies with what TTL to start.  Defaults to 1, `z' means
-.B mtr
-destination.
-
-.TP
-.B \-B\ NUM
-.TP
-.B \-\-bitpattern\ NUM
-.br
-Specifies bit pattern to use in payload.  Should be within range 0 - 255.
-
-.TP
-.B \-Q\ NUM
-.TP
-.B \-\-tos\ NUM
-.br
-Specifies value for type of service field in IP header.  Should be within range 0
-- 255.
-
-.TP
-.B \-u
-.TP
-.B \-\-udp
-.br
-Use UDP datagrams instead of ICMP ECHO.
-
-.TP
-.B \-T
-.TP
-.B \-\-tcp
-.br
-Use TCP SYN packets instead of ICMP ECHO.  PACKETSIZE is ignored, since
-SYN packets can not contain data.
-
-.TP
-.B \-P\ PORT
-.TP
-.B \-\-port\ PORT
-.br
-The target port number for TCP traces.
-
-.TP
-.B \-\-timeout\ SECONDS
-.br
-The number of seconds to keep the TCP socket open before giving up on
-the connection.  This will only affect the final hop.  Using large values
-for this, especially combined with a short interval, will use up a lot
-of file descriptors.
-
-.TP
-.B \-4
-.br
+.B -4
 Use IPv4 only.
 
 .TP
-.B \-6
-.br
-Use IPv6 only.  (IPV4 may be used for DNS lookups). 
+.B -6
+Use IPv6 only.
 
 .SH BUGS
 
-Some modern routers give a lower priority to ICMP ECHO packets than 
-to other network traffic.  Consequently, the reliability of these
-routers reported by 
+Some modern routers give a lower priority to ICMP ECHO packets than to other network traffic.  Consequently, the reliability of these routers reported by
 .B mtr
-will be significantly lower than the actual reliability of 
-these routers.  
+will be significantly lower than the actual reliability of these routers.
 
 
 .SH CONTACT INFORMATION
 
 .PP
-For the latest version, see the mtr web page at 
+For the latest version, see the mtr web page at
 .BR http://www.bitwizard.nl/mtr/ .
 
 .PP
-The mtr mailinglist was little used and is no longer active. 
+The mtr mailinglist was little used and is no longer active.
 
 .PP
-For patches, bug reports, or feature requests, please open an issue on
-GitHub at:
+For patches, bug reports, or feature requests, please open an issue on GitHub at:
 .BR https://github.com/traviscross/mtr .
 
 .SH "SEE ALSO"

@@ -7,7 +7,7 @@
     Copyright (C) 1998  Bertrand Leconte <B.Leconte@mail.dotcom.fr>
 
     This program is free software; you can redistribute it and/or modify
-    it under the terms of the GNU General Public License version 2 as 
+    it under the terms of the GNU General Public License version 2 as
     published by the Free Software Foundation.
 
     This program is distributed in the hope that it will be useful,
@@ -83,7 +83,6 @@
 
 extern char *Hostname;
 extern int WaitTime;
-extern int af;
 
 /* There is 256 hops max in the IP header (coded with a byte) */
 #define MAX_LINE_COUNT 256
@@ -123,8 +122,9 @@ void split_redraw(void)
    */
   for(at = 0; at < max; at++) {
     addr = net_addr(at);
-    if(addrcmp((void*)addr, (void*)&unspec_addr, af)) {
-      char str[256], *name;
+    if (unaddrcmp(addr)) {
+      char str[256];
+      const char *name;
       if (!(name = dns_lookup(addr)))
         name = strlongip(addr);
       if (show_ips) {

@@ -3,7 +3,7 @@
     Copyright (C) 1997,1998  Matt Kimball
 
     This program is free software; you can redistribute it and/or modify
-    it under the terms of the GNU General Public License version 2 as 
+    it under the terms of the GNU General Public License version 2 as
     published by the Free Software Foundation.
 
     This program is distributed in the hope that it will be useful,
@@ -104,12 +104,10 @@
 extern char LocalHostname[];
 extern char mtr_args[];
 extern int fstTTL;
-extern int maxTTL;
 extern int cpacketsize;
 extern int bitpattern;
 extern int tos;
 extern float WaitTime;
-extern int af;
 extern int mtrtype;
 extern int display_offset;
 extern int display_mode;
@@ -358,22 +356,20 @@ void mtr_curses_hosts(int startstat)
   struct mplslen *mpls, *mplss;
   ip_t *addr, *addrs;
   int y;
-  char *name;
 
   int i, k;
   char buf[1024];
 
   max = net_max();
-
-  for(at = net_min () + display_offset; at < max; at++) {
+  for (at = net_min() + display_offset; at < max; at++) {
     printw("%2d. ", at + 1);
     addr = net_addr(at);
     mpls = net_mpls(at);
 
-    if( addrcmp( (void *) addr, (void *) &unspec_addr, af ) != 0 ) {
-      name = dns_lookup(addr);
+    if (unaddrcmp(addr)) {
+      const char *name = dns_lookup(addr);
       if (! net_up(at))
-	attron(A_BOLD);
+        attron(A_BOLD);
 #ifdef IPINFO
       if (ii_ready())
         printw(fmt_ipinfo(addr));
@@ -381,9 +377,8 @@ void mtr_curses_hosts(int startstat)
       if(name != NULL) {
         if (show_ips) printw("%s (%s)", name, strlongip(addr));
         else printw("%s", name);
-      } else {
-	printw("%s", strlongip( addr ) );
-      }
+      } else
+        printw("%s", strlongip(addr));
       attroff(A_BOLD);
 
       getyx(stdscr, y, __unused_int);
@@ -406,8 +401,10 @@ void mtr_curses_hosts(int startstat)
       for (i=0; i < MAXPATH; i++ ) {
         addrs = net_addrs(at, i);
         mplss = net_mplss(at, i);
-	if ( addrcmp( (void *) addrs, (void *) addr, af ) == 0 ) continue;
-	if ( addrcmp( (void *) addrs, (void *) &unspec_addr, af ) == 0 ) break;
+        if (!addrcmp(addrs, addr))
+          continue;
+        if (!unaddrcmp(addrs))
+          break;
 
         name = dns_lookup(addrs);
         if (! net_up(at)) attron(A_BOLD);
@@ -417,14 +414,12 @@ void mtr_curses_hosts(int startstat)
           printw(fmt_ipinfo(addrs));
 #endif
         if (name != NULL) {
-	  if (show_ips) printw("%s (%s)", name, strlongip(addrs));
-	  else printw("%s", name);
-        } else {
-	  printw("%s", strlongip( addrs ) );
-        }
-        for (k=0; k < mplss->labels && enablempls; k++) {
+          if (show_ips) printw("%s (%s)", name, strlongip(addrs));
+          else printw("%s", name);
+        } else
+          printw("%s", strlongip(addrs));
+        for (k=0; k < mplss->labels && enablempls; k++)
           printw("\n    [MPLS: Lbl %lu Exp %u S %u TTL %u]", mplss->label[k], mplss->exp[k], mplss->s[k], mplss->ttl[k]);
-        }
         attroff(A_BOLD);
       }
 
@@ -591,10 +586,8 @@ void mtr_curses_graph(int startstat, int cols)
 {
 	int max, at, y;
 	ip_t * addr;
-	char* name;
 
 	max = net_max();
-
 	for (at = net_min() + display_offset; at < max; at++) {
 		printw("%2d. ", at+1);
 
@@ -606,12 +599,12 @@ void mtr_curses_graph(int startstat, int cols)
 
 		if (! net_up(at))
 			attron(A_BOLD);
-		if (addrcmp((void *) addr, (void *) &unspec_addr, af)) {
+		if (unaddrcmp(addr)) {
 #ifdef IPINFO
-                if (ii_ready())
-                  printw(fmt_ipinfo(addr));
+		if (ii_ready())
+			printw(fmt_ipinfo(addr));
 #endif
-			name = dns_lookup(addr);
+			const char *name = dns_lookup(addr);
 			printw("%s", name?name:strlongip(addr));
 		} else
 			printw("???");
@@ -636,18 +629,18 @@ void mtr_curses_graph(int startstat, int cols)
 }
 
 int mtr_curses_data_fields(char *buf) {
-    int i, j;
-    int hd_len = 0;
-    char fmt[16];
-    for (i=0; i < MAXFLD; i++ ) {
-	j = fld_index[fld_active[i]];
-	if (j < 0) continue;
-
-	sprintf( fmt, "%%%ds", data_fields[j].length );
-        sprintf( buf + hd_len, fmt, data_fields[j].title );
-	hd_len +=  data_fields[j].length;
-    }
-    return hd_len;
+	int i, j;
+	int hd_len = 0;
+	char fmt[16];
+	for (i=0; i < MAXFLD; i++ ) {
+		j = fld_index[fld_active[i]];
+		if (j < 0)
+			continue;
+		sprintf( fmt, "%%%ds", data_fields[j].length );
+		sprintf( buf + hd_len, fmt, data_fields[j].title );
+		hd_len +=  data_fields[j].length;
+	}
+	return hd_len;
 }
 
 #ifdef UNICODE

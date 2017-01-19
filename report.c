@@ -3,7 +3,7 @@
     Copyright (C) 1997,1998  Matt Kimball
 
     This program is free software; you can redistribute it and/or modify
-    it under the terms of the GNU General Public License version 2 as 
+    it under the terms of the GNU General Public License version 2 as
     published by the Free Software Foundation.
 
     This program is distributed in the hope that it will be useful,
@@ -38,14 +38,12 @@
 
 #define MAXLOADBAL 5
 
-extern int dns;
 extern char LocalHostname[];
 extern char *Hostname;
 extern int cpacketsize;
 extern int bitpattern;
 extern int tos;
 extern int MaxPing;
-extern int af;
 extern int reportwide;
 
 
@@ -64,12 +62,20 @@ void report_open(void) {
   printf("Start time: %s\n", get_time_string());
 }
 
-static size_t snprint_addr(char *dst, size_t dst_len, ip_t *addr)
-{
-  if(addrcmp((void *) addr, (void *) &unspec_addr, af)) {
-    struct hostent *host = dns ? addr2host((void *) addr, af) : NULL;
+static size_t snprint_addr(char *dst, size_t dst_len, ip_t *addr) {
+  if (unaddrcmp(addr)) {
+    struct hostent *host = NULL;
+    if (enable_dns) {
+#ifdef ENABLE_IPV6
+      if (af == AF_INET6)
+        host = gethostbyaddr(addr, sizeof(struct in6_addr), af);
+      else /* if (af == AF_INET) */
+#endif
+        host = gethostbyaddr(addr, sizeof(struct in_addr), af);
+    } else
+      host = NULL;
     if (!host) return snprintf(dst, dst_len, "%s", strlongip(addr));
-    else if (dns && show_ips)
+    else if (enable_dns && show_ips)
       return snprintf(dst, dst_len, "%s (%s)", host->h_name, strlongip(addr));
     else return snprintf(dst, dst_len, "%s", host->h_name);
   } else return snprintf(dst, dst_len, "%s", "???");
@@ -185,16 +191,16 @@ void report_close(void) {
     for (z = 1; z < MAXPATH ; z++) {
       ip_t *addr2 = net_addrs(at, z);
       struct mplslen *mplss = net_mplss(at, z);
-      if ((addrcmp ((void *) &unspec_addr, (void *) addr2, af)) == 0)
+      if (!unaddrcmp(addr2))
         break;
       int found = 0;
       int w;
       for (w = 0; w < z; w++)
         /* Ok... checking if there are ips repeated on same hop */
-        if ((addrcmp ((void *) addr2, (void *) net_addrs (at,w), af)) == 0) {
+        if (!addrcmp(addr2, net_addrs(at, w))) {
            found = 1;
            break;
-        }   
+        }
 
       if (!found) {
         if (mpls->labels && z == 1 && enablempls)

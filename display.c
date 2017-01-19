@@ -3,7 +3,7 @@
     Copyright (C) 1997,1998  Matt Kimball
 
     This program is free software; you can redistribute it and/or modify
-    it under the terms of the GNU General Public License version 2 as 
+    it under the terms of the GNU General Public License version 2 as
     published by the Free Software Foundation.
 
     This program is distributed in the hope that it will be useful,
@@ -122,6 +122,7 @@ void display_close(time_t now)
 #ifdef CURSES
   case DisplayCurses:
     mtr_curses_close();
+    dns_close();
 #ifdef IPINFO
     ii_close();
 #endif

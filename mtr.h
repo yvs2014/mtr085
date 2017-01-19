@@ -4,7 +4,7 @@
     Copyright (C) 2005 R.E.Wolff@BitWizard.nl
 
     This program is free software; you can redistribute it and/or modify
-    it under the terms of the GNU General Public License version 2 as 
+    it under the terms of the GNU General Public License version 2 as
     published by the Free Software Foundation.
 
     This program is distributed in the hope that it will be useful,
@@ -16,6 +16,11 @@
     along with this program; if not, write to the Free Software
     Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 */
+
+#ifndef MTR_H
+#define MTR_H
+
+#include "config.h"
 
 /* Typedefs */
 
@@ -58,10 +63,10 @@ typedef struct in6_addr ip_t;
 typedef struct in_addr ip_t;
 #endif
 
-extern int enablempls;
-extern int dns;
-extern int show_ips;
-extern int use_dns;
+int enablempls;
+int show_ips;
+int hinit;	// make sure that a hashtable already exists or not
+int maxTTL;
 
 #ifdef __GNUC__
 #define UNUSED __attribute__((__unused__))
@@ -73,5 +78,7 @@ extern int use_dns;
 typedef int socklen_t; 
 #endif
 
-char *
-trim(char * s);
+char *trim(char *s);
+word str2hash(const char* s);
+
+#endif

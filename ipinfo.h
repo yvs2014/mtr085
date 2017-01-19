@@ -37,5 +37,7 @@ int ii_getwidth(void);
 char* ii_getheader(void);
 char *fmt_ipinfo(ip_t *addr);
 void query_ipinfo(void);
+//#define ASLOOKUP_DEFAULT	NULL
+#define ASLOOKUP_DEFAULT	"10,2" /* riswhois, ASN */
 
 #endif

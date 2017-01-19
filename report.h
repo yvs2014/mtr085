@@ -3,7 +3,7 @@
     Copyright (C) 1997,1998  Matt Kimball
 
     This program is free software; you can redistribute it and/or modify
-    it under the terms of the GNU General Public License version 2 as 
+    it under the terms of the GNU General Public License version 2 as
     published by the Free Software Foundation.
 
     This program is distributed in the hope that it will be useful,
@@ -16,6 +16,9 @@
     Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 */
 
+#ifndef REPORT_H
+#define REPORT_H
+
 /*  Prototypes for report.h  */
 
 void report_open(void);
@@ -26,3 +29,5 @@ void xml_open(void);
 void xml_close(void);
 void csv_open(void);
 void csv_close(time_t now);
+
+#endif

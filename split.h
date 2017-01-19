@@ -5,7 +5,7 @@
     Copyright (C) 1998  Bertrand Leconte <B.Leconte@mail.dotcom.fr>
 
     This program is free software; you can redistribute it and/or modify
-    it under the terms of the GNU General Public License version 2 as 
+    it under the terms of the GNU General Public License version 2 as
     published by the Free Software Foundation.
 
     This program is distributed in the hope that it will be useful,
@@ -18,8 +18,13 @@
     Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 */
 
+#ifndef SPLIT_H
+#define SPLIT_H
+
 /*  Prototypes for split.c  */
 void split_open(void);
 void split_close(void);
 void split_redraw(void);
 int split_keyaction(void);
+
+#endif
