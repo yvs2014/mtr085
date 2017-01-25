@@ -68,11 +68,6 @@ AC_CHECK_FUNCS(attron fcntl)
 
 AC_CHECK_LIB(m, floor, , AC_MSG_ERROR(No math library found))
 
-AC_ARG_WITH([gtk],
-[  --with-gtk              With GTK UI],
-[gtk="${withval}"], [gtk=no])
-AM_CONDITIONAL([GTK], [test "x$gtk" = "xyes"])
-
 AC_ARG_WITH([ipinfo],
 [  --without-ipinfo        Do not try to use ipinfo lookup at all],
 [ipinfo="${withval}"], [ipinfo=yes])
@@ -124,22 +119,6 @@ AS_IF([test "x$syslog_debug" != "xno"], [
 AC_ARG_ENABLE(ipv6,
 [  --disable-ipv6          Do not enable IPv6],
 WANTS_IPV6=$enableval, WANTS_IPV6=yes)
-
-m4_ifndef([AM_PATH_GTK_2_0], [m4_defun([AM_PATH_GTK_2_0], [AC_MSG_ERROR([
-  Could not locate the gtk2 automake macros, these are usually located in
-    .../share/aclocal/gtk-2.0.m4
-  Before running bootstrap try setting the environment variable
-    ACLOCAL_PATH="/own/dir"
-  or configure --without-gtk.
-])])])
-
-AS_IF([test "x$gtk" = "xyes"], [
-        AM_PATH_GTK_2_0(2.6.0, CFLAGS="$CFLAGS $GTK_CFLAGS"
-                           LIBS="$LIBS $GTK_LIBS -lm"
-                           AC_DEFINE(GTK, 1, [Define to build mtr with a GTK interface]),
-                           AC_MSG_WARN(Building without GTK2 display support)
-                       )
-])
 
 m4_ifndef([PKG_CHECK_MODULES], [m4_defun([PKG_CHECK_MODULES], [AC_MSG_ERROR([
   Could not locate the pkg-config automake macros, these are usually located in

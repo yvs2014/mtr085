@@ -71,9 +71,7 @@
 pid_t mypid;
 int   DisplayMode;
 #if defined(CURSES) || defined(GRAPHCAIRO)
-int   display_mode;
 int   display_mode_max = 3;
-int   color_mode;
 #endif
 int   Interactive = 1;
 int   MaxPing = 10;
@@ -82,7 +80,8 @@ float WaitTime = 1.0;
 char *Hostname = NULL;
 char *InterfaceAddress = NULL;
 char  LocalHostname[128];
-char  mtr_args[1024]; // posix/susvn: 4096+
+char  mtr_args[1024];	// posix/susvn: 4096+
+unsigned int iargs;	// args passed interactively
 int   cpacketsize = 64;          /* default packet size */
 int   bitpattern;
 int   tos;
@@ -266,9 +265,6 @@ static struct option long_options[] = {
   { "mpls",	0, 0, 'e' },
   { "first-ttl",	1, 0, 'f' },	/* -f & -m are borrowed from traceroute */
   { "filename",	1, 0, 'F' },
-#ifdef GTK
-  { "gtk",	0, 0, 'g' },
-#endif
 #ifdef GRAPHCAIRO
   { "graphcairo",	1, 0, 'G' },
 #endif
@@ -396,11 +392,6 @@ void parse_arg(int argc, char **argv) {
       DisplayMode = DisplayCurses;
       break;
 #endif
-#ifdef GTK
-    case 'g':
-      DisplayMode = DisplayGTK;
-      break;
-#endif
 #ifdef SPLITMODE
     case 'p':
       DisplayMode = DisplaySplit;
@@ -507,7 +498,12 @@ void parse_arg(int argc, char **argv) {
         fprintf(stderr, "-u and -T are mutually exclusive.\n");
         exit(EXIT_FAILURE);
       }
-      mtrtype = IPPROTO_TCP;
+      if (net_tcp_init())
+        mtrtype = IPPROTO_TCP;
+      else {
+        fprintf(stderr, "Switch to TCP mode failed.\n");
+        exit(EXIT_FAILURE);
+      }
       break;
     case 'b':
       show_ips = 1;

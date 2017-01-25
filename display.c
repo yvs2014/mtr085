@@ -40,33 +40,19 @@
 
 extern int DisplayMode;
 
-#ifdef GTK
-#include "mtr-gtk.h"
-#endif
-
 #ifdef SPLITMODE
 #include "split.h"
 #endif
 
 void display_detect(int *argc, char ***argv) {
   DisplayMode = DisplayReport;
-
 #ifdef CURSES
   DisplayMode = DisplayCurses;
 #endif
-
-#ifdef GTK
-  if(gtk_detect(argc, argv)) {
-    DisplayMode = DisplayGTK;
-  }
-#endif
 }
 
-
-void display_open(void)
-{
+void display_open(void) {
   switch(DisplayMode) {
-
   case DisplayReport:
     report_open();
     break;
@@ -89,11 +75,6 @@ void display_open(void)
     split_open();
     break;
 #endif
-#ifdef GTK
-  case DisplayGTK:
-    gtk_open();
-    break;
-#endif
 #ifdef GRAPHCAIRO
   case DisplayGraphCairo:
     if (!gc_open())
@@ -103,9 +84,7 @@ void display_open(void)
   }
 }
 
-
-void display_close(time_t now)
-{
+void display_close(time_t now) {
   switch(DisplayMode) {
   case DisplayReport:
     report_close();
@@ -133,22 +112,15 @@ void display_close(time_t now)
     split_close();
     break;
 #endif
-#ifdef GTK
-  case DisplayGTK:
-    gtk_close();
-    break;
-#endif
 #ifdef GRAPHCAIRO
   case DisplayGraphCairo:
-	gc_close();  
-	break;
+    gc_close();  
+    break;
 #endif
   }
 }
 
-
-void display_redraw(void)
-{
+void display_redraw(void) {
   switch(DisplayMode) {
 #ifdef CURSES
   case DisplayCurses:
@@ -160,22 +132,15 @@ void display_redraw(void)
     split_redraw();
     break;
 #endif
-#ifdef GTK
-  case DisplayGTK:
-    gtk_redraw();
-    break;
-#endif
 #ifdef GRAPHCAIRO
   case DisplayGraphCairo:
-	gc_redraw();
-	break;
+    gc_redraw();
+    break;
 #endif
   }
 }
 
-
-int display_keyaction(void)
-{
+int display_keyaction(void) {
   switch(DisplayMode) {
 #ifdef CURSES
   case DisplayCurses:
@@ -185,17 +150,11 @@ int display_keyaction(void)
   case DisplaySplit:
     return split_keyaction();
 #endif
-#ifdef GTK
-  case DisplayGTK:
-    return gtk_keyaction();
-#endif
   }
   return 0;
 }
 
-
-void display_rawping(int host, int msec) 
-{
+void display_rawping(int host, int msec) {
   switch(DisplayMode) {
   case DisplayReport:
   case DisplayTXT:
@@ -203,7 +162,6 @@ void display_rawping(int host, int msec)
   case DisplayCSV:
   case DisplaySplit:
   case DisplayCurses:
-  case DisplayGTK:
     break;
   case DisplayRaw:
     raw_rawping (host, msec);
@@ -211,9 +169,7 @@ void display_rawping(int host, int msec)
   }
 }
 
-
-void display_rawhost(int host, ip_t *ip_addr) 
-{
+void display_rawhost(int host, ip_t *ip_addr) {
   switch(DisplayMode) {
   case DisplayReport:
   case DisplayTXT:
@@ -221,7 +177,6 @@ void display_rawhost(int host, ip_t *ip_addr)
   case DisplayCSV:
   case DisplaySplit:
   case DisplayCurses:
-  case DisplayGTK:
     break;
   case DisplayRaw:
     raw_rawhost (host, ip_addr);
@@ -229,9 +184,7 @@ void display_rawhost(int host, ip_t *ip_addr)
   }
 }
 
-
-void display_loop(void)
-{
+void display_loop(void) {
   switch(DisplayMode) {
   case DisplayReport:
   case DisplayTXT:
@@ -245,11 +198,6 @@ void display_loop(void)
 #endif
     select_loop();
     break;
-#ifdef GTK
-  case DisplayGTK:
-    gtk_loop();
-    break;
-#endif
   }
 }
 

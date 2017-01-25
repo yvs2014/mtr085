@@ -63,10 +63,17 @@ typedef struct in6_addr ip_t;
 typedef struct in_addr ip_t;
 #endif
 
+int mtrtype;	// default packet type
 int enablempls;
 int show_ips;
 int hinit;	// make sure that a hashtable already exists or not
 int maxTTL;
+int display_offset;
+#if defined(CURSES) || defined(GRAPHCAIRO)
+int display_mode;
+int display_mode_max;
+int color_mode;
+#endif
 
 #ifdef __GNUC__
 #define UNUSED __attribute__((__unused__))
@@ -80,5 +87,10 @@ typedef int socklen_t;
 
 char *trim(char *s);
 word str2hash(const char* s);
+
+#define SETBIT(n, x)	{ n |= 1 << (x);}
+#define CLRBIT(n, x)	{ n &= ~(1 << (x));}
+#define TGLBIT(n, x)	{ n ^= 1 << (x);}
+#define CHKBIT(n, x)	((n >> (x)) & 1)
 
 #endif

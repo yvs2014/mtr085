@@ -45,12 +45,9 @@
 
 #define	NUMHOSTS	10	// net.c static numhosts = 10
 
-extern int mtrtype;
-extern int maxTTL;
 extern float WaitTime;
-extern int display_offset;
-extern int display_mode;
-extern int display_mode_max;
+extern fd_set writefd;
+extern fd_set *p_writefd;
 
 static int timeout;
 static struct timeval lasttime;
@@ -285,30 +282,24 @@ void gc_keyaction(int c) {
 			num_pings = 0;
 			GCDEBUG_MSG(("net reset\n"));
 			break;
-		case 't':	// TCP and ICMP ECHO
-			switch (mtrtype) {
-				case IPPROTO_ICMP:
-				case IPPROTO_UDP:
-					mtrtype = IPPROTO_TCP;
-					GCDEBUG_MSG(("tcp_syn packets\n"));
-					break;
-				case IPPROTO_TCP:
-					mtrtype = IPPROTO_ICMP;
-					GCDEBUG_MSG(("icmp_echo packets\n"));
-					break;
+		case 't':	// TCP on/off
+			if (mtrtype == IPPROTO_TCP) {
+				mtrtype = IPPROTO_ICMP;
+				p_writefd = NULL;
+				GCDEBUG_MSG(("icmp_echo packets\n"));
+			} else if (net_tcp_init()) {
+				mtrtype = IPPROTO_TCP;
+				p_writefd = &writefd;
+				GCDEBUG_MSG(("tcp_syn packets\n"));
 			}
 			break;
-		case 'u':	// UDP and ICMP ECHO
-			switch (mtrtype) {
-				case IPPROTO_ICMP:
-				case IPPROTO_TCP:
-					GCDEBUG_MSG(("udp datagrams\n"));
-					mtrtype = IPPROTO_UDP;
-					break;
-				case IPPROTO_UDP:
-					mtrtype = IPPROTO_ICMP;
-					GCDEBUG_MSG(("icmp_echo packets\n"));
-					break;
+		case 'u':	// UDP on/off
+			if (mtrtype == IPPROTO_UDP) {
+				mtrtype = IPPROTO_ICMP;
+				GCDEBUG_MSG(("icmp_echo packets\n"));
+			} else {
+				mtrtype = IPPROTO_UDP;
+				GCDEBUG_MSG(("udp datagrams\n"));
 			}
 			break;
 	}

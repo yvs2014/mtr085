@@ -103,15 +103,12 @@
 
 extern char LocalHostname[];
 extern char mtr_args[];
+extern unsigned int iargs;
 extern int fstTTL;
 extern int cpacketsize;
 extern int bitpattern;
 extern int tos;
 extern float WaitTime;
-extern int mtrtype;
-extern int display_offset;
-extern int display_mode;
-extern int color_mode;
 
 static int __unused_int;
 
@@ -130,59 +127,162 @@ void mtr_fill_buf(int y, char *buf) {
 	buf[i] = '\0';
 }
 
+#define CURSES_HELP_MESSAGE \
+  "Command:\n" \
+  "  ?|h     help\n" \
+  "  b <c>   set ping bit pattern to c(0..255) or random(c<0)\n" \
+  "  c <n>   report cycle n, default n=infinite\n" \
+  "  d       switching display mode\n" \
+  "  e       toggle MPLS information on/off\n" \
+  "  f <n>   set the initial time-to-live(ttl), default n=1\n" \
+  "  i <n>   set the ping interval to n seconds, default n=1\n" \
+  "  j       toggle latency(LS NABWV)/jitter(DR AGJMXI) stats\n" \
+  "  m <n>   set the max time-to-live, default n= # of hops\n" \
+  "  n       toggle DNS on/off\n" \
+  "  o str   set the columns to display, default str='LRS N BAWV'\n" \
+  "  p|SPACE pause/resume)\n" \
+  "  Q <t>   set ping packet's TOS to t\n" \
+  "  r       reset all counters\n" \
+  "  s <n>   set the packet size to n or random(n<0)\n" \
+  "  t       switch between ICMP ECHO and TCP SYN\n" \
+  "  u       switch between ICMP ECHO and UDP datagrams\n"
+
 int mtr_curses_keyaction(void)
 {
   int c = getch();
   float f = 0.0;
   char buf[MAXFLD+1];
 
+  switch (tolower(c)) {
+    case '?':
+    case 'h':
+      erase();
+      mvprintw(2, 0, "%s", CURSES_HELP_MESSAGE);
+#ifdef IPINFO
+      printw("  y       switching IP Info\n");
+      printw("  Y       show hops on GoogleMaps (in -y[6-9] modes)\n");
+      printw("  z       toggle ASN Lookup on/off\n");
+#endif
+      addch('\n');
+      printw(" press any key to go back...");
+      getch();
+      return ActionNone;
+    case 'b':
+      mvprintw(2, 0, "Ping Bit Pattern: %d\n", bitpattern);
+      mvprintw(3, 0, "Pattern Range: 0(0x00)-255(0xff), <0 random.\n");
+      mtr_fill_buf(18, buf);
+      bitpattern = atoi(buf);
+      if (bitpattern > 255)
+        bitpattern = -1;
+      return ActionNone;
+    case 'd':
+      return ActionDisplay;
+    case 'e':
+      return ActionMPLS;
+    case 'f': {
+      mvprintw(2, 0, "First TTL: %d\n\n", fstTTL);
+      mtr_fill_buf(11, buf);
+      int i = atoi(buf);
+      if ((i < 1) || (i > maxTTL))
+        return ActionNone;
+      fstTTL = i;
+      return ActionNone;
+    }
+    case 'i':
+      mvprintw(2, 0, "Interval: %0.0f\n\n", WaitTime);
+      mtr_fill_buf(11, buf);
+      f = atof(buf);
+      if (f <= 0.0)
+        return ActionNone;
+      if (getuid() && (f < 1.0))
+        return ActionNone;
+      WaitTime = f;
+      return ActionNone;
+    case 'j':
+      strcpy(fld_active, index(fld_active, 'N') ? "DR AGJMXI" /* jitter */ : "LS NABWV" /* default */);
+      return ActionNone;
+    case 'm': {
+      mvprintw(2, 0, "Max TTL: %d\n\n", maxTTL);
+      mtr_fill_buf(9, buf);
+      int i = atoi(buf);
+      if ((i < fstTTL) || (i > (MaxHost - 1)))
+        return ActionNone;
+      maxTTL = i;
+      return ActionNone;
+    }
+    case 'n':
+      return ActionDNS;
+    case 'o': {	// fields to display & their ordering
+      mvprintw(2, 0, "Fields: %s\n\n", fld_active);
+      int i;
+      for (i = 0; i < MAXFLD; i++)
+        if (data_fields[i].descr)
+        printw("  %s\n", data_fields[i].descr);
+      addch('\n');
+      move(2,8);	// length of "Fields: "
+      refresh();
+
+      i = 0;
+      int curs = curs_set(1);
+      while ((c = getch()) != '\n' && (i < MAXFLD))
+        if (strchr(available_options, c)) {
+          addch(c | A_BOLD);
+          refresh();
+          buf[i++] = c;	// Only permit values in "available_options" be entered
+        } else
+          printf("\a");	// Illegal character. Beep, ring the bell.
+      if (curs != ERR)
+        curs_set(curs);
+      buf[i] = '\0';
+      if (i)
+        strcpy(fld_active, buf);
+      return ActionNone;
+    }
+    case 'p':
+      return ActionPauseResume;
+    case 'r':
+      return ActionReset;
+    case 's':
+      mvprintw(2, 0, "Change Packet Size: %d\n", cpacketsize);
+      mvprintw(3, 0, "Size Range: %d-%d, < 0:random.\n", MINPACKET, MAXPACKET);
+      mtr_fill_buf(20, buf);
+      cpacketsize = atoi(buf);
+      return ActionNone;
+    case 't':
+      return ActionTCP;
+    case 'u':
+      iargs &= ~3;
+      if (mtrtype != IPPROTO_UDP) {
+        mtrtype = IPPROTO_UDP;
+        SETBIT(iargs, 0);	// 1st bit: UDP mode
+      } else
+        mtrtype = IPPROTO_ICMP;
+      return ActionNone;
+#ifdef IPINFO
+    case 'z':
+      return ActionAS;
+#endif
+  }
   if(c == 'q')
     return ActionQuit;
-  if(c==3)
+  if(c == 3)
      return ActionQuit;
-  if (c==12)
+  if (c == 12)
      return ActionClear;
-  if ((c==19) || (tolower (c) == 'p'))
-     return ActionPause;
-  if ((c==17) || (c == ' '))
-     return ActionResume;
-  if(tolower(c) == 'r')
-    return ActionReset;
-  if (tolower(c) == 'd')
-    return ActionDisplay;
-  if (tolower(c) == 'e')
-    return ActionMPLS;
-  if (tolower(c) == 'n')
-    return ActionDNS;
+  if ((c == 17) || (c == 19) || (c == ' '))
+     return ActionPauseResume;
 #ifdef IPINFO
   if (c == 'y')
     return ActionII;
   if (c == 'Y')
     return ActionII_Map;
-  if (tolower(c) == 'z')
-    return ActionAS;
 #endif
   if (c == '+')
     return ActionScrollDown;
   if (c == '-')
     return ActionScrollUp;
 
-  if (tolower(c) == 's') {
-    mvprintw(2, 0, "Change Packet Size: %d\n", cpacketsize );
-    mvprintw(3, 0, "Size Range: %d-%d, < 0:random.\n", MINPACKET, MAXPACKET);
-    mtr_fill_buf(20, buf);
-    cpacketsize = atoi(buf);
-    return ActionNone;
-  }
-  if (tolower(c) == 'b') {
-    mvprintw(2, 0, "Ping Bit Pattern: %d\n", bitpattern );
-    mvprintw(3, 0, "Pattern Range: 0(0x00)-255(0xff), <0 random.\n");
-    mtr_fill_buf(18, buf);
-    bitpattern = atoi(buf);
-    if( bitpattern > 255 ) { bitpattern = -1; }
-    return ActionNone;
-  }
-  if ( c == 'Q') {    /* can not be tolower(c) */
+ if ( c == 'Q') {    /* can not be tolower(c) */
     mvprintw(2, 0, "Type of Service(tos): %d\n", tos );
     mvprintw(3, 0, "default 0x00, min cost 0x02, rel 0x04,, thr 0x08, low del 0x10...\n");
     mtr_fill_buf(22, buf);
@@ -192,134 +292,6 @@ int mtr_curses_keyaction(void)
     }
     return ActionNone;
   }
-  if (tolower(c) == 'i') {
-    mvprintw(2, 0, "Interval : %0.0f\n\n", WaitTime );
-    mtr_fill_buf(11, buf);
-    f = atof(buf);
-
-    if (f <= 0.0) return ActionNone;
-    if (getuid() != 0 && f < 1.0)
-      return ActionNone;
-    WaitTime = f;
-
-    return ActionNone;
-  }
-  if (tolower(c) == 'f') {
-    mvprintw(2, 0, "First TTL: %d\n\n", fstTTL );
-    mtr_fill_buf(11, buf);
-    int i = atoi(buf);
-
-    if ( i < 1 || i> maxTTL ) return ActionNone;
-    fstTTL = i;
-
-    return ActionNone;
-  }
-  if (tolower(c) == 'm') {
-    mvprintw(2, 0, "Max TTL: %d\n\n", maxTTL );
-    mtr_fill_buf(9, buf);
-    int i = atoi(buf);
-
-    if ( i < fstTTL || i>(MaxHost-1) ) return ActionNone;
-    maxTTL = i;
-
-    return ActionNone;
-  }
-  /* fields to display & their ordering */
-  if (tolower(c) == 'o') {
-    mvprintw(2, 0, "Fields: %s\n\n", fld_active );
-
-    int i;
-    for( i=0; i<MAXFLD; i++ ){
-      if( data_fields[i].descr != NULL )
-          printw("  %s\n", data_fields[i].descr);
-    }
-    addch('\n');
-    move(2,8);                /* length of "Fields: " */
-    refresh();
-
-    i = 0;
-    int curs = curs_set(1);
-    while ( (c=getch ()) != '\n' && i < MAXFLD ) {
-      if( strchr(available_options, c) ) {
-        addch(c | A_BOLD); refresh();
-        buf[i++] = c; /* Only permit values in "available_options" be entered */
-      } else {
-        printf("\a"); /* Illegal character. Beep, ring the bell. */
-      }
-    }
-    if (curs != ERR)
-      curs_set(curs);
-    buf[i] = '\0';
-    if ( strlen( buf ) > 0 ) strcpy( fld_active, buf );
-
-    return ActionNone;
-  }
-  if (tolower(c) == 'j') {
-    if( index(fld_active, 'N') ) {
-      strcpy(fld_active, "DR AGJMXI");        /* GeoMean and jitter */
-    } else {
-      strcpy(fld_active, "LS NABWV");         /* default */
-    }
-    return ActionNone;
-  }
-  if (tolower(c) == 'u') {
-    switch ( mtrtype ) {
-    case IPPROTO_ICMP:
-    case IPPROTO_TCP:
-      mtrtype = IPPROTO_UDP;
-      break;
-    case IPPROTO_UDP:
-      mtrtype = IPPROTO_ICMP;
-      break;
-    }
-    return ActionNone;
-  }
-  if (tolower(c) == 't') {
-    switch ( mtrtype ) {
-    case IPPROTO_ICMP:
-    case IPPROTO_UDP:
-      mtrtype = IPPROTO_TCP;
-      break;
-    case IPPROTO_TCP:
-      mtrtype = IPPROTO_ICMP;
-      break;
-    }
-    return ActionNone;
-  }
-  /* reserve to display help message -Min */
-  if (tolower(c) == '?'|| tolower(c) == 'h') {
-    erase();
-    int pressanykey_row = 20;
-    mvprintw(2, 0, "Command:\n" );
-    printw("  ?|h     help\n" );
-    printw("  p       pause (SPACE to resume)\n" );
-    printw("  d       switching display mode\n" );
-    printw("  e       toggle MPLS information on/off\n" );
-    printw("  n       toggle DNS on/off\n" );
-    printw("  r       reset all counters\n" );
-    printw("  o str   set the columns to display, default str='LRS N BAWV'\n" );
-    printw("  j       toggle latency(LS NABWV)/jitter(DR AGJMXI) stats\n" );
-    printw("  c <n>   report cycle n, default n=infinite\n" );
-    printw("  i <n>   set the ping interval to n seconds, default n=1\n" );
-    printw("  f <n>   set the initial time-to-live(ttl), default n=1\n" );
-    printw("  m <n>   set the max time-to-live, default n= # of hops\n" );
-    printw("  s <n>   set the packet size to n or random(n<0)\n" );
-    printw("  b <c>   set ping bit pattern to c(0..255) or random(c<0)\n" );
-    printw("  Q <t>   set ping packet's TOS to t\n" );
-    printw("  u       switch between ICMP ECHO and UDP datagrams\n" );
-#ifdef IPINFO
-    printw("  y       switching IP info\n");
-    printw("  Y       show hops on GoogleMaps (in -y[6-9] modes)\n");
-    printw("  z       toggle ASN info on/off\n");
-    pressanykey_row += 2;
-#endif
-    addch('\n');
-    mvprintw(pressanykey_row, 0, " press any key to go back..." );
-
-    getch();                  /* get any key */
-    return ActionNone;
-  }
-
   return ActionNone;          /* ignore unknown input */
 }
 
@@ -663,7 +635,7 @@ void mtr_print_scale3(int num_factors, int i0, int di) {
 
 void mtr_curses_redraw(void)
 {
-  int maxx;
+  int maxx, maxy;
   int startstat;
   int rowstat;
   time_t t;
@@ -674,13 +646,26 @@ void mtr_curses_redraw(void)
 
 
   erase();
-  getmaxyx(stdscr, __unused_int, maxx);
+  getmaxyx(stdscr, maxy, maxx);
 
   rowstat = 5;
 
   move(0, 0);
   attron(A_BOLD);
-  snprintf(buf, sizeof(buf), "mtr-%s%s", MTR_VERSION, mtr_args);
+  int l = snprintf(buf, sizeof(buf), "mtr-%s%s", MTR_VERSION, mtr_args);
+  if (iargs) {
+    l += snprintf(buf + l, sizeof(buf) - l, " (");
+    if (CHKBIT(iargs, 0))
+      l += snprintf(buf + l, sizeof(buf) - l, "UDP mode");
+    else if (CHKBIT(iargs, 1))
+      l += snprintf(buf + l, sizeof(buf) - l, "TCP mode");
+    if ((iargs >> 2) & 3) {
+      if (iargs & 3)
+        l += snprintf(buf + l, sizeof(buf) - l, ", ");
+      l += snprintf(buf + l, sizeof(buf) - l, "display mode %d", display_mode);
+    }
+    snprintf(buf + l, sizeof(buf) - l, ")");
+  }
   printw("%*s", (getmaxx(stdscr) + strlen(buf)) / 2, buf);
   attroff(A_BOLD);
 
@@ -769,13 +754,14 @@ void mtr_curses_redraw(void)
     else if (display_mode == 3) {
       if (color_mode)
         mtr_print_scale3(NUM_FACTORS3 - 1, 1, 2);
-	  else
+      else
         mtr_print_scale3(NUM_FACTORS3_MONO, 0, 1);
     }
 #endif
   }
 
   refresh();
+  move(maxy - 3, 0);
 }
 
 void mtr_curses_open(void)

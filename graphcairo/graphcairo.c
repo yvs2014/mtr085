@@ -9,6 +9,7 @@
 #include <pango/pangocairo.h>
 
 #include "config.h"
+#include "mtr.h"
 
 #ifdef UNICODE
 #ifdef HAVE_WCHAR_H
@@ -76,11 +77,8 @@ enum {
 #define DOT_SIZE		3
 #define CYCLE_FACTOR		1.0
 
-extern int maxTTL;		// mtr.c
-extern int display_mode;
 extern int enablempls;
 extern float WaitTime;
-extern int display_offset;	// select.c
 
 typedef void (*graph_func_t)(cairo_t *cr);
 graph_func_t graph_func;

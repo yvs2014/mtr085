@@ -29,6 +29,10 @@
 #include <netinet/icmp6.h>
 #endif
 
+#ifndef INET6_ADDRSTRLEN
+#define INET6_ADDRSTRLEN	46
+#endif
+
 int net_preopen(void);
 int net_selectsocket(void);
 int net_open(struct hostent *host);
@@ -77,6 +81,7 @@ void net_save_xmit(int at);
 void net_save_return(int at, int seq, int ms);
 int net_duplicate(int at, int seq);
 int net_process_tcp_fds(void);
+int net_tcp_init(void);
 
 void sockaddrtop( struct sockaddr * saddr, char * strptr, size_t len );
 
@@ -94,7 +99,7 @@ const char *strlongip(ip_t *ip);
 
 #define MAXPATH 8
 #define MaxHost 256
-#define MinSequence 33000
+#define MinSequence 32768
 #define MaxSequence 65536
 
 #define MAXPACKET 4470		/* largest test packet size */
@@ -104,22 +109,15 @@ const char *strlongip(ip_t *ip);
 /* stuff used by display such as report, curses... */
 #define MAXFLD 20		/* max stats fields to display */
 
-#if defined (__STDC__) && __STDC__
-#define CONST const
-#else
-#define CONST /* */
-#endif
-
-
 /* XXX This doesn't really belong in this header file, but as the
    right c-files include it, it will have to do for now. */
 
 /* dynamic field drawing */
 struct fields {
-  CONST unsigned char key;
-  CONST char *descr;
-  CONST char *title;
-  CONST char *format;
+  const unsigned char key;
+  const char *descr;
+  const char *title;
+  const char *format;
   int length;
   int (*net_xxx)();
 };

@@ -58,7 +58,6 @@
 
 #define COMMA	','
 #define VSLASH	'|'
-#define II_ITEM_MAX	25
 #define II_RESP_LINES	100
 #define NAMELEN	256
 #define UNKN	"?"
@@ -69,14 +68,13 @@ extern struct __res_state _res;
 extern char mtr_args[];
 
 int enable_ipinfo;
+int ipinfo_no[] = {-1};
 
 static int init;
 static int origin_no;
-static int ipinfo_no[II_ITEM_MAX] = {-1};
-static int ipinfo_max;
 static int skipped_items;
 
-typedef char* items_t[II_ITEM_MAX];
+typedef char* items_t[IPINFO_MAX_ITEMS];
 static items_t* items;
 
 typedef struct {
@@ -95,14 +93,14 @@ typedef struct {
     char* host6;
     char* unkn;
     char sep;
-    char* name[II_ITEM_MAX];
+    char* name[IPINFO_MAX_ITEMS];
     char* name_prfx;
     int type;	// 0 - dns:csv, 1 - http:csv, 2 - http:flat-json, 3 - whois
-    int skip[II_ITEM_MAX]; // query ip, ...
+    int skip[IPINFO_MAX_ITEMS]; // query ip, ...
     char* prefix;
     char* suffix;
-    char* sub[2 * II_ITEM_MAX];
-    int width[II_ITEM_MAX];
+    char* sub[2 * IPINFO_MAX_ITEMS];
+    int width[IPINFO_MAX_ITEMS];
     int fd;
 } origin_t;
 
@@ -182,7 +180,7 @@ char* split_rec(char *rec) {
 
     memset(items, 0, sizeof(*items));
     (*items)[0] = rec;
-    int i = split_with_sep(*items, II_ITEM_MAX, origins[origin_no].sep, '"');
+    int i = split_with_sep(*items, IPINFO_MAX_ITEMS, origins[origin_no].sep, '"');
 
     if (i > (ipinfo_max + skipped_items))
         ipinfo_max = i - skipped_items;
@@ -205,9 +203,9 @@ void add_rec(char *hkey) {
         memcpy(&it, items, sizeof(it));
         memset(items, 0, sizeof(items_t));
         int i, j;
-        for (i = j = 0; i < II_ITEM_MAX; i++) {
+        for (i = j = 0; i < IPINFO_MAX_ITEMS; i++) {
             int k, skip = 0;
-            for (k = 0; (k < II_ITEM_MAX) && origins[origin_no].skip[k]; k++)
+            for (k = 0; (k < IPINFO_MAX_ITEMS) && origins[origin_no].skip[k]; k++)
                 if ((skip = ((i + 1) == origins[origin_no].skip[k]) ? 1 : 0))
                     break;
             if (!skip)
@@ -220,12 +218,12 @@ void add_rec(char *hkey) {
         IILOG_ERR((MTR_SYSLOG, "hsearch(ENTER, key=%s) failed: %s", hkey, strerror(errno)));
 
 #ifdef LOG_IPINFO
-    static char buff[II_ITEM_MAX * (NAMELEN + 1)];
+    static char buff[IPINFO_MAX_ITEMS * (NAMELEN + 1)];
     memset(buff, 0, sizeof(buff));
     int l = 0;
 #endif
     int i;
-    for (i = 0; (i < II_ITEM_MAX) && (*items)[i]; i++) {
+    for (i = 0; (i < IPINFO_MAX_ITEMS) && (*items)[i]; i++) {
         int ilen = strnlen((*items)[i], NAMELEN);
 //        int ilen = mbstowcs(NULL, (*items)[i], 0);	// utf8
         if (origins[origin_no].width[i] < ilen)
@@ -327,13 +325,13 @@ void split_pairs(char sep) {
     memset(items, 0, sizeof(*items));
 
     int i;
-    for (i = 0; (i < II_ITEM_MAX) && it[i]; i++) {
+    for (i = 0; (i < IPINFO_MAX_ITEMS) && it[i]; i++) {
         char* ln[2] = { it[i] };
 //        (*items)[i] = (split_with_sep(ln, 2, sep, 0) == 2) ? trim(ln[1]) : it[i]; // skip names
 /* don't skip names */
         if (split_with_sep(ln, 2, sep, 0) == 2) {
             int skip = 0, j;
-            for (j = 0; (j < II_ITEM_MAX) && origins[origin_no].skip[j]; j++)
+            for (j = 0; (j < IPINFO_MAX_ITEMS) && origins[origin_no].skip[j]; j++)
                 if ((i + 1) == origins[origin_no].skip[j]) {
                    skip = 1;
                    break;
@@ -347,7 +345,7 @@ void split_pairs(char sep) {
                             if (strstr(name, origins[origin_no].name_prfx))
                                 name += strlen(origins[origin_no].name_prfx);
                         if (origins[origin_no].sub[0])
-                            for (j = 0; (j < (2 * II_ITEM_MAX - 1)) && origins[origin_no].sub[j]; j += 2)
+                            for (j = 0; (j < (2 * IPINFO_MAX_ITEMS - 1)) && origins[origin_no].sub[j]; j += 2)
                                 schng(name, origins[origin_no].sub[j], origins[origin_no].sub[j + 1]);
                         if (name[0])
                             name[0] = toupper((int)name[0]);
@@ -431,7 +429,7 @@ void process_http_response(char *buff, int r) {
                 split_pairs(':');
 
             { int j;
-              for (j = 0; (j < II_ITEM_MAX) && (*items)[j]; j++) // disclose items
+              for (j = 0; (j < IPINFO_MAX_ITEMS) && (*items)[j]; j++) // disclose items
                 (*items)[j] = trim_str((*items)[j], "\"'{}");
             }
 
@@ -479,7 +477,7 @@ void process_whois_response(char *buff, int r) {
 //        IILOG_MSG((MTR_SYSLOG, "process_whois_response(): got#%d \"%s\"", i, ln[0]));
         if (split_with_sep(ln, 2, ':', 0) == 2) {
             int j;
-            for (j = 0; (j < II_ITEM_MAX) && origins[origin_no].name[j]; j++) {
+            for (j = 0; (j < IPINFO_MAX_ITEMS) && origins[origin_no].name[j]; j++) {
                 char* desc = origins[origin_no].name[j];
                 if (!desc)
                     break;
@@ -510,7 +508,7 @@ void process_whois_response(char *buff, int r) {
     if (!(hr = search_hashed_id(str2hash(last_request))))
         IILOG_ERR((MTR_SYSLOG, "process_whois_response(): got unknown reply: \"%s\"", buff));
 
-    for (i = 0; (i < II_ITEM_MAX) && origins[origin_no].name[i]; i++)
+    for (i = 0; (i < IPINFO_MAX_ITEMS) && origins[origin_no].name[i]; i++)
         if (! ((*items)[i]))
             return;
 
@@ -757,7 +755,7 @@ char* ii_getheader(void) {
     static char header[NAMELEN];
     char fmt[16];
     int i, l = 0;
-    for (i = 0; (i < II_ITEM_MAX) && (ipinfo_no[i] >= 0) && (ipinfo_no[i] < ipinfo_max) && (l < NAMELEN) && origins[origin_no].name[ipinfo_no[i]]; i++) {
+    for (i = 0; (i < IPINFO_MAX_ITEMS) && (ipinfo_no[i] >= 0) && (ipinfo_no[i] < ipinfo_max) && (l < NAMELEN) && origins[origin_no].name[ipinfo_no[i]]; i++) {
         snprintf(fmt, sizeof(fmt), FIELD_FMT, origins[origin_no].width[ipinfo_no[i]]);
         l += snprintf(header + l, sizeof(header) - l, fmt, origins[origin_no].name[ipinfo_no[i]]);
     }
@@ -766,7 +764,7 @@ char* ii_getheader(void) {
 
 int ii_getwidth(void) {
     int i, l = 0;
-    for (i = 0; (i < II_ITEM_MAX) && (ipinfo_no[i] >= 0) && (ipinfo_no[i] < ipinfo_max); i++)
+    for (i = 0; (i < IPINFO_MAX_ITEMS) && (ipinfo_no[i] >= 0) && (ipinfo_no[i] < ipinfo_max); i++)
         l += origins[origin_no].width[ipinfo_no[i]] + 1;
     return l;
 }
@@ -775,7 +773,7 @@ char *fmt_ipinfo(ip_t *addr) {
     static char fmtinfo[NAMELEN];
     char fmt[16];
     int l = 0, i;
-    for (i = 0; (i < II_ITEM_MAX) && (ipinfo_no[i] >= 0); i++) {
+    for (i = 0; (i < IPINFO_MAX_ITEMS) && (ipinfo_no[i] >= 0); i++) {
         char *ipinfo = unaddrcmp(addr) ? get_ipinfo(addr, ipinfo_no[i]) : NULL;
         int width = origins[origin_no].width[ipinfo_no[i]];
         if (!width)
@@ -811,11 +809,11 @@ void ii_open(void) {
    }
    if (open_connection[origins[origin_no].type]() < 0)
        return;
-   while ((skipped_items < II_ITEM_MAX) && origins[origin_no].skip[skipped_items])
+   while ((skipped_items < IPINFO_MAX_ITEMS) && origins[origin_no].skip[skipped_items])
        skipped_items++;
 
    int i;
-   for (i = 0; i < II_ITEM_MAX; i++) {
+   for (i = 0; i < IPINFO_MAX_ITEMS; i++) {
        if (!origins[origin_no].name[i])
            break;
        origins[origin_no].width[i] = strnlen(origins[origin_no].name[i], NAMELEN);
@@ -841,24 +839,24 @@ void ii_close(void) {
 }
 
 void ii_parsearg(char *arg) {
-    char* args[II_ITEM_MAX + 1];
+    char* args[IPINFO_MAX_ITEMS + 1];
     memset(args, 0, sizeof(args));
     if (arg) {
         args[0] = strdup(arg);
-        split_with_sep(args, II_ITEM_MAX + 1, COMMA, 0);
+        split_with_sep(args, IPINFO_MAX_ITEMS + 1, COMMA, 0);
         int no = atoi(args[0]);
         if ((no > 0) && (no <= (sizeof(origins)/sizeof(origins[0]))))
             origin_no = no - 1;
     }
 
     int i, j;
-    for (i = 1, j = 0; (j < II_ITEM_MAX) && (i <= II_ITEM_MAX); i++)
+    for (i = 1, j = 0; (j < IPINFO_MAX_ITEMS) && (i <= IPINFO_MAX_ITEMS); i++)
         if (args[i]) {
             int no = atoi(args[i]);
             if (no > 0)
                 ipinfo_no[j++] = no - 1;
         }
-    for (i = j; i < II_ITEM_MAX; i++)
+    for (i = j; i < IPINFO_MAX_ITEMS; i++)
         ipinfo_no[i] = -1;
     if (ipinfo_no[0] < 0)
         ipinfo_no[0] = 0;
@@ -1047,7 +1045,7 @@ void ii_action(int action_asn) {
             case ActionII: {	// `y'
                 int i;
                 enable_ipinfo = 1;
-                for (i = 0; (i < II_ITEM_MAX) && (ipinfo_no[i] >= 0); i++) {
+                for (i = 0; (i < IPINFO_MAX_ITEMS) && (ipinfo_no[i] >= 0); i++) {
                     ipinfo_no[i]++;
                     if (ipinfo_no[i] > ipinfo_max)
                         ipinfo_no[i] = 0;
@@ -1078,7 +1076,7 @@ void ii_action(int action_asn) {
 
 void query_iiaddr(ip_t *addr) {
   int i;
-  for (i = 0; (i < II_ITEM_MAX) && (ipinfo_no[i] >= 0); i++)
+  for (i = 0; (i < IPINFO_MAX_ITEMS) && (ipinfo_no[i] >= 0); i++)
     get_ipinfo(addr, ipinfo_no[i]);
 }
 

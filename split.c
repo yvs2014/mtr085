@@ -28,218 +28,159 @@
 #include <unistd.h>
 #include <string.h>
 #include <sys/types.h>
-
-#include "mtr.h"
-#include "display.h"
-#include "dns.h"
-
-#include "net.h"
-#include "split.h"
-/*
-#ifdef CURSES
-#if defined(UNICODE)
-#define _XOPEN_SOURCE_EXTENDED
-#if defined (HAVE_NCURSESW_NCURSES_H)
-#  include <ncursesw/ncurses.h>
-#elif defined (HAVE_NCURSESW_CURSES_H)
-#  include <ncursesw/curses.h>
-#elif defined (HAVE_CURSES_H)
-#  include <curses.h>
-#else
-#  error No ncursesw header file available
-#endif
-#else
-
-#if defined(HAVE_NCURSES_H)
-#  include <ncurses.h>
-#elif defined(HAVE_NCURSES_CURSES_H)
-#  include <ncurses/curses.h>
-#elif defined(HAVE_CURSES_H)
-#  include <curses.h>
-#else
-#  error No curses header file available
-#endif
-
-#endif
-
-#else
-*/
 #include <sys/time.h>
 #include <termios.h>
-/*
-#endif
-*/
 
-/*
-#ifdef CURSES
-// like dns.c:restell()
-#define SPLIT_PRINT(x)	{ printf x; printf("\r\n"); }
-#else
-*/
-#define SPLIT_PRINT(x)	{ printf x; printf("\n"); }
-/*
-#endif
-*/
-
-extern char *Hostname;
-extern int WaitTime;
-
-/* There is 256 hops max in the IP header (coded with a byte) */
-#define MAX_LINE_COUNT 256
-#define MAX_LINE_SIZE  256
-
-char Lines[MAX_LINE_COUNT][MAX_LINE_SIZE];
-int  LineCount;
-
-
-#define DEBUG 0
-
-
-void split_redraw(void) 
-{
-  int   max;
-  int   at;
-  ip_t *addr;
-  char  newLine[MAX_LINE_SIZE];
-  int   i;
-
-#if DEBUG
-  SPLIT_PRINT(("split_redraw()"));
+#include "mtr.h"
+#include "split.h"
+#include "display.h"
+#include "dns.h"
+#include "net.h"
+#ifdef IPINFO
+#include "ipinfo.h"
 #endif
 
-  /* 
-   * If there is less lines than last time, we delete them
-   * TEST THIS PLEASE
-   */
-  max = net_max();
-  for (i=LineCount; i>max; i--) {
-    SPLIT_PRINT(("-%d", i));
-    LineCount--;
+#define SPLIT_SEPARATOR	"\t"
+#define UNKN_ITEM	"???"
+
+#ifdef IPINFO
+void split_ipinfo_print(ip_t *addr) {
+  int i;
+  for (i = 0; (i < IPINFO_MAX_ITEMS) && (ipinfo_no[i] >= 0); i++) {
+    char *ipinfo = unaddrcmp(addr) ? get_ipinfo(addr, ipinfo_no[i]) : NULL;
+    if (!ipinfo) {
+      if (ipinfo_no[i] >= ipinfo_max)
+        continue;
+      ipinfo = UNKN_ITEM;
+    }
+    printf(SPLIT_SEPARATOR "%s", ipinfo);
   }
-
-  /*
-   * For each line, we compute the new one and we compare it to the old one
-   */
-  for(at = 0; at < max; at++) {
-    addr = net_addr(at);
-    if (unaddrcmp(addr)) {
-      char str[256];
-      const char *name;
-      if (!(name = dns_lookup(addr)))
-        name = strlongip(addr);
-      if (show_ips) {
-        snprintf(str, sizeof(str), "%s %s", name, strlongip(addr));
-        name = str;
-      }
-      /* May be we should test name's length */
-      snprintf(newLine, sizeof(newLine), "%s %d %d %d %d %d %d", name,
-               net_loss(at),
-               net_returned(at), net_xmit(at),
-               net_best(at) /1000, net_avg(at)/1000,
-               net_worst(at)/1000);
-    } else {
-      sprintf(newLine, "???");
-    }
-
-    if (strcmp(newLine, Lines[at]) == 0) {
-      /* The same, so do nothing */
-#if DEBUG
-      SPLIT_PRINT(("SAME LINE"));
+}
 #endif
-    } else {
-      SPLIT_PRINT(("%d %s", at+1, newLine));
-      fflush(stdout);
-      strcpy(Lines[at], newLine);
-      if (LineCount < (at+1)) {
-	LineCount = at+1;
+
+void split_redraw(void) {
+  int max = net_max();
+  if (max > maxTTL)
+    max = maxTTL;
+
+  int at;
+  for (at = net_min() + display_offset; at < max; at++) {
+    ip_t *addr = net_addr(at);
+    printf("%2d", at + 1);
+    if (unaddrcmp(addr)) {
+      const char *name = dns_lookup(addr);
+      printf(SPLIT_SEPARATOR "%s", name ? name : strlongip(addr));
+      if (show_ips)
+        printf(SPLIT_SEPARATOR "%s", strlongip(addr));
+      printf(SPLIT_SEPARATOR "%.1f", net_loss(at) / 1000.);
+      printf(SPLIT_SEPARATOR "%d", net_returned(at));
+      printf(SPLIT_SEPARATOR "%d", net_xmit(at));
+      printf(SPLIT_SEPARATOR "%.1f", net_best(at) / 1000.);
+      printf(SPLIT_SEPARATOR "%.1f", net_avg(at) / 1000.);
+      printf(SPLIT_SEPARATOR "%.1f", net_worst(at) / 1000.);
+#ifdef IPINFO
+      if (ii_ready())
+        split_ipinfo_print(addr);
+#endif
+      printf("\n");
+
+      int i;
+      for (i = 0; i < MAXPATH; i++) {	// multipath
+        ip_t *addrs = net_addrs(at, i);
+        if (!addrcmp(addrs, addr))
+          continue;
+        if (!unaddrcmp(addrs))
+          break;
+        name = dns_lookup(addrs);
+        printf("%2d:%d", at + 1, i);
+        printf(SPLIT_SEPARATOR "%s", name ? name : strlongip(addrs));
+        if (show_ips)
+          printf(SPLIT_SEPARATOR "%s", strlongip(addrs));
+#ifdef IPINFO
+        if (ii_ready())
+          split_ipinfo_print(addrs);
+#endif
+        printf("\n");
       }
-    }
+    } else
+      printf(SPLIT_SEPARATOR "%s\n", UNKN_ITEM);
   }
 }
 
-
-void split_open(void)
-{
-  int i;
-#if DEBUG
-  printf("split_open()\n");
-#endif
-  LineCount = -1;
-  for (i=0; i<MAX_LINE_COUNT; i++) {
-    strcpy(Lines[i], "???");
-  }
-/*
-#ifdef CURSES
-  FILE *stdout2 = fopen("/dev/tty", "w");
-  if (!stdout2)
-    return;
-  SCREEN *screen;
-  if ((screen = newterm(NULL, stdout2, stdin))) {
-    set_term(screen);
-    raw();
-    noecho();
-  }
-#else
-*/
+void split_open(void) {
   struct termios t;
-  if (tcgetattr(0, &t) < 0)
+  if (tcgetattr(0, &t) < 0) {
+    perror("split_open()");
     return;
+  }
   t.c_lflag &= ~ICANON;
   t.c_lflag &= ~ECHO;
   t.c_cc[VMIN] = 1;
   t.c_cc[VTIME] = 0;
-  (void)tcsetattr(0, TCSANOW, &t);
-/*
-#endif
-*/
+  if (tcsetattr(0, TCSANOW, &t) < 0)
+    perror("split_open()");
 }
 
-
-void split_close(void)
-{
-/*
-#ifdef CURSES
-  endwin();
-#else
-*/
+void split_close(void) {
   struct termios t;
-  if (tcgetattr(0, &t) < 0)
+  if (tcgetattr(0, &t) < 0) {
+    perror("split_close()");
     return;
+  }
   t.c_lflag |= ICANON;
   t.c_lflag |= ECHO;
-  (void)tcsetattr(0, TCSADRAIN, &t);
-/*
-#endif
-*/
-#if DEBUG
-  printf("split_close()\n");
-#endif
+  if (tcsetattr(0, TCSADRAIN, &t))
+    perror("split_close()");
 }
 
+#define SPLIT_HELP_MESSAGE	\
+  "Command:\n" \
+  "  ?|h     help\n" \
+  "  n       toggle DNS on/off\n" \
+  "  p|SPACE pause/resume\n" \
+  "  q       quit\n" \
+  "  r       reset all counters\n" \
+  "  t       switch between ICMP ECHO and TCP SYN\n" \
+  "  u       switch between ICMP ECHO and UDP datagrams\n"
 
-int split_keyaction(void) 
-{
+int split_keyaction(void) {
   char c;
-/*
-#ifdef CURSES
-  c = getch();
-#else
-*/
-  if (read(0, &c, 1) < 0)
+  if (read(0, &c, 1) < 0) {
+    perror("split_keyaction()");
     return 0;
-/*
-#endif
-*/
+  }
 
-#if DEBUG
-  SPLIT_PRINT(("split_keyaction()"));
+  switch (tolower(c)) {
+    case '?':
+    case 'h':
+      printf("%s", SPLIT_HELP_MESSAGE);
+#ifdef IPINFO
+      printf("  y       switching IP Info\n");
+      printf("  z       toggle ASN Lookup on/off\n");
 #endif
-  if(tolower((int)c) == 'q')
-    return ActionQuit;
-  if(c==3)
-    return ActionQuit;
-  if(tolower((int)c) == 'r')
-    return ActionReset;
+      printf("\npress SPACE to resume... ");
+      fflush(stdout);
+      return ActionPauseResume;
+    case 'n': return ActionDNS;
+    case 'p': return ActionPauseResume;
+    case 'q': return ActionQuit;
+    case 'r': return ActionReset;
+    case 't': return ActionTCP;
+    case 'u': mtrtype = (mtrtype == IPPROTO_UDP) ? IPPROTO_ICMP : IPPROTO_UDP;
+      return ActionNone;
+#ifdef IPINFO
+    case 'y': return ActionII;
+    case 'z': return ActionAS;
+#endif
+  }
+  switch (c) {
+    case 3: return ActionQuit;
+    case 17:
+    case 19:
+    case ' ': return ActionPauseResume;
+    case '+': return ActionScrollDown;
+    case '-': return ActionScrollUp;
+  }
 
   return 0;
 }

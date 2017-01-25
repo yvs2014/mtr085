@@ -30,6 +30,7 @@
 #include <errno.h>
 
 #include "mtr.h"
+#include "select.h"
 #include "dns.h"
 #include "net.h"
 #ifdef IPINFO
@@ -42,28 +43,23 @@ extern int DisplayMode;
 extern int MaxPing;
 extern int ForceMaxPing;
 extern float WaitTime;
-extern int mtrtype;
-#if defined(CURSES) || defined(GRAPHCAIRO)
-extern int display_mode;
-extern int display_mode_max;
-#endif
+extern unsigned int iargs;
 
 static struct timeval intervaltime;
-int display_offset = 0;
 
-fd_set tcp_fds;
+fd_set writefd, *p_writefd;
+int dnsfd;
+#ifdef ENABLE_IPV6
+  int dnsfd6;
+#endif
 int maxfd;
 
 #define GRACETIME (5 * 1000*1000)
 
 void select_loop(void) {
   fd_set readfd;
-  fd_set writefd, *p_writefd = NULL;
+  int netfd;
   int anyset = 0;
-  int dnsfd, netfd;
-#ifdef ENABLE_IPV6
-  int dnsfd6;
-#endif
   int NumPing = 0;
   int paused = 0;
   struct timeval lasttime, thistime, selecttime;
@@ -73,11 +69,9 @@ void select_loop(void) {
   int graceperiod = 0;
 
   memset(&startgrace, 0, sizeof(startgrace));
-  FD_ZERO(&tcp_fds);
   gettimeofday(&lasttime, NULL);
 
-  if (mtrtype == IPPROTO_TCP)
-    p_writefd = &writefd;
+  p_writefd = (mtrtype == IPPROTO_TCP) ? &writefd : NULL;
 
   while(1) {
     dt = calc_deltatime(WaitTime);
@@ -85,6 +79,8 @@ void select_loop(void) {
     intervaltime.tv_usec = dt % 1000000;
 
     FD_ZERO(&readfd);
+    if (mtrtype == IPPROTO_TCP)
+      FD_ZERO(&writefd);
 
     if(Interactive) {
       FD_SET(0, &readfd);
@@ -137,8 +133,6 @@ void select_loop(void) {
 	selecttime.tv_sec = 0;
 	selecttime.tv_usec = paused?100000:0;
 
-	if (mtrtype == IPPROTO_TCP)
-	  writefd = tcp_fds;
 	rv = select(maxfd, &readfd, p_writefd, NULL, &selecttime);
 
       } else {
@@ -188,8 +182,6 @@ void select_loop(void) {
 	  selecttime.tv_usec += 1000000;
 	}
 
-	if (mtrtype == IPPROTO_TCP)
-	  writefd = tcp_fds;
 	rv = select(maxfd, &readfd, p_writefd, NULL, &selecttime);
       }
     } while ((rv < 0) && (errno == EINTR));
@@ -201,7 +193,7 @@ void select_loop(void) {
     anyset = 0;
 
     /*  Have we got new packets back?  */
-    if(FD_ISSET(netfd, &readfd)) {
+    if (FD_ISSET(netfd, &readfd)) {
       net_process_return();
       anyset = 1;
     }
@@ -228,8 +220,12 @@ void select_loop(void) {
       }
 #endif
 
+    /* Check for activity on open sockets */
+    if (mtrtype == IPPROTO_TCP)
+      anyset = net_process_tcp_fds();
+
     /*  Has a key been pressed?  */
-    if(FD_ISSET(0, &readfd)) {
+    if (FD_ISSET(0, &readfd)) {
       int action = display_keyaction();
       switch (action) {
         case ActionQuit: 
@@ -241,16 +237,14 @@ void select_loop(void) {
 #if defined(CURSES) || defined(GRAPHCAIRO)
         case ActionDisplay:
           display_mode = (display_mode + 1) % display_mode_max;
-          break;
+          // bits 2,3
+          iargs |= (display_mode & 3) << 2;
 #endif
         case ActionClear:
           display_clear();
           break;
-        case ActionPause:
-          paused = 1;
-          break;
-        case  ActionResume:
-          paused = 0;
+        case ActionPauseResume:
+          paused = !paused;
           break;
         case ActionMPLS:
           enablempls = !enablempls;
@@ -276,13 +270,24 @@ void select_loop(void) {
           if (display_offset < 0)
             display_offset = 0;
           break;
+        case ActionTCP:
+          iargs &= ~3;	// CLR tcp/udp bits
+          if (mtrtype == IPPROTO_TCP) {
+            mtrtype = IPPROTO_ICMP;
+            p_writefd = NULL;
+          } else if (net_tcp_init()) {
+            mtrtype = IPPROTO_TCP;
+            p_writefd = &writefd;
+            SETBIT(iargs, 1);
+          } else {
+            fprintf(stderr, "\rPress any key to continue..\r\n");
+            getchar();
+            display_clear();
+          }
+          break;
       }
       anyset = 1;
     }
-
-    /* Check for activity on open sockets */
-    if (mtrtype == IPPROTO_TCP)
-      anyset = net_process_tcp_fds();
   }
   return;
 }

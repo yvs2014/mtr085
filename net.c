@@ -125,8 +125,9 @@ struct sequence {
   int transit;
   int saved_seq;
   struct timeval time;
-  int socket;
 };
+
+int *tcp_sockets;
 
 
 /* Configuration parameter: How many queries to unknown hosts do we
@@ -174,15 +175,7 @@ struct sockaddr_in * rsa4 = (struct sockaddr_in *) &remotesockaddr_struct;
 ip_t * sourceaddress;
 ip_t * remoteaddress;
 
-/* XXX How do I code this to be IPV6 compatible??? */
-#ifdef ENABLE_IPV6
-char localaddr[INET6_ADDRSTRLEN];
-#else
-#ifndef INET_ADDRSTRLEN
-#define INET_ADDRSTRLEN 16
-#endif
-char localaddr[INET_ADDRSTRLEN];
-#endif
+static char localaddr[INET6_ADDRSTRLEN];
 
 static int batch_at = 0;
 static int numhosts = 10;
@@ -193,10 +186,9 @@ extern int cpacketsize;		/* packet size used by ping */
 static int packetsize;		/* packet size used by ping */
 extern int bitpattern;		/* packet bit pattern used by ping */
 extern int tos;			/* type of service set in ping packet*/
-extern int mtrtype;		/* type of query packet used */
 extern int remoteport;          /* target port for TCP tracing */
 extern int timeout;             /* timeout for TCP connections */
-extern fd_set tcp_fds;		/* TCP sockets */
+extern fd_set writefd;		/* TCP sockets */
 extern int maxfd;
 extern pid_t mypid;
 static int portpid;
@@ -274,6 +266,10 @@ void save_sequence(int index, int seq)
     host[index].up = 0;
   host[index].sent = 1;
   net_save_xmit(index);
+//syslog(LOG_INFO, "seq[%d]: index=%d, transit=%d, saved_seq=%d", seq,
+//  sequence[seq].index,
+//  sequence[seq].transit,
+//  sequence[seq].saved_seq);
 }
 
 int new_sequence(int index)
@@ -290,6 +286,15 @@ int new_sequence(int index)
   return seq;
 }
 
+int net_tcp_init(void) {
+  if (!tcp_sockets)
+    if (!(tcp_sockets = calloc(MaxSequence, sizeof(int)))) {
+      perror("net_tcp_init()");
+      return 0;
+    }
+  return 1;
+}
+ 
 #define ERR_N_EXIT(s) { display_clear(); perror(s); exit(EXIT_FAILURE);}
 
 /*  Attempt to connect to a TCP port with a TTL */
@@ -378,10 +383,12 @@ void net_send_tcp(int index)
 
   save_sequence(index, port);
   gettimeofday(&sequence[port].time, NULL);
-  sequence[port].socket = s;
+
+ if (tcp_sockets)
+	tcp_sockets[port] = s;
 
   connect(s, (struct sockaddr *) &remote, namelen);
-  FD_SET(s, &tcp_fds);
+  FD_SET(s, &writefd);
   if (s >= maxfd)
     maxfd = s + 1;
 }
@@ -529,11 +536,13 @@ void net_send_query(int index)
 }
 
 void tcp_seq_close(int at) {
-  int fd = sequence[at].socket;
+  if (!tcp_sockets)
+    return;
+  int fd = tcp_sockets[at];
   if (fd > 0) {
-    sequence[at].socket = 0;
+    tcp_sockets[at] = 0;
     close(fd);
-    FD_CLR(fd, &tcp_fds);
+    FD_CLR(fd, &writefd);
     if ((fd + 1) == maxfd)
       maxfd--;
   }
@@ -1399,6 +1408,9 @@ int err_slippage(int sock) {
 /* check if we got connection or error on any fds */
 int net_process_tcp_fds(void)
 {
+  if (!tcp_sockets)
+    return -1;
+
   int at, fd, r, ret = 0;
   struct timeval now;
   uint64_t unow, utime;
@@ -1411,8 +1423,8 @@ int net_process_tcp_fds(void)
   unow = now.tv_sec * 1000000L + now.tv_usec;
 
   for (at = 0; at < MaxSequence; at++) {
-    fd = sequence[at].socket;
-    if (fd > 0 && FD_ISSET(fd, &tcp_fds)) {
+    fd = tcp_sockets[at];
+    if (fd > 0 && FD_ISSET(fd, &writefd)) {
 //      r = write(fd, "G", 1);
       errno = err_slippage(fd);
       r = errno ? 0 : 1; // like write()
@@ -1478,9 +1490,6 @@ void net_init(int ipv6_mode) {
 }
 
 const char *strlongip(ip_t *ip) {
-#ifndef INET6_ADDRSTRLEN
-#define INET6_ADDRSTRLEN        46
-#endif
   static char addrstr[INET6_ADDRSTRLEN];
   return inet_ntop(af, ip, addrstr, sizeof(addrstr));
 }

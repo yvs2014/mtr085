@@ -26,12 +26,12 @@
 /* Don't put a trailing comma in enumeration lists. Some compilers 
    (notably the one on Irix 5.2) do not like that. */ 
 enum { ActionNone,  ActionQuit,  ActionReset,  ActionDisplay, 
-       ActionClear, ActionPause, ActionResume, ActionMPLS, ActionDNS, 
+       ActionClear, ActionPauseResume, ActionMPLS, ActionDNS, ActionTCP,
 #ifdef IPINFO
        ActionAS, ActionII, ActionII_Map,
 #endif
        ActionScrollDown, ActionScrollUp  };
-enum { DisplayReport, DisplayCurses, DisplayGTK, DisplaySplit, 
+enum { DisplayReport, DisplayCurses, DisplaySplit, 
 #ifdef GRAPHCAIRO
        DisplayGraphCairo,
 #endif

@@ -6,7 +6,7 @@ mtr - a network diagnostic tool
 
 
 .SH SYNOPSIS
-.B mtr [-abBcCdefFgGilmnopPQrstTuvwxyzZ46] HOSTNAME ...
+.B mtr [-abBcCdefFGilmnopPQrstTuvwxyzZ46] HOSTNAME ...
 
 .SH DESCRIPTION
 
@@ -113,16 +113,6 @@ destination.
 .TP
 .B -F, --filename FILE
 Reads the list of HOSTNAMEs from the FILE.
-
-.TP
-.B -g, --gtk
-Use this option to force
-.B mtr
-to use the GTK+ based X11 window interface (if available).  GTK+ must have been available on the system when
-.B mtr
-was built for this to work.  See the GTK+ web page at
-.B http://www.gtk.org/
-for more information about GTK+.
 
 .TP
 .B -G, --graphcairo ARGUMENTS

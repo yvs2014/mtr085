@@ -36,8 +36,13 @@ int ii_ready(void);
 int ii_getwidth(void);
 char* ii_getheader(void);
 char *fmt_ipinfo(ip_t *addr);
+char *get_ipinfo(ip_t *addr, int nd);
 void query_ipinfo(void);
+
 //#define ASLOOKUP_DEFAULT	NULL
 #define ASLOOKUP_DEFAULT	"10,2" /* riswhois, ASN */
+#define IPINFO_MAX_ITEMS	25
+int ipinfo_no[IPINFO_MAX_ITEMS];
+int ipinfo_max;
 
 #endif

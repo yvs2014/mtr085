@@ -18,11 +18,6 @@ nodist_mtr_SOURCES = version.h
 AM_CPPFLAGS =
 mtr_LDADD = $(RESOLV_LIBS)
 
-if GTK
-mtr_SOURCES += gtk/gtk.c gtk/mtr-gtk.h
-AM_CPPFLAGS += -Igtk
-endif
-
 if CURSES
 mtr_SOURCES += curses.c mtr-curses.h
 endif
