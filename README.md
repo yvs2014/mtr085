@@ -6,7 +6,7 @@ mtr - a network diagnostic tool
 SYNOPSIS
 --------
 
-**mtr \[-abBcCdefFgGilmnopPQrstTuvwxyzZ46\] HOSTNAME ...**
+**mtr \[-abBcCdefFGilmnopPQrstTuvwxyzZ46\] HOSTNAME ...**
 
 DESCRIPTION
 -----------

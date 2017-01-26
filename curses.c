@@ -199,6 +199,7 @@ int mtr_curses_keyaction(void)
       WaitTime = f;
       return ActionNone;
     case 'j':
+      TGLBIT(iargs, 6);	// 6th bit: latency/jitter
       strcpy(fld_active, index(fld_active, 'N') ? "DR AGJMXI" /* jitter */ : "LS NABWV" /* default */);
       return ActionNone;
     case 'm': {
@@ -321,85 +322,69 @@ void mtr_fill_data(int at, char *buf) {
       buf[hd_len] = 0;
 }
 
-void mtr_curses_hosts(int startstat)
-{
-  int max;
+void printw_mpls(struct mplslen *mpls) {
+  int i;
+  for (i = 0; i < mpls->labels; i++)
+    printw("    [MPLS: Lbl %lu Exp %u S %u TTL %u]\n", mpls->label[i], mpls->exp[i], mpls->s[i], mpls->ttl[i]);
+}
+
+void printw_addr(ip_t *addr, int up) {
+#ifdef IPINFO
+  if (ii_ready())
+    printw(fmt_ipinfo(addr));
+#endif
+  if (!up)
+    attron(A_BOLD);
+  const char *name = dns_lookup(addr);
+  if (name) {
+    printw("%s", name);
+    if (show_ips)
+      printw(" (%s)", strlongip(addr));
+  } else
+    printw("%s", strlongip(addr));
+  if (!up)
+    attroff(A_BOLD);
+}
+
+void mtr_curses_hosts(int startstat) {
+  int max = net_max();
   int at;
-  struct mplslen *mpls, *mplss;
-  ip_t *addr, *addrs;
-  int y;
-
-  int i, k;
-  char buf[1024];
-
-  max = net_max();
   for (at = net_min() + display_offset; at < max; at++) {
     printw("%2d. ", at + 1);
-    addr = net_addr(at);
-    mpls = net_mpls(at);
-
-    if (unaddrcmp(addr)) {
-      const char *name = dns_lookup(addr);
-      if (! net_up(at))
-        attron(A_BOLD);
-#ifdef IPINFO
-      if (ii_ready())
-        printw(fmt_ipinfo(addr));
-#endif
-      if(name != NULL) {
-        if (show_ips) printw("%s (%s)", name, strlongip(addr));
-        else printw("%s", name);
-      } else
-        printw("%s", strlongip(addr));
-      attroff(A_BOLD);
-
-      getyx(stdscr, y, __unused_int);
-      move(y, startstat);
-
-      mtr_fill_data(at, buf);
-      printw("%s", buf);
-
-      for (k=0; k < mpls->labels && enablempls; k++) {
-        if((k+1 < mpls->labels) || (mpls->labels == 1)) {
-           /* if we have more labels */
-           printw("\n    [MPLS: Lbl %lu Exp %u S %u TTL %u]", mpls->label[k], mpls->exp[k], mpls->s[k], mpls->ttl[k]);
-        } else {
-           /* bottom label */
-           printw("\n    [MPLS: Lbl %lu Exp %u S %u TTL %u]", mpls->label[k], mpls->exp[k], mpls->s[k], mpls->ttl[k]);
-        }
-      }
-
-      /* Multi path */
-      for (i=0; i < MAXPATH; i++ ) {
-        addrs = net_addrs(at, i);
-        mplss = net_mplss(at, i);
-        if (!addrcmp(addrs, addr))
-          continue;
-        if (!unaddrcmp(addrs))
-          break;
-
-        name = dns_lookup(addrs);
-        if (! net_up(at)) attron(A_BOLD);
-        printw("\n    ");
-#ifdef IPINFO
-        if (ii_ready())
-          printw(fmt_ipinfo(addrs));
-#endif
-        if (name != NULL) {
-          if (show_ips) printw("%s (%s)", name, strlongip(addrs));
-          else printw("%s", name);
-        } else
-          printw("%s", strlongip(addrs));
-        for (k=0; k < mplss->labels && enablempls; k++)
-          printw("\n    [MPLS: Lbl %lu Exp %u S %u TTL %u]", mplss->label[k], mplss->exp[k], mplss->s[k], mplss->ttl[k]);
-        attroff(A_BOLD);
-      }
-
-    } else {
-      printw("???");
+    ip_t *addr = net_addr(at);
+    if (!unaddrcmp(addr)) {
+      printw("???\n");
+      continue;
     }
 
+    printw_addr(addr, net_up(at));
+    { // print stat
+      char buf[1024];
+      mtr_fill_data(at, buf);
+      int y;
+      getyx(stdscr, y, __unused_int);
+      move(y, startstat);
+      printw("%s", buf);
+    }
     addch('\n');
+    if (enablempls)
+      printw_mpls(net_mpls(at));
+
+    /* Multi path */
+    int i;
+    for (i = 0; i < MAXPATH; i++) {
+      ip_t *addrs = net_addrs(at, i);
+      if (!addrcmp(addrs, addr))
+        continue;
+      if (!unaddrcmp(addrs))
+        break;
+
+      printw("    ");
+      printw_addr(addrs, net_up(at));
+      addch('\n');
+      if (enablempls)
+        printw_mpls(net_mplss(at, i));
+    }
   }
   move(2, 0);
 }
@@ -633,8 +618,17 @@ void mtr_print_scale3(int num_factors, int i0, int di) {
 }
 #endif
 
-void mtr_curses_redraw(void)
-{
+int chk_n_print(int bit, char *buf, int sz, const char *msg) {
+  int l = 0;
+  if (CHKBIT(iargs, bit)) {
+    if (iargs & ((1 << bit) - 1))	// is there smth before?
+      l = snprintf(buf, sz, ", ");
+    l += snprintf(buf + l, sz - l, "%s", msg);
+  }
+  return l;
+}
+
+void mtr_curses_redraw(void) {
   int maxx, maxy;
   int startstat;
   int rowstat;
@@ -650,20 +644,28 @@ void mtr_curses_redraw(void)
 
   rowstat = 5;
 
+  // title
   move(0, 0);
   attron(A_BOLD);
   int l = snprintf(buf, sizeof(buf), "mtr-%s%s", MTR_VERSION, mtr_args);
   if (iargs) {
     l += snprintf(buf + l, sizeof(buf) - l, " (");
-    if (CHKBIT(iargs, 0))
-      l += snprintf(buf + l, sizeof(buf) - l, "UDP mode");
-    else if (CHKBIT(iargs, 1))
-      l += snprintf(buf + l, sizeof(buf) - l, "TCP mode");
-    if ((iargs >> 2) & 3) {
-      if (iargs & 3)
+
+    l += chk_n_print(0, buf + l, sizeof(buf) - l, "UDP-mode");	// udp mode
+    l += chk_n_print(1, buf + l, sizeof(buf) - l, "TCP-mode");	// tcp mode
+    l += chk_n_print(2, buf + l, sizeof(buf) - l, "MPLS");	// mpls
+#ifdef IPINFO
+    l += chk_n_print(3, buf + l, sizeof(buf) - l, "ASN-Lookup");	// asn lookup
+    l += chk_n_print(4, buf + l, sizeof(buf) - l, "IP-Info");	// ip info
+#endif
+    l += chk_n_print(5, buf + l, sizeof(buf) - l, "DNS-off");	// dns
+    l += chk_n_print(6, buf + l, sizeof(buf) - l, "Jitter");	// jitter
+    if ((iargs >> 7) & 3) {	// 7,8 bits: display type
+      if (iargs & ((1 << 7) - 1))	// is there smth before?
         l += snprintf(buf + l, sizeof(buf) - l, ", ");
-      l += snprintf(buf + l, sizeof(buf) - l, "display mode %d", display_mode);
+      l += snprintf(buf + l, sizeof(buf) - l, "Display-Type: %d", (iargs >> 7) & 3);
     }
+
     snprintf(buf + l, sizeof(buf) - l, ")");
   }
   printw("%*s", (getmaxx(stdscr) + strlen(buf)) / 2, buf);

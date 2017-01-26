@@ -237,8 +237,10 @@ void select_loop(void) {
 #if defined(CURSES) || defined(GRAPHCAIRO)
         case ActionDisplay:
           display_mode = (display_mode + 1) % display_mode_max;
-          // bits 2,3
-          iargs |= (display_mode & 3) << 2;
+          // bits 7,8: display-type
+          CLRBIT(iargs, 7);
+          CLRBIT(iargs, 8);
+          iargs |= (display_mode & 3) << 7;
 #endif
         case ActionClear:
           display_clear();
@@ -248,16 +250,21 @@ void select_loop(void) {
           break;
         case ActionMPLS:
           enablempls = !enablempls;
+          TGLBIT(iargs, 2);	// 2nd bit: MPLS on/off
           display_clear();
           break;
         case ActionDNS:
           enable_dns = !enable_dns;
+          TGLBIT(iargs, 5);	// 5th bit: DNS on/off
           dns_open();
           display_clear();
           break;
 #ifdef IPINFO
         case ActionAS:
         case ActionII:
+          // 3,4 bits: ASN Lookup, IPInfo
+          TGLBIT(iargs, (action == ActionAS) ? 3 : 4);
+          CLRBIT(iargs, (action == ActionAS) ? 4 : 3);
         case ActionII_Map:
           ii_action(action);
           break;

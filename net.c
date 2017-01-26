@@ -266,10 +266,6 @@ void save_sequence(int index, int seq)
     host[index].up = 0;
   host[index].sent = 1;
   net_save_xmit(index);
-//syslog(LOG_INFO, "seq[%d]: index=%d, transit=%d, saved_seq=%d", seq,
-//  sequence[seq].index,
-//  sequence[seq].transit,
-//  sequence[seq].saved_seq);
 }
 
 int new_sequence(int index)
@@ -709,8 +705,7 @@ void net_process_return(void)
 #endif
   }
 
-  num = recvfrom(recvsock, packet, MAXPACKET, 0,
-		 fromsockaddr, &fromsockaddrsize);
+  num = recvfrom(recvsock, packet, MAXPACKET, 0, fromsockaddr, &fromsockaddrsize);
 
   switch ( af ) {
   case AF_INET:
