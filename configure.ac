@@ -16,19 +16,19 @@ AC_CHECK_SIZEOF(unsigned long, 4)
 AC_CHECK_HEADERS(sys/types.h fcntl.h socket.h sys/socket.h sys/xti.h arpa/nameser_compat.h)
 
 AC_ARG_WITH(curses,
-[  --without-curses        Without Curses support],
-[curses=${withval}], [curses=yes])
+	AS_HELP_STRING([--without-curses], [without Curses library]),
+	[curses=${withval}], [curses=yes])
 AM_CONDITIONAL([CURSES], [test "x$curses" = "xyes"])
 
 AC_ARG_WITH(splitmode,
-[  --without-splitmode     Without split-mode],
-[splitmode=${withval}], [splitmode=yes])
+	AS_HELP_STRING([--without-splitmode], [without split-mode]),
+	splitmode=${withval}], [splitmode=yes])
 AM_CONDITIONAL([SPLITMODE], [test "x$splitmode" = "xyes"])
 AS_IF([test "x$splitmode" = "xyes"], [AC_DEFINE([SPLITMODE], [1], [Define to enable split-mode])])
 
 AC_ARG_WITH(unicode,
-[  --without-unicode       Without Unicode histogram],
-[unicode=${withval}], [unicode=yes])
+	AS_HELP_STRING([--without-unicode], [without Unicode histogram]),
+	[unicode=${withval}], [unicode=yes])
 AS_IF([test "x$curses" = "xno"], [unicode=no])
 
 AS_IF([test "x$unicode" = "xyes"], [
@@ -48,13 +48,13 @@ AC_CHECK_HEADERS(ncurses.h ncurses/curses.h curses.h cursesX.h, break)
 
 # We don't refer to any symbols in termcap, but -lcurses on SunOS does.
 # We have to trust the linker not to mess things up... (It should not
-# pull in anything if we don't refer to anything in the lib). 
+# pull in anything if we don't refer to anything in the lib).
 AC_CHECK_LIB(termcap, tgetent)
 AC_CHECK_LIB(tinfo, tgetent)
 
-AC_CHECK_FUNC(initscr, , 
+AC_CHECK_FUNC(initscr, ,
   AC_CHECK_LIB(ncurses, initscr, ,
-    AC_CHECK_LIB(curses, initscr, , 
+    AC_CHECK_LIB(curses, initscr, ,
       AC_CHECK_LIB(cursesX, initscr,
 	AC_DEFINE(CURSES, 1, Build with curses support),
 	AC_MSG_WARN(Building without curses display support)))))
@@ -69,44 +69,48 @@ AC_CHECK_FUNCS(attron fcntl)
 AC_CHECK_LIB(m, floor, , AC_MSG_ERROR(No math library found))
 
 AC_ARG_WITH([ipinfo],
-[  --without-ipinfo        Do not try to use ipinfo lookup at all],
-[ipinfo="${withval}"], [ipinfo=yes])
+	AS_HELP_STRING([--without-ipinfo], [without IP-info lookup]),
+	[ipinfo="${withval}"], [ipinfo=yes])
 AM_CONDITIONAL([IPINFO], [test "x$ipinfo" = "xyes"])
 AS_IF([test "x$ipinfo" = "xyes"], [AC_DEFINE([IPINFO], [1], [Define to enable ipinfo lookup])])
 
 AC_ARG_WITH([graphcairo_xcb],
-[  --with-graphcairo-xcb   Cairo graph with XCB backend],
-[graphcairo_xcb="${withval}"], [graphcairo_xcb=no])
+	AS_HELP_STRING([--with-graphcairo-xcb], [Cairo graph with XCB backend]),
+	[graphcairo_xcb="${withval}"], [graphcairo_xcb=no])
 AS_IF([test "x$curses" = "xno"], [graphcairo_xcb=no])
 AM_CONDITIONAL([GRAPHCAIRO_XCB], [test "x$graphcairo_xcb" = "xyes"])
 
 AC_ARG_WITH([graphcairo_xlib],
-[  --with-graphcairo-xlib  Cairo graph with Xlib backend],
-[graphcairo_xlib="${withval}"], [graphcairo_xlib=no])
+	AS_HELP_STRING([--with-graphcairo-xlib], [Cairo graph with Xlib backend]),
+	[graphcairo_xlib="${withval}"], [graphcairo_xlib=no])
 AS_IF([test "x$curses" = "xno"], [graphcairo_xlib=no])
 AM_CONDITIONAL([GRAPHCAIRO_XLIB], [test "x$graphcairo_xlib" = "xyes"])
 
 AM_CONDITIONAL([GRAPHCAIRO], [test "x$graphcairo_xcb" = "xyes" -o "x$graphcairo_xlib" = "xyes"])
 
 AC_ARG_WITH([libidn],
-[  --with-libidn           With libidn],
-[libidn="${withval}"], [libidn=no])
+	AS_HELP_STRING([--with-libidn], [IDN support (libidn)]),
+	[libidn="${withval}"], [libidn=no])
 AM_CONDITIONAL([LIBIDN], [test "x$libidn" = "xyes"])
 
 AC_ARG_WITH([sys_getopt],
-[  --without-sys-getopt    Do not try to use system getopt],
-[sys_getopt="${withval}"], [sys_getopt=yes])
+	    AS_HELP_STRING([--without-sys-getopt], [do not use your system getopt]),
+	[sys_getopt="${withval}"], [sys_getopt=yes])
 AM_CONDITIONAL([LOCAL_GETOPT], [test "x$sys_getopt" = "xno"])
 
 AC_ARG_ENABLE([syslog_debug],
-[  --enable-syslog-debug   Syslog debug on],
-[syslog_debug="${enableval}"], [syslog_debug=no])
+	AS_HELP_STRING([--enable-syslog-debug[[[=net,dns,ipinfo]]]],
+		[syslog debug on (default: dns,ipinfo)]),
+	[syslog_debug="${enableval}"], [syslog_debug=no])
 
 AS_IF([test "x$syslog_debug" != "xno"], [
 	AC_DEFINE([MTR_SYSLOG], [LOG_INFO], [Define syslog level])
 	AS_IF([test "x$syslog_debug" == "xyes"], [
+#		AC_DEFINE([LOG_NET], 1, [Enable Net module debug logging])
 		AC_DEFINE([LOG_DNS], 1, [Enable DNS debug logging])
 		AC_DEFINE([LOG_IPINFO], 1, [Enable IPinfo logging])
+	], [AS_IF([test "x$syslog_debug" == "xnet"], [
+		AC_DEFINE([LOG_NET], 1, [Enable Net debug logging])
 	], [AS_IF([test "x$syslog_debug" == "xdns"], [
 		AC_DEFINE([LOG_DNS], 1, [Enable DNS debug logging])
 	], [AS_IF([test "x$syslog_debug" != "xipinfo"], [
@@ -114,11 +118,12 @@ AS_IF([test "x$syslog_debug" != "xno"], [
 	])
 	])
 	])
+	])
 ])
 
 AC_ARG_ENABLE(ipv6,
-[  --disable-ipv6          Do not enable IPv6],
-WANTS_IPV6=$enableval, WANTS_IPV6=yes)
+	AS_HELP_STRING([--disable-ipv6], [do not enable IPv6]),
+	WANTS_IPV6=$enableval, WANTS_IPV6=yes)
 
 m4_ifndef([PKG_CHECK_MODULES], [m4_defun([PKG_CHECK_MODULES], [AC_MSG_ERROR([
   Could not locate the pkg-config automake macros, these are usually located in
@@ -177,14 +182,14 @@ case "$host_os" in
   ;;
 esac
 
-AC_CHECK_FUNC(socket, , 
+AC_CHECK_FUNC(socket, ,
   AC_CHECK_LIB(socket, socket, , AC_MSG_ERROR(No socket library found)))
 
 AC_CHECK_FUNC(gethostbyname, ,
   AC_CHECK_LIB(nsl, gethostbyname, , AC_MSG_ERROR(No nameservice library found)))
 
-#AC_CHECK_FUNC(res_init, , 
-#  AC_CHECK_LIB(bind, res_init, , 
+#AC_CHECK_FUNC(res_init, ,
+#  AC_CHECK_LIB(bind, res_init, ,
 #   AC_CHECK_LIB(resolv, res_init, , AC_MSG_ERROR(No resolver library found))))
 
 AC_CHECK_FUNCS(seteuid)

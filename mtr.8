@@ -6,7 +6,7 @@ mtr - a network diagnostic tool
 
 
 .SH SYNOPSIS
-.B mtr [-abBcCdefFGilmnopPQrstTuvwxyzZ46] HOSTNAME ...
+.B mtr [-abBcCdefFGilmnopPQrsTuvwxyzZ46] HOSTNAME ...
 
 .SH DESCRIPTION
 
@@ -259,12 +259,6 @@ to measure the quality of your network may result in decreased network performan
 This option sets the packet size used for probing.  It is in bytes inclusive IP and ICMP headers
 
 If set to a negative number, every iteration will use a different, random packet size upto that number.
-
-.TP
-.B -t, --curses
-Use this option to force
-.B mtr
-to use the curses based terminal interface (if available).
 
 .TP
 .B -T, --tcp

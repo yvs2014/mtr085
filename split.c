@@ -150,7 +150,7 @@ int split_keyaction(void) {
     return 0;
   }
 
-  switch (tolower(c)) {
+  switch (tolower((int)c)) {
     case '?':
     case 'h':
       printf("%s", SPLIT_HELP_MESSAGE);

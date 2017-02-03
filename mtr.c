@@ -280,9 +280,6 @@ static struct option long_options[] = {
   { "tos",	1, 0, 'Q' },	/* typeof service (0,255) */
   { "report",	0, 0, 'r' },
   { "psize",	1, 0, 's' },	/* changed 'p' to 's' to match ping option, overload psize<0, ->rand(min,max) */
-#ifdef CURSES
-  { "curses",	0, 0, 't' },
-#endif
   { "tcp",	0, 0, 'T' },	/* TCP (default is ICMP) */
   { "udp",	0, 0, 'u' },	/* UDP (default is ICMP) */
   { "version",	0, 0, 'v' },
@@ -387,11 +384,6 @@ void parse_arg(int argc, char **argv) {
       reportwide = 1;
       DisplayMode = DisplayReport;
       break;
-#ifdef CURSES
-    case 't':
-      DisplayMode = DisplayCurses;
-      break;
-#endif
 #ifdef SPLITMODE
     case 'p':
       DisplayMode = DisplaySplit;

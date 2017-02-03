@@ -45,7 +45,6 @@ void net_process_return(void);
 
 int net_max(void);
 int net_min(void);
-int net_last(int at);
 ip_t * net_addr(int at);
 void * net_mpls(int at);
 void * net_mplss(int, int);
@@ -71,14 +70,11 @@ int calc_deltatime (float WaitTime);
 
 int net_returned(int at);
 int net_xmit(int at);
-int net_transit(int at);
 
 int net_up(int at);
 
 #define SAVED_PINGS 200
 int* net_saved_pings(int at);
-void net_save_xmit(int at);
-void net_save_return(int at, int seq, int ms);
 int net_duplicate(int at, int seq);
 int net_process_tcp_fds(void);
 int net_tcp_init(void);
@@ -99,8 +95,6 @@ const char *strlongip(ip_t *ip);
 
 #define MAXPATH 8
 #define MaxHost 256
-#define MinSequence 32768
-#define MaxSequence 65536
 
 #define MAXPACKET 4470		/* largest test packet size */
 #define MINPACKET 28		/* 20 bytes IP header and 8 bytes ICMP or UDP */

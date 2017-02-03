@@ -28,8 +28,10 @@
 #include <sys/ioctl.h>
 #include <sys/select.h>
 #include <netinet/in.h>
-#include <netinet/udp.h>
+#include <netinet/ip.h>
 #include <netinet/tcp.h>
+#include <netinet/udp.h>
+#include <netinet/ip_icmp.h>
 #include <memory.h>
 #include <unistd.h>
 #ifdef HAVE_FCNTL_H
@@ -45,6 +47,15 @@
 #include "net.h"
 #include "display.h"
 #include "dns.h"
+
+#ifdef LOG_NET
+#include <syslog.h>
+#define NETLOG_MSG(x)   { syslog x ; }
+#define NETLOG_ERR(x)   { syslog x ; return; }
+#else
+#define NETLOG_MSG(x)   {}
+#define NETLOG_ERR(x)   { return; }
+#endif
 
 /*  We can't rely on header files to provide this information, because
     the fields have different names between, for instance, Linux and
@@ -80,19 +91,14 @@ struct IPHeader {
   uint32 daddr;
 };
 
-
-#define ICMP_ECHO		8
-#define ICMP_ECHOREPLY		0
-
-#define ICMP_TSTAMP		13
-#define ICMP_TSTAMPREPLY	14
-
-#define ICMP_TIME_EXCEEDED	11
-#define ICMP_UNREACHABLE        3
-
 #ifndef SOL_IP
 #define SOL_IP 0
 #endif
+
+#define SEQ_MAX 16384
+
+#define LO_UDPPORT 33433	// start from LO_UDPPORT+1
+#define UDPPORTS 90		// go thru udp:33434-33523 acl
 
 struct nethost {
   ip_t addr;
@@ -127,7 +133,7 @@ struct sequence {
   struct timeval time;
 };
 
-int *tcp_sockets;
+unsigned *tcp_sockets;
 
 
 /* Configuration parameter: How many queries to unknown hosts do we
@@ -135,15 +141,9 @@ int *tcp_sockets;
    reachable) */
 #define MAX_UNKNOWN_HOSTS 5
 
-
-/* BSD-derived kernels use host byte order for the IP length and
-   offset fields when using raw sockets.  We detect this automatically at
-   run-time and do the right thing. */
-static int BSDfix = 0;
-
 static struct nethost host[MaxHost];
-static struct sequence sequence[MaxSequence];
-static struct timeval reset = { 0, 0 };
+static struct sequence sequence[SEQ_MAX];
+static struct timeval reset;
 
 int    timestamp;
 int    sendsock4;
@@ -177,7 +177,7 @@ ip_t * remoteaddress;
 
 static char localaddr[INET6_ADDRSTRLEN];
 
-static int batch_at = 0;
+static int batch_at;
 static int numhosts = 10;
 
 extern int fstTTL;		/* initial hub(ttl) to ping byMin */
@@ -207,31 +207,22 @@ int calc_deltatime (float waittime)
   return 1000000 * waittime;
 }
 
-
-/* This doesn't work for odd sz. I don't know enough about this to say
-   that this is wrong. It doesn't seem to cripple mtr though. -- REW */
-int checksum(void *data, int sz)
-{
-  unsigned short *ch;
-  unsigned int sum;
-
-  sum = 0;
-  ch = data;
-  sz = sz / 2;
-  while (sz--) {
-    sum += *(ch++);
-  }
-
+unsigned short checksum(const void *data, int sz) {
+  const unsigned short *ch = data;
+  unsigned sum = 0;
+  for (; sz > 1; sz -= 2)
+    sum += *ch++;
+  if (sz)
+    sum += *(unsigned char *)ch;
   sum = (sum >> 16) + (sum & 0xffff);
-
-  return (~sum & 0xffff);
+  sum += (sum >> 16);
+  return ~sum;
 }
-
 
 /* Prepend pseudoheader to the udp datagram and calculate checksum */
 int udp_checksum(void *pheader, void *udata, int psize, int dsize)
 {
-  unsigned int tsize = psize + dsize;
+  unsigned tsize = psize + dsize;
   char csumpacket[tsize];
   memset(csumpacket, (unsigned char) abs(bitpattern), abs(tsize));
 
@@ -253,9 +244,7 @@ int udp_checksum(void *pheader, void *udata, int psize, int dsize)
   return checksum(csumpacket,tsize);
 }
 
-
-void save_sequence(int index, int seq)
-{
+void save_sequence(int index, int seq) {
   sequence[seq].index = index;
   sequence[seq].transit = 1;
   sequence[seq].saved_seq = ++host[index].xmit;
@@ -265,26 +254,40 @@ void save_sequence(int index, int seq)
   if (host[index].sent)
     host[index].up = 0;
   host[index].sent = 1;
-  net_save_xmit(index);
+
+  if (host[index].saved[SAVED_PINGS - 1] != -2) {
+    int at;
+    for (at = 0; at < MaxHost; at++) {
+      memmove(host[at].saved, host[at].saved + 1, (SAVED_PINGS - 1) * sizeof(int));
+      host[at].saved[SAVED_PINGS - 1] = -2;
+      host[at].saved_seq_offset += 1;
+    }
+  }
+  host[index].saved[SAVED_PINGS - 1] = -1;
 }
 
-int new_sequence(int index)
-{
-  static int next_sequence = MinSequence;
-  int seq;
-
-  seq = next_sequence++;
-  if (next_sequence >= MaxSequence)
-    next_sequence = MinSequence;
-
+int new_icmp_sequence(int index) {
+  static int next_sequence;
+  int seq = ++next_sequence;
+  if (next_sequence >= SEQ_MAX)
+    next_sequence = 0;
   save_sequence(index, seq);
-
   return seq;
 }
 
+int new_udp_sequence(int index) {
+  static int next_sequence;
+  int seq = ++next_sequence;
+  if (next_sequence >= UDPPORTS)
+    next_sequence = 0;
+  save_sequence(index, seq);
+  return seq;
+}
+
+
 int net_tcp_init(void) {
   if (!tcp_sockets)
-    if (!(tcp_sockets = calloc(MaxSequence, sizeof(int)))) {
+    if (!(tcp_sockets = calloc(SEQ_MAX, sizeof(int)))) {
       perror("net_tcp_init()");
       return 0;
     }
@@ -294,8 +297,7 @@ int net_tcp_init(void) {
 #define ERR_N_EXIT(s) { display_clear(); perror(s); exit(EXIT_FAILURE);}
 
 /*  Attempt to connect to a TCP port with a TTL */
-void net_send_tcp(int index)
-{
+void net_send_tcp(int index) {
   int ttl, s;
   int opt = 1;
   int port;
@@ -377,49 +379,41 @@ void net_send_tcp(int index)
     ERR_N_EXIT("unknown AF?");
   }
 
-  save_sequence(index, port);
-  gettimeofday(&sequence[port].time, NULL);
+  int pseq = port % SEQ_MAX;
+  save_sequence(index, pseq);
+  gettimeofday(&sequence[pseq].time, NULL);
 
- if (tcp_sockets)
-	tcp_sockets[port] = s;
+  if (tcp_sockets)
+    tcp_sockets[pseq] = s;
 
   connect(s, (struct sockaddr *) &remote, namelen);
   FD_SET(s, &writefd);
   if (s >= maxfd)
     maxfd = s + 1;
+  NETLOG_MSG((LOG_INFO, "net_send_tcp(index=%d): sequence=%d, socket=%d", index, pseq, s));
 }
 
 /*  Attempt to find the host at a particular number of hops away  */
-void net_send_query(int index)
-{
-  if (mtrtype == IPPROTO_TCP) {
-    net_send_tcp(index);
-    return;
-  }
-
-  /*ok  char packet[sizeof(struct IPHeader) + sizeof(struct ICMPHeader)];*/
+void net_send_query(int index) {
   char packet[MAXPACKET];
-  struct IPHeader *ip = (struct IPHeader *) packet;
-  struct ICMPHeader *icmp = NULL;
+  struct IPHeader *ip = (struct IPHeader *)packet;
+  struct ICMPHeader*icmp = NULL;
   struct udphdr *udp = NULL;
   struct UDPv4PHeader *udpp = NULL;
-
-  /*ok  int packetsize = sizeof(struct IPHeader) + sizeof(struct ICMPHeader) + datasize;*/
-  int rv;
-  static int first=1;
-  int ttl, iphsize = 0, echotype = 0, salen = 0;
-
-  ttl = index + 1;
+  int iphsize = 0, echotype = 0, salen = 0;
+  int ttl = index + 1;
 
 #ifdef ENABLE_IPV6
   /* offset for ipv6 checksum calculation */
   int offset = 6;
 #endif
 
-  if ( packetsize < MINPACKET ) packetsize = MINPACKET;
-  if ( packetsize > MAXPACKET ) packetsize = MAXPACKET;
+  if (packetsize < MINPACKET)
+    packetsize = MINPACKET;
+  else if (packetsize > MAXPACKET)
+    packetsize = MAXPACKET;
 
-  memset(packet, (unsigned char) abs(bitpattern), abs(packetsize));
+  memset(packet, (unsigned char) abs(bitpattern), packetsize);
 
   switch ( af ) {
   case AF_INET:
@@ -430,16 +424,15 @@ void net_send_query(int index)
     if (setsockopt(sendsock, IPPROTO_IP, IP_TTL, &ttl, sizeof ttl))
       ERR_N_EXIT("setsockopt IP_TTL");
 #else
-    iphsize = sizeof (struct IPHeader);
-
-  ip->version = 0x45;
-  ip->tos = tos;
-  ip->len = BSDfix ? abs(packetsize): htons (abs(packetsize));
-  ip->id = 0;
-  ip->frag = 0;    /* 1, if want to find mtu size? Min */
+    iphsize = sizeof(struct IPHeader);
+    ip->version = 0x45;
+    ip->tos = tos;
+    ip->len = packetsize;
+    ip->id = 0;
+    ip->frag = 0;    /* 1, if want to find mtu size? Min */
     ip->ttl = ttl;
-  ip->protocol = mtrtype;
-  ip->check = 0;
+    ip->protocol = mtrtype;
+    ip->check = 0;
 
   /* BSD needs the source address here, Linux & others do not... */
     addrcpy(&(ip->saddr), &(ssa4->sin_addr));
@@ -459,37 +452,29 @@ void net_send_query(int index)
 #endif
   }
 
-  switch ( mtrtype ) {
-  case IPPROTO_ICMP:
+  if (mtrtype == IPPROTO_ICMP) {
     icmp = (struct ICMPHeader *)(packet + iphsize);
     icmp->type     = echotype;
     icmp->code     = 0;
     icmp->checksum = 0;
     icmp->id       = mypid;
-    icmp->sequence = new_sequence(index);
-    icmp->checksum = checksum(icmp, abs(packetsize) - iphsize);
+    icmp->sequence = new_icmp_sequence(index);
+    icmp->checksum = checksum(icmp, packetsize - iphsize);
 
     gettimeofday(&sequence[icmp->sequence].time, NULL);
-    break;
-
-  case IPPROTO_UDP:
+    NETLOG_MSG((LOG_INFO, "net_send_icmp(index=%d): sequence=%d", index, icmp->sequence));
+  } else if (mtrtype == IPPROTO_UDP) {
     udp = (struct udphdr *)(packet + iphsize);
     udp->uh_sum  = 0;
     udp->uh_sport = htons(portpid);
-    udp->uh_ulen = abs(packetsize) - iphsize;
-    if(!BSDfix)
-      udp->uh_ulen = htons(udp->uh_ulen);
 
-    udp->uh_dport = new_sequence(index);
-    gettimeofday(&sequence[udp->uh_dport].time, NULL);
+    udp->uh_ulen = htons(packetsize - iphsize);
+    int useq = new_udp_sequence(index);
+    udp->uh_dport = LO_UDPPORT + useq;
+    gettimeofday(&sequence[useq].time, NULL);
     udp->uh_dport = htons(udp->uh_dport);
-    break;
-  }
-
-  switch ( af ) {
-  case AF_INET:
-    switch ( mtrtype ) {
-    case IPPROTO_UDP:
+    NETLOG_MSG((LOG_INFO, "net_send_udp(index=%d): sequence=%d, port=%d", index, useq, ntohs(udp->uh_dport)));
+    if (af == AF_INET) {
       /* checksum is not mandatory. only calculate if we know ip->saddr */
       if (ip->saddr) {
         udpp = (struct UDPv4PHeader *)(malloc(sizeof(struct UDPv4PHeader)));
@@ -497,45 +482,28 @@ void net_send_query(int index)
         udpp->daddr = ip->daddr;
         udpp->protocol = ip->protocol;
         udpp->len = udp->uh_ulen;
-        udp->uh_sum = udp_checksum(udpp, udp, sizeof(struct UDPv4PHeader), abs(packetsize) - iphsize);
+        udp->uh_sum = udp_checksum(udpp, udp, sizeof(struct UDPv4PHeader), packetsize - iphsize);
+        if (!udp->uh_sum)
+          udp->uh_sum = 0xffff;
       }
-      break;
     }
-
-    ip->check = checksum(packet, abs(packetsize));
-    break;
 #ifdef ENABLE_IPV6
-  case AF_INET6:
-    switch ( mtrtype ) {
-    case IPPROTO_UDP:
+    else if (af == AF_INET6) {
       /* kernel checksum calculation */
       if (setsockopt(sendsock, IPPROTO_IPV6, IPV6_CHECKSUM, &offset, sizeof(offset)))
         ERR_N_EXIT("setsockopt IPV6_CHECKSUM");
-      break;
     }
-    break;
 #endif
   }
 
-  rv = sendto(sendsock, packet, abs(packetsize), 0,
-	      remotesockaddr, salen);
-  if (first && (rv < 0) && ((errno == EINVAL) || (errno == EMSGSIZE))) {
-    /* Try the first packet again using host byte order. */
-    ip->len = abs (packetsize);
-    rv = sendto(sendsock, packet, abs(packetsize), 0,
-		remotesockaddr, salen);
-    if (rv >= 0) {
-      BSDfix = 1;
-    }
-  }
-  first = 0;
+  sendto(sendsock, packet, packetsize, 0, remotesockaddr, salen);
 }
 
-void tcp_seq_close(int at) {
+void tcp_seq_close(unsigned at) {
   if (!tcp_sockets)
     return;
-  int fd = tcp_sockets[at];
-  if (fd > 0) {
+  unsigned fd = tcp_sockets[at];
+  if (fd) {
     tcp_sockets[at] = 0;
     close(fd);
     FD_CLR(fd, &writefd);
@@ -546,8 +514,7 @@ void tcp_seq_close(int at) {
 
 /*   We got a return on something we sent out.  Record the address and
      time.  */
-void net_process_ping(int seq, struct mplslen mpls, void * addr, struct timeval now)
-{
+void net_process_ping(unsigned port, struct mplslen mpls, void *addr, struct timeval now) {
   int index;
   int totusec;
   int oldavg;	/* usedByMin */
@@ -562,17 +529,16 @@ void net_process_ping(int seq, struct mplslen mpls, void * addr, struct timeval 
   /* Copy the from address ASAP because it can be overwritten */
   addrcpy(&addrcopy, addr);
 
-  if (seq < 0 || seq >= MaxSequence)
-    return;
-
+  unsigned seq = port % SEQ_MAX;
   if (!sequence[seq].transit)
     return;
+
+  NETLOG_MSG((LOG_INFO, "net_process_ping(port=%d, seq=%d)", port, seq));
   sequence[seq].transit = 0;
   if (mtrtype == IPPROTO_TCP)
     tcp_seq_close(seq);
 
   index = sequence[seq].index;
-
   totusec = (now.tv_sec  - sequence[seq].time.tv_sec ) * 1000000 +
             (now.tv_usec - sequence[seq].time.tv_usec);
   /* impossible? if( totusec < 0 ) totusec = 0 */;
@@ -581,51 +547,37 @@ void net_process_ping(int seq, struct mplslen mpls, void * addr, struct timeval 
     /* should be out of if as addr can change */
     addrcpy(&(host[index].addr), addrcopy);
     host[index].mpls = mpls;
-    display_rawhost(index, (void *) &(host[index].addr));
+    display_rawhost(index, &(host[index].addr));
 
   /* multi paths */
     addrcpy(&(host[index].addrs[0]), addrcopy);
     host[index].mplss[0] = mpls;
   } else {
-    for( i=0; i<MAXPATH; ) {
+    for (i = 0; i < MAXPATH; i++)
       if (!addrcmp(&(host[index].addrs[i]), &addrcopy) || !unaddrcmp(&(host[index].addrs[i])))
         break;
-      i++;
-    }
     if (addrcmp(&(host[index].addrs[i]), addrcopy) && (i < MAXPATH)) {
       addrcpy(&(host[index].addrs[i]), addrcopy);
       host[index].mplss[i] = mpls;
-      display_rawhost(index, (void *) &(host[index].addrs[i]));
+      display_rawhost(index, &(host[index].addrs[i]));
     }
   }
 
-  host[index].jitter = totusec - host[index].last;
-  if (host[index].jitter < 0 ) host[index].jitter = - host[index].jitter;
+  host[index].jitter = abs(totusec - host[index].last);
   host[index].last = totusec;
 
   if (host[index].returned < 1) {
     host[index].best = host[index].worst = host[index].gmean = totusec;
-    host[index].avg  = host[index].var  = 0;
-
-    host[index].jitter = host[index].jworst = host[index].jinta= 0;
+    host[index].avg = host[index].var = 0;
+    host[index].jitter = host[index].jworst = host[index].jinta = 0;
   }
 
-  /* some time best can be too good to be true, experienced
-   * at least in linux 2.4.x.
-   *  safe guard 1) best[index]>=best[index-1] if index>0
-   *             2) best >= average-20,000 usec (good number?)
-  if (index > 0) {
-    if (totusec < host[index].best &&
-       totusec>= host[index-1].best) host[index].best  = totusec;
-  } else {
-    if(totusec < host[index].best) host[index].best  = totusec;
-  }
-   */
-  if (totusec < host[index].best ) host[index].best  = totusec;
-  if (totusec > host[index].worst) host[index].worst = totusec;
-
+  if (totusec < host[index].best)
+     host[index].best = totusec;
+  if (totusec > host[index].worst)
+     host[index].worst = totusec;
   if (host[index].jitter > host[index].jworst)
-	host[index].jworst = host[index].jitter;
+     host[index].jworst = host[index].jitter;
 
   host[index].returned++;
   oldavg = host[index].avg;
@@ -644,7 +596,11 @@ void net_process_ping(int seq, struct mplslen mpls, void * addr, struct timeval 
   host[index].up = 1;
   host[index].transit = 0;
 
-  net_save_return(index, sequence[seq].saved_seq, totusec);
+  int idx = sequence[seq].saved_seq - host[index].saved_seq_offset;
+  if ((idx >= 0) && (idx <= SAVED_PINGS))
+    host[index].saved[idx] = totusec;
+
+  NETLOG_MSG((LOG_INFO, "display_rawping(index=%d, totusec=%d)", index, totusec));
   display_rawping(index, totusec);
 }
 
@@ -662,8 +618,7 @@ void net_process_ping(int seq, struct mplslen mpls, void * addr, struct timeval 
 /*  We know a packet has come in, because the main select loop has called us,
     now we just need to read it, see if it is for us, and if it is a reply
     to something we sent, then call net_process_ping()  */
-void net_process_return(void)
-{
+void net_process_return(void) {
   char packet[MAXPACKET];
 #ifdef ENABLE_IPV6
   struct sockaddr_storage fromsockaddr_struct;
@@ -679,7 +634,6 @@ void net_process_return(void)
   struct timeval now;
   ip_t * fromaddress = NULL;
   int echoreplytype = 0, timeexceededtype = 0, unreachabletype = 0;
-  int sequence = 0;
 
   /* MPLS decoding */
   struct mplslen mpls;
@@ -691,8 +645,8 @@ void net_process_return(void)
     fromsockaddrsize = sizeof (struct sockaddr_in);
     fromaddress = (ip_t *) &(fsa4->sin_addr);
     echoreplytype = ICMP_ECHOREPLY;
-    timeexceededtype = ICMP_TIME_EXCEEDED;
-    unreachabletype = ICMP_UNREACHABLE;
+    timeexceededtype = ICMP_TIMXCEED;
+    unreachabletype = ICMP_UNREACH;
     break;
 #ifdef ENABLE_IPV6
   case AF_INET6:
@@ -706,31 +660,32 @@ void net_process_return(void)
   }
 
   num = recvfrom(recvsock, packet, MAXPACKET, 0, fromsockaddr, &fromsockaddrsize);
-
-  switch ( af ) {
+  NETLOG_MSG((LOG_INFO, "net_process_return(): got %d bytes", num));
+  switch (af) {
   case AF_INET:
-    if((size_t) num < sizeof(struct IPHeader) + sizeof(struct ICMPHeader))
+    if (num < (sizeof(struct IPHeader) + sizeof(struct ICMPHeader)))
       return;
     header = (struct ICMPHeader *)(packet + sizeof(struct IPHeader));
     break;
 #ifdef ENABLE_IPV6
   case AF_INET6:
-    if(num < sizeof(struct ICMPHeader))
+    if (num < sizeof(struct ICMPHeader))
       return;
-
-    header = (struct ICMPHeader *) packet;
+    header = (struct ICMPHeader *)packet;
     break;
 #endif
   }
 
-  switch ( mtrtype ) {
+  int sequence = -1;
+
+  switch (mtrtype) {
   case IPPROTO_ICMP:
     if (header->type == echoreplytype) {
-      if(header->id != (uint16)mypid)
+      if (header->id != (uint16)mypid)
         return;
       sequence = header->sequence;
     } else if (header->type == timeexceededtype) {
-      switch ( af ) {
+      switch (af) {
       case AF_INET:
         USER_DATA(header, FDATA_OFF, struct ICMPHeader, 160);
       break;
@@ -744,11 +699,12 @@ void net_process_return(void)
       if (header->id != (uint16)mypid)
         return;
       sequence = header->sequence;
+      NETLOG_MSG((LOG_INFO, "ICMP: net_process_return(sequence=%d)", sequence));
     }
     break;
 
   case IPPROTO_UDP:
-    if (header->type == timeexceededtype || header->type == unreachabletype) {
+    if ((header->type == timeexceededtype) || (header->type == unreachabletype)) {
       struct udphdr *uh = NULL;
       switch ( af ) {
       case AF_INET:
@@ -762,12 +718,13 @@ void net_process_return(void)
       }
       if (ntohs(uh->uh_sport) != portpid)
         return;
-      sequence = ntohs(uh->uh_dport);
+      sequence = ntohs(uh->uh_dport) - LO_UDPPORT;
+      NETLOG_MSG((LOG_INFO, "UDP: net_process_return(sequence=%d)", sequence));
     }
     break;
 
   case IPPROTO_TCP:
-    if (header->type == timeexceededtype || header->type == unreachabletype) {
+    if ((header->type == timeexceededtype) || (header->type == unreachabletype)) {
       struct tcphdr *th = NULL;
       switch ( af ) {
       case AF_INET:
@@ -780,12 +737,13 @@ void net_process_return(void)
 #endif
       }
       sequence = ntohs(th->th_sport);
+      NETLOG_MSG((LOG_INFO, "TCP: net_process_return(sequence=%d)", sequence));
     }
     break;
   }
 
-  if (sequence)
-    net_process_ping (sequence, mpls, (void *) fromaddress, now);
+  if (sequence > 0)
+    net_process_ping(sequence, mpls, fromaddress, now);
 }
 
 
@@ -823,7 +781,6 @@ int net_drop(int at)
 {
   return (host[at].xmit - host[at].transit) - host[at].returned;
 }
-
 
 int net_last(int at)
 {
@@ -930,12 +887,6 @@ int net_xmit(int at)
 }
 
 
-int net_transit(int at)
-{
-  return host[at].transit;
-}
-
-
 int net_up(int at)
 {
    return host[at].up;
@@ -957,38 +908,32 @@ void net_end_transit(void)
   }
 }
 
-int net_send_batch(void)
-{
-  int n_unknown=0, i;
-
+int net_send_batch(void) {
   /* randomized packet size and/or bit pattern if packetsize<0 and/or
      bitpattern<0.  abs(packetsize) and/or abs(bitpattern) will be used
   */
-  if( batch_at < fstTTL ) {
-    if( cpacketsize < 0 ) {
-	/* Someone used a formula here that tried to correct for the
-           "end-error" in "rand()". By "end-error" I mean that if you
-           have a range for "rand()" that runs to 32768, and the
-           destination range is 10000, you end up with 4 out of 32768
-           0-2768's and only 3 out of 32768 for results 2769 .. 9999.
-           As our detination range (in the example 10000) is much
-           smaller (reasonable packet sizes), and our rand() range much
-           larger, this effect is insignificant. Oh! That other formula
-           didn't work. */
-      packetsize = MINPACKET + rand () % (-cpacketsize - MINPACKET);
-    } else {
-      packetsize = cpacketsize;
-    }
-    if( bitpattern < 0 ) {
-      bitpattern = - (int)(256 + 255*(rand()/(RAND_MAX+0.1)));
-    }
+  if (batch_at < fstTTL) {
+    /* Someone used a formula here that tried to correct for the
+       "end-error" in "rand()". By "end-error" I mean that if you
+       have a range for "rand()" that runs to 32768, and the
+       destination range is 10000, you end up with 4 out of 32768
+       0-2768's and only 3 out of 32768 for results 2769 .. 9999.
+       As our destination range (in the example 10000) is much
+       smaller (reasonable packet sizes), and our rand() range much
+       larger, this effect is insignificant. Oh! That other formula
+       didn't work. */
+    packetsize = (cpacketsize >= 0) ? cpacketsize : (MINPACKET + rand() % (-cpacketsize - MINPACKET));
+    if (bitpattern < 0)
+      bitpattern = - (int)(256 + 255 * (rand() / (RAND_MAX + 0.1)));
   }
 
-  /* printf ("cpacketsize = %d, packetsize = %d\n", cpacketsize, packetsize);  */
+  if (mtrtype == IPPROTO_TCP)
+    net_send_tcp(batch_at);
+  else
+    net_send_query(batch_at);
 
-  net_send_query(batch_at);
-
-  for (i=fstTTL-1;i<batch_at;i++) {
+  int n_unknown=0, i;
+  for (i = fstTTL - 1; i < batch_at; i++) {
     if (!unaddrcmp(&(host[i].addr)))
       n_unknown++;
 
@@ -1175,14 +1120,11 @@ void net_reopen(struct hostent * addr) {
 }
 
 
-void net_reset(void)
-{
-  int at;
-  int i;
-
+void net_reset(void) {
   batch_at = fstTTL - 1;	/* above replacedByMin */
   numhosts = 10;
 
+  unsigned at;
   for (at = 0; at < MaxHost; at++) {
     host[at].xmit = 0;
     host[at].transit = 0;
@@ -1199,13 +1141,13 @@ void net_reset(void)
     host[at].javg = 0;
     host[at].jworst = 0;
     host[at].jinta = 0;
-    for (i=0; i<SAVED_PINGS; i++) {
+    int i;
+    for (i = 0; i < SAVED_PINGS; i++)
       host[at].saved[i] = -2;	/* unsent */
-    }
     host[at].saved_seq_offset = -SAVED_PINGS+2;
   }
 
-  for (at = 0; at < MaxSequence; at++) {
+  for (at = 0; at < SEQ_MAX; at++) {
     sequence[at].transit = 0;
     if (mtrtype == IPPROTO_TCP)
       tcp_seq_close(at);
@@ -1278,36 +1220,6 @@ int* net_saved_pings(int at)
   return host[at].saved;
 }
 
-
-void net_save_increment(void)
-{
-  int at;
-  for (at = 0; at < MaxHost; at++) {
-    memmove(host[at].saved, host[at].saved+1, (SAVED_PINGS-1)*sizeof(int));
-    host[at].saved[SAVED_PINGS-1] = -2;
-    host[at].saved_seq_offset += 1;
-  }
-}
-
-
-void net_save_xmit(int at)
-{
-  if (host[at].saved[SAVED_PINGS-1] != -2)
-    net_save_increment();
-  host[at].saved[SAVED_PINGS-1] = -1;
-}
-
-
-void net_save_return(int at, int seq, int ms)
-{
-  int idx;
-  idx = seq - host[at].saved_seq_offset;
-  if (idx < 0 || idx > SAVED_PINGS) {
-    return;
-  }
-  host[at].saved[idx] = ms;
-}
-
 /* Similar to inet_ntop but uses a sockaddr as it's argument. */
 void sockaddrtop( struct sockaddr * saddr, char * strptr, size_t len ) {
   struct sockaddr_in *  sa4;
@@ -1338,14 +1250,14 @@ void sockaddrtop( struct sockaddr * saddr, char * strptr, size_t len ) {
 void decodempls(int num, char *packet, struct mplslen *mpls, int offset) {
 
   int i;
-  unsigned int ext_ver, ext_res, ext_chk, obj_hdr_len;
+  unsigned ext_ver, ext_res, ext_chk, obj_hdr_len;
   u_char obj_hdr_class, obj_hdr_type;
 
   /* loosely derived from the traceroute-nanog.c
    * decoding by Jorge Boncompte */
   ext_ver = packet[offset]>>4;
   ext_res = (packet[offset]&15)+ packet[offset+1];
-  ext_chk = ((unsigned int)packet[offset+2]<<8)+packet[offset+3];
+  ext_chk = ((unsigned)packet[offset+2]<<8)+packet[offset+3];
 
   /* Check for ICMP extension header */
   if (ext_ver == 2 && ext_res == 0 && ext_chk != 0 && num >= (offset+6)) {
@@ -1363,7 +1275,7 @@ void decodempls(int num, char *packet, struct mplslen *mpls, int offset) {
 
         /* piece together the 20 byte label value */
         mpls->label[i] = ((unsigned long) (packet[(offset+8)+(i*4)] << 12 & 0xff000) +
-            (unsigned int) (packet[(offset+9)+(i*4)] << 4 & 0xff0) +
+            (unsigned)(packet[(offset+9)+(i*4)] << 4 & 0xff0) +
             (packet[(offset+10)+(i*4)] >> 4 & 0xf));
         mpls->exp[i] = (packet[(offset+10)+(i*4)] >> 1) & 0x7;
         mpls->s[i] = (packet[(offset+10)+(i*4)] & 0x1); /* should be 1 if only one label */
@@ -1401,12 +1313,10 @@ int err_slippage(int sock) {
 }
 
 /* check if we got connection or error on any fds */
-int net_process_tcp_fds(void)
-{
+int net_process_tcp_fds(void) {
   if (!tcp_sockets)
     return -1;
 
-  int at, fd, r, ret = 0;
   struct timeval now;
   uint64_t unow, utime;
 
@@ -1417,26 +1327,29 @@ int net_process_tcp_fds(void)
   gettimeofday(&now, NULL);
   unow = now.tv_sec * 1000000L + now.tv_usec;
 
-  for (at = 0; at < MaxSequence; at++) {
-    fd = tcp_sockets[at];
-    if (fd > 0 && FD_ISSET(fd, &writefd)) {
-//      r = write(fd, "G", 1);
-      errno = err_slippage(fd);
-      r = errno ? 0 : 1; // like write()
-      /* if write was successful, or connection refused we have
-       * (probably) reached the remote address. Anything else happens to the
-       * connection, we write it off to avoid leaking sockets */
-      if (r == 1 || errno == ECONNREFUSED) {
-        net_process_ping(at, mpls, remoteaddress, now);
-        ret = 1;
-//      } else if ((errno != EAGAIN) && (errno != EHOSTUNREACH)) {
-//        sequence[at].transit = 0;
-//        tcp_seq_close(at);
+  int ret = 0;
+  unsigned at;
+  for (at = 0; at < SEQ_MAX; at++) {
+    unsigned fd = tcp_sockets[at];
+    if (fd) {
+      if (FD_ISSET(fd, &writefd)) {
+//        r = write(fd, "G", 1);
+        errno = err_slippage(fd);
+        int r = errno ? 0 : 1; // like write()
+        /* if write was successful, or connection refused we have
+         * (probably) reached the remote address. Anything else happens to the
+         * connection, we write it off to avoid leaking sockets */
+        if (r == 1 || errno == ECONNREFUSED) {
+          net_process_ping(at, mpls, remoteaddress, now);
+          ret = 1;
+//        } else if ((errno != EAGAIN) && (errno != EHOSTUNREACH)) {
+//          sequence[at].transit = 0;
+//          tcp_seq_close(at);
+        }
       }
-    }
-    if (fd > 0) {
       utime = sequence[at].time.tv_sec * 1000000L + sequence[at].time.tv_usec;
       if (unow - utime > timeout) {
+        NETLOG_MSG((LOG_INFO, "close sequence[%d] after %d sec", at, timeout / 1000000));
         sequence[at].transit = 0;
         tcp_seq_close(at);
       }

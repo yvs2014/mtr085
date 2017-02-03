@@ -39,8 +39,8 @@ char *fmt_ipinfo(ip_t *addr);
 char *get_ipinfo(ip_t *addr, int nd);
 void query_ipinfo(void);
 
-//#define ASLOOKUP_DEFAULT	NULL
-#define ASLOOKUP_DEFAULT	"10,2" /* riswhois, ASN */
+#define ASLOOKUP_DEFAULT	NULL	// cymru
+//#define ASLOOKUP_DEFAULT	"10,2"	// riswhois
 #define IPINFO_MAX_ITEMS	25
 int ipinfo_no[IPINFO_MAX_ITEMS];
 int ipinfo_max;
