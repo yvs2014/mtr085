@@ -254,12 +254,12 @@ void process_dns_response(char *buff, int r) {
     if (!(hr = search_hashed_id(header->id)))
         return;
 
-    char host[NAMELEN], *pt;
+    char hostname[NAMELEN], *pt;
     char *txt;
     int exp, size, txtlen, type;
 
     pt = buff + sizeof(HEADER);
-    if ((exp = dn_expand(buff, buff + r, pt, host, sizeof(host))) < 0)
+    if ((exp = dn_expand(buff, buff + r, pt, hostname, sizeof(hostname))) < 0)
         IILOG_ERR((MTR_SYSLOG, "process_dns_response(): dn_expand() failed: %s", strerror(errno)));
 
     pt += exp;
@@ -268,7 +268,7 @@ void process_dns_response(char *buff, int r) {
         IILOG_ERR((MTR_SYSLOG, "process_dns_response(): broken DNS reply"));
 
     pt += INT16SZ; /* class */
-    if ((exp = dn_expand(buff, buff + r, pt, host, sizeof(host))) < 0)
+    if ((exp = dn_expand(buff, buff + r, pt, hostname, sizeof(hostname))) < 0)
         IILOG_ERR((MTR_SYSLOG, "process_dns_response(): second dn_expand() failed: %s", strerror(errno)));
 
     pt += exp;
@@ -993,7 +993,7 @@ int ii_gen_n_open_html(int mode) {
 
     int at, max = net_max();
     for (at = net_min(); at < max; at++) {
-        ip_t *addr = net_addr(at);
+        ip_t *addr = &host[at].addr;
         if (unaddrcmp(addr)) {
 //{ lat: N.M, lng: K.L, title: 'ip (hostname)', delay: 'N msec', desc: 'City, Region, Country'},
             char *lat, *lng;
@@ -1014,10 +1014,10 @@ int ii_gen_n_open_html(int mode) {
                 continue;
             int l = 0;
             l += snprintf(buf + l, sizeof(buf) - l, "{ lat: %s, lng: %s, title: '%s", lat, lng, strlongip(addr));
-            const char *host = dns_lookup(addr);
-            if (host)
-                l += snprintf(buf + l, sizeof(buf) - l, " (%s)", host);
-            l += snprintf(buf + l, sizeof(buf) - l, "', delay: '%.1f msec', desc: \"", net_avg(at) / 1000.);
+            const char *hostname = dns_lookup(addr);
+            if (hostname)
+                l += snprintf(buf + l, sizeof(buf) - l, " (%s)", hostname);
+            l += snprintf(buf + l, sizeof(buf) - l, "', delay: '%.1f msec', desc: \"", host[at].avg / 1000.);
 
             if (city)
                 if (*city)
@@ -1085,12 +1085,12 @@ void query_ipinfo(void) {
       return;
   int at, max = net_max();
   for (at = net_min(); at < max; at++) {
-    ip_t *addr = net_addr(at);
+    ip_t *addr = &host[at].addr;
     if (unaddrcmp(addr)) {
       query_iiaddr(addr);
       int i;
       for (i=0; i < MAXPATH; i++) {
-        ip_t *addrs = net_addrs(at, i);
+        ip_t *addrs = &(host[at].addrs[i]);
         if (unaddrcmp(addrs))
           query_iiaddr(addrs);
       }

@@ -115,7 +115,7 @@ void report_close(void) {
     len_hosts = strlen(HOST);
     AT_HOST_LOOP(
       int nlen;
-      if ((nlen = snprint_addr(name, sizeof(name), net_addr(at))))
+      if ((nlen = snprint_addr(name, sizeof(name), &host[at].addr)))
         if (len_hosts < nlen)
           len_hosts = nlen;
     );
@@ -157,8 +157,8 @@ void report_close(void) {
   );
 
   AT_HOST_LOOP(
-    ip_t *addr = net_addr(at);
-    struct mplslen *mpls = net_mpls(at);
+    ip_t *addr = &host[at].addr;
+    struct mplslen *mpls = &host[at].mpls;
     snprint_addr(name, sizeof(name), addr);
 
 #ifdef IPINFO
@@ -174,13 +174,13 @@ void report_close(void) {
 #endif
 
     len = reportwide ? strlen(buf) : l1;
-#define DFLD_PR(factor) { snprintf(buf + len, sizeof(buf) - len, data_fields[j].format, data_fields[j].net_xxx(at) factor); }
+#define REPORT_FLD1(factor) { snprintf(buf + len, sizeof(buf) - len, data_fields[j].format, net_elem(at, data_fields[j].key) factor); }
     ACTIVE_FLD_LOOP(
       /* 1000.0 is a temporay hack for stats usec to ms, impacted net_loss. */
       if (index(data_fields[j].format, 'f'))
-        DFLD_PR(/1000.0)
+        REPORT_FLD1(/1000.0)
       else
-        DFLD_PR();
+        REPORT_FLD1();
       len += data_fields[j].length;
     );
 
@@ -189,15 +189,15 @@ void report_close(void) {
     /* z is starting at 1 because addrs[0] is the same that addr */
     int z;
     for (z = 1; z < MAXPATH ; z++) {
-      ip_t *addr2 = net_addrs(at, z);
-      struct mplslen *mplss = net_mplss(at, z);
+      ip_t *addr2 = &(host[at].addrs[z]);
+      struct mplslen *mplss = &(host[at].mplss[z]);
       if (!unaddrcmp(addr2))
         break;
       int found = 0;
       int w;
       for (w = 0; w < z; w++)
         /* Ok... checking if there are ips repeated on same hop */
-        if (!addrcmp(addr2, net_addrs(at, w))) {
+        if (!addrcmp(addr2, &(host[at].addrs[w]))) {
            found = 1;
            break;
         }
@@ -223,25 +223,11 @@ void report_close(void) {
   )
 }
 
-void txt_open(void)
-{
-}
-
-
-void txt_close(void)
-{ 
+void txt_close(void) {
   report_close();
 }
 
-
-
-void xml_open(void)
-{
-}
-
-
-void xml_close(void)
-{
+void xml_close(void) {
   int i, j, at, max;
   ip_t *addr;
   char name[81];
@@ -263,7 +249,7 @@ void xml_close(void)
   max = net_max();
   at  = net_min();
   for(; at < max; at++) {
-    addr = net_addr(at);
+    addr = &host[at].addr;
     snprint_addr(name, sizeof(name), addr);
 
     printf("    <HUB COUNT=%d HOST=%s>\n", at+1, name);
@@ -274,47 +260,35 @@ void xml_close(void)
       strcpy(name, "        <%s>");
       strcat(name, data_fields[j].format);
       strcat(name, "</%s>\n");
+#define REPORT_FLD2(factor) { printf(name, data_fields[j].title, net_elem(at, data_fields[j].key) factor, data_fields[j].title ); }
       /* 1000.0 is a temporay hack for stats usec to ms, impacted net_loss. */
-      if( index( data_fields[j].format, 'f' ) ) {
-	printf( name,
-		data_fields[j].title,
-		data_fields[j].net_xxx(at) /1000.0,
-		data_fields[j].title );
-      } else {
-	printf( name,
-		data_fields[j].title,
-		data_fields[j].net_xxx(at),
-		data_fields[j].title );
-      }
+      if (index(data_fields[j].format, 'f'))
+        REPORT_FLD2(/1000.0)
+      else
+        REPORT_FLD2();
     }
     printf("    </HUB>\n");
   }
   printf("</MTR>\n");
 }
 
-
-void csv_open(void)
-{
-}
-
-void csv_close(time_t now)
-{
-  int i, j, at, max;
-  ip_t *addr;
-  char name[81];
-
-  for( i=0; i<MAXFLD; i++ ) {
-      j = fld_index[fld_active[i]];
-      if (j < 0) continue; 
+void csv_close(time_t now) {
+  int i, j;
+  for (i = 0; i < MAXFLD; i++) {
+    j = fld_index[fld_active[i]];
+    if (j < 0)
+      continue;
   }
 
-  max = net_max();
-  at  = net_min();
-  for(; at < max; at++) {
-    addr = net_addr(at);
+  int max = net_max();
+  int at = net_min();
+  for (; at < max; at++) {
+    ip_t *addr = &host[at].addr;
+    int last = host[at].last;
+
+    char name[81];
     snprint_addr(name, sizeof(name), addr);
 
-    int last = net_last(at);
 #ifdef IPINFO
     if (ii_ready())
       printf("MTR.%s;%lld;%s;%s;%d;%s;%s;%d", MTR_VERSION, (long long)now, "OK", Hostname, at+1, name, fmt_ipinfo(addr), last);
@@ -322,17 +296,18 @@ void csv_close(time_t now)
 #endif
       printf("MTR.%s;%lld;%s;%s;%d;%s;%d", MTR_VERSION, (long long)now, "OK", Hostname, at+1, name, last);
 
-    for( i=0; i<MAXFLD; i++ ) {
+    for (i = 0; i < MAXFLD; i++) {
       j = fld_index[fld_active[j]];
-      if (j < 0) continue; 
+      if (j < 0)
+        continue;
 
       /* 1000.0 is a temporay hack for stats usec to ms, impacted net_loss. */
-      if( index( data_fields[j].format, 'f' ) ) {
-	printf( ", %.2f", data_fields[j].net_xxx(at) / 1000.0);
-      } else {
-	printf( ", %d",   data_fields[j].net_xxx(at) );
-      }
+      if (index(data_fields[j].format, 'f'))
+        printf(", %.2f", net_elem(at, data_fields[j].key) / 1000.0);
+      else
+        printf(", %d", net_elem(at, data_fields[j].key));
     }
     printf("\n");
   }
 }
+

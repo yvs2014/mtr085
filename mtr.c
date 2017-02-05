@@ -81,7 +81,7 @@ char *Hostname = NULL;
 char *InterfaceAddress = NULL;
 char  LocalHostname[128];
 char  mtr_args[1024];	// posix/susvn: 4096+
-unsigned int iargs;	// args passed interactively
+unsigned iargs;	// args passed interactively
 int   cpacketsize = 64;          /* default packet size */
 int   bitpattern;
 int   tos;
@@ -100,21 +100,21 @@ char          available_options[MAXFLD];
 
 struct fields data_fields[MAXFLD] = {
   /* key, Remark, Header, Format, Width, CallBackFunc */
-  {' ', "<sp>: Space between fields", " ",  " ",        1, &net_drop  },
-  {'L', "L: Loss Ratio",          "Loss%",  " %4.1f%%", 6, &net_loss  },
-  {'D', "D: Dropped Packets",     "Drop",   " %4d",     5, &net_drop  },
-  {'R', "R: Received Packets",    "Rcv",    " %5d",     6, &net_returned},
-  {'S', "S: Sent Packets",        "Snt",    " %5d",     6, &net_xmit  },
-  {'N', "N: Newest RTT(ms)",      "Last",   " %5.1f",   6, &net_last  },
-  {'B', "B: Min/Best RTT(ms)",    "Best",   " %5.1f",   6, &net_best  },
-  {'A', "A: Average RTT(ms)",     "Avg",    " %5.1f",   6, &net_avg   },
-  {'W', "W: Max/Worst RTT(ms)",   "Wrst",   " %5.1f",   6, &net_worst },
-  {'V', "V: Standard Deviation",  "StDev",  " %5.1f",   6, &net_stdev },
-  {'G', "G: Geometric Mean",      "Gmean",  " %5.1f",   6, &net_gmean },
-  {'J', "J: Current Jitter",      "Jttr",   " %4.1f",   5, &net_jitter},
-  {'M', "M: Jitter Mean/Avg.",    "Javg",   " %4.1f",   5, &net_javg  },
-  {'X', "X: Worst Jitter",        "Jmax",   " %4.1f",   5, &net_jworst},
-  {'I', "I: Interarrival Jitter", "Jint",   " %4.1f",   5, &net_jinta },
+  {' ', "<sp>: Space between fields", " ",  " ",        1},
+  {'L', "L: Loss Ratio",          "Loss%",  " %4.1f%%", 6},
+  {'D', "D: Dropped Packets",     "Drop",   " %4d",     5},
+  {'R', "R: Received Packets",    "Rcv",    " %5d",     6},
+  {'S', "S: Sent Packets",        "Snt",    " %5d",     6},
+  {'N', "N: Newest RTT(ms)",      "Last",   " %5.1f",   6},
+  {'B', "B: Min/Best RTT(ms)",    "Best",   " %5.1f",   6},
+  {'A', "A: Average RTT(ms)",     "Avg",    " %5.1f",   6},
+  {'W', "W: Max/Worst RTT(ms)",   "Wrst",   " %5.1f",   6},
+  {'V', "V: Standard Deviation",  "StDev",  " %5.1f",   6},
+  {'G', "G: Geometric Mean",      "Gmean",  " %5.1f",   6},
+  {'J', "J: Current Jitter",      "Jttr",   " %4.1f",   5},
+  {'M', "M: Jitter Mean/Avg.",    "Javg",   " %4.1f",   5},
+  {'X', "X: Worst Jitter",        "Jmax",   " %4.1f",   5},
+  {'I', "I: Interarrival Jitter", "Jint",   " %4.1f",   5},
   {'\0', NULL, NULL, NULL, 0, NULL}
 };
 

@@ -23,11 +23,8 @@
 
 void report_open(void);
 void report_close(void);
-void txt_open(void);
 void txt_close(void);
-void xml_open(void);
 void xml_close(void);
-void csv_open(void);
 void csv_close(time_t now);
 
 #endif

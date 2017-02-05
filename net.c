@@ -100,32 +100,6 @@ struct IPHeader {
 #define LO_UDPPORT 33433	// start from LO_UDPPORT+1
 #define UDPPORTS 90		// go thru udp:33434-33523 acl
 
-struct nethost {
-  ip_t addr;
-  ip_t addrs[MAXPATH];	/* for multi paths byMin */
-  int xmit;
-  int returned;
-  int sent;
-  int up;
-  long long var;/* variance, could be overflowed */
-  int last;
-  int best;
-  int worst;
-  int avg;	/* average:  addByMin */
-  int gmean;	/* geometirc mean: addByMin */
-  int jitter;	/* current jitter, defined as t1-t0 addByMin */
-/*int jbest;*/	/* min jitter, of cause it is 0, not needed */
-  int javg;	/* avg jitter */
-  int jworst;	/* max jitter */
-  int jinta;	/* estimated variance,? rfc1889's "Interarrival Jitter" */
-  int transit;
-  int saved[SAVED_PINGS];
-  int saved_seq_offset;
-  struct mplslen mpls;
-  struct mplslen mplss[MAXPATH];
-};
-
-
 struct sequence {
   int index;
   int transit;
@@ -141,7 +115,7 @@ unsigned *tcp_sockets;
    reachable) */
 #define MAX_UNKNOWN_HOSTS 5
 
-static struct nethost host[MaxHost];
+struct nethost host[MaxHost];
 static struct sequence sequence[SEQ_MAX];
 static struct timeval reset;
 
@@ -175,7 +149,7 @@ struct sockaddr_in * rsa4 = (struct sockaddr_in *) &remotesockaddr_struct;
 ip_t * sourceaddress;
 ip_t * remoteaddress;
 
-static char localaddr[INET6_ADDRSTRLEN];
+char localaddr[INET6_ADDRSTRLEN];
 
 static int batch_at;
 static int numhosts = 10;
@@ -195,9 +169,7 @@ static int portpid;
 
 /* return the number of microseconds to wait before sending the next
    ping */
-int calc_deltatime (float waittime)
-{
-//  waittime /= numhosts;
+int calc_deltatime(float waittime) {
   int n = numhosts;
   int f = fstTTL - 1;
   if (f)
@@ -266,24 +238,15 @@ void save_sequence(int index, int seq) {
   host[index].saved[SAVED_PINGS - 1] = -1;
 }
 
-int new_icmp_sequence(int index) {
+int new_sequence(int index) {
+  static int max_seqs[] = { [IPPROTO_ICMP] = SEQ_MAX, [IPPROTO_UDP] = UDPPORTS };
   static int next_sequence;
-  int seq = ++next_sequence;
-  if (next_sequence >= SEQ_MAX)
+  int seq = next_sequence++;
+  if (next_sequence >= max_seqs[mtrtype])
     next_sequence = 0;
   save_sequence(index, seq);
   return seq;
 }
-
-int new_udp_sequence(int index) {
-  static int next_sequence;
-  int seq = ++next_sequence;
-  if (next_sequence >= UDPPORTS)
-    next_sequence = 0;
-  save_sequence(index, seq);
-  return seq;
-}
-
 
 int net_tcp_init(void) {
   if (!tcp_sockets)
@@ -458,9 +421,8 @@ void net_send_query(int index) {
     icmp->code     = 0;
     icmp->checksum = 0;
     icmp->id       = mypid;
-    icmp->sequence = new_icmp_sequence(index);
+    icmp->sequence = new_sequence(index);
     icmp->checksum = checksum(icmp, packetsize - iphsize);
-
     gettimeofday(&sequence[icmp->sequence].time, NULL);
     NETLOG_MSG((LOG_INFO, "net_send_icmp(index=%d): sequence=%d", index, icmp->sequence));
   } else if (mtrtype == IPPROTO_UDP) {
@@ -469,7 +431,7 @@ void net_send_query(int index) {
     udp->uh_sport = htons(portpid);
 
     udp->uh_ulen = htons(packetsize - iphsize);
-    int useq = new_udp_sequence(index);
+    int useq = new_sequence(index);
     udp->uh_dport = LO_UDPPORT + useq;
     gettimeofday(&sequence[useq].time, NULL);
     udp->uh_dport = htons(udp->uh_dport);
@@ -699,7 +661,7 @@ void net_process_return(void) {
       if (header->id != (uint16)mypid)
         return;
       sequence = header->sequence;
-      NETLOG_MSG((LOG_INFO, "ICMP: net_process_return(sequence=%d)", sequence));
+      NETLOG_MSG((LOG_INFO, "ICMP: net_process_return(): id=%d, seq=%d", header->id, sequence));
     }
     break;
 
@@ -719,7 +681,7 @@ void net_process_return(void) {
       if (ntohs(uh->uh_sport) != portpid)
         return;
       sequence = ntohs(uh->uh_dport) - LO_UDPPORT;
-      NETLOG_MSG((LOG_INFO, "UDP: net_process_return(sequence=%d)", sequence));
+      NETLOG_MSG((LOG_INFO, "UDP: net_process_return: portpid=%d, seq=%d", portpid, sequence));
     }
     break;
 
@@ -737,123 +699,53 @@ void net_process_return(void) {
 #endif
       }
       sequence = ntohs(th->th_sport);
-      NETLOG_MSG((LOG_INFO, "TCP: net_process_return(sequence=%d)", sequence));
+      NETLOG_MSG((LOG_INFO, "TCP: net_process_return(): sequence=%d", sequence));
     }
     break;
   }
 
-  if (sequence > 0)
+  if (sequence >= 0)
     net_process_ping(sequence, mpls, fromaddress, now);
 }
 
-
-ip_t *net_addr(int at)
-{
-  return (ip_t *)&(host[at].addr);
-}
-
-
-ip_t *net_addrs(int at, int i)
-{
-  return (ip_t *)&(host[at].addrs[i]);
-}
-
-void *net_mpls(int at)
-{
-  return (struct mplslen *)&(host[at].mplss);
-}
-
-void *net_mplss(int at, int i)
-{
-  return (struct mplslen *)&(host[at].mplss[i]);
-}
-
-int net_loss(int at)
-{
-  if ((host[at].xmit - host[at].transit) == 0)
-    return 0;
-  /* times extra 1000 */
-  return 1000*(100 - (100.0 * host[at].returned / (host[at].xmit - host[at].transit)) );
-}
-
-
-int net_drop(int at)
-{
-  return (host[at].xmit - host[at].transit) - host[at].returned;
-}
-
-int net_last(int at)
-{
-  return (host[at].last);
-}
-
-
-int net_best(int at)
-{
-  return (host[at].best);
-}
-
-
-int net_worst(int at)
-{
-  return (host[at].worst);
-}
-
-
-int net_avg(int at)
-{
-  return (host[at].avg);
-}
-
-
-int net_gmean(int at)
-{
-  return (host[at].gmean);
-}
-
-
-int net_stdev(int at)
-{
-  if( host[at].returned > 1 ) {
-    return ( 1000.0 * sqrt( host[at].var/(host[at].returned -1.0) ) );
-  } else {
-    return( 0 );
+int net_elem(int at, char c) {
+  switch (c) {	// mtr.c:data_fields[]
+    case 'D':	// Dropped Packets
+      return (host[at].xmit - host[at].transit) - host[at].returned;
+    case 'L':	// Loss Ratio (times extra 1000)
+      return (host[at].xmit - host[at].transit) ? (1000 * (100 - (100.0 * host[at].returned / (host[at].xmit - host[at].transit)))) : 0;
+    case 'R':	// Received Packets
+      return host[at].returned;
+    case 'S':	// Sent Packets
+      return host[at].xmit;
+    case 'N':	// Newest RTT(ms)
+      return host[at].last;
+    case 'B':	// Min/Best RTT(ms)
+      return host[at].best;
+    case 'A':	// Average RTT(ms)
+      return host[at].avg;
+    case 'W':	// Max/Worst RTT(ms)
+      return host[at].worst;
+    case 'V':	// Standard Deviation
+      return (host[at].returned > 1) ? (1000.0 * sqrt(host[at].var / (host[at].returned -1.0))) : 0;
+    case 'G':	// Geometric Mean
+      return host[at].gmean;
+    case 'J':	// Current Jitter
+      return host[at].jitter;
+    case 'M':	// Jitter Mean/Avg
+      return host[at].javg;
+    case 'X':	// Worst Jitter
+      return host[at].jworst;
+    case 'I':	// Interarrival Jitter
+      return host[at].jinta;
   }
+  return 0;
 }
 
-
-int net_jitter(int at)
-{
-  return (host[at].jitter);
-}
-
-
-int net_jworst(int at)
-{
-  return (host[at].jworst);
-}
-
-
-int net_javg(int at)
-{
-  return (host[at].javg);
-}
-
-
-int net_jinta(int at)
-{
-  return (host[at].jinta);
-}
-
-
-int net_max(void)
-{
+int net_max(void) {
+  int max = 0;
   int at;
-  int max;
-
-  max = 0;
-  /* for(at = 0; at < MaxHost-2; at++) { */
-  for(at = 0; at < maxTTL-1; at++) {
+  for (at = 0; at < (maxTTL - 1) /* (MaxHost - 2) */; at++) {
     if (!addrcmp(&(host[at].addr), remoteaddress)) {
       if (endpoint_mode)
         fstTTL = at + 1;
@@ -864,48 +756,17 @@ int net_max(void)
       max = at + 2;
     }
   }
-
   return max;
 }
 
-
-int net_min (void)
-{
-  return ( fstTTL - 1 );
+int net_min (void) {
+  return (fstTTL - 1);
 }
 
-
-int net_returned(int at)
-{
-  return host[at].returned;
-}
-
-
-int net_xmit(int at)
-{
-  return host[at].xmit;
-}
-
-
-int net_up(int at)
-{
-   return host[at].up;
-}
-
-
-char * net_localaddr (void)
-{
-  return localaddr;
-}
-
-
-void net_end_transit(void)
-{
+void net_end_transit(void) {
   int at;
-
-  for(at = 0; at < MaxHost; at++) {
+  for(at = 0; at < MaxHost; at++)
     host[at].transit = 0;
-  }
 }
 
 int net_send_batch(void) {
@@ -1192,10 +1053,7 @@ int net_set_interfaceaddress (char *InterfaceAddress)
   return 0;
 }
 
-
-
-void net_close(void)
-{
+void net_close(void) {
   if (sendsock4 >= 0) {
     close(sendsock4_icmp);
     close(sendsock4_udp);
@@ -1208,16 +1066,8 @@ void net_close(void)
   if (recvsock6 >= 0) close(recvsock6);
 }
 
-
-int net_waitfd(void)
-{
+int net_waitfd(void) {
   return recvsock;
-}
-
-
-int* net_saved_pings(int at)
-{
-  return host[at].saved;
 }
 
 /* Similar to inet_ntop but uses a sockaddr as it's argument. */

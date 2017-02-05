@@ -103,7 +103,7 @@
 
 extern char LocalHostname[];
 extern char mtr_args[];
-extern unsigned int iargs;
+extern unsigned iargs;
 extern int fstTTL;
 extern int cpacketsize;
 extern int bitpattern;
@@ -297,29 +297,26 @@ int mtr_curses_keyaction(void)
 }
 
 void mtr_fill_data(int at, char *buf) {
-  int i, j;
-  int hd_len;
-
-      /* net_xxx returns times in usecs. Just display millisecs */
-      hd_len = 0;
-      for( i=0; i<MAXFLD; i++ ) {
+  int hd_len = 0;
+  int i;
+  /* net_xxx returns times in usecs. Just display millisecs */
+  for (i = 0; i < MAXFLD; i++) {
 	/* Ignore options that don't exist */
 	/* On the other hand, we now check the input side. Shouldn't happen,
 	   can't be careful enough. */
-	j = fld_index[fld_active[i]];
-	if (j == -1) continue;
+    int j = fld_index[fld_active[i]];
+    if (j == -1)
+      continue;
 
 	/* temporay hack for stats usec to ms... */
-	if( index( data_fields[j].format, 'f' ) ) {
-	  sprintf(buf + hd_len, data_fields[j].format,
-		data_fields[j].net_xxx(at) /1000.0 );
-	} else {
-	  sprintf(buf + hd_len, data_fields[j].format,
-		data_fields[j].net_xxx(at) );
-	}
-	hd_len +=  data_fields[j].length;
-      }
-      buf[hd_len] = 0;
+#define CURSES_FLD(factor) { sprintf(buf + hd_len, data_fields[j].format, net_elem(at, data_fields[j].key) factor); }
+    if (index(data_fields[j].format, 'f'))
+      CURSES_FLD(/1000.0)
+    else
+      CURSES_FLD();
+    hd_len += data_fields[j].length;
+  }
+  buf[hd_len] = 0;
 }
 
 void printw_mpls(struct mplslen *mpls) {
@@ -351,13 +348,13 @@ void mtr_curses_hosts(int startstat) {
   int at;
   for (at = net_min() + display_offset; at < max; at++) {
     printw("%2d. ", at + 1);
-    ip_t *addr = net_addr(at);
+    ip_t *addr = &host[at].addr;
     if (!unaddrcmp(addr)) {
       printw("???\n");
       continue;
     }
 
-    printw_addr(addr, net_up(at));
+    printw_addr(addr, host[at].up);
     { // print stat
       char buf[1024];
       mtr_fill_data(at, buf);
@@ -368,22 +365,22 @@ void mtr_curses_hosts(int startstat) {
     }
     addch('\n');
     if (enablempls)
-      printw_mpls(net_mpls(at));
+      printw_mpls(&host[at].mpls);
 
     /* Multi path */
     int i;
     for (i = 0; i < MAXPATH; i++) {
-      ip_t *addrs = net_addrs(at, i);
+      ip_t *addrs = &(host[at].addrs[i]);
       if (!addrcmp(addrs, addr))
         continue;
       if (!unaddrcmp(addrs))
         break;
 
       printw("    ");
-      printw_addr(addrs, net_up(at));
+      printw_addr(addrs, host[at].up);
       addch('\n');
       if (enablempls)
-        printw_mpls(net_mplss(at, i));
+        printw_mpls(&(host[at].mplss[i]));
     }
   }
   move(2, 0);
@@ -408,34 +405,27 @@ static int dm3_color_base;
 static cchar_t map_na3[3];
 #endif
 
-void mtr_gen_scale(int num_factors, int *scale, double *factors)
-{
-	int *saved, i, max, at;
-	int range;
-
+void mtr_gen_scale(int num_factors, int *scale, double *factors) {
 	low_ms = 1000000;
 	high_ms = -1;
-
-	for (i = 0; i < num_factors; i++) {
-		scale[i] = 0;
-	}
-	max = net_max();
+	int max = net_max();
+	int at;
 	for (at = display_offset; at < max; at++) {
-		saved = net_saved_pings(at);
+		int i;
 		for (i = 0; i < SAVED_PINGS; i++) {
-			if (saved[i] < 0) continue;
-			if (saved[i] < low_ms) {
-				low_ms = saved[i];
-			}
-			if (saved[i] > high_ms) {
-				high_ms = saved[i];
-			}
+			int saved = host[at].saved[i];
+			if (saved < 0)
+				continue;
+			if (saved < low_ms)
+				low_ms = saved;
+			if (saved > high_ms)
+				high_ms = saved;
 		}
 	}
-	range = high_ms - low_ms;
-	for (i = 0; i < num_factors; i++) {
+	int range = high_ms - low_ms;
+	int i;
+	for (i = 0; i < num_factors; i++)
 		scale[i] = low_ms + ((double)range * factors[i]);
-	}
 }
 
 void mtr_gen_scale_gc(void) {
@@ -548,13 +538,13 @@ void mtr_curses_graph(int startstat, int cols)
 	for (at = net_min() + display_offset; at < max; at++) {
 		printw("%2d. ", at+1);
 
-		addr = net_addr(at);
-		if (!addr) {
+		addr = &host[at].addr;
+		if (!addr || !unaddrcmp(addr)) {
 			printw("???\n");
 			continue;
 		}
 
-		if (! net_up(at))
+		if (!host[at].up)
 			attron(A_BOLD);
 		if (unaddrcmp(addr)) {
 #ifdef IPINFO
@@ -571,16 +561,15 @@ void mtr_curses_graph(int startstat, int cols)
 		move(y, startstat);
 
 		addch(' ');
-		int *saved = net_saved_pings(at);
 		int i;
 #ifdef UNICODE
 		if (display_mode == 3)
 			for (i = SAVED_PINGS - cols; i < SAVED_PINGS; i++)
-				add_wch(mtr_saved_cc(saved[i]));
+				add_wch(mtr_saved_cc(host[at].saved[i]));
 		else
 #endif
 			for (i = SAVED_PINGS - cols; i < SAVED_PINGS; i++)
-				addch(mtr_saved_ch(saved[i]));
+				addch(mtr_saved_ch(host[at].saved[i]));
 		addch('\n');
 	}
 }
@@ -671,7 +660,7 @@ void mtr_curses_redraw(void) {
   printw("%*s", (getmaxx(stdscr) + strlen(buf)) / 2, buf);
   attroff(A_BOLD);
 
-  mvprintw(1, 0, "%s (%s)", LocalHostname, net_localaddr());
+  mvprintw(1, 0, "%s (%s)", LocalHostname, localaddr);
   time(&t);
   mvprintw(1, maxx-25, ctime(&t));
 

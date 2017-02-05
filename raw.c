@@ -35,33 +35,20 @@
 
 static int havename[MaxHost];
 
-
-#if 0
-static char *addr_to_str(ip_t addr)
-{
-  static char buf[20];
-
-  sprintf (buf, "%s", strlongip( &addr ));
-  return buf;
-}
-#endif
-
-void raw_rawping (int host, int msec)
-{
-  if (!havename[host]) {
-    const char *name = dns_lookup(net_addr(host));
+void raw_rawping (int at, int msec) {
+  if (!havename[at]) {
+    const char *name = dns_lookup(&host[at].addr);
     if (name) {
-      havename[host]++;
-      printf ("d %d %s\n", host, name);
+      havename[at]++;
+      printf ("d %d %s\n", at, name);
     }
   }
-  printf ("p %d %d\n", host, msec);
-  fflush (stdout); 
+  printf("p %d %d\n", at, msec);
+  fflush(stdout);
 }
 
-
-void raw_rawhost (int host, ip_t * ip_addr)
-{
-  printf ("h %d %s\n", host, strlongip( ip_addr ));
-  fflush (stdout); 
+void raw_rawhost (int at, ip_t * ip_addr) {
+  printf("h %d %s\n", at, strlongip(ip_addr));
+  fflush(stdout);
 }
+

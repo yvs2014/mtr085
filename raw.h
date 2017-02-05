@@ -22,7 +22,7 @@
 #define RAW_H
 
 /*  Prototypes for raw.c  */
-void raw_rawping(int host, int msec);
-void raw_rawhost(int host, ip_t * addr);
+void raw_rawping(int at, int msec);
+void raw_rawhost(int at, ip_t *addr);
 
 #endif

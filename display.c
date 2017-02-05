@@ -56,15 +56,6 @@ void display_open(void) {
   case DisplayReport:
     report_open();
     break;
-  case DisplayTXT:
-    txt_open();
-    break;
-  case DisplayXML:
-    xml_open();
-    break;
-  case DisplayCSV:
-    csv_open();
-    break;
 #ifdef CURSES
   case DisplayCurses:
     mtr_curses_open();  

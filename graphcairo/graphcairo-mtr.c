@@ -336,10 +336,10 @@ void gc_redraw(void) {
 	lasttime = now;
 
 	if (dt < timeout) {
-		int pings = net_xmit(min);
+		int pings = host[min].xmit;
 		for (at = min + 1; at < max; at++)
-			if (net_xmit(at) != pings)
-					return;
+			if (host[at].xmit != pings)
+				return;
 		if (pings > num_pings)
 			num_pings = pings;
 		else
@@ -360,21 +360,20 @@ void gc_redraw(void) {
 	}
 
 	for (i = 0, at = min; i < hops; i++, at++) {
-		ip_t *addr = net_addr(at);
+		ip_t *addr = &host[at].addr;
 
 		if (unaddrcmp(addr)) {
-			int *saved = net_saved_pings(at);
 			int saved_ndx = SAVED_PINGS - 2;	// waittime ago
 			if (params.jitter_graph) {
 				// jitter, defined as "tN - tN-1" (net.c)
-				if ((saved[saved_ndx] < 0) || (saved[saved_ndx - 1] < 0))	// unsent, unknown, etc.
+				if ((host[at].saved[saved_ndx] < 0) || (host[at].saved[saved_ndx - 1] < 0))	// unsent, unknown, etc.
 					data[i] = -1;
 				else {
-					int saved_jttr = saved[saved_ndx] - saved[saved_ndx - 1];
+					int saved_jttr = host[at].saved[saved_ndx] - host[at].saved[saved_ndx - 1];
 					data[i] = (saved_jttr < 0) ? -saved_jttr : saved_jttr;
 				}
 			} else
-				data[i] = (saved[saved_ndx] >= 0) ? saved[saved_ndx] : -1;
+				data[i] = (host[at].saved[saved_ndx] >= 0) ? host[at].saved[saved_ndx] : -1;
 
 			if (params.enable_legend) {
 				// line+hop
@@ -392,7 +391,7 @@ void gc_redraw(void) {
 					if (display_mode == 3) {
 						int j;
 						for (j = SAVED_PINGS - curses_cols; j < SAVED_PINGS; j++) {
-							*(wchar_t*)pos = mtr_curses_saved_wch(saved[j]);
+							*(wchar_t*)pos = mtr_curses_saved_wch(host[at].saved[j]);
 							pos += sizeof(wchar_t);
 						}
 						*(wchar_t*)pos = L'\0';
@@ -401,7 +400,7 @@ void gc_redraw(void) {
 					{
 						int j;
 						for (j = SAVED_PINGS - curses_cols; j < SAVED_PINGS; j++)
-							*pos++ = mtr_curses_saved_ch(saved[j]);
+							*pos++ = mtr_curses_saved_ch(host[at].saved[j]);
 						*pos = 0;
 					}
 				} else
@@ -410,13 +409,13 @@ void gc_redraw(void) {
 
 				// mpls
 				if (enablempls)
-					gc_print_mpls(i, data[i], net_mpls(at));
+					gc_print_mpls(i, data[i], &host[at].mpls);
 
 				// multipath
 				if (params.enable_multipath) {
 					int j;
 					for (j = 0; j < MAXPATH; j++) {
-						ip_t *addrs = net_addrs(at, j);
+						ip_t *addrs = &(host[at].addrs[j]);
 						if (!addrcmp(addrs, addr))
 							continue;
 						if (!unaddrcmp(addrs))
@@ -424,7 +423,7 @@ void gc_redraw(void) {
 						fill_hostinfo(at, addrs);
 						cr_print_host(i, data[i], buf, NULL);
 						if (enablempls)	// multipath+mpls
-							gc_print_mpls(i, data[i], net_mplss(at, j));
+							gc_print_mpls(i, data[i], &(host[at].mplss[j]));
 					}
 				}
 			}

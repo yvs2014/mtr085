@@ -45,36 +45,12 @@ void net_process_return(void);
 
 int net_max(void);
 int net_min(void);
-ip_t * net_addr(int at);
-void * net_mpls(int at);
-void * net_mplss(int, int);
-int net_loss(int at);
-int net_drop(int at);
-int net_last(int at);
-int net_best(int at);
-int net_worst(int at);
-int net_avg(int at);
-int net_gmean(int at);
-int net_stdev(int at);
-int net_jitter(int at);
-int net_jworst(int at);
-int net_javg(int at);
-int net_jinta(int at);
-ip_t * net_addrs(int at, int i);
-char *net_localaddr(void);
-
+int net_elem(int at, char c);
 int net_send_batch(void);
 void net_end_transit(void);
-
 int calc_deltatime (float WaitTime);
 
-int net_returned(int at);
-int net_xmit(int at);
-
-int net_up(int at);
-
 #define SAVED_PINGS 200
-int* net_saved_pings(int at);
 int net_duplicate(int at, int seq);
 int net_process_tcp_fds(void);
 int net_tcp_init(void);
@@ -106,24 +82,6 @@ const char *strlongip(ip_t *ip);
 /* XXX This doesn't really belong in this header file, but as the
    right c-files include it, it will have to do for now. */
 
-/* dynamic field drawing */
-struct fields {
-  const unsigned char key;
-  const char *descr;
-  const char *title;
-  const char *format;
-  int length;
-  int (*net_xxx)();
-};
-
-extern struct fields data_fields[MAXFLD];
-
-
-/* keys: the value in the array is the index number in data_fields[] */
-extern int fld_index[];
-extern unsigned char fld_active[];
-extern char available_options[];
-
 /* MPLS label object */
 struct mplslen {
   unsigned long label[MAXLABELS]; /* label value */
@@ -132,6 +90,47 @@ struct mplslen {
   char s[MAXLABELS]; /* bottom of stack */
   char labels; /* how many labels did we get? */
 };
+
+struct nethost {
+  ip_t addr;
+  ip_t addrs[MAXPATH];	/* for multi paths byMin */
+  int xmit;
+  int returned;
+  int sent;
+  int up;
+  long long var;/* variance, could be overflowed */
+  int last;
+  int best;
+  int worst;
+  int avg;	/* average:  addByMin */
+  int gmean;	/* geometirc mean: addByMin */
+  int jitter;	/* current jitter, defined as t1-t0 addByMin */
+  int javg;	/* avg jitter */
+  int jworst;	/* max jitter */
+  int jinta;	/* estimated variance,? rfc1889's "Interarrival Jitter" */
+  int transit;
+  int saved[SAVED_PINGS];
+  int saved_seq_offset;
+  struct mplslen mpls;
+  struct mplslen mplss[MAXPATH];
+};
+extern struct nethost host[];
+
+/* dynamic field drawing */
+struct fields {
+  const unsigned char key;
+  const char *descr;
+  const char *title;
+  const char *format;
+  int length;
+};
+extern struct fields data_fields[];
+
+/* keys: the value in the array is the index number in data_fields[] */
+extern int fld_index[];
+extern unsigned char fld_active[];
+extern char available_options[];
+extern char localaddr[];
 
 void decodempls(int, char *, struct mplslen *, int);
 

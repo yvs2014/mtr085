@@ -43,7 +43,10 @@ extern int DisplayMode;
 extern int MaxPing;
 extern int ForceMaxPing;
 extern float WaitTime;
-extern unsigned int iargs;
+extern unsigned iargs;
+#ifdef IPINFO
+extern int enable_ipinfo;
+#endif
 
 static struct timeval intervaltime;
 
@@ -262,9 +265,13 @@ void select_loop(void) {
 #ifdef IPINFO
         case ActionAS:
         case ActionII:
+          ii_action(action);
           // 3,4 bits: ASN Lookup, IPInfo
-          TGLBIT(iargs, (action == ActionAS) ? 3 : 4);
-          CLRBIT(iargs, (action == ActionAS) ? 4 : 3);
+          CLRBIT(iargs, 3);
+          CLRBIT(iargs, 4);
+          if (enable_ipinfo)
+            SETBIT(iargs, (action == ActionAS) ? 3 : 4);
+          break;
         case ActionII_Map:
           ii_action(action);
           break;

@@ -65,19 +65,19 @@ void split_redraw(void) {
 
   int at;
   for (at = net_min() + display_offset; at < max; at++) {
-    ip_t *addr = net_addr(at);
+    ip_t *addr = &host[at].addr;
     printf("%2d", at + 1);
     if (unaddrcmp(addr)) {
       const char *name = dns_lookup(addr);
       printf(SPLIT_SEPARATOR "%s", name ? name : strlongip(addr));
       if (show_ips)
         printf(SPLIT_SEPARATOR "%s", strlongip(addr));
-      printf(SPLIT_SEPARATOR "%.1f", net_loss(at) / 1000.);
-      printf(SPLIT_SEPARATOR "%d", net_returned(at));
-      printf(SPLIT_SEPARATOR "%d", net_xmit(at));
-      printf(SPLIT_SEPARATOR "%.1f", net_best(at) / 1000.);
-      printf(SPLIT_SEPARATOR "%.1f", net_avg(at) / 1000.);
-      printf(SPLIT_SEPARATOR "%.1f", net_worst(at) / 1000.);
+      printf(SPLIT_SEPARATOR "%.1f", net_elem(at, 'L') / 1000.);
+      printf(SPLIT_SEPARATOR "%d", host[at].returned);
+      printf(SPLIT_SEPARATOR "%d", host[at].xmit);
+      printf(SPLIT_SEPARATOR "%.1f", host[at].best / 1000.);
+      printf(SPLIT_SEPARATOR "%.1f", host[at].avg / 1000.);
+      printf(SPLIT_SEPARATOR "%.1f", host[at].worst / 1000.);
 #ifdef IPINFO
       if (ii_ready())
         split_ipinfo_print(addr);
@@ -86,7 +86,7 @@ void split_redraw(void) {
 
       int i;
       for (i = 0; i < MAXPATH; i++) {	// multipath
-        ip_t *addrs = net_addrs(at, i);
+        ip_t *addrs = &(host[at].addrs[i]);
         if (!addrcmp(addrs, addr))
           continue;
         if (!unaddrcmp(addrs))
