@@ -8,7 +8,6 @@ install-exec-hook:
 mtr_SOURCES = mtr.c \
               net.c net.h \
               dns.c dns.h \
-              raw.c raw.h \
               display.c display.h \
               report.c report.h \
               select.c select.h
@@ -65,7 +64,7 @@ BUILT_SOURCES = version.h
 version.h: version.h.tmp Makefile $(mtr_SOURCES)
 	@cat version.h.tmp > $@; \
 	if [ -d .git ] && [ -n "$$(which git)" ]; then \
-	  xver=".$$(git rev-list HEAD | sed '/^97af563/q' | wc -l)"; \
+	  xver=".$$(git rev-list HEAD | sed '/^97af563/q' | sed -un '$$=')"; \
 	  sed \
 	    -e "/#define *MTR_VERSION */{s/\"\([^\"]*\)\"/\"\1$$xver\"/;}" \
 	    version.h.tmp > $@; \

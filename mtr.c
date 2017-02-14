@@ -99,9 +99,9 @@ char          available_options[MAXFLD];
 
 
 struct fields data_fields[MAXFLD] = {
-  /* key, Remark, Header, Format, Width, CallBackFunc */
+  /* key, Remark, Header, Format, Width */
   {' ', "<sp>: Space between fields", " ",  " ",        1},
-  {'L', "L: Loss Ratio",          "Loss%",  " %4.1f%%", 6},
+  {'L', "L: Loss Ratio",          "Loss",   " %4.1f%%", 6},
   {'D', "D: Dropped Packets",     "Drop",   " %4d",     5},
   {'R', "R: Received Packets",    "Rcv",    " %5d",     6},
   {'S', "S: Sent Packets",        "Snt",    " %5d",     6},
@@ -115,7 +115,7 @@ struct fields data_fields[MAXFLD] = {
   {'M', "M: Jitter Mean/Avg.",    "Javg",   " %4.1f",   5},
   {'X', "X: Worst Jitter",        "Jmax",   " %4.1f",   5},
   {'I', "I: Interarrival Jitter", "Jint",   " %4.1f",   5},
-  {'\0', NULL, NULL, NULL, 0, NULL}
+  {'\0', NULL, NULL, NULL, 0}
 };
 
 typedef struct names {
@@ -238,15 +238,11 @@ static void unlock(FILE *f) {
         perror("fcntl()");
 }
 
+void init_fld_options (void) {
+  memset(fld_index, -1, sizeof(fld_index));
 
-void init_fld_options (void)
-{
   int i;
-
-  for (i=0;i < 256;i++)
-    fld_index[i] = -1;
-
-  for (i=0;data_fields[i].key != 0;i++) {
+  for (i = 0; data_fields[i].key; i++) {
     available_options[i] = data_fields[i].key;
     fld_index[data_fields[i].key] = i;
   }
@@ -258,9 +254,8 @@ static struct option long_options[] = {
   { "show-ips",	0, 0, 'b' },
   { "bitpattern",	1, 0, 'B' },	/* overload b>255, ->rand(0,255) */
   { "report-cycles",	1, 0, 'c' },
-  { "csv",	0, 0, 'C' },
 #if defined(CURSES) || defined(GRAPHCAIRO)
-  { "displaymode",	1, 0, 'd' },
+  { "display",	1, 0, 'd' },
 #endif
   { "mpls",	0, 0, 'e' },
   { "first-ttl",	1, 0, 'f' },	/* -f & -m are borrowed from traceroute */
@@ -269,7 +264,9 @@ static struct option long_options[] = {
   { "graphcairo",	1, 0, 'G' },
 #endif
   { "interval",	1, 0, 'i' },
-  { "raw",	0, 0, 'l' },
+#if defined(OUTPUT_FORMAT_CSV) || defined(OUTPUT_FORMAT_RAW) || defined(OUTPUT_FORMAT_TXT) || defined(OUTPUT_FORMAT_XML)
+  { "output",	1, 0, 'l' },
+#endif
   { "max-ttl",	1, 0, 'm' },
   { "no-dns",	0, 0, 'n' },
   { "order",	1, 0, 'o' },	/* fileds to display & their order */
@@ -284,7 +281,6 @@ static struct option long_options[] = {
   { "udp",	0, 0, 'u' },	/* UDP (default is ICMP) */
   { "version",	0, 0, 'v' },
   { "report-wide",	0, 0, 'w' },
-  { "xml",	0, 0, 'x' },
 #ifdef IPINFO
   { "ipinfo",	1, 0, 'y' },
   { "aslookup",	0, 0, 'z' },
@@ -332,6 +328,22 @@ char *get_opt_desc(char opt) {
     case 's': return "BYTES";
     case 'o': return "FIELDS";
     case 'F': return "FILE";
+#if defined(OUTPUT_FORMAT_CSV) || defined(OUTPUT_FORMAT_RAW) || defined(OUTPUT_FORMAT_TXT) || defined(OUTPUT_FORMAT_XML)
+    case 'l': return ""
+#ifdef OUTPUT_FORMAT_CSV
+" CSV"
+#endif
+#ifdef OUTPUT_FORMAT_RAW
+" RAW"
+#endif
+#ifdef OUTPUT_FORMAT_TXT
+" TXT"
+#endif
+#ifdef OUTPUT_FORMAT_XML
+" XML"
+#endif
+;
+#endif
 #ifdef IPINFO
     case 'y': return "ORIGIN,FIELDS";
 #endif
@@ -389,15 +401,36 @@ void parse_arg(int argc, char **argv) {
       DisplayMode = DisplaySplit;
       break;
 #endif
+#if defined(OUTPUT_FORMAT_CSV) || defined(OUTPUT_FORMAT_RAW) || defined(OUTPUT_FORMAT_TXT) || defined(OUTPUT_FORMAT_XML)
     case 'l':
-      DisplayMode = DisplayRaw;
+      switch (tolower((int)optarg[0])) {
+#ifdef OUTPUT_FORMAT_CSV
+        case 'c':
+          DisplayMode = DisplayCSV;
+          break;
+#endif
+#ifdef OUTPUT_FORMAT_RAW
+        case 'r':
+          DisplayMode = DisplayRaw;
+          enable_raw = 1;
+          break;
+#endif
+#ifdef OUTPUT_FORMAT_TXT
+        case 't':
+          DisplayMode = DisplayTXT;
+          break;
+#endif
+#ifdef OUTPUT_FORMAT_XML
+        case 'x':
+          DisplayMode = DisplayXML;
+          break;
+#endif
+        default:
+          usage(argv[0]);
+          exit(-1);
+      }
       break;
-    case 'C':
-      DisplayMode = DisplayCSV;
-      break;
-    case 'x':
-      DisplayMode = DisplayXML;
-      break;
+#endif
 #if defined(CURSES) || defined(GRAPHCAIRO)
     case 'd':
       display_mode = ((atoi(optarg)) & ~8) % display_mode_max;
@@ -536,16 +569,25 @@ void parse_arg(int argc, char **argv) {
     }
   }
 
-  if (DisplayMode == DisplayReport ||
-      DisplayMode == DisplayTXT ||
-      DisplayMode == DisplayXML ||
-      DisplayMode == DisplayRaw ||
-      DisplayMode == DisplayCSV)
-    Interactive = 0;
+  switch (DisplayMode) {
+    case DisplayReport:
+#ifdef OUTPUT_FORMAT_CSV
+    case DisplayCSV:
+#endif
+#ifdef OUTPUT_FORMAT_RAW
+    case DisplayRaw:
+#endif
+#ifdef OUTPUT_FORMAT_TXT
+    case DisplayTXT:
+#endif
+#ifdef OUTPUT_FORMAT_XML
+    case DisplayXML:
+#endif
+      Interactive = 0;
+  }
 
   if (optind > argc - 1)
     return;
-
 }
 
 

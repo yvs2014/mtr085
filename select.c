@@ -139,13 +139,24 @@ void select_loop(void) {
 	rv = select(maxfd, &readfd, p_writefd, NULL, &selecttime);
 
       } else {
-	if(Interactive) display_redraw();
+        if (Interactive)
+          display_redraw();
 #ifdef IPINFO
-	if (DisplayMode == DisplayReport)
-	  if (ii_ready())
-            query_ipinfo();
+        if (ii_ready())
+          switch (DisplayMode) {
+            case DisplayReport:
+#ifdef OUTPUT_FORMAT_CSV
+            case DisplayCSV:
 #endif
-
+#ifdef OUTPUT_FORMAT_TXT
+            case DisplayTXT:
+#endif
+#ifdef OUTPUT_FORMAT_XML
+            case DisplayXML:
+#endif
+              query_ipinfo();
+          }
+#endif
 	gettimeofday(&thistime, NULL);
 
 	if(thistime.tv_sec > lasttime.tv_sec + intervaltime.tv_sec ||

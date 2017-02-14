@@ -29,7 +29,6 @@
 #endif
 #include "report.h"
 #include "select.h"
-#include "raw.h"
 #include "dns.h"
 #ifdef IPINFO
 #include "ipinfo.h"
@@ -80,15 +79,21 @@ void display_close(time_t now) {
   case DisplayReport:
     report_close();
     break;
+#ifdef OUTPUT_FORMAT_TXT
   case DisplayTXT:
     txt_close();
     break;
+#endif
+#ifdef OUTPUT_FORMAT_XML
   case DisplayXML:
     xml_close();
     break;
+#endif
+#ifdef OUTPUT_FORMAT_CSV
   case DisplayCSV:
     csv_close(now);
     break;
+#endif
 #ifdef CURSES
   case DisplayCurses:
     mtr_curses_close();
@@ -145,45 +150,23 @@ int display_keyaction(void) {
   return 0;
 }
 
-void display_rawping(int host, int msec) {
-  switch(DisplayMode) {
-  case DisplayReport:
-  case DisplayTXT:
-  case DisplayXML:
-  case DisplayCSV:
-  case DisplaySplit:
-  case DisplayCurses:
-    break;
-  case DisplayRaw:
-    raw_rawping (host, msec);
-    break;
-  }
-}
-
-void display_rawhost(int host, ip_t *ip_addr) {
-  switch(DisplayMode) {
-  case DisplayReport:
-  case DisplayTXT:
-  case DisplayXML:
-  case DisplayCSV:
-  case DisplaySplit:
-  case DisplayCurses:
-    break;
-  case DisplayRaw:
-    raw_rawhost (host, ip_addr);
-    break;
-  }
-}
-
 void display_loop(void) {
   switch(DisplayMode) {
   case DisplayReport:
-  case DisplayTXT:
-  case DisplayXML:
+#ifdef OUTPUT_FORMAT_CSV
   case DisplayCSV:
+#endif
+#ifdef OUTPUT_FORMAT_RAW
+  case DisplayRaw:
+#endif
+#ifdef OUTPUT_FORMAT_TXT
+  case DisplayTXT:
+#endif
+#ifdef OUTPUT_FORMAT_XML
+  case DisplayXML:
+#endif
   case DisplaySplit:
   case DisplayCurses:
-  case DisplayRaw:
 #ifdef GRAPHCAIRO
   case DisplayGraphCairo:
 #endif

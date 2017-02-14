@@ -20,11 +20,13 @@
 
 #include <sys/types.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <netdb.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
 #include <string.h>
 #include <strings.h>
+#include <ctype.h>
 #include <time.h>
 
 #include "mtr.h"
@@ -40,26 +42,22 @@
 
 extern char LocalHostname[];
 extern char *Hostname;
-extern int cpacketsize;
+extern int packetsize;
 extern int bitpattern;
 extern int tos;
 extern int MaxPing;
 extern int reportwide;
 
 
-char *get_time_string (void) 
-{
-  time_t now; 
-  char *t;
-  now = time (NULL);
-  t = ctime (&now);
-  t [ strlen (t) -1] = 0; // remove the trailing newline
+char *get_time_string(time_t now) {
+  char *t = ctime(&now);
+  t[strlen(t) - 1] = 0; // remove the trailing newline
   return t;
 }
 
 void report_open(void) {
   printf("Local host: %s\n", LocalHostname);
-  printf("Start time: %s\n", get_time_string());
+  printf("Start time: %s\n", get_time_string(time(NULL)));
 }
 
 static size_t snprint_addr(char *dst, size_t dst_len, ip_t *addr) {
@@ -91,7 +89,7 @@ void print_mpls(struct mplslen *mpls) {
   int i; \
   for (i=0; i < MAXFLD; i++) { \
     int j = fld_index[fld_active[i]]; \
-    if (j < 0) \
+    if (j <= 0) \
       continue; \
     statement; \
   } \
@@ -106,8 +104,8 @@ void print_mpls(struct mplslen *mpls) {
 }
 
 void report_close(void) {
-  static char buf[1024];
-  static char name[81];
+  static char buf[MAXDNAME];
+  static char name[MAXDNAME];
   int len_hosts;
 #define HOST	"Host"
 
@@ -223,91 +221,133 @@ void report_close(void) {
   )
 }
 
+#ifdef OUTPUT_FORMAT_TXT
 void txt_close(void) {
   report_close();
 }
+#endif
 
+#ifdef OUTPUT_FORMAT_XML
+#define XML_MARGIN1	4
+#define XML_MARGIN2	8
 void xml_close(void) {
-  int i, j, at, max;
-  ip_t *addr;
-  char name[81];
+  printf("<?xml version=\"1.0\"?>\n");
+  printf("<MTR SRC=\"%s\" DST=\"%s\"", LocalHostname, Hostname);
+  printf(" TOS=\"0x%X\"", tos);
+  printf(" PSIZE=\"%d\"", packetsize);
+  printf(" BITPATTERN=\"0x%02X\"", (unsigned char) abs(bitpattern));
+  printf(" TESTS=\"%d\">\n", MaxPing);
 
-  printf("<MTR SRC=%s DST=%s", LocalHostname, Hostname);
-  printf(" TOS=0x%X", tos);
-  if(cpacketsize >= 0) {
-    printf(" PSIZE=%d", cpacketsize);
-  } else {
-    printf(" PSIZE=rand(%d-%d)",MINPACKET, -cpacketsize);
-  }
-  if( bitpattern>=0 ) {
-    printf(" BITPATTERN=0x%02X", (unsigned char)(bitpattern));
-  } else {
-    printf(" BITPATTERN=rand(0x00-FF)");
-  }
-  printf(" TESTS=%d>\n", MaxPing);
+  char name[MAXDNAME];
+  int at, max = net_max();
+  for (at = net_min(); at < max; at++) {
+    snprint_addr(name, sizeof(name), &host[at].addr);
+    printf("%*s<HUB COUNT=\"%d\" HOST=\"%s\">\n", XML_MARGIN1, " ", at + 1, name);
 
-  max = net_max();
-  at  = net_min();
-  for(; at < max; at++) {
-    addr = &host[at].addr;
-    snprint_addr(name, sizeof(name), addr);
+    int i;
+    for (i=0; i < MAXFLD; i++) {
+      int j = fld_index[fld_active[i]];
+      if (j <= 0)
+        continue;
 
-    printf("    <HUB COUNT=%d HOST=%s>\n", at+1, name);
-    for( i=0; i<MAXFLD; i++ ) {
-      j = fld_index[fld_active[i]];
-      if (j < 0) continue;
-
-      strcpy(name, "        <%s>");
+      strcpy(name, "%*s<%s>");
       strcat(name, data_fields[j].format);
       strcat(name, "</%s>\n");
-#define REPORT_FLD2(factor) { printf(name, data_fields[j].title, net_elem(at, data_fields[j].key) factor, data_fields[j].title ); }
+#define REPORT_FLD2(factor) { printf(name, XML_MARGIN2, " ", data_fields[j].title, \
+  net_elem(at, data_fields[j].key) factor, data_fields[j].title ); }
       /* 1000.0 is a temporay hack for stats usec to ms, impacted net_loss. */
       if (index(data_fields[j].format, 'f'))
         REPORT_FLD2(/1000.0)
       else
         REPORT_FLD2();
     }
-    printf("    </HUB>\n");
+#ifdef IPINFO
+      if (ii_ready())
+        printf("%*s<IPInfo>%s</IPInfo>\n", XML_MARGIN2, " ", fmt_ipinfo(&host[at].addr));
+#endif
+    printf("%*s</HUB>\n", XML_MARGIN1, " ");
   }
   printf("</MTR>\n");
 }
+#endif
+
+#ifdef OUTPUT_FORMAT_CSV
+#define CSV_SEPARATOR	";"
+void prupper(const char *str) {
+  while (*str)
+    putchar(toupper((int) *str++));
+}
 
 void csv_close(time_t now) {
-  int i, j;
+  printf("PROGRAM" CSV_SEPARATOR "TIME" CSV_SEPARATOR "DESTINATION" CSV_SEPARATOR "HOP"
+    CSV_SEPARATOR "STATUS" CSV_SEPARATOR "HOSTNAME/IP");
+#ifdef IPINFO
+  if (ii_ready())
+    printf(CSV_SEPARATOR "IPINFO");
+#endif
+  int i;
   for (i = 0; i < MAXFLD; i++) {
-    j = fld_index[fld_active[i]];
-    if (j < 0)
+    int j = fld_index[fld_active[i]];
+    if (j <= 0)
       continue;
+    printf(CSV_SEPARATOR);
+    prupper(data_fields[j].title);
   }
+  printf("\n");
 
-  int max = net_max();
-  int at = net_min();
-  for (; at < max; at++) {
+  char name[MAXDNAME];
+  int at, max = net_max();
+  for (at = net_min(); at < max; at++) {
     ip_t *addr = &host[at].addr;
-    int last = host[at].last;
-
-    char name[81];
     snprint_addr(name, sizeof(name), addr);
 
+    printf("mtr-%s", MTR_VERSION);
+    printf(CSV_SEPARATOR "%s", get_time_string(now));
+    printf(CSV_SEPARATOR "%s", Hostname);
+    printf(CSV_SEPARATOR "%d", at + 1);
+    printf(CSV_SEPARATOR "%s", host[at].up ? "up" : "down");
+    printf(CSV_SEPARATOR "%s", name);
 #ifdef IPINFO
     if (ii_ready())
-      printf("MTR.%s;%lld;%s;%s;%d;%s;%s;%d", MTR_VERSION, (long long)now, "OK", Hostname, at+1, name, fmt_ipinfo(addr), last);
-    else
+      printf(CSV_SEPARATOR "%s", fmt_ipinfo(addr));
 #endif
-      printf("MTR.%s;%lld;%s;%s;%d;%s;%d", MTR_VERSION, (long long)now, "OK", Hostname, at+1, name, last);
 
+    int i;
     for (i = 0; i < MAXFLD; i++) {
-      j = fld_index[fld_active[j]];
-      if (j < 0)
+      int j = fld_index[fld_active[i]];
+      if (j <= 0)
         continue;
 
       /* 1000.0 is a temporay hack for stats usec to ms, impacted net_loss. */
       if (index(data_fields[j].format, 'f'))
-        printf(", %.2f", net_elem(at, data_fields[j].key) / 1000.0);
+        printf(CSV_SEPARATOR "%.2f", net_elem(at, data_fields[j].key) / 1000.0);
       else
-        printf(", %d", net_elem(at, data_fields[j].key));
+        printf(CSV_SEPARATOR "%d", net_elem(at, data_fields[j].key));
     }
     printf("\n");
   }
 }
+#endif
+
+#ifdef OUTPUT_FORMAT_RAW
+int enable_raw;
+static int havename[MaxHost];
+
+void raw_rawping (int at, int msec) {
+  if (!havename[at]) {
+    const char *name = dns_lookup(&host[at].addr);
+    if (name) {
+      havename[at]++;
+      printf("d %d %s\n", at, name);
+    }
+  }
+  printf("p %d %d\n", at, msec);
+  fflush(stdout);
+}
+
+void raw_rawhost (int at, ip_t * ip_addr) {
+  printf("h %d %s\n", at, strlongip(ip_addr));
+  fflush(stdout);
+}
+#endif
 

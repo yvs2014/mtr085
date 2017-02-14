@@ -305,7 +305,7 @@ void mtr_fill_data(int at, char *buf) {
 	/* On the other hand, we now check the input side. Shouldn't happen,
 	   can't be careful enough. */
     int j = fld_index[fld_active[i]];
-    if (j == -1)
+    if (j < 0)
       continue;
 
 	/* temporay hack for stats usec to ms... */
@@ -575,16 +575,17 @@ void mtr_curses_graph(int startstat, int cols)
 }
 
 int mtr_curses_data_fields(char *buf) {
-	int i, j;
 	int hd_len = 0;
 	char fmt[16];
-	for (i=0; i < MAXFLD; i++ ) {
-		j = fld_index[fld_active[i]];
+
+	int i;
+	for (i = 0; i < MAXFLD; i++ ) {
+		int j = fld_index[fld_active[i]];
 		if (j < 0)
 			continue;
-		sprintf( fmt, "%%%ds", data_fields[j].length );
-		sprintf( buf + hd_len, fmt, data_fields[j].title );
-		hd_len +=  data_fields[j].length;
+		sprintf(fmt, "%%%ds", data_fields[j].length);
+		sprintf(buf + hd_len, fmt, data_fields[j].title);
+		hd_len += data_fields[j].length;
 	}
 	return hd_len;
 }

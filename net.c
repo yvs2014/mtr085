@@ -47,6 +47,7 @@
 #include "net.h"
 #include "display.h"
 #include "dns.h"
+#include "report.h"
 
 #ifdef LOG_NET
 #include <syslog.h>
@@ -156,8 +157,8 @@ static int numhosts = 10;
 
 extern int fstTTL;		/* initial hub(ttl) to ping byMin */
 extern int endpoint_mode;	/* -fz option */
-extern int cpacketsize;		/* packet size used by ping */
-static int packetsize;		/* packet size used by ping */
+extern int cpacketsize;		/* default packet size, or user-defined */
+int packetsize;			/* packet size used by ping */
 extern int bitpattern;		/* packet bit pattern used by ping */
 extern int tos;			/* type of service set in ping packet*/
 extern int remoteport;          /* target port for TCP tracing */
@@ -509,7 +510,10 @@ void net_process_ping(unsigned port, struct mplslen mpls, void *addr, struct tim
     /* should be out of if as addr can change */
     addrcpy(&(host[index].addr), addrcopy);
     host[index].mpls = mpls;
-    display_rawhost(index, &(host[index].addr));
+#ifdef OUTPUT_FORMAT_RAW
+    if (enable_raw)
+      raw_rawhost(index, &(host[index].addr));
+#endif
 
   /* multi paths */
     addrcpy(&(host[index].addrs[0]), addrcopy);
@@ -521,7 +525,10 @@ void net_process_ping(unsigned port, struct mplslen mpls, void *addr, struct tim
     if (addrcmp(&(host[index].addrs[i]), addrcopy) && (i < MAXPATH)) {
       addrcpy(&(host[index].addrs[i]), addrcopy);
       host[index].mplss[i] = mpls;
-      display_rawhost(index, &(host[index].addrs[i]));
+#ifdef OUTPUT_FORMAT_RAW
+      if (enable_raw)
+        raw_rawhost(index, &(host[index].addrs[i]));
+#endif
     }
   }
 
@@ -562,8 +569,12 @@ void net_process_ping(unsigned port, struct mplslen mpls, void *addr, struct tim
   if ((idx >= 0) && (idx <= SAVED_PINGS))
     host[index].saved[idx] = totusec;
 
-  NETLOG_MSG((LOG_INFO, "display_rawping(index=%d, totusec=%d)", index, totusec));
-  display_rawping(index, totusec);
+#ifdef OUTPUT_FORMAT_RAW
+  if (enable_raw) {
+    NETLOG_MSG((LOG_INFO, "raw_rawping(index=%d, totusec=%d)", index, totusec));
+    raw_rawping(index, totusec);
+  }
+#endif
 }
 
 #define FDATA_OFF	(sizeof(struct IPHeader) + sizeof(struct ICMPHeader) + sizeof(struct IPHeader))

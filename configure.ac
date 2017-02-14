@@ -105,16 +105,42 @@ AC_ARG_ENABLE([syslog_debug],
 
 AS_IF([test "x$syslog_debug" != "xno"], [
 	AC_DEFINE([MTR_SYSLOG], [LOG_INFO], [Define syslog level])
-	AS_IF([test "x$syslog_debug" == "xyes"], [
+	AS_IF([test "x$syslog_debug" = "xyes"], [
 #		AC_DEFINE([LOG_NET], 1, [Enable Net module debug logging])
 		AC_DEFINE([LOG_DNS], 1, [Enable DNS debug logging])
 		AC_DEFINE([LOG_IPINFO], 1, [Enable IPinfo logging])
-	], [AS_IF([test "x$syslog_debug" == "xnet"], [
+	], [AS_IF([test "x$syslog_debug" = "xnet"], [
 		AC_DEFINE([LOG_NET], 1, [Enable Net debug logging])
-	], [AS_IF([test "x$syslog_debug" == "xdns"], [
+	], [AS_IF([test "x$syslog_debug" = "xdns"], [
 		AC_DEFINE([LOG_DNS], 1, [Enable DNS debug logging])
-	], [AS_IF([test "x$syslog_debug" != "xipinfo"], [
+	], [AS_IF([test "x$syslog_debug" = "xipinfo"], [
 		AC_DEFINE([LOG_IPINFO], 1, [Enable IPinfo logging])
+	])
+	])
+	])
+	])
+])
+
+AC_ARG_WITH([output_format],
+	AS_HELP_STRING([--with-output-format[[[=csv,raw,txt,xml]]]],
+		[additional output formats (default: all)]),
+	[output_format="${withval}"], [output_format=no])
+
+AS_IF([test "x$output_format" != "xno"], [
+	AS_IF([test "x$output_format" = "xyes"], [
+		AC_DEFINE([OUTPUT_FORMAT_CSV], 1, [Support CSV output format])
+		AC_DEFINE([OUTPUT_FORMAT_RAW], 1, [Support RAW output format])
+		AC_DEFINE([OUTPUT_FORMAT_TXT], 1, [Support TXT output format])
+		AC_DEFINE([OUTPUT_FORMAT_XML], 1, [Support XML output format])
+	], [AS_IF([test "x$output_format" = "xcsv"], [
+		AC_DEFINE([OUTPUT_FORMAT_CSV], 1, [Support CSV output format])
+	], [AS_IF([test "x$output_format" = "xraw"], [
+		AC_DEFINE([OUTPUT_FORMAT_RAW], 1, [Support RAW output format])
+	], [AS_IF([test "x$output_format" = "xtxt"], [
+		AC_DEFINE([OUTPUT_FORMAT_TXT], 1, [Support TXT output format])
+	], [AS_IF([test "x$output_format" = "xxml"], [
+		AC_DEFINE([OUTPUT_FORMAT_XML], 1, [Support XML output format])
+	])
 	])
 	])
 	])

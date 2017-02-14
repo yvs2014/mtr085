@@ -6,7 +6,7 @@ mtr - a network diagnostic tool
 
 
 .SH SYNOPSIS
-.B mtr [-abBcCdefFGilmnopPQrsTuvwxyzZ46] HOSTNAME ...
+.B mtr [-abBcdefFGilmnopPQrsTuvwyzZ46] HOSTNAME ...
 
 .SH DESCRIPTION
 
@@ -54,14 +54,6 @@ Specifies bit pattern to use in payload.  Should be within range 0 - 255.
 .TP
 .B -c, --report-cycles COUNT
 Use this option to set the number of pings sent to determine both the machines on the network and the reliability of those machines.  Each cycle lasts one second.
-
-.TP
-.B -C, --csv
-Use this option to tell
-.B mtr
-to use the
-.B CSV
-output format.  This format is better suited for automated processing.
 
 .TP
 .B -d, --displaymode MODE
@@ -179,10 +171,21 @@ Keys:
 Use this option to specify the positive number of seconds between ICMP ECHO requests.  The default value for this parameter is one second.  The root user may choose values between zero and one.
 
 .TP
-.B -l, --raw
+.B -l, --output csv,raw,txt,xml
+.RS
 Use this option to tell
 .B mtr
-to use the raw output format.  This format is better suited for archival of the measurement results.  It could be parsed to be presented into any of the other display methods.
+to use the CSV|RAW|TXT|XML output format.
+.RS
+- RAW is suited for archival of the measurement results
+.RE
+.RS
+- CSV is suited for automated processing
+.RE
+.RS
+- XML is suited for automated processing of the measurement results
+.RE
+.RE
 
 .TP
 .B -m, --max-ttl NUM
@@ -280,14 +283,6 @@ This option puts
 into wide report mode.  When in this mode,
 .B mtr
 will not cut hostnames in the report.
-
-.TP
-.B -x, --xml
-Use this option to tell
-.B mtr
-to use the
-.B XML
-output format.  This format is better suited for automated processing of the measurement results.
 
 .TP
 .B -y, --ipinfo ORIGIN,FIELDS

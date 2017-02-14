@@ -31,19 +31,30 @@ enum { ActionNone,  ActionQuit,  ActionReset,  ActionDisplay,
        ActionAS, ActionII, ActionII_Map,
 #endif
        ActionScrollDown, ActionScrollUp  };
-enum { DisplayReport, DisplayCurses, DisplaySplit, 
+enum { DisplayReport, DisplayCurses,
+#ifdef OUTPUT_FORMAT_CSV
+       DisplayCSV,
+#endif
+#ifdef OUTPUT_FORMAT_RAW
+       DisplayRaw,
+#endif
+#ifdef OUTPUT_FORMAT_TXT
+       DisplayTXT,
+#endif
+#ifdef OUTPUT_FORMAT_XML
+       DisplayXML,
+#endif
 #ifdef GRAPHCAIRO
        DisplayGraphCairo,
 #endif
-       DisplayRaw,    DisplayXML,    DisplayCSV, DisplayTXT};
+       DisplaySplit
+};
 
 /*  Prototypes for display.c  */
 void display_detect(int *argc, char ***argv);
 void display_open(void);
 void display_close(time_t now);
 void display_redraw(void);
-void display_rawping(int hostnum, int msec);
-void display_rawhost(int hostnum, ip_t *ip_addr);
 int display_keyaction(void);
 void display_loop(void);
 void display_clear(void);
