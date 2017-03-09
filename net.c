@@ -114,7 +114,7 @@ unsigned *tcp_sockets;
 /* Configuration parameter: How many queries to unknown hosts do we
    send? (This limits the amount of traffic generated if a host is not
    reachable) */
-#define MAX_UNKNOWN_HOSTS 5
+#define MAX_UNKNOWN_HOSTS 10
 
 struct nethost host[MaxHost];
 static struct sequence sequence[SEQ_MAX];
