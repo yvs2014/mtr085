@@ -337,7 +337,7 @@ void gc_redraw(void) {
 
 	if (dt < timeout) {
 		int pings = host[min].xmit;
-		for (at = min + 1; at < max; at++)
+		for (at = min + 1; at < (max - 1); at++)
 			if (host[at].xmit != pings)
 				return;
 		if (pings > num_pings)
