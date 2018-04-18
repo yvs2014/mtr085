@@ -60,9 +60,6 @@ void split_ipinfo_print(ip_t *addr) {
 
 void split_redraw(void) {
   int max = net_max();
-  if (max > maxTTL)
-    max = maxTTL;
-
   int at;
   for (at = net_min() + display_offset; at < max; at++) {
     ip_t *addr = &host[at].addr;

@@ -483,11 +483,7 @@ void net_process_ping(unsigned port, struct mplslen mpls, void *addr, struct tim
   int oldavg;	/* usedByMin */
   int oldjavg;	/* usedByMin */
   int i;	/* usedByMin */
-#ifdef ENABLE_IPV6
-  char addrcopy[sizeof(struct in6_addr)];
-#else
-  char addrcopy[sizeof(struct in_addr)];
-#endif
+  ip_t addrcopy;
 
   /* Copy the from address ASAP because it can be overwritten */
   addrcpy(&addrcopy, addr);
@@ -508,22 +504,21 @@ void net_process_ping(unsigned port, struct mplslen mpls, void *addr, struct tim
 
   if (!unaddrcmp(&(host[index].addr))) {
     /* should be out of if as addr can change */
-    addrcpy(&(host[index].addr), addrcopy);
+    addrcpy(&(host[index].addr), &addrcopy);
     host[index].mpls = mpls;
 #ifdef OUTPUT_FORMAT_RAW
     if (enable_raw)
       raw_rawhost(index, &(host[index].addr));
 #endif
-
-  /* multi paths */
-    addrcpy(&(host[index].addrs[0]), addrcopy);
+    /* multi paths */
+    addrcpy(&(host[index].addrs[0]), &addrcopy);
     host[index].mplss[0] = mpls;
   } else {
     for (i = 0; i < MAXPATH; i++)
       if (!addrcmp(&(host[index].addrs[i]), &addrcopy) || !unaddrcmp(&(host[index].addrs[i])))
         break;
-    if (addrcmp(&(host[index].addrs[i]), addrcopy) && (i < MAXPATH)) {
-      addrcpy(&(host[index].addrs[i]), addrcopy);
+    if (addrcmp(&(host[index].addrs[i]), &addrcopy) && (i < MAXPATH)) {
+      addrcpy(&(host[index].addrs[i]), &addrcopy);
       host[index].mplss[i] = mpls;
 #ifdef OUTPUT_FORMAT_RAW
       if (enable_raw)
@@ -755,18 +750,20 @@ int net_elem(int at, char c) {
 
 int net_max(void) {
   int max = 0;
-  int at;
-  for (at = 0; at < (maxTTL - 1) /* (MaxHost - 2) */; at++) {
+  for (int at = 0; at < maxTTL; at++) {
     if (!addrcmp(&(host[at].addr), remoteaddress)) {
+      max = at + 1;
       if (endpoint_mode)
-        fstTTL = at + 1;
-      return at + 1;
+        fstTTL = max;
+      break;
     } else if (unaddrcmp(&(host[at].addr))) {
       if (endpoint_mode)
         fstTTL = at + 1;
       max = at + 2;
     }
   }
+  if (max > maxTTL)
+     max = maxTTL;
   return max;
 }
 
