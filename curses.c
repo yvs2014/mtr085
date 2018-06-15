@@ -658,7 +658,7 @@ void mtr_curses_redraw(void) {
 
     snprintf(buf + l, sizeof(buf) - l, ")");
   }
-  printw("%*s", (getmaxx(stdscr) + strlen(buf)) / 2, buf);
+  printw("%*s", (int)(getmaxx(stdscr) + strlen(buf)) / 2, buf);
   attroff(A_BOLD);
 
   mvprintw(1, 0, "%s (%s)", LocalHostname, localaddr);
