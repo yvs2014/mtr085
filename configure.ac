@@ -340,12 +340,16 @@ AC_MSG_CHECKING(for C flags to get more warnings)
 ac_save_CFLAGS="$CFLAGS"
 if test "x$ac_cv_c_compiler_gnu" = "xyes" ; then
   dnl gcc is the easiest C compiler
-  warning_CFLAGS="-Wall"
-  # Check if compiler supports -Wno-pointer-sign and add it if supports
   CFLAGS_saved="$CFLAGS"
-  CFLAGS="$CFLAGS -Wno-pointer-sign"
+  extra_CFLAGS="-Wall"
+  # Check if compiler supports -Wno-pointer-sign and add it if supports
+  CFLAGS="$CFLAGS_saved -Wno-pointer-sign"
   AC_COMPILE_IFELSE([ AC_LANG_SOURCE([[ int foo; ]])],
-                  [ warning_CFLAGS="${warning_CFLAGS} -Wno-pointer-sign" ],)
+                  [ extra_CFLAGS="${extra_CFLAGS} -Wno-pointer-sign" ],)
+  # Check if compiler supports C99 and add it if supports
+  CFLAGS="$CFLAGS_saved -std=c99"
+  AC_COMPILE_IFELSE([ AC_LANG_SOURCE([[ int foo; ]])],
+                  [ extra_CFLAGS="${extra_CFLAGS} -std=c99" ],)
   CFLAGS="$CFLAGS_saved"
 else
   dnl Vendor supplied C compilers are a bit tricky
@@ -353,29 +357,29 @@ else
     dnl SGI IRIX with the MipsPRO C compiler
     irix*)
       CFLAGS="$CFLAGS -fullwarn"
-      AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[#include <stdio.h>]], [[printf("test");]])],[warning_CFLAGS="-fullwarn"],[])
+      AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[#include <stdio.h>]], [[printf("test");]])],[extra_CFLAGS="-fullwarn"],[])
       ;;
 
     dnl SunOS 4.x with the SparcWorks(?) acc compiler
     sunos*)
         if "$CC" = "acc" ; then
           CFLAGS="$CFLAGS -vc"
-          AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[#include <stdio.h>]], [[printf("test");]])],[warning_CFLAGS="-vc"],[])
+          AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[#include <stdio.h>]], [[printf("test");]])],[extra_CFLAGS="-vc"],[])
         fi
       ;;
 
     dnl Unknown, do nothing
     *)
-      warning_CFLAGS="none"
+      extra_CFLAGS="none"
       ;;
   esac
 fi
 CFLAGS="$ac_save_CFLAGS"
-if test "$warning_CFLAGS" = "none" ; then
+if test "$extra_CFLAGS" = "none" ; then
   AC_MSG_RESULT(none)
 else
-  CFLAGS="$CFLAGS $warning_CFLAGS"
-  AC_MSG_RESULT($warning_CFLAGS)
+  CFLAGS="$CFLAGS $extra_CFLAGS"
+  AC_MSG_RESULT($extra_CFLAGS)
 fi
 
 
