@@ -197,7 +197,6 @@ AS_IF([test "x$sys_getopt" = "xyes"], [
 AC_CANONICAL_HOST
 case "$host_os" in
   linux*)
-    AC_DEFINE(_BSD_SOURCE, 1, [enable BSD derived definitions (deprecated since glibc 2.20)])
     AC_DEFINE(_DEFAULT_SOURCE, 1, [enable "default" definitions (since glibc 2.20)])
   ;;
   solaris*)
@@ -339,18 +338,7 @@ dnl Add C flags to display more warnings
 AC_MSG_CHECKING(for C flags to get more warnings)
 ac_save_CFLAGS="$CFLAGS"
 if test "x$ac_cv_c_compiler_gnu" = "xyes" ; then
-  dnl gcc is the easiest C compiler
-  CFLAGS_saved="$CFLAGS"
   extra_CFLAGS="-Wall"
-  # Check if compiler supports -Wno-pointer-sign and add it if supports
-  CFLAGS="$CFLAGS_saved -Wno-pointer-sign"
-  AC_COMPILE_IFELSE([ AC_LANG_SOURCE([[ int foo; ]])],
-                  [ extra_CFLAGS="${extra_CFLAGS} -Wno-pointer-sign" ],)
-  # Check if compiler supports C99 and add it if supports
-  CFLAGS="$CFLAGS_saved -std=c99"
-  AC_COMPILE_IFELSE([ AC_LANG_SOURCE([[ int foo; ]])],
-                  [ extra_CFLAGS="${extra_CFLAGS} -std=c99" ],)
-  CFLAGS="$CFLAGS_saved"
 else
   dnl Vendor supplied C compilers are a bit tricky
   case "$host_os" in

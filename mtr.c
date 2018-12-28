@@ -24,7 +24,6 @@
 #include <string.h>
 #include <unistd.h>
 #include <errno.h>
-#include <string.h>
 #include <strings.h>
 
 #include <netdb.h>
@@ -697,7 +696,7 @@ int main(int argc, char **argv) {
       strcpy(LocalHostname, "UNKNOWNHOST");
 
     struct addrinfo hints, *res;
-    bzero(&hints, sizeof(hints));
+    memset(&hints, 0, sizeof(hints));
     hints.ai_family = af;
     hints.ai_socktype = SOCK_DGRAM;
     int error = getaddrinfo(Hostname, NULL, &hints, &res);
@@ -737,7 +736,7 @@ int main(int argc, char **argv) {
       continue;
 
     struct hostent host;
-    bzero(&host, sizeof(host));
+    memset(&host, 0, sizeof(host));
     host.h_name = ai->ai_canonname;
     host.h_aliases = NULL;
     host.h_addrtype = ai->ai_family;

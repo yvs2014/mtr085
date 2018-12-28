@@ -200,7 +200,7 @@ int mtr_curses_keyaction(void)
       return ActionNone;
     case 'j':
       TGLBIT(iargs, 6);	// 6th bit: latency/jitter
-      strcpy(fld_active, index(fld_active, 'N') ? "DR AGJMXI" /* jitter */ : "LS NABWV" /* default */);
+      strcpy((char*)fld_active, index((char*)fld_active, 'N') ? "DR AGJMXI" /* jitter */ : "LS NABWV" /* default */);
       return ActionNone;
     case 'm': {
       mvprintw(2, 0, "Max TTL: %d\n\n", maxTTL);
@@ -236,7 +236,7 @@ int mtr_curses_keyaction(void)
         curs_set(curs);
       buf[i] = '\0';
       if (i)
-        strcpy(fld_active, buf);
+        strcpy((char*)fld_active, buf);
       return ActionNone;
     }
     case 'p':

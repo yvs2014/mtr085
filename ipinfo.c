@@ -249,14 +249,14 @@ ENTRY* search_hashed_id(word id) {
     return hr;
 }
 
-void process_dns_response(char *buff, int r) {
+void process_dns_response(void *buff, int r) {
     HEADER* header = (HEADER*)buff;
     ENTRY *hr;
     if (!(hr = search_hashed_id(header->id)))
         return;
 
-    char hostname[NAMELEN], *pt;
-    char *txt;
+    char hostname[NAMELEN], *txt;
+    u_char *pt;
     int exp, size, txtlen, type;
 
     pt = buff + sizeof(HEADER);
@@ -366,7 +366,7 @@ void split_pairs(char sep) {
 
 static tcp_resp_t tcp_resp;
 
-void process_http_response(char *buff, int r) {
+void process_http_response(void *buff, int r) {
     static char h11[] = "HTTP/1.1";
     static int h11_ln = sizeof(h11) - 1;
     static char h11ok[] = "HTTP/1.1 200 OK";
@@ -383,7 +383,7 @@ void process_http_response(char *buff, int r) {
 #endif
         if (!strncmp(p, h11ok, h11ok_ln)) {
             memset(tcp_resp, 0, sizeof(tcp_resp));
-            static unsigned char copy[RECV_BUFF_SZ];
+            static char copy[RECV_BUFF_SZ];
             memset(copy, 0, sizeof(copy));
             memcpy(copy, p, sizeof(copy));
             tcp_resp[0] = copy;
@@ -451,7 +451,7 @@ void process_http_response(char *buff, int r) {
 #endif
 }
 
-void process_whois_response(char *buff, int r) {
+void process_whois_response(void *buff, int r) {
     IILOG_MSG((MTR_SYSLOG, "Got[%d]: \"%s\"", r, buff));
 
     char *txt;
@@ -517,11 +517,11 @@ void process_whois_response(char *buff, int r) {
     items = NULL;
 }
 
-typedef void (*process_response_f)(char*, int);
+typedef void (*process_response_f)(void*, int);
 static process_response_f process_response[] = { process_dns_response, process_http_response, process_http_response, process_whois_response };
 
 void ii_ack(void) {
-    static unsigned char buff[RECV_BUFF_SZ];
+    static char buff[RECV_BUFF_SZ];
     int r;
     if ((r = recv(origins[origin_no].fd, buff, sizeof(buff), 0)) < 0)
         IILOG_ERR((MTR_SYSLOG, "ii_ack(): recv() failed: %s", strerror(errno)));
@@ -624,13 +624,13 @@ int send_dns_query(const char *request, word id) {
 }
 
 int send_http_query(const char *request, word id) {
-    unsigned char buff[RECV_BUFF_SZ];
+    char buff[RECV_BUFF_SZ];
     snprintf(buff, sizeof(buff), "GET %s HTTP/1.1\r\nHost: %s\r\nUser-Agent: mtr/%s\r\nAccept: */*\r\n\r\n", request, origins[origin_no].host, MTR_VERSION);
     return send(origins[origin_no].fd, buff, strlen(buff), 0);
 }
 
 int send_whois_query(const char *request, word id) {
-    unsigned char buff[RECV_BUFF_SZ];
+    char buff[RECV_BUFF_SZ];
     snprintf(buff, sizeof(buff), "%s\r\n", request);
     return send(origins[origin_no].fd, buff, strlen(buff), 0);
 }

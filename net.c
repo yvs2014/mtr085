@@ -18,8 +18,8 @@
 
 #include "config.h"
 
-#if defined(HAVE_SYS_XTI_H)
-#include <sys/xti.h>
+#ifndef _BSD_SOURCE
+#define _BSD_SOURCE 1
 #endif
 
 #include <sys/types.h>
@@ -197,7 +197,7 @@ int udp_checksum(void *pheader, void *udata, int psize, int dsize)
 {
   unsigned tsize = psize + dsize;
   char csumpacket[tsize];
-  memset(csumpacket, (unsigned char) abs(bitpattern), abs(tsize));
+  memset(csumpacket, (unsigned char) abs(bitpattern), tsize);
 
   struct UDPv4PHeader *prepend = (struct UDPv4PHeader *) csumpacket;
   struct UDPv4PHeader *udppheader = (struct UDPv4PHeader *) pheader;
@@ -750,7 +750,8 @@ int net_elem(int at, char c) {
 
 int net_max(void) {
   int max = 0;
-  for (int at = 0; at < maxTTL; at++) {
+  int at;
+  for (at = 0; at < maxTTL; at++) {
     if (!addrcmp(&(host[at].addr), remoteaddress)) {
       max = at + 1;
       if (endpoint_mode)

@@ -41,7 +41,6 @@
 #endif
 
 #define SPLIT_SEPARATOR	"\t"
-#define UNKN_ITEM	"???"
 
 #ifdef IPINFO
 void split_ipinfo_print(ip_t *addr) {

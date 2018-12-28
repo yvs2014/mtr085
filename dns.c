@@ -299,7 +299,7 @@ const char *dns_lookup(ip_t *ip) {
 }
 
 void parserespacket(unsigned char *buf, int l) {
-  static unsigned char answer[MAXDNAME];
+  static char answer[MAXDNAME];
 
   if (l < (int) sizeof(HEADER))
     DNSLOG_ERR((MTR_SYSLOG, "Packet smaller than standard header size"));
