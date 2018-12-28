@@ -319,10 +319,17 @@ void mtr_fill_data(int at, char *buf) {
   buf[hd_len] = 0;
 }
 
-void printw_mpls(struct mplslen *mpls) {
+int printw_mpls(struct mplslen *mpls) {
   int i;
-  for (i = 0; i < mpls->labels; i++)
-    printw("    [MPLS: Lbl %lu Exp %u S %u TTL %u]\n", mpls->label[i], mpls->exp[i], mpls->s[i], mpls->ttl[i]);
+  for (i = 0; i < mpls->labels; i++) {
+    int y;
+    getyx(stdscr, y, __unused_int);
+    printw("    [MPLS: Lbl %lu Exp %u S %u TTL %u]", mpls->label[i], mpls->exp[i], mpls->s[i], mpls->ttl[i]);
+    int re = move(y + 1, 0);
+    if (re == ERR)
+      return re;
+  }
+  return OK;
 }
 
 void printw_addr(ip_t *addr, int up) {
@@ -343,14 +350,21 @@ void printw_addr(ip_t *addr, int up) {
     attroff(A_BOLD);
 }
 
+#define CHK_NL(y) { int re = move(y, 0); if (re == ERR) break; }
+
 void mtr_curses_hosts(int startstat) {
   int max = net_max();
   int at;
   for (at = net_min() + display_offset; at < max; at++) {
+    int y;
+    getyx(stdscr, y, __unused_int);
+    CHK_NL(y);
     printw("%2d. ", at + 1);
+
     ip_t *addr = &host[at].addr;
     if (!unaddrcmp(addr)) {
-      printw("???\n");
+      printw("%s", UNKN_ITEM);
+      CHK_NL(y + 1);
       continue;
     }
 
@@ -358,12 +372,9 @@ void mtr_curses_hosts(int startstat) {
     { // print stat
       char buf[1024];
       mtr_fill_data(at, buf);
-      int y;
-      getyx(stdscr, y, __unused_int);
-      move(y, startstat);
-      printw("%s", buf);
+      mvprintw(y, startstat, "%s", buf);
+      CHK_NL(y + 1);
     }
-    addch('\n');
     if (enablempls)
       printw_mpls(&host[at].mpls);
 
@@ -378,9 +389,11 @@ void mtr_curses_hosts(int startstat) {
 
       printw("    ");
       printw_addr(addrs, host[at].up);
-      addch('\n');
+      getyx(stdscr, y, __unused_int);
+      CHK_NL(y + 1);
       if (enablempls)
-        printw_mpls(&(host[at].mplss[i]));
+        if (printw_mpls(&(host[at].mplss[i])) == ERR)
+          break;
     }
   }
   move(2, 0);
@@ -511,7 +524,7 @@ chtype mtr_saved_ch(int saved_int) {
 			if (saved_int <= scale2[i])
 				return map2[i];
 	}
-	return map_na2[2];	// ???
+	return map_na2[2];	// UNKN_ITEM
 }
 
 #ifdef UNICODE
@@ -525,22 +538,23 @@ cchar_t* mtr_saved_cc(int saved_int) {
 	for (i = 0; i < num_factors; i++)
 		if (saved_int <= scale3[i])
 			return &map3[i];
-	return &map_na3[2];	// ???
+	return &map_na3[2];	// UNKN_ITEM
 }
 #endif
 
-void mtr_curses_graph(int startstat, int cols)
-{
-	int max, at, y;
-	ip_t * addr;
-
-	max = net_max();
+void mtr_curses_graph(int startstat, int cols) {
+    int max = net_max();
+    int at;
 	for (at = net_min() + display_offset; at < max; at++) {
-		printw("%2d. ", at+1);
+		int y;
+		getyx(stdscr, y, __unused_int);
+		CHK_NL(y);
+		printw("%2d. ", at + 1);
 
-		addr = &host[at].addr;
-		if (!addr || !unaddrcmp(addr)) {
-			printw("???\n");
+		ip_t *addr = &host[at].addr;
+		if (!unaddrcmp(addr)) {
+			printw("%s", UNKN_ITEM);
+			CHK_NL(y + 1);
 			continue;
 		}
 
@@ -554,13 +568,10 @@ void mtr_curses_graph(int startstat, int cols)
 			const char *name = dns_lookup(addr);
 			printw("%s", name?name:strlongip(addr));
 		} else
-			printw("???");
+			printw(UNKN_ITEM);
 		attroff(A_BOLD);
 
-		getyx(stdscr, y, __unused_int);
-		move(y, startstat);
-
-		addch(' ');
+		mvprintw(y, startstat, " ");
 		int i;
 #ifdef UNICODE
 		if (display_mode == 3)
@@ -570,7 +581,7 @@ void mtr_curses_graph(int startstat, int cols)
 #endif
 			for (i = SAVED_PINGS - cols; i < SAVED_PINGS; i++)
 				addch(mtr_saved_ch(host[at].saved[i]));
-		addch('\n');
+		CHK_NL(y + 1);
 	}
 }
 
@@ -618,13 +629,54 @@ int chk_n_print(int bit, char *buf, int sz, const char *msg) {
   return l;
 }
 
+void print_scale(void) {
+	attron(A_BOLD);
+	printw("Scale:");
+	attroff(A_BOLD);
+
+	if (display_mode == 1) {
+		addstr("  ");
+		addch(map1[0] | A_BOLD);
+		printw(" less than %dms   ", scale2[NUM_FACTORS2 - 2] / 1000);
+		addch(map1[1] | (color_mode ? 0 : A_BOLD));
+		addstr(" greater than ");
+		addch(map1[0] | A_BOLD);
+		addstr("   ");
+		addch('?' | (color_mode ? (map2[NUM_FACTORS2 - 1] & A_ATTRIBUTES) : A_BOLD));
+		addstr(" Unknown");
+	} else if (display_mode == 2) {
+		if (color_mode) {
+			int i;
+			for (i = 0; i < NUM_FACTORS2 - 1; i++) {
+				addstr("  ");
+				addch(map2[i]);
+				printw(":%dms", scale2[i] / 1000);
+			}
+			addstr("  ");
+			addch(map2[NUM_FACTORS2 - 1]);
+		} else {
+			int i;
+			for (i = 0; i < NUM_FACTORS2 - 1; i++)
+				printw("  %c:%dms", map2[i] & A_CHARTEXT, scale2[i] / 1000);
+			printw("  %c", map2[NUM_FACTORS2 - 1] & A_CHARTEXT);
+		}
+	}
+#ifdef UNICODE
+	else if (display_mode == 3) {
+		if (color_mode)
+			mtr_print_scale3(NUM_FACTORS3 - 1, 1, 2);
+		else
+			mtr_print_scale3(NUM_FACTORS3_MONO, 0, 1);
+	}
+#endif
+}
+
 void mtr_curses_redraw(void) {
   int maxx, maxy;
   int startstat;
   int rowstat;
   time_t t;
 
-  int i;
   int  hd_len;
   char buf[1024];
 
@@ -690,8 +742,8 @@ void mtr_curses_redraw(void) {
     mvprintw(rowstat - 2, maxx-hd_len-1, "   Packets               Pings");
     attroff(A_BOLD);
 
-    move(rowstat, 0);
-    mtr_curses_hosts(maxx-hd_len-1);
+    if (move(rowstat, 0) != ERR)
+      mtr_curses_hosts(maxx - hd_len - 1);
 
   } else {
     char msg[80];
@@ -706,50 +758,16 @@ void mtr_curses_redraw(void) {
     sprintf(msg, " Last %3d pings", max_cols);
     mvprintw(rowstat - 1, startstat, msg);
 
-    attroff(A_BOLD);
-    move(rowstat, 0);
-
-    mtr_gen_scale_gc();
-    mtr_curses_graph(startstat, max_cols);
-
-    addch('\n');
-    attron(A_BOLD);
-    printw("Scale:");
-    attroff(A_BOLD);
-
-    if (display_mode == 1) {
-      addstr("  ");
-      addch(map1[0] | A_BOLD);
-      printw(" less than %dms   ", scale2[NUM_FACTORS2 - 2] / 1000);
-      addch(map1[1] | (color_mode ? 0 : A_BOLD));
-      addstr(" greater than ");
-      addch(map1[0] | A_BOLD);
-      addstr("   ");
-      addch('?' | (color_mode ? (map2[NUM_FACTORS2 - 1] & A_ATTRIBUTES) : A_BOLD));
-      addstr(" Unknown");
-    } else if (display_mode == 2) {
-      if (color_mode) {
-        for (i = 0; i < NUM_FACTORS2 - 1; i++) {
-          addstr("  ");
-          addch(map2[i]);
-          printw(":%dms", scale2[i] / 1000);
-        }
-        addstr("  ");
-        addch(map2[NUM_FACTORS2 - 1]);
-      } else {
-        for (i = 0; i < NUM_FACTORS2 - 1; i++)
-          printw("  %c:%dms", map2[i] & A_CHARTEXT, scale2[i] / 1000);
-        printw("  %c", map2[NUM_FACTORS2 - 1] & A_CHARTEXT);
-      }
-    }
-#ifdef UNICODE
-    else if (display_mode == 3) {
-      if (color_mode)
-        mtr_print_scale3(NUM_FACTORS3 - 1, 1, 2);
-      else
-        mtr_print_scale3(NUM_FACTORS3_MONO, 0, 1);
-    }
-#endif
+	if (move(rowstat, 0) != ERR) {
+		attroff(A_BOLD);
+		mtr_gen_scale_gc();
+		mtr_curses_graph(startstat, max_cols);
+		int y;
+		getyx(stdscr, y, __unused_int);
+		int re = move(y + 1, 0);
+		if (re != ERR)
+			print_scale();
+	}
   }
 
   refresh();
