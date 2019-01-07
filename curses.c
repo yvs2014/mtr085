@@ -136,7 +136,7 @@ void mtr_fill_buf(int y, char *buf) {
   "  e       toggle MPLS information on/off\n" \
   "  f <n>   set the initial time-to-live(ttl), default n=1\n" \
   "  i <n>   set the ping interval to n seconds, default n=1\n" \
-  "  j       toggle latency(LS NABWV)/jitter(DR AGJMXI) stats\n" \
+  "  j       toggle default(LS NABWV)/jitter(DR AGJMXI) stats\n" \
   "  m <n>   set the max time-to-live, default n= # of hops\n" \
   "  n       toggle DNS on/off\n" \
   "  o str   set the columns to display, default str='LRS N BAWV'\n" \
@@ -200,7 +200,7 @@ int mtr_curses_keyaction(void)
       return ActionNone;
     case 'j':
       TGLBIT(iargs, 6);	// 6th bit: latency/jitter
-      strcpy((char*)fld_active, index((char*)fld_active, 'N') ? "DR AGJMXI" /* jitter */ : "LS NABWV" /* default */);
+      set_fld_active(index((char*)fld_active, 'J') ? (char*)fld_active_save /* default */ : FLD_ACTIVE_JITTER /* jitter */);
       return ActionNone;
     case 'm': {
       mvprintw(2, 0, "Max TTL: %d\n\n", maxTTL);
@@ -236,7 +236,7 @@ int mtr_curses_keyaction(void)
         curs_set(curs);
       buf[i] = '\0';
       if (i)
-        strcpy((char*)fld_active, buf);
+        set_fld_active(buf);
       return ActionNone;
     }
     case 'p':
@@ -586,8 +586,9 @@ void mtr_curses_graph(int startstat, int cols) {
 }
 
 int mtr_curses_data_fields(char *buf) {
-	int hd_len = 0;
 	char fmt[16];
+	int l = 0;
+	*buf = 0;
 
 	int i;
 	for (i = 0; i < MAXFLD; i++ ) {
@@ -595,10 +596,10 @@ int mtr_curses_data_fields(char *buf) {
 		if (j < 0)
 			continue;
 		sprintf(fmt, "%%%ds", data_fields[j].length);
-		sprintf(buf + hd_len, fmt, data_fields[j].title);
-		hd_len += data_fields[j].length;
+		sprintf(buf + l, fmt, data_fields[j].title);
+		l += data_fields[j].length;
 	}
-	return hd_len;
+	return l;
 }
 
 #ifdef UNICODE
@@ -678,7 +679,7 @@ void mtr_curses_redraw(void) {
   time_t t;
 
   int  hd_len;
-  char buf[1024];
+  static char redraw_buf[1024];
 
 
   erase();
@@ -689,33 +690,33 @@ void mtr_curses_redraw(void) {
   // title
   move(0, 0);
   attron(A_BOLD);
-  int l = snprintf(buf, sizeof(buf), "mtr-%s%s", MTR_VERSION, mtr_args);
+  int l = snprintf(redraw_buf, sizeof(redraw_buf), "%s-%s%s", PACKAGE_NAME, MTR_VERSION, mtr_args);
   if (iargs) {
-    l += snprintf(buf + l, sizeof(buf) - l, " (");
+    l += snprintf(redraw_buf + l, sizeof(redraw_buf) - l, " (");
 
-    l += chk_n_print(0, buf + l, sizeof(buf) - l, "UDP-mode");	// udp mode
-    l += chk_n_print(1, buf + l, sizeof(buf) - l, "TCP-mode");	// tcp mode
-    l += chk_n_print(2, buf + l, sizeof(buf) - l, "MPLS");	// mpls
+    l += chk_n_print(0, redraw_buf + l, sizeof(redraw_buf) - l, "UDP-mode");	// udp mode
+    l += chk_n_print(1, redraw_buf + l, sizeof(redraw_buf) - l, "TCP-mode");	// tcp mode
+    l += chk_n_print(2, redraw_buf + l, sizeof(redraw_buf) - l, "MPLS");	// mpls
 #ifdef IPINFO
-    l += chk_n_print(3, buf + l, sizeof(buf) - l, "ASN-Lookup");	// asn lookup
-    l += chk_n_print(4, buf + l, sizeof(buf) - l, "IP-Info");	// ip info
+    l += chk_n_print(3, redraw_buf + l, sizeof(redraw_buf) - l, "ASN-Lookup");	// asn lookup
+    l += chk_n_print(4, redraw_buf + l, sizeof(redraw_buf) - l, "IP-Info");	// ip info
 #endif
-    l += chk_n_print(5, buf + l, sizeof(buf) - l, "DNS-off");	// dns
-    l += chk_n_print(6, buf + l, sizeof(buf) - l, "Jitter");	// jitter
+    l += chk_n_print(5, redraw_buf + l, sizeof(redraw_buf) - l, "DNS-off");	// dns
+    l += chk_n_print(6, redraw_buf + l, sizeof(redraw_buf) - l, "Jitter");	// jitter
     if ((iargs >> 7) & 3) {	// 7,8 bits: display type
       if (iargs & ((1 << 7) - 1))	// is there smth before?
-        l += snprintf(buf + l, sizeof(buf) - l, ", ");
-      l += snprintf(buf + l, sizeof(buf) - l, "Display-Type: %d", (iargs >> 7) & 3);
+        l += snprintf(redraw_buf + l, sizeof(redraw_buf) - l, ", ");
+      l += snprintf(redraw_buf + l, sizeof(redraw_buf) - l, "Display-Type: %d", (iargs >> 7) & 3);
     }
 
-    snprintf(buf + l, sizeof(buf) - l, ")");
+    snprintf(redraw_buf + l, sizeof(redraw_buf) - l, ")");
   }
-  printw("%*s", (int)(getmaxx(stdscr) + strlen(buf)) / 2, buf);
+  printw("%*s", (int)(getmaxx(stdscr) + strlen(redraw_buf)) / 2, redraw_buf);
   attroff(A_BOLD);
 
   mvprintw(1, 0, "%s (%s)", LocalHostname, localaddr);
   time(&t);
-  mvprintw(1, maxx-25, ctime(&t));
+  mvprintw(1, maxx - 25, ctime(&t));
 
   printw("Keys:  ");
   attron(A_BOLD); addch('H'); attroff(A_BOLD); printw("elp   ");
@@ -726,7 +727,7 @@ void mtr_curses_redraw(void) {
 
   if (display_mode == 0) {
     startstat = 1;
-    hd_len = mtr_curses_data_fields(buf);
+    hd_len = mtr_curses_data_fields(redraw_buf);
     attron(A_BOLD);
 #ifdef IPINFO
     if (ii_ready()) {
@@ -738,8 +739,15 @@ void mtr_curses_redraw(void) {
     }
 #endif
     mvprintw(rowstat - 1, startstat, "Host");
-    mvprintw(rowstat - 1, maxx-hd_len-1, "%s", buf);
-    mvprintw(rowstat - 2, maxx-hd_len-1, "   Packets               Pings");
+    l = maxx - hd_len - 1;
+    mvprintw(rowstat - 1, l > 0 ? l : 0, "%s", redraw_buf);
+    if (strncmp(FLD_ACTIVE_DEFAULT, (char*)fld_active, sizeof(FLD_ACTIVE_DEFAULT))
+      && strncmp(FLD_ACTIVE_JITTER, (char*)fld_active, sizeof(FLD_ACTIVE_JITTER)))
+      l = snprintf(redraw_buf, sizeof(redraw_buf), "CUSTOMIZED-OUTPUT: %s", fld_active);
+    else
+      l = snprintf(redraw_buf, sizeof(redraw_buf), "Packets      Pings");
+    l = l >= hd_len ? maxx - l : maxx - hd_len + 1;
+    mvprintw(rowstat - 2, l > 0 ? l : 0, redraw_buf);
     attroff(A_BOLD);
 
     if (move(rowstat, 0) != ERR)

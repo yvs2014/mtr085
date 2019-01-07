@@ -301,7 +301,7 @@ void csv_close(time_t now) {
     ip_t *addr = &host[at].addr;
     snprint_addr(name, sizeof(name), addr);
 
-    printf("mtr-%s", MTR_VERSION);
+    printf("%s-%s", PACKAGE_NAME, MTR_VERSION);
     printf(CSV_SEPARATOR "%s", get_time_string(now));
     printf(CSV_SEPARATOR "%s", Hostname);
     printf(CSV_SEPARATOR "%d", at + 1);

@@ -129,6 +129,7 @@ extern struct fields data_fields[];
 /* keys: the value in the array is the index number in data_fields[] */
 extern int fld_index[];
 extern unsigned char fld_active[];
+extern unsigned char fld_active_save[];
 extern char available_options[];
 extern char localaddr[];
 

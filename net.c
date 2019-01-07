@@ -1027,37 +1027,36 @@ void net_reset(void) {
 }
 
 
-int net_set_interfaceaddress (char *InterfaceAddress)
-{
+int net_set_interfaceaddress(char *InterfaceAddress) {
   int len = 0;
-
-  if (!InterfaceAddress) return 0;
+  if (!InterfaceAddress)
+    return 0;
 
   sourcesockaddr->sa_family = af;
-  switch ( af ) {
-  case AF_INET:
-    ssa4->sin_port = 0;
-    if ( inet_aton( InterfaceAddress, &(ssa4->sin_addr) ) < 1 ) {
-      fprintf( stderr, "mtr: bad interface address: %s\n", InterfaceAddress );
-      return( 1 );
-  }
-    len = sizeof (struct sockaddr);
-    break;
+  switch (af) {
+    case AF_INET:
+      ssa4->sin_port = 0;
+      if (inet_aton(InterfaceAddress, &(ssa4->sin_addr)) < 1) {
+        fprintf(stderr, "bad interface address: %s\n", InterfaceAddress);
+        return 1;
+      }
+      len = sizeof(struct sockaddr);
+      break;
 #ifdef ENABLE_IPV6
-  case AF_INET6:
-    ssa6->sin6_port = 0;
-    if ( inet_pton( af, InterfaceAddress, &(ssa6->sin6_addr) ) < 1 ) {
-      fprintf( stderr, "mtr: bad interface address: %s\n", InterfaceAddress );
-      return( 1 );
-    }
-    len = sizeof (struct sockaddr_in6);
-    break;
+    case AF_INET6:
+      ssa6->sin6_port = 0;
+      if (inet_pton(af, InterfaceAddress, &(ssa6->sin6_addr)) < 1) {
+        fprintf(stderr, "bad interface address: %s\n", InterfaceAddress);
+        return 1;
+      }
+      len = sizeof(struct sockaddr_in6);
+      break;
 #endif
   }
 
-  if ( bind( sendsock, sourcesockaddr, len ) == -1 ) {
-    perror("mtr: failed to bind to interface");
-      return( 1 );
+  if (bind(sendsock, sourcesockaddr, len) == -1) {
+    perror("failed to bind to interface");
+    return 1;
   }
   return 0;
 }

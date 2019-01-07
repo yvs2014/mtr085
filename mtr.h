@@ -87,6 +87,10 @@ typedef int socklen_t;
 
 char *trim(char *s);
 word str2hash(const char* s);
+void set_fld_active(const char *s);
+
+#define FLD_ACTIVE_DEFAULT	"LS NABWV"
+#define FLD_ACTIVE_JITTER	"DR AGJMXI"
 
 #define SETBIT(n, x)	{ n |= 1 << (x);}
 #define CLRBIT(n, x)	{ n &= ~(1 << (x));}

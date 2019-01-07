@@ -92,7 +92,8 @@ int   remoteport = 80;           /* for TCP tracing */
 int   timeout = 10 * 1000000;    /* for TCP tracing */
 
 /* default display field(defined by key in net.h) and order */
-unsigned char fld_active[2*MAXFLD] = "LS NABWV";
+unsigned char fld_active[2*MAXFLD];
+unsigned char fld_active_save[2*MAXFLD];
 int           fld_index[256];
 char          available_options[MAXFLD];
 
@@ -126,12 +127,13 @@ static names_t *names = NULL;
 char* trim(char *s) {
   char *p = s;
   int l = strlen(p);
-  while (isspace((int)p[l-1]) && l) p[--l] = 0;
-  while (isspace((int)*p)) p++;
+  while (isspace((int)p[l-1]) && l)
+    p[--l] = 0;
+  while (isspace((int)*p))
+    p++;
   return p;
 }
 
-//#if IPINFO || DNS
 word str2hash(const char* s) {
   word h = 0;
   int c;
@@ -139,7 +141,15 @@ word str2hash(const char* s) {
     h = ((h << 5) + h) ^ c; // h * 33 ^ c
   return h;
 }
-//#endif
+
+void set_fld_active(const char *s) {
+  static char s_copy[2*MAXFLD];
+  strncpy(s_copy, s, sizeof(s_copy));
+  memset(fld_active_save, 0, sizeof(fld_active_save));
+  strncpy((char*)fld_active_save, (char*)fld_active, sizeof(fld_active_save));
+  memset(fld_active, 0, sizeof(fld_active));
+  strncpy((char*)fld_active, s_copy, sizeof(fld_active));
+}
 
 static void append_to_names(const char* item) {
   names_t* name = malloc(sizeof(names_t));
@@ -498,7 +508,7 @@ void parse_arg(int argc, char **argv) {
           exit (1);
         }
       }
-      strcpy ((char*)fld_active, optarg);
+      set_fld_active(optarg);
       break;
     case 'B':
       bitpattern = atoi (optarg);
@@ -568,6 +578,10 @@ void parse_arg(int argc, char **argv) {
     }
   }
 
+  static int sz;
+  for (i = 1; i < argc; i++)
+    sz += snprintf(mtr_args + sz, sizeof(mtr_args) - sz, " %s", argv[i]);
+
   switch (DisplayMode) {
     case DisplayReport:
 #ifdef OUTPUT_FORMAT_CSV
@@ -590,25 +604,47 @@ void parse_arg(int argc, char **argv) {
 }
 
 
-void parse_mtr_options (char *string)
-{
+void parse_mtr_options(char *string) {
   int argc;
-  char *argv[128], *p;
+  char *argv[128];
 
-  if (!string) return;
+  if (!string)
+    return;
 
-  argv[0] = "mtr";
+  argv[0] = PACKAGE_NAME;
   argc = 1;
-  p = strtok (string, " \t");
-  while (p != NULL && ((size_t) argc < (sizeof(argv)/sizeof(argv[0])))) {
-    argv[argc++] = p;
-    p = strtok (NULL, " \t");
-  }
-  if (p != NULL) {
-    fprintf (stderr, "Warning: extra arguments ignored: %s", p);
+  char *p = string;
+  while (*p) {
+    if (argc == sizeof(argv) / sizeof(argv[0]) - 1) {
+      fprintf(stderr, "Warning: extra arguments ignored: %s", p);
+      break;
+    }
+    while (*p && isspace((int)*p))
+      p++;
+
+    if (*p == '"' || *p == '\'') {
+      int delim = *p++;
+      char *q = strdup(p);
+      argv[argc++] = q;
+      while (*p && *p != delim) {
+        if (*p == '\\')
+          p++;
+        *q++ = *p++;
+      }
+      *q = 0;
+    } else {
+      argv[argc++] = p;
+      while (*p && !isspace((int)*p))
+        p++;
+    }
+
+    if (*p == 0)
+      break;
+    *p++ = 0;
   }
 
-  parse_arg (argc, argv);
+  argv[argc] = NULL;
+  parse_arg(argc, argv);
   optind = 0;
 }
 
@@ -665,13 +701,9 @@ int main(int argc, char **argv) {
     setlocale(LC_CTYPE, lc_ctype);
 #endif
 
+  set_fld_active(FLD_ACTIVE_DEFAULT);
   parse_mtr_options(getenv("MTR_OPTIONS"));
   parse_arg(argc, argv);
-
-  { int sz, i;
-    for (sz = 0, i = 1; i < argc; i++)
-      sz += snprintf(mtr_args + sz, sizeof(mtr_args) - sz, " %s", argv[i]);
-  }
 
   while (optind < argc) {
     char* name = argv[optind++];
