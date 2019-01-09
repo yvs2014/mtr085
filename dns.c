@@ -126,7 +126,7 @@ void dns_open(void) {
   DNSLOG_MSG((MTR_SYSLOG, "dns init"));
 
   if (!hinit) {
-    if (!hcreate(maxTTL * 2)) {
+    if (!hcreate(maxTTL * 4)) {
       perror("hcreate()");
       return;
     }

@@ -83,7 +83,10 @@ typedef struct {
     char *key;
 } ii_q_t;
 
-#define TMPFILE	"/tmp/mtr-map-XXXXXX"
+#define TMPFILE_BASE	"/tmp/mtr-map-XXXXXX"
+#define TMPFILE_SUFF	".html"
+#define TMPFILE	TMPFILE_BASE TMPFILE_SUFF
+
 char tmpfn[] = TMPFILE;
 static int tmpfd;
 typedef char* tcp_resp_t[II_RESP_LINES];
@@ -802,7 +805,7 @@ void ii_open(void) {
    if (init)
        return;
    if (!hinit) {
-       if (!hcreate(maxTTL * 2)) {
+       if (!hcreate(maxTTL * 4)) {
            perror("hcreate()");
            return;
        }
@@ -871,88 +874,28 @@ void ii_parsearg(char *arg) {
         ii_open();
 }
 
-char hbody_begin[] = "<body>\
-    <script src=\"http://maps.googleapis.com/maps/api/js?libraries=geometry&sensor=false\"></script>\
-    <script>\
-        var hopes = [\
-";
-char hbody_end[] = "];\
-        function Label(opt_options) {\
-            this.setValues(opt_options);\
-            var span = this.span_ = document.createElement('span');\
-            span.style.cssText = 'position: relative; left: -50%; top: -8px; white-space: nowrap; border: 1px solid blue; padding: 2px; background-color: white';\
-            var div = this.div_ = document.createElement('div');\
-            div.appendChild(span);\
-            div.style.cssText = 'position: absolute; display: none';\
-        }\
-        Label.prototype = new google.maps.OverlayView();\
-\
-        Label.prototype.onAdd = function() {\
-            var pane = this.getPanes().floatPane;\
-            pane.appendChild(this.div_);\
-            var me = this;\
-            this.listeners_ = [\
-                google.maps.event.addListener(this, 'position_changed', function() { me.draw();}),\
-                google.maps.event.addListener(this, 'text_changed', function() { me.draw();})\
-            ];\
-        };\
-        Label.prototype.onRemove = function() {\
-            this.div_.parentNode.removeChild(this.div_);\
-            for (var i = 0, max = this.listeners_.length; i < max; i++)\
-                google.maps.event.removeListener(this.listeners_[i]);\
-        };\
-        Label.prototype.draw = function() {\
-            var projection = this.getProjection();\
-            var position = projection.fromLatLngToDivPixel(this.get('position'));\
-            var div = this.div_;\
-            div.style.left = position.x + 'px';\
-            div.style.top = position.y + 'px';\
-            div.style.display = 'block';\
-        };\
-\
-        window.onload = function() {\
-            var map = new google.maps.Map(document.getElementById(\"MTR\"));\
-            var info = new google.maps.InfoWindow();\
-            var bounds = new google.maps.LatLngBounds();\
-\
-            for (i = 0; i < hopes.length; i++) {\
-                var marker = new google.maps.Marker({\
-                    position: new google.maps.LatLng(hopes[i].lat, hopes[i].lng),\
-                    title: hopes[i].title,\
-                    map: map,\
-                });\
-                bounds.extend(marker.position);\
-                if (i > 0) {\
-                    label = new Label({  \
-                        map: map, position: google.maps.geometry.spherical.interpolate(\
-                            new google.maps.LatLng(hopes[i - 1].lat, hopes[i - 1].lng),\
-                            new google.maps.LatLng(hopes[i].lat, hopes[i].lng),\
-                            0.5),\
-                    });\
-                    label.span_.innerHTML = hopes[i].delay;\
-                }\
-                (function(m, h) {\
-                    google.maps.event.addListener(marker, \"click\", function (e) {\
-                        info.setContent(h.desc);\
-                        info.open(map, m);\
-                    });\
-                })(marker, hopes[i]);\
-            }\
-            map.fitBounds(bounds);\
-            new google.maps.Polyline({\
-                path: hopes,\
-                strokeColor: '#1040F0',\
-                strokeOpacity: 0.7,\
-                geodesic: true,\
-                map: map,\
-            });\
-\
-        }\
-    </script>\
-    <div id=\"MTR\" style=\"width: 100%; height: 100%;\"></div>\
-</body>\
-</html>\
-";
+char hhead_script[] = "<script src=\"https://unpkg.com/leaflet@1.4.0/dist/leaflet.js\"></script>";
+char hhead_link[] = "<link rel=\"stylesheet\" href=\"https://unpkg.com/leaflet@1.4.0/dist/leaflet.css\">";
+char hbody_begin[] =
+"<body>"
+"	<div id=\"mtr_div\" style=\"width:100%; height:100%;\"></div>"
+"	<script>"
+"		var hopes = [";
+char hbody_end[] =
+"		];"
+"		var map = L.map('mtr_div');"
+"		L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {"
+"			attribution: '<a href=\"https://www.openstreetmap.org/\">OpenStreetMap</a>'"
+"		}).addTo(map);"
+"		hopes.forEach(function(e){"
+"			m = L.marker(e).addTo(map);"
+"			m.bindTooltip(e.delay + '<br>' + e.title + '<br>' + e.desc);"
+"		});"
+"		var polyline = L.polyline(hopes, {opacity:0.7,weight:5}).addTo(map);"
+"		map.fitBounds(polyline.getBounds());"
+"    </script>"
+"</body>"
+"</html>";
 
 #ifdef LOG_IPINFO
 #define TMP_WRITE(x) \
@@ -981,14 +924,14 @@ int ii_gen_n_open_html(int mode) {
             return -1;
 #endif
     }
-    if ((tmpfd = mkstemp(filename)) < -1) {
+    if ((tmpfd = mkstemps(filename, strlen(TMPFILE_SUFF))) < -1) {
         IILOG_MSG((MTR_SYSLOG, "mkstemp() failed: %s", strerror(errno)));
         return -1;
     }
     strncpy(tmpfn, filename, sizeof(tmpfn));
 
     static char buf[1024];
-    snprintf(buf, sizeof(buf), "<html><head><title>mtr%s</title></head>", mtr_args);
+    snprintf(buf, sizeof(buf), "<html><head><title>mtr%s</title>%s%s</head>", mtr_args, hhead_script, hhead_link);
     TMP_WRITE(buf);
     TMP_WRITE(hbody_begin);
 

@@ -199,7 +199,7 @@ int mtr_curses_keyaction(void)
       WaitTime = f;
       return ActionNone;
     case 'j':
-      TGLBIT(iargs, 6);	// 6th bit: latency/jitter
+      TGLBIT(iargs, 6);	// 6th bit: latency(default) / jitter
       set_fld_active(index((char*)fld_active, 'J') ? (char*)fld_active_save /* default */ : FLD_ACTIVE_JITTER /* jitter */);
       return ActionNone;
     case 'm': {

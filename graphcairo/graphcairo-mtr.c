@@ -100,7 +100,7 @@ int gc_open(void) {
 
 	if (params.enable_legend) {
 		if (params.jitter_graph == 1)
-			strcpy(fld_active, "DR AGJMXI");
+			strcpy((char*)fld_active, FLD_ACTIVE_JITTER);
 		mtr_curses_data_fields(legend_hd[LEGEND_HEADER_STATIC]);
 		curses_cols = cr_recalc(hostinfo_max);
 		mtr_curses_init();
@@ -237,12 +237,12 @@ void gc_keyaction(int c) {
 				GCDEBUG_MSG(("enable_mpls=%d\n", enablempls));
 				break;
 			case 'j':
-				if (index(fld_active, 'N'))
-					strcpy(fld_active, "DR AGJMXI");
+				if (index((char*)fld_active, 'N'))
+					strcpy((char*)fld_active, FLD_ACTIVE_JITTER);
 				else
-					strcpy(fld_active, "LS NABWV");
+					strcpy((char*)fld_active, FLD_ACTIVE_DEFAULT);
 				mtr_curses_data_fields(legend_hd[LEGEND_HEADER_STATIC]);
-				GCDEBUG_MSG(("toggle latency/jitter stats\n"));
+				GCDEBUG_MSG(("toggle latency(default)/jitter stats\n"));
 				break;
 			case 'n':	// DNS
 				enable_dns = !enable_dns;
