@@ -36,6 +36,5 @@ SCREENSHOTS
 ![ii-screenshot01](https://github.com/yvs2014/mtr/raw/master/img/ii-screenshot01.png)
 
 ## geolocation
-![ii-screenshot02](https://github.com/yvs2014/mtr/raw/master/img/ii-screenshot02.png)
-![ii-screenshot03](https://github.com/yvs2014/mtr/raw/master/img/ii-screenshot03.png)
+![ii-screenshot04](https://github.com/yvs2014/mtr/raw/master/img/ii-screenshot04.png)
 
