@@ -18,6 +18,7 @@
 
 #include "config.h"
 
+#include <syslog.h>
 #include <unistd.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -64,6 +65,8 @@
 #define UNKN	"?"
 #define RECV_BUFF_SZ	3000
 #define TCP_CONN_TIMEOUT	3
+#define CHAR_QOUTES	"\"'"
+#define CHAR_BRACKETS	"{}"
 
 extern struct __res_state _res;
 extern char mtr_args[];
@@ -74,9 +77,11 @@ int ipinfo_no[] = {-1};
 static int init;
 static int origin_no;
 static int skipped_items;
+static int skipped_props;
 
 typedef char* items_t[IPINFO_MAX_ITEMS];
 static items_t* items;
+static int got_items;
 
 typedef struct {
     int status;
@@ -90,7 +95,11 @@ typedef struct {
 char tmpfn[] = TMPFILE;
 static int tmpfd;
 typedef char* tcp_resp_t[II_RESP_LINES];
-static char *last_request;	// some workaround to "no id" whois
+static tcp_resp_t tcp_resp;
+static char *last_request;	// workaround to "no id" whois
+
+typedef void (*process_response_f)(void*, int);
+static int remote_ports[] = { 53, 80, 80, 43 };	// [type]
 
 typedef struct {
     char* host;
@@ -98,17 +107,16 @@ typedef struct {
     char* unkn;
     char sep;
     char* name[IPINFO_MAX_ITEMS];
-    char* name_prfx;
+    char* prop_prfx;
     int type;	// 0 - dns:csv, 1 - http:csv, 2 - http:flat-json, 3 - whois
-    int skip[IPINFO_MAX_ITEMS]; // query ip, ...
+    int ndx[IPINFO_MAX_ITEMS]; // skip/mandatory indexes: query ip, ...
     char* prefix;
     char* suffix;
-    char* sub[2 * IPINFO_MAX_ITEMS];
+    char* substitution[IPINFO_MAX_ITEMS];
+    char* skip_prop[IPINFO_MAX_ITEMS]; // skip by string: query ip, ...
     int width[IPINFO_MAX_ITEMS];
     int fd;
 } origin_t;
-
-static int remote_ports[] = { 53, 80, 80, 43 };	// [type]
 
 static origin_t origins[] = {
 // Abbreviations: CC - Country Code, RC - Region Code, MC - Metro Code, Org - Organization, TZ - TimeZone
@@ -125,7 +133,7 @@ static origin_t origins[] = {
         { "ASN" } },
 
     { "peer.asn.shadowserver.org", NULL, NULL, VSLASH,
-        { "Peers", "ASN", "Route", "AS Name", "CC", "Website", "Org" } },
+        { "Peers", "ASN", "Route", "AS Name", "CC", /*"Website",*/ "Org" } },
 
     { "freegeoip.net", NULL, NULL, COMMA,
         { /* QueryIP, */ "CC", "Country", "RC", "Region", "City", "Zip", "TZ", "Lat", "Long", "MC" },
@@ -136,15 +144,17 @@ static origin_t origins[] = {
         NULL, 1, {14, 1}, "/csv/" },
 
     { "getcitydetails.geobytes.com", NULL, NULL, COMMA,
-        {}, // { /* ForwarderFor, RemoteIP, QueryIP,*/ "Certainty", "Internet", "Country", "RLC", "Region", "RC", "LC", "DMA", "City", "CityID", "FQCN", "Lat", "Long", "Capital", "TZ", "Nationality", "Population", "NatinalityPlural", "MapReference", "Currency", "CurrencyCode", "Title" },
-        "geobytes", 2, {3, 1, 2}, "/GetCityDetails?fqcn=", NULL,
-        { "code", "Code", "location", "Location", "cityid", "CityID", "dma", "DMA",
-          "fqcn", "FQCN", "singular", "Singular", "plural", "Plural", "reference", "Reference"},
+	    { /*forwarderfor, remoteip, ipaddress,*/ "certainty", "internet", "country", "regionlocationcode", "region", "code", "locationcode", "dma", "city", "cityid", "fqcn", "latitude", "longitude", "capital", "timezone", "nationalitysingular", "population", "nationalityplural", "mapreference", "currency", "currencycode", "title" },
+        "geobytes", 2, {3}, "/GetCityDetails?fqcn=", NULL,
+	    { "Certainty", "CC", "Country", "RLC", "Region", "RC", "LC", "DMA", "City", "CityID", "FQCN", "Lat", "Long", "Capital", "TZ", "Nationality", "Population", "NationalityPlural", "MapReference", "Currency", "CurrencyCode", "Title" },
+        { "forwarderfor", "remoteip", "queryip" },
     },
 
     { "ipinfo.io", NULL, NULL, COMMA,
-        {}, // { /* QueryIP, Hostname, */ "City", "Region", "CC", "Location", "AS Name", "Postal" },
-        NULL, 2, {1, 2}, "/", "/json" },
+        { /* ip, hostname,*/ "city", "region", "country", "loc", "postal", "org" },
+        NULL, 2, {1}, "/", "/json", { "City", "Region", "CC", "Location", "Postal", "Org"},
+		{ "ip", "hostname" },
+    },
 
     { "riswhois.ripe.net", "riswhois.ripe.net", NULL, 0,
         {"Route", "Origin", "Descr", "CC"},
@@ -169,13 +179,16 @@ int split_with_sep(char** args, int max, char sep, char quote) {
                 inside = !inside;
 
     int j;
-    for (j = 0; j < max; j++)
+    for (j = 0; j < max; j++) {
         if (args[j])
             args[j] = trim(args[j]);
-    return (i < max) ? (i + 1) : max;
+    }
+    got_items = (i < max) ? (i + 1) : max;
+    return got_items;
 }
 
 char* split_rec(char *rec) {
+    IILOG_MSG((MTR_SYSLOG, "split_rec(%s)", rec));
     if (!(items = malloc(sizeof(*items)))) {
         free(rec);
         IILOG_MSG((MTR_SYSLOG, "split_rec(): malloc() failed"));
@@ -184,34 +197,38 @@ char* split_rec(char *rec) {
 
     memset(items, 0, sizeof(*items));
     (*items)[0] = rec;
-    int i = split_with_sep(*items, IPINFO_MAX_ITEMS, origins[origin_no].sep, '"');
+    int n = split_with_sep(*items, IPINFO_MAX_ITEMS, origins[origin_no].sep, '"');
 
-    if (i > (ipinfo_max + skipped_items))
-        ipinfo_max = i - skipped_items;
+    if (n > (ipinfo_max + skipped_items))
+        ipinfo_max = n - ((skipped_items > skipped_props) ? skipped_items : skipped_props);
 
     char *unkn = origins[origin_no].unkn;
     if (unkn) {
         int len = strlen(unkn);
-        int j;
-        for (j = 0; (j < i) && (*items)[j]; j++)
-            if (!strncmp((*items)[j], unkn, len))
-                (*items)[j] = UNKN;
+        int i;
+        for (i = 0; (i < n) && (*items)[i]; i++)
+            if (!strncmp((*items)[i], unkn, len))
+                (*items)[i] = UNKN;
     }
 
-    return (ipinfo_no[0] < i) ? (*items)[ipinfo_no[0]] : (*items)[0];
+    return (ipinfo_no[0] < n) ? (*items)[ipinfo_no[0]] : (*items)[0];
 }
 
 void add_rec(char *hkey) {
-    if (origins[origin_no].skip[0]) {
+    if (origins[origin_no].ndx[0]) {
         items_t it;
         memcpy(&it, items, sizeof(it));
         memset(items, 0, sizeof(items_t));
         int i, j;
         for (i = j = 0; i < IPINFO_MAX_ITEMS; i++) {
             int k, skip = 0;
-            for (k = 0; (k < IPINFO_MAX_ITEMS) && origins[origin_no].skip[k]; k++)
-                if ((skip = ((i + 1) == origins[origin_no].skip[k]) ? 1 : 0))
-                    break;
+            if (origins[origin_no].type == 2) {	// http:flat-json 1st-slot
+                if (!i && origins[origin_no].ndx[0])
+                    continue;
+            } else
+                for (k = 0; (k < IPINFO_MAX_ITEMS) && origins[origin_no].ndx[k]; k++)
+                    if ((skip = ((i + 1) == origins[origin_no].ndx[k]) ? 1 : 0))
+                        break;
             if (!skip)
                 (*items)[j++] = it[i];
         }
@@ -317,57 +334,55 @@ char* trim_str(char *s, char *sc) {
     return p;
 }
 
-void schng(char *str, char *from, char *to) {
-    char *s;
-    if ((s = strstr(str, from)))
-        memcpy(s, to, strlen(to));
+int in_str_list(const char *str, char* const* list) {
+    int i;
+    for (i = 0; (i < IPINFO_MAX_ITEMS) && list[i]; i++)
+        if (strncmp(str, list[i], NAMELEN) == 0)
+            return i;
+    return -1;
+}
+int in_ndx_list(const int ndx, const int* list) {
+    int i;
+    for (i = 0; (i < IPINFO_MAX_ITEMS) && list[i]; i++)
+        if ((ndx + 1) == list[i])
+            return ndx;
+    return -1;
 }
 
 void split_pairs(char sep) {
     items_t it;
     memcpy(&it, items, sizeof(it));
     memset(items, 0, sizeof(*items));
-
     int i;
     for (i = 0; (i < IPINFO_MAX_ITEMS) && it[i]; i++) {
         char* ln[2] = { it[i] };
-//        (*items)[i] = (split_with_sep(ln, 2, sep, 0) == 2) ? trim(ln[1]) : it[i]; // skip names
-/* don't skip names */
-        if (split_with_sep(ln, 2, sep, 0) == 2) {
-            int skip = 0, j;
-            for (j = 0; (j < IPINFO_MAX_ITEMS) && origins[origin_no].skip[j]; j++)
-                if ((i + 1) == origins[origin_no].skip[j]) {
-                   skip = 1;
-                   break;
-                }
-            if (!skip) {
-                int n = i - skipped_items;
-                if (n >= 0) {
-                    char *name = trim_str(ln[0], "\"'{}");
-                    if (name) {
-                        if (origins[origin_no].name_prfx)
-                            if (strstr(name, origins[origin_no].name_prfx))
-                                name += strlen(origins[origin_no].name_prfx);
-                        if (origins[origin_no].sub[0])
-                            for (j = 0; (j < (2 * IPINFO_MAX_ITEMS - 1)) && origins[origin_no].sub[j]; j += 2)
-                                schng(name, origins[origin_no].sub[j], origins[origin_no].sub[j + 1]);
-                        if (name[0])
-                            name[0] = toupper((int)name[0]);
-                        origins[origin_no].name[n] = strdup(name);
-                        int l = strlen(name);
-                        if (origins[origin_no].width[n] < l)
-                            origins[origin_no].width[n] = l;
-                    }
-                }
-            }
-            (*items)[i] = trim(ln[1]);
-        } else
-            (*items)[i] = it[i];
-/**/
+        if (split_with_sep(ln, 2, sep, 0) != 2)
+            continue;
+        char *prop = trim_str(ln[0], CHAR_QOUTES);
+        if (origins[origin_no].prop_prfx)
+            if (strstr(prop, origins[origin_no].prop_prfx))
+                prop += strlen(origins[origin_no].prop_prfx);
+        char *val = trim_str(ln[1], CHAR_QOUTES);
+        int ndx = in_ndx_list(i, origins[origin_no].ndx);
+        if (ndx >= 0) {
+            // type=2: http:flat-json: always add in 1st slot, it's query ip
+            (*items)[(origins[origin_no].type == 2) ? 0 : ndx] = strdup(val);
+            continue;
+        }
+        ndx = in_str_list(prop, origins[origin_no].name);
+        if (ndx >= 0) {
+            (*items)[ndx + skipped_items] = strdup(val);
+            continue;
+        }
+    }
+
+    for (i = 0; (i < IPINFO_MAX_ITEMS) && origins[origin_no].name[i]; i++) {
+        if (!origins[origin_no].name[i])
+            break;
+        if (!(*items)[i])
+            (*items)[i] = strdup("");
     }
 }
-
-static tcp_resp_t tcp_resp;
 
 void process_http_response(void *buff, int r) {
     static char h11[] = "HTTP/1.1";
@@ -375,7 +390,7 @@ void process_http_response(void *buff, int r) {
     static char h11ok[] = "HTTP/1.1 200 OK";
     static int h11ok_ln = sizeof(h11ok) - 1;
 
-    IILOG_MSG((MTR_SYSLOG, "Got[%d]: \"%s\"", r, buff));
+    IILOG_MSG((MTR_SYSLOG, "Got[%d]: \"%s\"", r, (char*)buff));
 #ifdef LOG_IPINFO
     int reply = 0;
 #endif
@@ -427,20 +442,29 @@ void process_http_response(void *buff, int r) {
             }
 
             IILOG_MSG((MTR_SYSLOG, "http response#%d [%d]: \"%s\"", reply, rn, txt));
-            if (!split_rec(txt))
+            if (!split_rec(trim_str(trim_str(txt, CHAR_QOUTES), CHAR_BRACKETS)))
                 continue;
+            else if (got_items < origins[origin_no].ndx[0]) {
+                IILOG_MSG((MTR_SYSLOG, "process_http_response(): got #%d, expected at least #%d", got_items, origins[origin_no].ndx[0]));
+                continue;
+            }
+
             if (origins[origin_no].type == 2)
                 split_pairs(':');
 
             { int j;
               for (j = 0; (j < IPINFO_MAX_ITEMS) && (*items)[j]; j++) // disclose items
-                (*items)[j] = trim_str((*items)[j], "\"'{}");
+                  (*items)[j] = trim_str((*items)[j], CHAR_QOUTES);
             }
 
             ENTRY *hr;
-            // first entry of the skip-table is our request
-            if (!(hr = search_hashed_id(str2hash((*items)[origins[origin_no].skip[0] - 1])))) {
-                IILOG_MSG((MTR_SYSLOG, "process_http_response(): got unknown reply #%d: \"%s\"", reply, (*items)[origins[origin_no].skip[0] - 1]));
+            // first entry is either our request or a return code
+            int re_ndx = 0;
+            if (origins[origin_no].type != 2)
+                if (origins[origin_no].ndx[0])
+                    re_ndx = origins[origin_no].ndx[0] - 1;
+            if (!(hr = search_hashed_id(str2hash((*items)[re_ndx])))) {
+                IILOG_MSG((MTR_SYSLOG, "process_http_response(): got unknown reply #%d: \"%s\"", reply, (*items)[re_ndx]));
                 continue;
             }
             add_rec(((ii_q_t*)hr->data)->key);
@@ -450,12 +474,12 @@ void process_http_response(void *buff, int r) {
 
 #ifdef LOG_IPINFO
     if (!reply)
-        IILOG_MSG((MTR_SYSLOG, "process_http_response(): What is that? got[%d] \"%s\"", r, buff));
+        IILOG_MSG((MTR_SYSLOG, "process_http_response(): What is that? got[%d] \"%s\"", r, (char*)buff));
 #endif
 }
 
 void process_whois_response(void *buff, int r) {
-    IILOG_MSG((MTR_SYSLOG, "Got[%d]: \"%s\"", r, buff));
+    IILOG_MSG((MTR_SYSLOG, "Got[%d]: \"%s\"", r, (char*)buff));
 
     char *txt;
     if (!(txt = malloc(RECV_BUFF_SZ)))
@@ -501,7 +525,6 @@ void process_whois_response(void *buff, int r) {
                     if (split_with_sep(dc, 2, COMMA, 0) == 2)
                         (*items)[RISWHOIS_LAST_NDX + 1] = dc[1];
                 }
-//
                 if (ipinfo_max < (j + 1))
                     ipinfo_max = j + 1;
             }
@@ -510,7 +533,7 @@ void process_whois_response(void *buff, int r) {
 
     ENTRY *hr;
     if (!(hr = search_hashed_id(str2hash(last_request))))
-        IILOG_ERR((MTR_SYSLOG, "process_whois_response(): got unknown reply: \"%s\"", buff));
+        IILOG_ERR((MTR_SYSLOG, "process_whois_response(): got unknown reply: \"%s\"", (char*)buff));
 
     for (i = 0; (i < IPINFO_MAX_ITEMS) && origins[origin_no].name[i]; i++)
         if (! ((*items)[i]))
@@ -520,7 +543,6 @@ void process_whois_response(void *buff, int r) {
     items = NULL;
 }
 
-typedef void (*process_response_f)(void*, int);
 static process_response_f process_response[] = { process_dns_response, process_http_response, process_http_response, process_whois_response };
 
 void ii_ack(void) {
@@ -759,9 +781,14 @@ char* ii_getheader(void) {
     static char header[NAMELEN];
     char fmt[16];
     int i, l = 0;
-    for (i = 0; (i < IPINFO_MAX_ITEMS) && (ipinfo_no[i] >= 0) && (ipinfo_no[i] < ipinfo_max) && (l < NAMELEN) && origins[origin_no].name[ipinfo_no[i]]; i++) {
-        snprintf(fmt, sizeof(fmt), FIELD_FMT, origins[origin_no].width[ipinfo_no[i]]);
-        l += snprintf(header + l, sizeof(header) - l, fmt, origins[origin_no].name[ipinfo_no[i]]);
+    for (i = 0; i < IPINFO_MAX_ITEMS; i++) {
+        int no = ipinfo_no[i];
+        char *name = origins[origin_no].name[no];
+        if ((no < 0) || (no >= ipinfo_max) || (l >= NAMELEN) || !name)
+            break;
+        snprintf(fmt, sizeof(fmt), FIELD_FMT, origins[origin_no].width[no]);
+        char *sname = origins[origin_no].substitution[no];
+        l += snprintf(header + l, sizeof(header) - l, fmt, sname ? sname : name);
     }
     return l ? header : NULL;
 }
@@ -813,8 +840,10 @@ void ii_open(void) {
    }
    if (open_connection[origins[origin_no].type]() < 0)
        return;
-   while ((skipped_items < IPINFO_MAX_ITEMS) && origins[origin_no].skip[skipped_items])
+   while ((skipped_items < IPINFO_MAX_ITEMS) && origins[origin_no].ndx[skipped_items])
        skipped_items++;
+   while ((skipped_props < IPINFO_MAX_ITEMS) && origins[origin_no].skip_prop[skipped_props])
+       skipped_props++;
 
    int i;
    for (i = 0; i < IPINFO_MAX_ITEMS; i++) {
