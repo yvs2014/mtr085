@@ -648,6 +648,44 @@ void parse_mtr_options(char *string) {
   optind = 0;
 }
 
+int set_hostent(struct addrinfo *res) {
+    struct addrinfo *ai;
+    for (ai = res; ai; ai = ai->ai_next)
+      if (af == ai->ai_family)	// use only the desired AF
+        break;
+    if (af != ai->ai_family)	// not found
+      return 0;	// unsuccess
+
+    char* alptr[2] = { NULL, NULL };
+    if (af == AF_INET)
+      alptr[0] = (void*) &(((struct sockaddr_in *)ai->ai_addr)->sin_addr);
+#ifdef ENABLE_IPV6
+    else if (af == AF_INET6)
+      alptr[0] = (void*) &(((struct sockaddr_in6 *)ai->ai_addr)->sin6_addr);
+#endif
+    else
+      return 0;	// unsuccess
+
+    static struct hostent host;
+    memset(&host, 0, sizeof(host));
+    host.h_name = ai->ai_canonname;
+    host.h_aliases = NULL;
+    host.h_addrtype = ai->ai_family;
+    host.h_length = ai->ai_addrlen;
+    host.h_addr_list = alptr;
+
+    if (net_open(&host)) {
+      perror("Unable to start net module");
+      return 0;	// unsuccess
+	}
+    if (net_set_interfaceaddress(InterfaceAddress)) {
+      perror("Couldn't set interface address");
+      return 0;	// unsuccess
+    }
+    return 1;	// success
+}
+
+
 int main(int argc, char **argv) {
   net_init(0);		// Use IPv4 by default
   enable_dns = 1;	// Use DNS
@@ -722,8 +760,8 @@ int main(int argc, char **argv) {
   }
 
   time_t now = time(NULL);
-  for (;names; names = names->next) {
-    Hostname = names->name;
+  for (names_t *n = names; n; n = n->next) {
+    Hostname = n->name;
     if (gethostname(LocalHostname, sizeof(LocalHostname)))
       strcpy(LocalHostname, "UNKNOWNHOST");
 
@@ -740,58 +778,25 @@ int main(int argc, char **argv) {
       if (error)
         if (idna_to_ascii_8z(Hostname, &z_hostname, 0) == IDNA_SUCCESS)
           error = getaddrinfo(z_hostname, NULL, &hints, &res);
-    }
+    } else
 #endif
-    if (error) {
-      if (error == EAI_SYSTEM)
-         perror(Hostname);
-      else
-         fprintf(stderr, "Failed to resolve \"%s\": %s\n", Hostname, gai_strerror(error));
-      continue;
+    {
+      if (error) {
+        if (error == EAI_SYSTEM)
+          perror(Hostname);
+        else
+          fprintf(stderr, "Failed to resolve \"%s\": %s\n", Hostname, gai_strerror(error));
+      } else if (set_hostent(res)) {
+        lock(stdout);
+        display_open();
+        dns_open();
+        display_loop();
+        net_end_transit();
+        display_close(now);
+        unlock(stdout);
+      }
     }
-
-    struct addrinfo *ai;
-    for (ai = res; ai; ai = ai->ai_next)
-      if (af == ai->ai_family)	// use only the desired AF
-        break;
-    if (af != ai->ai_family)	// not found
-      continue;
-
-    char* alptr[2] = { NULL, NULL };
-    if (af == AF_INET)
-      alptr[0] = (void*) &(((struct sockaddr_in *)ai->ai_addr)->sin_addr);
-#ifdef ENABLE_IPV6
-    else if (af == AF_INET6)
-      alptr[0] = (void*) &(((struct sockaddr_in6 *)ai->ai_addr)->sin6_addr);
-#endif
-    else
-      continue;
-
-    struct hostent host;
-    memset(&host, 0, sizeof(host));
-    host.h_name = ai->ai_canonname;
-    host.h_aliases = NULL;
-    host.h_addrtype = ai->ai_family;
-    host.h_length = ai->ai_addrlen;
-    host.h_addr_list = alptr;
-
-    if (net_open(&host)) {
-      perror("Unable to start net module");
-      continue;
-    }
-
-    if (net_set_interfaceaddress(InterfaceAddress)) {
-      perror("Couldn't set interface address");
-      continue;
-    }
-
-    lock(stdout);
-      display_open();
-      dns_open();
-      display_loop();
-      net_end_transit();
-      display_close(now);
-    unlock(stdout);
+    freeaddrinfo(res);
   }
 
   net_close();

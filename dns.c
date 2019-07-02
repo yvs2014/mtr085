@@ -403,15 +403,17 @@ void parserespacket(unsigned char *buf, int l) {
       DNSLOG_ERR((MTR_SYSLOG, "dn_expand() failed while expanding domain in rdata"));
     int l = strnlen(answer, sizeof(answer));
     DNSLOG_MSG((MTR_SYSLOG, "Answer[%d]: \"%s\"[%d]", r, answer, l));
-    if (l > MAXHOSTNAMELEN)
+    if (l > MAXHOSTNAMELEN) {
       DNSLOG_ERR((MTR_SYSLOG, "Ignoring reply: hostname too long: %d > %d", l, MAXHOSTNAMELEN));
+      return;
+    }
 
-    rp->hostname = malloc(strlen(answer) + 1);
+    rp->hostname = malloc(l + 1);
     if (!rp->hostname) {
       perror("parserespacket(): malloc()");
       return;
     }
-    strcpy(rp->hostname, answer);
+    strncpy(rp->hostname, answer, l + 1);
     c += size;
   }
 }

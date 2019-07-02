@@ -23,4 +23,5 @@ stamp-h1*
 /mtr
 /version.h
 /version.h.tmp
+.*.swp
 

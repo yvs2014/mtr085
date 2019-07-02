@@ -68,6 +68,11 @@ AC_CHECK_FUNCS(attron fcntl)
 
 AC_CHECK_LIB(m, floor, , AC_MSG_ERROR(No math library found))
 
+AC_ARG_WITH([libasan],
+	AS_HELP_STRING([--with-libasan], [build with AddressSanitizer]),
+	[libasan="${withval}"], [libasan=no])
+AM_CONDITIONAL([LIBASAN], [test "x$libasan" = "xyes"])
+
 AC_ARG_WITH([ipinfo],
 	AS_HELP_STRING([--without-ipinfo], [without IP-info lookup]),
 	[ipinfo="${withval}"], [ipinfo=yes])
@@ -92,7 +97,6 @@ AC_ARG_WITH([libidn],
 	AS_HELP_STRING([--with-libidn], [IDN support (libidn)]),
 	[libidn="${withval}"], [libidn=no])
 AM_CONDITIONAL([LIBIDN], [test "x$libidn" = "xyes"])
-
 AC_ARG_WITH([sys_getopt],
 	    AS_HELP_STRING([--without-sys-getopt], [do not use your system getopt]),
 	[sys_getopt="${withval}"], [sys_getopt=yes])

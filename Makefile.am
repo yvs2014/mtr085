@@ -2,7 +2,7 @@ SUBDIRS = img
 
 sbin_PROGRAMS = mtr
 man_MANS = mtr.8
-install-exec-hook: 
+install-exec-hook:
 	chmod u+s $(DESTDIR)$(sbindir)/mtr
 
 mtr_SOURCES = mtr.c \
@@ -56,6 +56,12 @@ endif
 if LIBIDN
 AM_CPPFLAGS += @libidn_CFLAGS@
 mtr_LDADD += @libidn_LIBS@
+endif
+
+if LIBASAN
+AM_CFLAGS	= -fno-omit-frame-pointer
+AM_CFLAGS	+= -fsanitize=undefined
+AM_CFLAGS	+= -fsanitize=address
 endif
 
 CLEANFILES = version.h
