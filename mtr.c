@@ -88,7 +88,7 @@ int   reportwide;
 int   mtrtype = IPPROTO_ICMP;    /* Use ICMP as default packet type */
 int   fstTTL = 1;                /* default start at first hop */
 int   endpoint_mode;             /* set by -fz option */
-int   remoteport = 80;           /* for TCP tracing */
+int   remoteport = -1;
 int   timeout = 10 * 1000000;    /* for TCP tracing */
 
 /* default display field(defined by key in net.h) and order */

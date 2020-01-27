@@ -101,6 +101,8 @@ struct IPHeader {
 #define LO_UDPPORT 33433	// start from LO_UDPPORT+1
 #define UDPPORTS 90		// go thru udp:33434-33523 acl
 
+#define TCP_DEFAULT_PORT 80
+
 struct sequence {
   int index;
   int transit;
@@ -161,7 +163,7 @@ extern int cpacketsize;		/* default packet size, or user-defined */
 int packetsize;			/* packet size used by ping */
 extern int bitpattern;		/* packet bit pattern used by ping */
 extern int tos;			/* type of service set in ping packet*/
-extern int remoteport;          /* target port for TCP tracing */
+extern int remoteport;          /* target port */
 extern int timeout;             /* timeout for TCP connections */
 extern fd_set writefd;		/* TCP sockets */
 extern int maxfd;
@@ -260,6 +262,13 @@ int net_tcp_init(void) {
  
 #define ERR_N_EXIT(s) { display_clear(); perror(s); exit(EXIT_FAILURE);}
 
+#define NST_ADRR_FILL(lo_addr, ssa_addr, re_addr, re_port, loc) { \
+  addrcpy(&lo_addr, &ssa_addr); \
+  addrcpy(&re_addr, remoteaddress); \
+  re_port = htons((remoteport > 0) ? remoteport : TCP_DEFAULT_PORT); \
+  namelen = sizeof(*loc); \
+}
+
 /*  Attempt to connect to a TCP port with a TTL */
 void net_send_tcp(int index) {
   int ttl, s;
@@ -289,17 +298,11 @@ void net_send_tcp(int index) {
   socklen_t namelen = sizeof(local);
   switch (af) {
   case AF_INET:
-    addrcpy(&local4->sin_addr, &ssa4->sin_addr);
-    addrcpy(&remote4->sin_addr, remoteaddress);
-    remote4->sin_port = htons(remoteport);
-    namelen = sizeof(*local4);
+    NST_ADRR_FILL(local4->sin_addr, ssa4->sin_addr, remote4->sin_addr, remote4->sin_port, local4);
     break;
 #ifdef ENABLE_IPV6
   case AF_INET6:
-    addrcpy(&local6->sin6_addr, &ssa6->sin6_addr);
-    addrcpy(&remote6->sin6_addr, remoteaddress);
-    remote6->sin6_port = htons(remoteport);
-    namelen = sizeof(*local6);
+    NST_ADRR_FILL(local6->sin6_addr, ssa6->sin6_addr, remote6->sin6_addr, remote6->sin6_port, local6);
     break;
 #endif
   }
@@ -355,6 +358,11 @@ void net_send_tcp(int index) {
   if (s >= maxfd)
     maxfd = s + 1;
   NETLOG_MSG((LOG_INFO, "net_send_tcp(index=%d): sequence=%d, socket=%d", index, pseq, s));
+}
+
+#define SET_UDP_UH_PORTS(sport, dport) { \
+  udp->uh_sport = htons(sport); \
+  udp->uh_dport = htons(dport); \
 }
 
 /*  Attempt to find the host at a particular number of hops away  */
@@ -429,13 +437,15 @@ void net_send_query(int index) {
   } else if (mtrtype == IPPROTO_UDP) {
     udp = (struct udphdr *)(packet + iphsize);
     udp->uh_sum  = 0;
-    udp->uh_sport = htons(portpid);
-
     udp->uh_ulen = htons(packetsize - iphsize);
     int useq = new_sequence(index);
-    udp->uh_dport = LO_UDPPORT + useq;
+    if (remoteport < 0) {
+      SET_UDP_UH_PORTS(portpid, (LO_UDPPORT + useq));
+	} else {
+      SET_UDP_UH_PORTS((LO_UDPPORT + useq), remoteport);
+    };
+
     gettimeofday(&sequence[useq].time, NULL);
-    udp->uh_dport = htons(udp->uh_dport);
     NETLOG_MSG((LOG_INFO, "net_send_udp(index=%d): sequence=%d, port=%d", index, useq, ntohs(udp->uh_dport)));
     if (af == AF_INET) {
       /* checksum is not mandatory. only calculate if we know ip->saddr */
@@ -583,6 +593,14 @@ void net_process_ping(unsigned port, struct mplslen mpls, void *addr, struct tim
   header = (head_struct *)(packet + data_off); \
 }
 
+#define NPR_FILL_SADDR(sa_in, sa_addr, icmp_er, icmp_te, icmp_un) { \
+    fromsockaddrsize = sizeof(struct sa_in); \
+    fromaddress = (ip_t *) &(sa_addr); \
+    echoreplytype = icmp_er; \
+    timeexceededtype = icmp_te; \
+    unreachabletype = icmp_un; \
+}
+
 /*  We know a packet has come in, because the main select loop has called us,
     now we just need to read it, see if it is for us, and if it is a reply
     to something we sent, then call net_process_ping()  */
@@ -610,19 +628,11 @@ void net_process_return(void) {
   gettimeofday(&now, NULL);
   switch ( af ) {
   case AF_INET:
-    fromsockaddrsize = sizeof (struct sockaddr_in);
-    fromaddress = (ip_t *) &(fsa4->sin_addr);
-    echoreplytype = ICMP_ECHOREPLY;
-    timeexceededtype = ICMP_TIMXCEED;
-    unreachabletype = ICMP_UNREACH;
+    NPR_FILL_SADDR(sockaddr_in, fsa4->sin_addr, ICMP_ECHOREPLY, ICMP_TIME_EXCEEDED, ICMP_UNREACH);
     break;
 #ifdef ENABLE_IPV6
   case AF_INET6:
-    fromsockaddrsize = sizeof (struct sockaddr_in6);
-    fromaddress = (ip_t *) &(fsa6->sin6_addr);
-    echoreplytype = ICMP6_ECHO_REPLY;
-    timeexceededtype = ICMP6_TIME_EXCEEDED;
-    unreachabletype = ICMP6_DST_UNREACH;
+    NPR_FILL_SADDR(sockaddr_in6, fsa6->sin6_addr, ICMP6_ECHO_REPLY, ICMP6_TIME_EXCEEDED, ICMP6_DST_UNREACH);
     break;
 #endif
   }
@@ -652,7 +662,7 @@ void net_process_return(void) {
       if (header->id != (uint16)mypid)
         return;
       sequence = header->sequence;
-    } else if (header->type == timeexceededtype) {
+    } else if ((header->type == timeexceededtype) || (header->type == unreachabletype)) {
       switch (af) {
       case AF_INET:
         USER_DATA(header, FDATA_OFF, struct ICMPHeader, 160);
@@ -671,8 +681,7 @@ void net_process_return(void) {
     }
     break;
 
-  case IPPROTO_UDP:
-    if ((header->type == timeexceededtype) || (header->type == unreachabletype)) {
+  case IPPROTO_UDP: {
       struct udphdr *uh = NULL;
       switch ( af ) {
       case AF_INET:
@@ -684,15 +693,21 @@ void net_process_return(void) {
       break;
 #endif
       }
-      if (ntohs(uh->uh_sport) != portpid)
-        return;
-      sequence = ntohs(uh->uh_dport) - LO_UDPPORT;
+      if (remoteport < 0) {
+        if (ntohs(uh->uh_sport) != portpid)
+          return;
+        sequence = ntohs(uh->uh_dport);
+      } else {
+        if (ntohs(uh->uh_dport) != remoteport)
+          return;
+        sequence = ntohs(uh->uh_sport);
+      }
+      sequence -= LO_UDPPORT;
       NETLOG_MSG((LOG_INFO, "UDP: net_process_return: portpid=%d, seq=%d", portpid, sequence));
     }
     break;
 
-  case IPPROTO_TCP:
-    if ((header->type == timeexceededtype) || (header->type == unreachabletype)) {
+  case IPPROTO_TCP: {
       struct tcphdr *th = NULL;
       switch ( af ) {
       case AF_INET:
