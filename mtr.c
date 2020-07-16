@@ -488,7 +488,7 @@ void parse_arg(int argc, char **argv) {
     case 'o':
       /* Check option before passing it on to fld_active. */
       if (strlen(optarg) >= sizeof(fld_active)) {
-        fprintf(stderr, "Too many fields (max=%ld): %s\n", sizeof(fld_active) - 1, optarg);
+        fprintf(stderr, "Too many fields (max=%zd): %s\n", sizeof(fld_active) - 1, optarg);
         exit(1);
       }
       for (i = 0; optarg[i]; i++) {
@@ -711,7 +711,8 @@ int main(int argc, char **argv) {
   /* The field options are now in a static array all together,
      but that requires a run-time initialization. */
   memset(fld_index, -1, sizeof(fld_index));
-  for (int i = 0; (data_fields[i].key) && (i < sizeof(fld_avail)); i++) {
+  int i;
+  for (i = 0; (data_fields[i].key) && (i < sizeof(fld_avail)); i++) {
     fld_avail[i] = data_fields[i].key;
     fld_index[data_fields[i].key] = i;
   }
@@ -753,7 +754,8 @@ int main(int argc, char **argv) {
   }
 
   time_t now = time(NULL);
-  for (names_t *n = names; n; n = n->next) {
+  names_t *n;
+  for (n = names; n; n = n->next) {
     Hostname = n->name;
     if (gethostname(LocalHostname, sizeof(LocalHostname)))
       strcpy(LocalHostname, "UNKNOWNHOST");

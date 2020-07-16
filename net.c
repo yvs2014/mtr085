@@ -626,8 +626,11 @@ void net_process_return(void) {
   mpls.labels = 0;
 
   gettimeofday(&now, NULL);
-  switch ( af ) {
+  switch (af) {
   case AF_INET:
+#ifndef ICMP_TIME_EXCEEDED  // old systems' compatibility
+#define ICMP_TIME_EXCEEDED  11
+#endif
     NPR_FILL_SADDR(sockaddr_in, fsa4->sin_addr, ICMP_ECHOREPLY, ICMP_TIME_EXCEEDED, ICMP_UNREACH);
     break;
 #ifdef ENABLE_IPV6

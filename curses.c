@@ -226,7 +226,8 @@ int mtr_curses_keyaction(void)
       return ActionDNS;
     case 'o': {	// fields to display & their ordering
       mvprintw(2, 0, "Fields: %s\n\n", fld_active);
-      for (int i = 0; (i <= AVLFLD) && data_fields[i].key; i++)
+      int i;
+      for (i = 0; (i <= AVLFLD) && data_fields[i].key; i++)
         if (data_fields[i].descr)
           printw("  %s\n", data_fields[i].descr);
       addch('\n');
@@ -235,8 +236,7 @@ int mtr_curses_keyaction(void)
 
       static FLD_BUF_T fld_curr;
       int curs = curs_set(1);
-      int i = 0;
-      for (; i < sizeof(fld_curr); i++) {
+      for (i = 0; i < sizeof(fld_curr); i++) {
         int f = getch();
         if (f == '\n')
             break;
@@ -604,7 +604,8 @@ int mtr_curses_data_fields(char *buf) {
 
 	if (buf) {
 		*buf = 0;
-		for (int i = 0; i < sizeof(fld_active); i++ ) {
+		int i;
+		for (i = 0; i < sizeof(fld_active); i++ ) {
 			int j = fld_index[fld_active[i]];
 			if (j < 0)
 				continue;

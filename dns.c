@@ -413,7 +413,7 @@ void parserespacket(unsigned char *buf, int l) {
       perror("parserespacket(): malloc()");
       return;
     }
-    strncpy(rp->hostname, answer, l);
+    strncpy(rp->hostname, answer, l + 1);
     c += size;
   }
 }
