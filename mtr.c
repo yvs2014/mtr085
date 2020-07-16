@@ -92,13 +92,13 @@ int   remoteport = -1;
 int   timeout = 10 * 1000000;    /* for TCP tracing */
 
 /* default display field(defined by key in net.h) and order */
-unsigned char fld_active[2*MAXFLD];
-unsigned char fld_active_save[2*MAXFLD];
-int           fld_index[256];
-char          available_options[MAXFLD];
+FLD_BUF_T fld_active;
+FLD_BUF_T fld_active_save;
+char      fld_avail[AVLFLD + 1];
+int       fld_index[256];
 
 
-struct fields data_fields[MAXFLD] = {
+const struct fields data_fields[AVLFLD + 1] = {
   /* key, Remark, Header, Format, Width */
   {' ', "<sp>: Space between fields", " ",  " ",        1},
   {'L', "L: Loss Ratio",          "Loss",   " %4.1f%%", 6},
@@ -143,12 +143,12 @@ word str2hash(const char* s) {
 }
 
 void set_fld_active(const char *s) {
-  static char s_copy[2*MAXFLD];
-  strncpy(s_copy, s, sizeof(s_copy));
+  static FLD_BUF_T s_copy;
+  strncpy((char*)s_copy, s, sizeof(s_copy) - 1);
   memset(fld_active_save, 0, sizeof(fld_active_save));
   strncpy((char*)fld_active_save, (char*)fld_active, sizeof(fld_active_save));
   memset(fld_active, 0, sizeof(fld_active));
-  strncpy((char*)fld_active, s_copy, sizeof(fld_active));
+  strncpy((char*)fld_active, (char*)s_copy, sizeof(fld_active));
 }
 
 static void append_to_names(const char* item) {
@@ -245,17 +245,6 @@ static void unlock(FILE *f) {
     if (!fstat(fd, &buf) && S_ISREG(buf.st_mode))
       if (fcntl(fd, F_SETLKW, &lock) == -1)
         perror("fcntl()");
-}
-
-void init_fld_options (void) {
-  memset(fld_index, -1, sizeof(fld_index));
-
-  int i;
-  for (i = 0; data_fields[i].key; i++) {
-    available_options[i] = data_fields[i].key;
-    fld_index[data_fields[i].key] = i;
-  }
-  available_options[i] = 0;
 }
 
 static struct option long_options[] = {
@@ -447,11 +436,11 @@ void parse_arg(int argc, char **argv) {
       break;
 #endif
     case 'c':
-      MaxPing = atoi (optarg);
+      MaxPing = atoi(optarg);
       ForceMaxPing = 1;
       break;
     case 's':
-      cpacketsize = atoi (optarg);
+      cpacketsize = atoi(optarg);
       break;
     case 'a':
       InterfaceAddress = optarg;
@@ -463,12 +452,12 @@ void parse_arg(int argc, char **argv) {
       enable_dns = 0;
       break;
     case 'i':
-      WaitTime = atof (optarg);
-      if (WaitTime <= 0.0) {
+      WaitTime = atof(optarg);
+      if (WaitTime <= 0) {
         fprintf(stderr, "Wait time must be positive\n");
         exit(1);
       }
-      if (getuid() != 0 && WaitTime < 1.0) {
+      if (getuid() && (WaitTime < 1)) {
         fprintf(stderr, "Non-root users cannot request an interval < 1.0 seconds\n");
         exit(1);
       }
@@ -478,7 +467,7 @@ void parse_arg(int argc, char **argv) {
         endpoint_mode = 1;
         break;
       }
-      fstTTL = atoi (optarg);
+      fstTTL = atoi(optarg);
       if (fstTTL > maxTTL)
         fstTTL = maxTTL;
       if (fstTTL < 1)	/* prevent 0 hop */
@@ -488,9 +477,9 @@ void parse_arg(int argc, char **argv) {
       read_from_file(optarg);
       break;
     case 'm':
-      maxTTL = atoi (optarg);
+      maxTTL = atoi(optarg);
       if (maxTTL > (MaxHost - 1))
-        maxTTL = MaxHost-1;
+        maxTTL = MaxHost - 1;
       if (maxTTL < 1)	/* prevent 0 hop */
         maxTTL = 1;
       if (fstTTL > maxTTL) /* don't know the pos of -m or -f */
@@ -498,25 +487,25 @@ void parse_arg(int argc, char **argv) {
       break;
     case 'o':
       /* Check option before passing it on to fld_active. */
-      if (strlen (optarg) > MAXFLD) {
-        fprintf(stderr, "Too many fields: %s\n", optarg);
-        exit (1);
+      if (strlen(optarg) >= sizeof(fld_active)) {
+        fprintf(stderr, "Too many fields (max=%ld): %s\n", sizeof(fld_active) - 1, optarg);
+        exit(1);
       }
-      for (i=0; optarg[i]; i++) {
-        if(!strchr (available_options, optarg[i])) {
-          fprintf (stderr, "Unknown field identifier: %c\n", optarg[i]);
-          exit (1);
+      for (i = 0; optarg[i]; i++) {
+        if(!strchr(fld_avail, optarg[i])) {
+          fprintf(stderr, "Unknown field identifier: %c\n", optarg[i]);
+          exit(1);
         }
       }
       set_fld_active(optarg);
       break;
     case 'B':
-      bitpattern = atoi (optarg);
+      bitpattern = atoi(optarg);
       if (bitpattern > 255)
         bitpattern = -1;
       break;
     case 'Q':
-      tos = atoi (optarg);
+      tos = atoi(optarg);
       if (tos > 255 || tos < 0)	// error message, should do more checking for valid values
         tos = 0;
       break;
@@ -721,7 +710,11 @@ int main(int argc, char **argv) {
 
   /* The field options are now in a static array all together,
      but that requires a run-time initialization. */
-  init_fld_options ();
+  memset(fld_index, -1, sizeof(fld_index));
+  for (int i = 0; (data_fields[i].key) && (i < sizeof(fld_avail)); i++) {
+    fld_avail[i] = data_fields[i].key;
+    fld_index[data_fields[i].key] = i;
+  }
 
 #ifdef UNICODE
   int dm_histogram = 0;

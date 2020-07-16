@@ -112,19 +112,38 @@ extern float WaitTime;
 
 static int __unused_int;
 
-void mtr_fill_buf(int y, char *buf) {
+static FLD_BUF_T fields_buf;
+
+int mtr_curses_get_buf(int y) {
 	move(2, y);
 	int curs = curs_set(1);
 	refresh();
-	int c;
 	int i = 0;
-	while ((c=getch()) != '\n' && i < MAXFLD) {
-		addch(c | A_BOLD); refresh();
-		buf[i++] = c;   /* need more checking on 'c' */
+	for (; i < sizeof(fields_buf); i++) {
+		int c = getch();
+		if (c == '\n')
+			break;
+		addch(c | A_BOLD);
+		refresh();
+		fields_buf[i] = c;	// need more checking on 'c'
 	}
 	if (curs != ERR)
 		curs_set(curs);
-	buf[i] = '\0';
+	fields_buf[i] = '\0';
+	return i;
+}
+
+void mtr_curses_get_int(int y, int* res) {
+	if (res) {
+		if (mtr_curses_get_buf(y))
+			*res = atoi((char*)fields_buf);
+	}
+}
+void mtr_curses_get_float(int y, float* res) {
+	if (res) {
+		if (mtr_curses_get_buf(y))
+			*res = atof((char*)fields_buf);
+	}
 }
 
 #define CURSES_HELP_MESSAGE \
@@ -150,8 +169,6 @@ void mtr_fill_buf(int y, char *buf) {
 int mtr_curses_keyaction(void)
 {
   int c = getch();
-  float f = 0.0;
-  char buf[MAXFLD+1];
 
   switch (tolower(c)) {
     case '?':
@@ -170,8 +187,7 @@ int mtr_curses_keyaction(void)
     case 'b':
       mvprintw(2, 0, "Ping Bit Pattern: %d\n", bitpattern);
       mvprintw(3, 0, "Pattern Range: 0(0x00)-255(0xff), <0 random.\n");
-      mtr_fill_buf(18, buf);
-      bitpattern = atoi(buf);
+      mtr_curses_get_int(18, &bitpattern);
       if (bitpattern > 255)
         bitpattern = -1;
       return ActionNone;
@@ -181,22 +197,18 @@ int mtr_curses_keyaction(void)
       return ActionMPLS;
     case 'f': {
       mvprintw(2, 0, "First TTL: %d\n\n", fstTTL);
-      mtr_fill_buf(11, buf);
-      int i = atoi(buf);
-      if ((i < 1) || (i > maxTTL))
-        return ActionNone;
-      fstTTL = i;
+      int i;
+      mtr_curses_get_int(11, &i);
+      if ((i > 0) && (i <= maxTTL))
+        fstTTL = i;
       return ActionNone;
     }
     case 'i':
       mvprintw(2, 0, "Interval: %0.0f\n\n", WaitTime);
-      mtr_fill_buf(11, buf);
-      f = atof(buf);
-      if (f <= 0.0)
-        return ActionNone;
-      if (getuid() && (f < 1.0))
-        return ActionNone;
-      WaitTime = f;
+      float f = WaitTime;
+      mtr_curses_get_float(11, &f);
+      if ((f > 0) && (f < 1) && getuid())
+        WaitTime = f;
       return ActionNone;
     case 'j':
       TGLBIT(iargs, 6);	// 6th bit: latency(default) / jitter
@@ -204,39 +216,43 @@ int mtr_curses_keyaction(void)
       return ActionNone;
     case 'm': {
       mvprintw(2, 0, "Max TTL: %d\n\n", maxTTL);
-      mtr_fill_buf(9, buf);
-      int i = atoi(buf);
-      if ((i < fstTTL) || (i > (MaxHost - 1)))
-        return ActionNone;
-      maxTTL = i;
+      int i;
+      mtr_curses_get_int(9, &i);
+      if ((i >= fstTTL) || (i < MaxHost))
+        maxTTL = i;
       return ActionNone;
     }
     case 'n':
       return ActionDNS;
     case 'o': {	// fields to display & their ordering
       mvprintw(2, 0, "Fields: %s\n\n", fld_active);
-      int i;
-      for (i = 0; i < MAXFLD; i++)
+      for (int i = 0; (i <= AVLFLD) && data_fields[i].key; i++)
         if (data_fields[i].descr)
-        printw("  %s\n", data_fields[i].descr);
+          printw("  %s\n", data_fields[i].descr);
       addch('\n');
       move(2,8);	// length of "Fields: "
       refresh();
 
-      i = 0;
+      static FLD_BUF_T fld_curr;
       int curs = curs_set(1);
-      while ((c = getch()) != '\n' && (i < MAXFLD))
-        if (strchr(available_options, c)) {
-          addch(c | A_BOLD);
+      int i = 0;
+      for (; i < sizeof(fld_curr); i++) {
+        int f = getch();
+        if (f == '\n')
+            break;
+        if (strchr(fld_avail, f)) {
+          addch(f | A_BOLD);
           refresh();
-          buf[i++] = c;	// Only permit values in "available_options" be entered
+          fld_curr[i] = f;	// Only permit values in "fld_avail" be entered
         } else
-          printf("\a");	// Illegal character. Beep, ring the bell.
+          putchar('\a');	// Illegal character. Beep, ring the bell.
+      }
       if (curs != ERR)
         curs_set(curs);
-      buf[i] = '\0';
-      if (i)
-        set_fld_active(buf);
+      if (i) {
+        fld_curr[i] = '\0';
+        set_fld_active((char*)fld_curr);
+      }
       return ActionNone;
     }
     case 'p':
@@ -246,8 +262,7 @@ int mtr_curses_keyaction(void)
     case 's':
       mvprintw(2, 0, "Change Packet Size: %d\n", cpacketsize);
       mvprintw(3, 0, "Size Range: %d-%d, < 0:random.\n", MINPACKET, MAXPACKET);
-      mtr_fill_buf(20, buf);
-      cpacketsize = atoi(buf);
+      mtr_curses_get_int(20, &cpacketsize);
       return ActionNone;
     case 't':
       return ActionTCP;
@@ -286,11 +301,9 @@ int mtr_curses_keyaction(void)
  if ( c == 'Q') {    /* can not be tolower(c) */
     mvprintw(2, 0, "Type of Service(tos): %d\n", tos );
     mvprintw(3, 0, "default 0x00, min cost 0x02, rel 0x04,, thr 0x08, low del 0x10...\n");
-    mtr_fill_buf(22, buf);
-    tos = atoi(buf);
-    if( tos > 255 || tos <0 ) {
+    mtr_curses_get_int(22, &tos);
+    if ((tos > 255) || (tos < 0))
       tos = 0;
-    }
     return ActionNone;
   }
   return ActionNone;          /* ignore unknown input */
@@ -300,7 +313,7 @@ void mtr_fill_data(int at, char *buf) {
   int hd_len = 0;
   int i;
   /* net_xxx returns times in usecs. Just display millisecs */
-  for (i = 0; i < MAXFLD; i++) {
+  for (i = 0; i < sizeof(fld_active); i++) {
 	/* Ignore options that don't exist */
 	/* On the other hand, we now check the input side. Shouldn't happen,
 	   can't be careful enough. */
@@ -588,16 +601,17 @@ void mtr_curses_graph(int startstat, int cols) {
 int mtr_curses_data_fields(char *buf) {
 	char fmt[16];
 	int l = 0;
-	*buf = 0;
 
-	int i;
-	for (i = 0; i < MAXFLD; i++ ) {
-		int j = fld_index[fld_active[i]];
-		if (j < 0)
-			continue;
-		sprintf(fmt, "%%%ds", data_fields[j].length);
-		sprintf(buf + l, fmt, data_fields[j].title);
-		l += data_fields[j].length;
+	if (buf) {
+		*buf = 0;
+		for (int i = 0; i < sizeof(fld_active); i++ ) {
+			int j = fld_index[fld_active[i]];
+			if (j < 0)
+				continue;
+			sprintf(fmt, "%%%ds", data_fields[j].length);
+			sprintf(buf + l, fmt, data_fields[j].title);
+			l += data_fields[j].length;
+		}
 	}
 	return l;
 }

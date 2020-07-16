@@ -77,7 +77,9 @@ const char *strlongip(ip_t *ip);
 #define MAXLABELS 8		/* http://kb.juniper.net/KB2190 (+ 3 just in case) */
 
 /* stuff used by display such as report, curses... */
-#define MAXFLD 20		/* max stats fields to display */
+#define AVLFLD 20			/* max available stat-fields to display */
+#define MAXFLD (2 * AVLFLD)	/* max stat-fields to display */
+typedef unsigned char FLD_BUF_T[MAXFLD + 1];
 
 /* XXX This doesn't really belong in this header file, but as the
    right c-files include it, it will have to do for now. */
@@ -124,13 +126,13 @@ struct fields {
   const char *format;
   int length;
 };
-extern struct fields data_fields[];
+extern const struct fields data_fields[];
 
 /* keys: the value in the array is the index number in data_fields[] */
-extern int fld_index[];
-extern unsigned char fld_active[];
-extern unsigned char fld_active_save[];
-extern char available_options[];
+extern FLD_BUF_T fld_active;
+extern FLD_BUF_T fld_active_save;
+extern char      fld_avail[];
+extern int       fld_index[];
 extern char localaddr[];
 
 void decodempls(int, char *, struct mplslen *, int);

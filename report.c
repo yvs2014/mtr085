@@ -87,7 +87,7 @@ void print_mpls(struct mplslen *mpls) {
 
 #define ACTIVE_FLD_LOOP(statement) { \
   int i; \
-  for (i=0; i < MAXFLD; i++) { \
+  for (i = 0; i < sizeof(fld_active); i++) { \
     int j = fld_index[fld_active[i]]; \
     if (j <= 0) \
       continue; \
