@@ -700,32 +700,42 @@ int ii_send_query(const char *lkey, const char *hkey) {
     return 0;
 }
 
+
 #ifdef ENABLE_IPV6
-char *reverse_host6(struct in6_addr *addr, char *buff) {
-    int i;
-    char *b = buff;
-    for (i=(sizeof(*addr)/2-1); i>=0; i--, b+=4) // 64b portion
-        sprintf(b, "%x.%x.", addr->s6_addr[i] & 0xf, addr->s6_addr[i] >> 4);
-    buff[strlen(buff) - 1] = 0;
-    return buff;
+#define BYTES_TO_PROCESS	8
+void al_reves_chars(int al_reves, const unsigned char *s6a, int i, char *b0) {
+    static char hex4bits[] = "0123456789abcdef";
+    if (al_reves) {
+        char c = s6a[BYTES_TO_PROCESS - 1 - i];
+        *b0 = hex4bits[c & 0xf];
+        *(b0 + 2) = hex4bits[(c >> 4) & 0xf];
+    } else {
+        char c = s6a[i];
+        *b0 = hex4bits[(c >> 4) & 0xf];
+        *(b0 + 2) = hex4bits[c & 0xf];
+    }
+    *(b0 + 1) = '.';
+    *(b0 + 3) = '.';
 }
 
-char *frontward_host6(struct in6_addr *addr, char *buff) {
-    int i;
-    char *b = buff;
-    for (i=0; i<=(sizeof(*addr)/2-1); i++, b+=4) // 64b portion
-        sprintf(b, "%x.%x.", addr->s6_addr[i] >> 4, addr->s6_addr[i] & 0xf);
-    buff[strlen(buff) - 1] = 0;
+char *al_reves_host6(struct in6_addr *addr, char *buff, int len, int dir) {	// 0: frontward, 1: backward
+    if (len < (4 * BYTES_TO_PROCESS))
+        return NULL;
+    for (int i = 0; i < BYTES_TO_PROCESS; i++)
+        al_reves_chars(dir, addr->s6_addr, i, buff + i * 4);
+    buff[4 * BYTES_TO_PROCESS - 1] = 0;
     return buff;
 }
 #endif
+
 
 void set_tcp_lkey(char *lkey, const char *hkey) {
   sprintf(lkey, "%s%s", origins[origin_no].prefix, hkey);
   if (origins[origin_no].suffix)
     sprintf(lkey + strlen(lkey), "%s", origins[origin_no].suffix);
 }
- 
+
+
 char *get_ipinfo(ip_t *addr, int nd) {
     if (!addr)
         return NULL;
@@ -742,17 +752,21 @@ char *get_ipinfo(ip_t *addr, int nd) {
             case 3: // whois
                 set_tcp_lkey(lkey, strlongip(addr));
                 break;
-            default: // dns
-                sprintf(lkey, "%s.%s", reverse_host6(addr, hkey), origins[origin_no].host6);
+            default: { // dns
+                char *al = al_reves_host6(addr, hkey, sizeof(hkey), 1);
+                if (!al)
+                    return NULL;
+		if (snprintf(lkey, sizeof(lkey), "%s.%s", al, origins[origin_no].host6) < 0)
+                    return NULL;
+                }
         }
-        frontward_host6(addr, hkey);
+	if (!al_reves_host6(addr, hkey, sizeof(hkey), 0))
+            return NULL;
     } else /* if (af == AF_INET) */
 #endif
     {   if (!origins[origin_no].host)
             return NULL;
-        unsigned char buff[4];
-        memcpy(buff, addr, 4);
-        sprintf(hkey, "%d.%d.%d.%d", buff[0], buff[1], buff[2], buff[3]);
+        snprintf(hkey, sizeof(hkey), "%d.%d.%d.%d", ((unsigned char*)addr)[0], ((unsigned char*)addr)[1], ((unsigned char*)addr)[2], ((unsigned char*)addr)[3]);
         switch (origins[origin_no].type) {
             case 1: // http:csv
             case 2: // http:flat-json
@@ -760,7 +774,7 @@ char *get_ipinfo(ip_t *addr, int nd) {
                 set_tcp_lkey(lkey, hkey);
                 break;
             default: // dns
-                sprintf(lkey, "%d.%d.%d.%d.%s", buff[3], buff[2], buff[1], buff[0], origins[origin_no].host);
+                snprintf(lkey, sizeof(lkey), "%d.%d.%d.%d.%s", ((unsigned char*)addr)[3], ((unsigned char*)addr)[2], ((unsigned char*)addr)[1], ((unsigned char*)addr)[0], origins[origin_no].host);
         }
     }
 
@@ -775,6 +789,7 @@ char *get_ipinfo(ip_t *addr, int nd) {
     }
     return NULL;
 }
+
 
 #define FIELD_FMT	"%%-%ds "
 char* ii_getheader(void) {
