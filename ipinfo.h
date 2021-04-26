@@ -19,14 +19,6 @@
 #ifndef IPINFO_H
 #define IPINFO_H
 
-// The autoconf system provides us with the NO_IPINFO define. 
-// Littering the code with #ifndef NO_IPINFO (double negative)
-// does not benefit readabilty. So here we invert the sense of the
-// define. 
-//
-// Similarly, this include file should be included unconditially. 
-// It will evaluate to nothing if we don't need it. 
-
 void ii_close();
 void ii_parsearg(char *arg);
 void ii_action(int action_asn);
