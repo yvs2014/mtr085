@@ -741,13 +741,12 @@ void mtr_curses_redraw(void) {
   attron(A_BOLD); addch('q'); attroff(A_BOLD); printw("uit\n");
 
   if (display_mode == 0) {
-    startstat = 1;
+    startstat = 4;	// `NN. '
     hd_len = mtr_curses_data_fields(redraw_buf);
     attron(A_BOLD);
 #ifdef IPINFO
     if (ii_ready()) {
         char *header = ii_getheader();
-        startstat = 4;	// `NN. '
         if (header)
             mvprintw(rowstat - 1, startstat, "%s", header);
         startstat += ii_getwidth(); // `NN. ' + IPINFO
