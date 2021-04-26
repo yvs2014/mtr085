@@ -50,11 +50,11 @@
 
 #ifdef LOG_IPINFO
 #include <syslog.h>
-#define IILOG_MSG(x)	{ syslog x ; }
-#define IILOG_ERR(x)	{ syslog x ; return; }
+#define IILOG_MSG(format, ...) { syslog(MTR_SYSLOG, format, __VA_ARGS__); }
+#define IILOG_RET(format, ...) { syslog(MTR_SYSLOG, format, __VA_ARGS__); return; }
 #else
-#define IILOG_MSG(x)	{}
-#define IILOG_ERR(x)	{ return; }
+#define IILOG_MSG(format, ...)  {}
+#define IILOG_RET(format, ...)  { return; }
 #endif
 
 #define COMMA	','
@@ -187,10 +187,10 @@ int split_with_sep(char** args, int max, char sep, char quote) {
 }
 
 char* split_rec(char *rec) {
-    IILOG_MSG((MTR_SYSLOG, "split_rec(%s)", rec));
+    IILOG_MSG("%s(%s)", __FUNCTION__, rec);
     if (!(items = malloc(sizeof(*items)))) {
         free(rec);
-        IILOG_MSG((MTR_SYSLOG, "split_rec(): malloc() failed"));
+        IILOG_MSG("%s(): malloc() failed", __FUNCTION__);
         return NULL;
     }
 
@@ -235,7 +235,7 @@ void add_rec(char *hkey) {
 
     ENTRY *hr, item = { hkey, items};
     if (!(hr = hsearch(item, ENTER)))
-        IILOG_ERR((MTR_SYSLOG, "hsearch(ENTER, key=%s) failed: %s", hkey, strerror(errno)));
+        IILOG_RET("hsearch(ENTER, key=%s) failed: %s", hkey, strerror(errno));
 
 #ifdef LOG_IPINFO
     static char buff[IPINFO_MAX_ITEMS * (NAMELEN + 1)];
@@ -252,18 +252,18 @@ void add_rec(char *hkey) {
         l += snprintf(buff + l, sizeof(buff) - l, "\"%s\" ", (*items)[i]);
 #endif
     }
-    IILOG_MSG((MTR_SYSLOG, "Key %s: add %s", hkey, buff));
+    IILOG_MSG("Key %s: add %s", hkey, buff);
 }
 
 ENTRY* search_hashed_id(word id) {
     word ids[2] = { id, 0 };
     ENTRY *hr, item = { (void*)ids };
     if (!(hr = hsearch(item, FIND))) {
-        IILOG_MSG((MTR_SYSLOG, "hsearch(FIND): key=%d not found", id));
+        IILOG_MSG("hsearch(FIND): key=%d not found", id);
         return NULL;
     }
 
-    IILOG_MSG((MTR_SYSLOG, "Process ipinfo response id=%d", id));
+    IILOG_MSG("Process ipinfo response id=%d", id);
     ((ii_q_t*)hr->data)->status = 1; // status: 1 (found)
     return hr;
 }
@@ -280,33 +280,33 @@ void process_dns_response(void *buff, int r) {
 
     pt = buff + sizeof(HEADER);
     if ((exp = dn_expand(buff, buff + r, pt, hostname, sizeof(hostname))) < 0)
-        IILOG_ERR((MTR_SYSLOG, "process_dns_response(): dn_expand() failed: %s", strerror(errno)));
+        IILOG_RET("%s(): dn_expand() failed: %s", __FUNCTION__, strerror(errno));
 
     pt += exp;
     GETSHORT(type, pt);
     if (type != T_TXT)
-        IILOG_ERR((MTR_SYSLOG, "process_dns_response(): broken DNS reply"));
+        IILOG_RET("%s(): broken DNS reply", __FUNCTION__);
 
     pt += INT16SZ; /* class */
     if ((exp = dn_expand(buff, buff + r, pt, hostname, sizeof(hostname))) < 0)
-        IILOG_ERR((MTR_SYSLOG, "process_dns_response(): second dn_expand() failed: %s", strerror(errno)));
+        IILOG_RET("%s(): second dn_expand() failed: %s", __FUNCTION__, strerror(errno));
 
     pt += exp;
     GETSHORT(type, pt);
     if (type != T_TXT)
-        IILOG_ERR((MTR_SYSLOG, "process_dns_response(): not a TXT record"));
+        IILOG_RET("%s(): not a TXT record", __FUNCTION__);
 
     pt += INT16SZ; /* class */
     pt += INT32SZ; /* ttl */
     GETSHORT(size, pt);
     txtlen = *pt;
     if (txtlen >= size || !txtlen)
-        IILOG_ERR((MTR_SYSLOG, "process_dns_response(): broken TXT record (txtlen = %d, size = %d)", txtlen, size));
+        IILOG_RET("%s(): broken TXT record (txtlen = %d, size = %d)", __FUNCTION__, txtlen, size);
     if (txtlen > NAMELEN)
         txtlen = NAMELEN;
 
     if (!(txt = malloc(txtlen + 1)))
-        IILOG_ERR((MTR_SYSLOG, "process_dns_response(): malloc() failed"));
+        IILOG_RET("%s(): malloc() failed", __FUNCTION__);
 
     pt++;
     strncpy(txt, (char*) pt, txtlen);
@@ -389,7 +389,7 @@ void process_http_response(void *buff, int r) {
     static char h11ok[] = "HTTP/1.1 200 OK";
     static int h11ok_ln = sizeof(h11ok) - 1;
 
-    IILOG_MSG((MTR_SYSLOG, "Got[%d]: \"%s\"", r, (char*)buff));
+    IILOG_MSG("Got[%d]: \"%s\"", r, (char*)buff);
 #ifdef LOG_IPINFO
     int reply = 0;
 #endif
@@ -407,7 +407,7 @@ void process_http_response(void *buff, int r) {
 
             int rn = split_with_sep(tcp_resp, II_RESP_LINES, '\n', 0);
             if (rn < 4) { // HEADER + NL + NL + DATA
-                IILOG_MSG((MTR_SYSLOG, "process_http_response(): empty response #%d", reply));
+                IILOG_MSG("%s(): empty response #%d", __FUNCTION__, reply);
                 continue;
             }
 
@@ -430,7 +430,7 @@ void process_http_response(void *buff, int r) {
 
             char *txt;
             if (!(txt = malloc(cnt_len + 1))) {
-                IILOG_MSG((MTR_SYSLOG, "process_http_response(): reply #%d: malloc() failed", reply));
+                IILOG_MSG("%s(): reply #%d: malloc() failed", __FUNCTION__, reply);
                 continue;
             }
             memset(txt, 0, cnt_len);
@@ -440,11 +440,11 @@ void process_http_response(void *buff, int r) {
                 strcat(txt, tcp_resp[i]);
             }
 
-            IILOG_MSG((MTR_SYSLOG, "http response#%d [%d]: \"%s\"", reply, rn, txt));
+            IILOG_MSG("http response#%d [%d]: \"%s\"", reply, rn, txt);
             if (!split_rec(trim_str(trim_str(txt, CHAR_QOUTES), CHAR_BRACKETS)))
                 continue;
             else if (got_items < origins[origin_no].ndx[0]) {
-                IILOG_MSG((MTR_SYSLOG, "process_http_response(): got #%d, expected at least #%d", got_items, origins[origin_no].ndx[0]));
+                IILOG_MSG("%s(): got #%d, expected at least #%d", __FUNCTION__, got_items, origins[origin_no].ndx[0]);
                 continue;
             }
 
@@ -463,33 +463,33 @@ void process_http_response(void *buff, int r) {
                 if (origins[origin_no].ndx[0])
                     re_ndx = origins[origin_no].ndx[0] - 1;
             if (!(hr = search_hashed_id(str2hash((*items)[re_ndx])))) {
-                IILOG_MSG((MTR_SYSLOG, "process_http_response(): got unknown reply #%d: \"%s\"", reply, (*items)[re_ndx]));
+                IILOG_MSG("%s(): got unknown reply #%d: \"%s\"", __FUNCTION__, reply, (*items)[re_ndx]);
                 continue;
             }
             add_rec(((ii_q_t*)hr->data)->key);
         } else
-            IILOG_MSG((MTR_SYSLOG, "process_http_response(): reply#%d is not OK: got \"%s\"", reply, p));
+            IILOG_MSG("%s(): reply#%d is not OK: got \"%s\"", __FUNCTION__, reply, p);
     }
 
 #ifdef LOG_IPINFO
     if (!reply)
-        IILOG_MSG((MTR_SYSLOG, "process_http_response(): What is that? got[%d] \"%s\"", r, (char*)buff));
+        IILOG_MSG("%s(): What is that? got[%d] \"%s\"", __FUNCTION__, r, (char*)buff);
 #endif
 }
 
 void process_whois_response(void *buff, int r) {
-    IILOG_MSG((MTR_SYSLOG, "Got[%d]: \"%s\"", r, (char*)buff));
+    IILOG_MSG("Got[%d]: \"%s\"", r, (char*)buff);
 
     char *txt;
     if (!(txt = malloc(RECV_BUFF_SZ)))
-        IILOG_ERR((MTR_SYSLOG, "process_whois_response(): malloc() failed"));
+        IILOG_RET("%s(): malloc() failed", __FUNCTION__);
     memcpy(txt, buff, RECV_BUFF_SZ);
     txt[r] = 0;
 
     if (!items) {
         if (!(items = malloc(sizeof(*items)))) {
             free(txt);
-            IILOG_ERR((MTR_SYSLOG, "process_whois_response(): malloc() failed"));
+            IILOG_RET("%s(): malloc() failed", __FUNCTION__);
         }
         memset(items, 0, sizeof(*items));
     }
@@ -501,7 +501,7 @@ void process_whois_response(void *buff, int r) {
     int i;
     for (i = 0; i < rn; i++) {
         char* ln[2] = { tcp_resp[i] };
-//        IILOG_MSG((MTR_SYSLOG, "process_whois_response(): got#%d \"%s\"", i, ln[0]));
+//        IILOG_MSG("%s(): got#%d \"%s\"", __FUNCTION__, i, ln[0]);
         if (split_with_sep(ln, 2, ':', 0) == 2) {
             int j;
             for (j = 0; (j < IPINFO_MAX_ITEMS) && origins[origin_no].name[j]; j++) {
@@ -532,7 +532,7 @@ void process_whois_response(void *buff, int r) {
 
     ENTRY *hr;
     if (!(hr = search_hashed_id(str2hash(last_request))))
-        IILOG_ERR((MTR_SYSLOG, "process_whois_response(): got unknown reply: \"%s\"", (char*)buff));
+        IILOG_RET("%s(): got unknown reply: \"%s\"", __FUNCTION__, (char*)buff);
 
     for (i = 0; (i < IPINFO_MAX_ITEMS) && origins[origin_no].name[i]; i++)
         if (! ((*items)[i]))
@@ -548,18 +548,18 @@ void ii_ack(void) {
     static char buff[RECV_BUFF_SZ];
     int r;
     if ((r = recv(origins[origin_no].fd, buff, sizeof(buff), 0)) < 0)
-        IILOG_ERR((MTR_SYSLOG, "ii_ack(): recv() failed: %s", strerror(errno)));
+        IILOG_RET("%s(): recv() failed: %s", __FUNCTION__, strerror(errno));
     if (!r) { // Got 0 bytes
         close(origins[origin_no].fd);
         origins[origin_no].fd = 0;
         last_request = NULL;
-        IILOG_ERR((MTR_SYSLOG, "Close connection to %s", origins[origin_no].host));
+        IILOG_RET("Close connection to %s", origins[origin_no].host);
     }
     process_response[origins[origin_no].type](buff, r);
 }
 
 int init_dns(void) {
-    IILOG_MSG((MTR_SYSLOG, "Create DNS socket"));
+    IILOG_MSG("%s", "Create DNS socket");
     if (res_init() < 0) {
         perror("res_init()");
         return -1;
@@ -572,7 +572,7 @@ int init_dns(void) {
 }
 
 int open_tcp_connection(void) {
-    IILOG_MSG((MTR_SYSLOG, "Open connection to %s", origins[origin_no].host));
+    IILOG_MSG("Open connection to %s", origins[origin_no].host);
     struct hostent* h;
     if (!(h = gethostbyname(origins[origin_no].host))) {
         perror(origins[origin_no].host);
@@ -621,7 +621,7 @@ int open_tcp_connection(void) {
             perror("select()");
 #ifdef LOG_IPINFO
         else
-            IILOG_MSG((MTR_SYSLOG, "#%d: connection timed out", i));
+            IILOG_MSG("#%d: connection timed out", i);
 #endif
     }
     fprintf(stderr, "Cannot create ipinfo connection\n");
@@ -639,7 +639,7 @@ int send_dns_query(const char *request, word id) {
     unsigned char buff[RECV_BUFF_SZ];
     int r = res_mkquery(QUERY, request, C_IN, T_TXT, NULL, 0, NULL, buff, RECV_BUFF_SZ);
     if (r < 0) {
-        IILOG_MSG((MTR_SYSLOG, "send_dns_query(): res_mkquery() failed: %s", strerror(errno)));
+        IILOG_MSG("%s(): res_mkquery() failed: %s", __FUNCTION__, strerror(errno));
         return r;
     }
     HEADER* h = (HEADER*)buff;
@@ -666,7 +666,7 @@ int ii_send_query(const char *lkey, const char *hkey) {
     word id[2] = { str2hash(hkey), 0 };
     ENTRY item = { (void*)id };
     if (hsearch(item, FIND)) {
-//        IILOG_MSG((MTR_SYSLOG, "Query %s (id=%d) on the waitlist", lookup_key, id[0]));
+//        IILOG_MSG("Query %s (id=%d) on the waitlist", lookup_key, id[0]);
         return 0;
     }
 
@@ -675,7 +675,7 @@ int ii_send_query(const char *lkey, const char *hkey) {
         if ((r = open_connection[origins[origin_no].type]()) < 0)
             return r;
 
-    IILOG_MSG((MTR_SYSLOG, "Send %s query (id=%d)", lkey, id[0]));
+    IILOG_MSG("Send %s query (id=%d)", lkey, id[0]);
     if ((r = send_query[origins[origin_no].type](lkey, id[0])) <= 0)
         return r;
 
@@ -690,9 +690,9 @@ int ii_send_query(const char *lkey, const char *hkey) {
     last_request = strdup(hkey);
     ((ii_q_t*)item.data)->key = last_request;
 
-    IILOG_MSG((MTR_SYSLOG, "Add ipinfo query (id=%d, data=%s)", id[0], hkey));
+    IILOG_MSG("Add ipinfo query (id=%d, data=%s)", id[0], hkey);
     if (!hsearch(item, ENTER)) {
-        IILOG_MSG((MTR_SYSLOG, "hsearch(ENTER, key=%d, data=%s) failed: %s", id[0], hkey, strerror(errno)));
+        IILOG_MSG("hsearch(ENTER, key=%d, data=%s) failed: %s", id[0], hkey, strerror(errno));
         return -1;
     }
 
@@ -911,7 +911,7 @@ void ii_parsearg(char *arg) {
     if (args[0])
         free(args[0]);
     enable_ipinfo = 1;
-    IILOG_MSG((MTR_SYSLOG, "Data source: %s/%s", origins[origin_no].host, origins[origin_no].host6?origins[origin_no].host6:"-"));
+    IILOG_MSG("Data source: %s/%s", origins[origin_no].host, origins[origin_no].host6?origins[origin_no].host6:"-");
 
     if (!init)
         ii_open();
@@ -943,7 +943,7 @@ char hbody_end[] =
 #ifdef LOG_IPINFO
 #define TMP_WRITE(x) \
     if (write(tmpfd, x, strlen(x)) < -1) {\
-		IILOG_MSG((MTR_SYSLOG, "ii_gen_n_open_html(): write() failed: %s", strerror(errno)));\
+		IILOG_MSG("%s(): write() failed: %s", __FUNCTION__, strerror(errno));\
         return -1;\
     }
 #else
@@ -968,7 +968,7 @@ int ii_gen_n_open_html(int mode) {
 #endif
     }
     if ((tmpfd = mkstemps(filename, strlen(TMPFILE_SUFF))) < -1) {
-        IILOG_MSG((MTR_SYSLOG, "mkstemp() failed: %s", strerror(errno)));
+        IILOG_MSG("mkstemp() failed: %s", strerror(errno));
         return -1;
     }
     strncpy(tmpfn, filename, sizeof(tmpfn));
@@ -1013,7 +1013,7 @@ int ii_gen_n_open_html(int mode) {
                 if (*region)
                     l += snprintf(buf + l, sizeof(buf) - l, "%s, ", region);
             l += snprintf(buf + l, sizeof(buf) - l, "%s\"},", country);
-            IILOG_MSG((MTR_SYSLOG, "map hope: %s", buf));
+            IILOG_MSG("map hope: %s", buf);
             TMP_WRITE(buf);
         }
     }

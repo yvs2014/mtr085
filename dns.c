@@ -65,11 +65,11 @@
 
 #ifdef LOG_DNS
 #include <syslog.h>
-#define DNSLOG_MSG(x)	{ syslog x ; }
-#define DNSLOG_ERR(x)	{ syslog x ; return; }
+#define DNSLOG_MSG(format, ...) { syslog(MTR_SYSLOG, format, __VA_ARGS__); }
+#define DNSLOG_RET(format, ...) { syslog(MTR_SYSLOG, format, __VA_ARGS__); return; }
 #else
-#define DNSLOG_MSG(x)	{}
-#define DNSLOG_ERR(x)	{ return; }
+#define DNSLOG_MSG(format, ...)  {}
+#define DNSLOG_RET(format, ...)  { return; }
 #endif
 
 struct resolve {
@@ -123,7 +123,7 @@ int dns_waitfd(int family) {
 void dns_open(void) {
   if (!enable_dns || init)
     return;
-  DNSLOG_MSG((MTR_SYSLOG, "dns init"));
+  DNSLOG_MSG("%s", "dns init");
 
   if (!hinit) {
     if (!hcreate(maxTTL * 4)) {
@@ -210,12 +210,12 @@ char* set_lookup_key(ip_t *ip) {
 void sendrequest(struct resolve *rp) {
   set_lookup_key(&(rp->ip));
   word id = str2hash(lookup_key);
-  DNSLOG_MSG((MTR_SYSLOG, "Send \"%s\" (id=%d)", lookup_key, id));
+  DNSLOG_MSG("Send \"%s\" (id=%d)", lookup_key, id);
 
   unsigned char buf[PACKETSZ];
   int r = res_mkquery(QUERY, lookup_key, C_IN, T_PTR, NULL, 0, NULL, buf, sizeof(buf));
   if (r < 0)
-    DNSLOG_ERR((MTR_SYSLOG, "Query too large"));
+    DNSLOG_RET("%s", "Query too large");
 
   HEADER *hp = (HEADER*)buf;
   hp->id = id;	/* htons() deliberately left out (redundant) */
@@ -246,7 +246,7 @@ void sendrequest(struct resolve *rp) {
 
 #ifdef LOG_DNS
     if ((myres.nsaddr_list[i].sin_family == AF_INET) || (myres.nsaddr_list[i].sin_family == AF_INET6))
-      DNSLOG_MSG((MTR_SYSLOG, "Request id=%d to %s %s", id, straddr, (re < 0) ? "failed" : "was sent"));
+      DNSLOG_MSG("Request id=%d to %s %s", id, straddr, (re < 0) ? "failed" : "was sent");
 #endif
   }
 }
@@ -272,7 +272,7 @@ const char *dns_lookup(ip_t *ip) {
     perror("dns_lookup(): malloc()");
     return NULL;
   }
-  DNSLOG_MSG((MTR_SYSLOG, "> Add hash record (id=%d) for %s", id, strlongip(ip)));
+  DNSLOG_MSG("> Add hash record (id=%d) for %s", id, strlongip(ip));
   addrcpy(&(rp->ip), ip);
   rp->hostname = NULL;
 
@@ -288,7 +288,7 @@ const char *dns_lookup(ip_t *ip) {
 
   if (!hsearch(item, ENTER)) {
     perror("dns_lookup(): hsearch(ENTER)");
-    DNSLOG_MSG((MTR_SYSLOG, "hsearch(ENTER, key=%s) failed", lookup_key));
+    DNSLOG_MSG("hsearch(ENTER, key=%s) failed", lookup_key);
     free(item.key);
     free(rp);
     return NULL;
@@ -302,97 +302,97 @@ void parserespacket(unsigned char *buf, int l) {
   static char answer[MAXDNAME];
 
   if (l < (int) sizeof(HEADER))
-    DNSLOG_ERR((MTR_SYSLOG, "Packet smaller than standard header size"));
+    DNSLOG_RET("%s", "Packet smaller than standard header size");
   if (l == (int) sizeof(HEADER))
-    DNSLOG_ERR((MTR_SYSLOG, "Packet has empty body"));
+    DNSLOG_RET("%s", "Packet has empty body");
   HEADER *hp = (HEADER*)buf;
 
-  DNSLOG_MSG((MTR_SYSLOG, "Got %d bytes, id=%d", l, hp->id));
+  DNSLOG_MSG("Got %d bytes, id=%d", l, hp->id);
   /* Convert data to host byte order */
   /* hp->id does not need to be redundantly byte-order flipped, it is only echoed by nameserver */
   struct resolve *rp = hfind_res(hp->id);
   if (!rp)
-    DNSLOG_ERR((MTR_SYSLOG, "Got unknown response (id=%d)", hp->id));
+    DNSLOG_RET("Got unknown response (id=%d)", hp->id);
   if (rp->hostname)
-    DNSLOG_ERR((MTR_SYSLOG, "Duplicated response for %s? (id=%d, hostname=%s)", strlongip(&(rp->ip)), hp->id, rp->hostname));
+    DNSLOG_RET("Duplicated response for %s? (id=%d, hostname=%s)", strlongip(&(rp->ip)), hp->id, rp->hostname);
 
   hp->qdcount = ntohs(hp->qdcount);
   hp->ancount = ntohs(hp->ancount);
   hp->nscount = ntohs(hp->nscount);
   hp->arcount = ntohs(hp->arcount);
   if (hp->tc)	/* Packet truncated */
-    DNSLOG_ERR((MTR_SYSLOG, "Nameserver packet truncated"));
+    DNSLOG_RET("%s", "Nameserver packet truncated");
   if (!hp->qr)	/* Not a reply */
-    DNSLOG_ERR((MTR_SYSLOG, "Query packet received on nameserver communication socket"));
+    DNSLOG_RET("%s", "Query packet received on nameserver communication socket");
   if (hp->opcode)	/* Not opcode 0 (standard query) */
-    DNSLOG_ERR((MTR_SYSLOG, "Invalid opcode in response packet"));
+    DNSLOG_RET("%s", "Invalid opcode in response packet");
   unsigned char *eob = buf + l;
   unsigned char *c = buf + sizeof(HEADER);
 
   if (hp->rcode != NOERROR) {
 #ifdef LOG_DNS
     if (hp->rcode == NXDOMAIN)
-      DNSLOG_MSG((MTR_SYSLOG, "Host %s not found", strlongip(&(rp->ip))))
+      DNSLOG_MSG("Host %s not found", strlongip(&(rp->ip)))
 	else
-      DNSLOG_MSG((MTR_SYSLOG, "Received error response %u", hp->rcode));
+      DNSLOG_MSG("Received error response %u", hp->rcode);
 #endif
 	return;
   }
   if (!(hp->ancount))
-    DNSLOG_ERR((MTR_SYSLOG, "No error returned but no answers given"));
+    DNSLOG_RET("%s", "No error returned but no answers given");
 
-  DNSLOG_MSG((MTR_SYSLOG, "Received nameserver reply (qd:%u an:%u ns:%u ar:%u)", hp->qdcount, hp->ancount, hp->nscount, hp->arcount));
+  DNSLOG_MSG("Received nameserver reply (qd:%u an:%u ns:%u ar:%u)", hp->qdcount, hp->ancount, hp->nscount, hp->arcount);
   if (hp->qdcount != 1)
-    DNSLOG_ERR((MTR_SYSLOG, "Reply does not contain one query"));
+    DNSLOG_RET("%s", "Reply does not contain one query");
   if (c > eob)
-    DNSLOG_ERR((MTR_SYSLOG, "Reply too short"));
+    DNSLOG_RET("%s", "Reply too short");
 
   set_lookup_key(&(rp->ip));
   *answer = 0;
 
   int r = dn_expand(buf, buf + l, c, answer, sizeof(answer));
   if (r < 0)
-    DNSLOG_ERR((MTR_SYSLOG, "dn_expand() failed while expanding query domain"));
+    DNSLOG_RET("%s", "dn_expand() failed while expanding query domain");
   answer[strlen(lookup_key)] = 0;
   if (strcasecmp(lookup_key, answer))
-    DNSLOG_ERR((MTR_SYSLOG, "Unknown query packet dropped (\"%s\" does not match \"%s\")", lookup_key, answer));
-  DNSLOG_MSG((MTR_SYSLOG, "Queried \"%s\"", answer));
+    DNSLOG_RET("Unknown query packet dropped (\"%s\" does not match \"%s\")", lookup_key, answer);
+  DNSLOG_MSG("Queried \"%s\"", answer);
   c += r;
   if (c + 4 > eob)
-    DNSLOG_ERR((MTR_SYSLOG, "Query resource record truncated"));
+    DNSLOG_RET("%s", "Query resource record truncated");
   int type, size;
   GETSHORT(type, c);
   if (type != T_PTR)
-    DNSLOG_ERR((MTR_SYSLOG, "Received unimplemented query type %u", type))
+    DNSLOG_RET("Received unimplemented query type %u", type)
   c += INT16SZ;	// skip class
 
   int i;
   for (i = hp->ancount + hp->nscount + hp->arcount; i; i--) {
     if (c > eob)
-      DNSLOG_ERR((MTR_SYSLOG, "Packet does not contain all specified resouce records"));
+      DNSLOG_RET("%s", "Packet does not contain all specified resouce records");
     memset(answer, 0, sizeof(answer));
     r = dn_expand(buf, buf + l, c, answer, sizeof(answer) - 1);
     if (r < 0)
-      DNSLOG_ERR((MTR_SYSLOG, "dn_expand() failed while expanding answer domain"));
+      DNSLOG_RET("%s", "dn_expand() failed while expanding answer domain");
 //    answer[strlen(lookup_key)] = 0;
     c += r;
     if (c + 10 > eob)
-      DNSLOG_ERR((MTR_SYSLOG, "Resource record truncated"));
+      DNSLOG_RET("%s", "Resource record truncated");
     GETSHORT(type, c);
     c += INT16SZ;	// skip class
 	c += INT32SZ;	// skip ttl
     GETSHORT(size, c);
     if (!size)
-      DNSLOG_ERR((MTR_SYSLOG, "Zero size rdata"));
+      DNSLOG_RET("%s", "Zero size rdata");
     if (c + size > eob)
-      DNSLOG_ERR((MTR_SYSLOG, "Specified rdata length exceeds packet size"));
+      DNSLOG_RET("%s", "Specified rdata length exceeds packet size");
     if (type != T_PTR) {
-      DNSLOG_MSG((MTR_SYSLOG, "Ignoring resource type %u", type));
+      DNSLOG_MSG("Ignoring resource type %u", type);
       c += size;
 	  continue;
 	}
     if (strncasecmp(lookup_key, answer, sizeof(answer))) {
-      DNSLOG_MSG((MTR_SYSLOG, "No match for \"%s\": \"%s\"", lookup_key, answer));
+      DNSLOG_MSG("No match for \"%s\": \"%s\"", lookup_key, answer);
       c += size;
 	  continue;
 	}
@@ -400,11 +400,11 @@ void parserespacket(unsigned char *buf, int l) {
     memset(answer, 0, sizeof(answer));
     r = dn_expand(buf, buf + l, c, answer, sizeof(answer) - 1);
     if (r < 0)
-      DNSLOG_ERR((MTR_SYSLOG, "dn_expand() failed while expanding domain in rdata"));
+      DNSLOG_RET("%s", "dn_expand() failed while expanding domain in rdata");
     int l = strnlen(answer, sizeof(answer));
-    DNSLOG_MSG((MTR_SYSLOG, "Answer[%d]: \"%s\"[%d]", r, answer, l));
+    DNSLOG_MSG("Answer[%d]: \"%s\"[%d]", r, answer, l);
 //    if (l > MAXHOSTNAMELEN) {
-//      DNSLOG_ERR((MTR_SYSLOG, "Ignoring reply: hostname too long: %d > %d", l, MAXHOSTNAMELEN));
+//      DNSLOG_RET("Ignoring reply: hostname too long: %d > %d", l, MAXHOSTNAMELEN);
 //      return;
 //    }
 
@@ -462,10 +462,10 @@ void dns_ack(int fd, int family) {
 #ifdef LOG_DNS
   else {
     if (af == AF_INET)
-      DNSLOG_MSG((MTR_SYSLOG, "Received reply from unknown source: %s", inet_ntop(af, &(from4->sin_addr), lookup_key, sizeof(lookup_key))))
+      DNSLOG_MSG("Received reply from unknown source: %s", inet_ntop(af, &(from4->sin_addr), lookup_key, sizeof(lookup_key)))
 #ifdef ENABLE_IPV6
     else /* if (af == AF_INET6) */
-      DNSLOG_MSG((MTR_SYSLOG, "Received reply from unknown source: %s", inet_ntop(af, &(from6->sin6_addr), lookup_key, sizeof(lookup_key))));
+      DNSLOG_MSG("Received reply from unknown source: %s", inet_ntop(af, &(from6->sin6_addr), lookup_key, sizeof(lookup_key)));
 #endif
   }
 #endif
