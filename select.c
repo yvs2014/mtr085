@@ -142,7 +142,7 @@ void select_loop(void) {
         if (Interactive)
           display_redraw();
 #ifdef IPINFO
-        if (ii_ready())
+        if (ii_ready()) {
           switch (DisplayMode) {
             case DisplayReport:
 #ifdef OUTPUT_FORMAT_CSV
@@ -156,6 +156,7 @@ void select_loop(void) {
 #endif
               query_ipinfo();
           }
+	}
 #endif
 	gettimeofday(&thistime, NULL);
 
