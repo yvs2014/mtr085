@@ -364,7 +364,7 @@ void usage(char *name) {
     if (long_options[i].has_arg) {
       char *desc = get_opt_desc((char)long_options[i].val);
       if (desc)
-        printf(" %s", desc);
+        printf(" %s", trim(desc));
     }
     printf("]\n");
   }

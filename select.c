@@ -228,11 +228,12 @@ void select_loop(void) {
     }
 
 #ifdef IPINFO
-    if (ii_waitfd())
+    if (ii_waitfd()) {
       if (FD_ISSET(iifd, &readfd)) {
         ii_ack();
         anyset = 1;
       }
+    }
 #endif
 
     /* Check for activity on open sockets */

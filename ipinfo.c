@@ -546,16 +546,17 @@ static process_response_f process_response[] = { process_dns_response, process_h
 
 void ii_ack(void) {
     static char buff[RECV_BUFF_SZ];
-    int r;
-    if ((r = recv(origins[origin_no].fd, buff, sizeof(buff), 0)) < 0)
-        IILOG_RET("%s(): recv() failed: %s", __FUNCTION__, strerror(errno));
-    if (!r) { // Got 0 bytes
+    int r = recv(origins[origin_no].fd, buff, sizeof(buff), 0);
+    if (r > 0)
+        process_response[origins[origin_no].type](buff, r);
+    else if (r < 0)
+        IILOG_RET("%s(): recv() failed: %s", __FUNCTION__, strerror(errno))
+    else { // Got 0 bytes
         close(origins[origin_no].fd);
         origins[origin_no].fd = 0;
         last_request = NULL;
         IILOG_RET("Close connection to %s", origins[origin_no].host);
     }
-    process_response[origins[origin_no].type](buff, r);
 }
 
 int init_dns(void) {
@@ -568,6 +569,7 @@ int init_dns(void) {
         perror("socket()");
         return -1;
     }
+//    IILOG_MSG("DNS socket[origin=%d]: %d", origin_no, origins[origin_no].fd);
     return 0;
 }
 

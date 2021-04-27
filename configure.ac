@@ -136,6 +136,11 @@ AS_IF([test "x$output_format" != "xno"], [
 		AC_DEFINE([OUTPUT_FORMAT_RAW], 1, [Support RAW output format])
 		AC_DEFINE([OUTPUT_FORMAT_TXT], 1, [Support TXT output format])
 		AC_DEFINE([OUTPUT_FORMAT_XML], 1, [Support XML output format])
+	], [AS_IF([test "x$output_format" = "xall"], [
+		AC_DEFINE([OUTPUT_FORMAT_CSV], 1, [Support CSV output format])
+		AC_DEFINE([OUTPUT_FORMAT_RAW], 1, [Support RAW output format])
+		AC_DEFINE([OUTPUT_FORMAT_TXT], 1, [Support TXT output format])
+		AC_DEFINE([OUTPUT_FORMAT_XML], 1, [Support XML output format])
 	], [AS_IF([test "x$output_format" = "xcsv"], [
 		AC_DEFINE([OUTPUT_FORMAT_CSV], 1, [Support CSV output format])
 	], [AS_IF([test "x$output_format" = "xraw"], [
@@ -144,6 +149,7 @@ AS_IF([test "x$output_format" != "xno"], [
 		AC_DEFINE([OUTPUT_FORMAT_TXT], 1, [Support TXT output format])
 	], [AS_IF([test "x$output_format" = "xxml"], [
 		AC_DEFINE([OUTPUT_FORMAT_XML], 1, [Support XML output format])
+	])
 	])
 	])
 	])

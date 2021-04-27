@@ -321,10 +321,11 @@ void mtr_fill_data(int at, char *buf) {
     if (j < 0)
       continue;
 
-	/* temporay hack for stats usec to ms... */
+// 1) temporay hack for stats usec to ms...
+// 2) j=0: printf(" ", 0);
 #define CURSES_FLD(factor) { sprintf(buf + hd_len, data_fields[j].format, net_elem(at, data_fields[j].key) factor); }
     if (index(data_fields[j].format, 'f'))
-      CURSES_FLD(/1000.0)
+      CURSES_FLD(/1000.)
     else
       CURSES_FLD();
     hd_len += data_fields[j].length;

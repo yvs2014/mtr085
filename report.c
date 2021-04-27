@@ -18,15 +18,15 @@
 
 #include "config.h"
 
-#include <sys/types.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
+#include <ctype.h>
+#include <assert.h>
 #include <netdb.h>
 #include <netinet/in.h>
+#include <sys/types.h>
 #include <sys/socket.h>
-#include <string.h>
-#include <strings.h>
-#include <ctype.h>
 #include <time.h>
 
 #include "mtr.h"
@@ -38,7 +38,8 @@
 #include "ipinfo.h"
 #endif
 
-#define MAXLOADBAL 5
+#define HOSTTITLE	"Host"	// report mode
+#define LSIDE_LEN	40	// non-wide report mode: left side of output
 
 extern char LocalHostname[];
 extern char *Hostname;
@@ -47,7 +48,6 @@ extern int bitpattern;
 extern int tos;
 extern int MaxPing;
 extern int reportwide;
-
 
 char *get_time_string(time_t now) {
   char *t = ctime(&now);
@@ -60,166 +60,174 @@ void report_open(void) {
   printf("Start time: %s\n", get_time_string(time(NULL)));
 }
 
-static size_t snprint_addr(char *dst, size_t dst_len, ip_t *addr) {
+static size_t snprint_addr(char *dst, size_t len, ip_t *addr) {
   if (unaddrcmp(addr)) {
     struct hostent *host = NULL;
     if (enable_dns) {
 #ifdef ENABLE_IPV6
       if (af == AF_INET6)
         host = gethostbyaddr(addr, sizeof(struct in6_addr), af);
-      else /* if (af == AF_INET) */
+      else if (af == AF_INET)
 #endif
         host = gethostbyaddr(addr, sizeof(struct in_addr), af);
+    }
+    if (host) {
+      if (enable_dns && show_ips)
+        return snprintf(dst, len, "%s (%s)", host->h_name, strlongip(addr));
+      else
+        return snprintf(dst, len, "%s", host->h_name);
     } else
-      host = NULL;
-    if (!host) return snprintf(dst, dst_len, "%s", strlongip(addr));
-    else if (enable_dns && show_ips)
-      return snprintf(dst, dst_len, "%s (%s)", host->h_name, strlongip(addr));
-    else return snprintf(dst, dst_len, "%s", host->h_name);
-  } else return snprintf(dst, dst_len, "%s", "???");
+      return snprintf(dst, len, "%s", strlongip(addr));
+  } else
+    return snprintf(dst, len, "%s", "???");
 }
 
-void print_mpls(struct mplslen *mpls) {
-  int k;
-  for (k=0; k < mpls->labels; k++)
-    printf("       [MPLS: Lbl %lu Exp %u S %u TTL %u]\n", mpls->label[k], mpls->exp[k], mpls->s[k], mpls->ttl[k]);
+void print_mpls(struct mplslen *m) {
+#define MPLS_LINE_FMT "%4s[MPLS: Lbl %lu Exp %u S %u TTL %u]"
+  if (m)
+    for (int i = 0; i < m->labels; i++)
+      printf(MPLS_LINE_FMT "\n", "", m->label[i], m->exp[i], m->s[i], m->ttl[i]);
 }
 
-#define ACTIVE_FLD_LOOP(statement) { \
-  int i; \
-  for (i = 0; i < sizeof(fld_active); i++) { \
-    int j = fld_index[fld_active[i]]; \
-    if (j <= 0) \
-      continue; \
-    statement; \
-  } \
-  printf("%s\n", buf); \
+int get_longest_name(int min, int max) {
+  char *buf = malloc(max);
+  assert(buf);
+  int l = min;
+  int m = net_max();
+  for (int at = net_min(); at < m; at++) {
+    int n = snprint_addr(buf, max, &host[at].addr);
+    if (n > l)
+      l = n;
+  }
+  free(buf);
+  return l;
 }
 
-#define AT_HOST_LOOP(statement) { \
-  int max = net_max(), at; \
-  for (at = net_min(); at < max; at++) { \
-    statement; \
-  } \
+int found_addr_in_addrs(int z, ip_t *addr, ip_t *addrs) {
+  for (int w = 0; w < z; w++) { // Ok... checking if there are ips repeated on same hop
+    if (!addrcmp(addr, &(addrs[w])))
+      return 1;
+  }
+  return 0;
 }
+
 
 void report_close(void) {
-  static char buf[MAXDNAME];
-  static char name[MAXDNAME];
-  int len_hosts;
-#define HOST	"Host"
+  assert(LSIDE_LEN < MAXDNAME);
+  char *lbuf = calloc(1, MAXDNAME);	// left side
+  assert(lbuf);
+  char *rbuf = calloc(1, MAXDNAME);	// right side
+  assert(rbuf);
 
-  if (reportwide) { // get the longest hostname
-    len_hosts = strlen(HOST);
-    AT_HOST_LOOP(
-      int nlen;
-      if ((nlen = snprint_addr(name, sizeof(name), &host[at].addr)))
-        if (len_hosts < nlen)
-          len_hosts = nlen;
-    );
-    if (len_hosts > sizeof(buf))
-      len_hosts = sizeof(buf);
-  } else
-    len_hosts = 32;
+  int len = get_longest_name(strlen(HOSTTITLE), MAXDNAME);
+  char fmt[16];
+  char lfmt[16];	// left side format
+  char dfmt[16];
 
-  int l0 = 4;	// 2d._
-  int l1 = l0 + len_hosts;
-  int len = l0;
-  memset(buf, ' ', sizeof(buf));
-  buf[sizeof(buf) - 1] = 0;
+  // header: left
 #ifdef IPINFO
   if (ii_ready()) {
-    char *ii = ii_getheader();
-    if (ii) {
-      int di = ii_getwidth();
-      if (di > (sizeof(buf) - l0))
-        di = sizeof(buf) - l0;
-      memcpy(buf + l0, ii, di);
-      len += di;
+    snprintf(lfmt, sizeof(lfmt), "%%2d. %%-%ds %%-%ds", ii_getwidth(), len); // "at. IPINFO HOST"
+    snprintf(dfmt, sizeof(dfmt), "    %%-%ds %%-%ds", ii_getwidth(), len);
+    snprintf(lbuf, MAXDNAME, dfmt, ii_getheader(), HOSTTITLE);
+  } else
+#endif
+  {
+    snprintf(lfmt, sizeof(lfmt), "%%2d. %%-%ds", len); // "at. HOST"
+    snprintf(dfmt, sizeof(dfmt), "    %%-%ds", len);
+    snprintf(lbuf, MAXDNAME, dfmt, HOSTTITLE);
+  }
+
+  // header: right
+  for (int i = 0, r = 0; i < sizeof(fld_active); i++) {
+    int j = fld_index[fld_active[i]];
+    if (j >= 0) {
+      snprintf(fmt, sizeof(fmt), "%%%ds", data_fields[j].length);
+      r += snprintf(rbuf + r, MAXDNAME - r, fmt, data_fields[j].title);
     }
   }
-#endif
-  int lh = strlen(HOST);
-  memcpy(buf + len, HOST, lh);
-  len += lh;
+
+  // header: left + right
   if (!reportwide)
-    len = len_hosts;
-  if (len < l1)
-    len = l1;
+    if (strlen(lbuf) >= LSIDE_LEN)
+      lbuf[LSIDE_LEN] = 0;
+  // without space between because all the fields on the right side are supposed to be with some indent
+  printf("%s%s\n", lbuf, rbuf);
 
-  char fmt[16];
-  ACTIVE_FLD_LOOP(
-    snprintf(fmt, sizeof(fmt), "%%%ds", data_fields[j].length);
-    snprintf(buf + len, sizeof(buf), fmt, data_fields[j].title);
-    len += data_fields[j].length;
-  );
 
-  AT_HOST_LOOP(
+  // body
+  char *name = calloc(1, MAXDNAME);
+  assert(name);
+  int max = net_max();
+
+  for (int at = net_min(); at < max; at++) {
     ip_t *addr = &host[at].addr;
-    struct mplslen *mpls = &host[at].mpls;
-    snprint_addr(name, sizeof(name), addr);
+    snprint_addr(name, MAXDNAME, addr);
 
+    // body: left
 #ifdef IPINFO
-    if (ii_ready()) {
-      snprintf(fmt, sizeof(fmt), "%%2d. %%s%%-%ds", len_hosts);
-      snprintf(buf, sizeof(buf), fmt, at+1, fmt_ipinfo(addr), name);
-    } else {
+    if (ii_ready())
+      snprintf(lbuf, MAXDNAME, lfmt, at + 1, fmt_ipinfo(addr), name);
+    else
 #endif
-    snprintf(fmt, sizeof(fmt), "%%2d. %%-%ds", len_hosts);
-    snprintf(buf, sizeof(buf), fmt, at+1, name);
-#ifdef IPINFO
+      snprintf(lbuf, MAXDNAME, lfmt, at + 1, name);
+
+    // body: right
+#define REPORT_FLD1(factor) { r += snprintf(rbuf + r, MAXDNAME - r, data_fields[j].format, net_elem(at, data_fields[j].key) factor); }
+    for (int i = 0, r = 0; i < sizeof(fld_active); i++) {
+      int j = fld_index[fld_active[i]];
+// j=0 fmt=" " elem=0: printed as " " with printf(" ", 0)
+      if (j > 0) {
+        if (index(data_fields[j].format, 'f'))
+          REPORT_FLD1(/1000.0)
+        else
+          REPORT_FLD1();
+      }
     }
-#endif
 
-    len = reportwide ? strlen(buf) : l1;
-#define REPORT_FLD1(factor) { snprintf(buf + len, sizeof(buf) - len, data_fields[j].format, net_elem(at, data_fields[j].key) factor); }
-    ACTIVE_FLD_LOOP(
-      /* 1000.0 is a temporay hack for stats usec to ms, impacted net_loss. */
-      if (index(data_fields[j].format, 'f'))
-        REPORT_FLD1(/1000.0)
-      else
-        REPORT_FLD1();
-      len += data_fields[j].length;
-    );
+    // body: left + right
+    if (!reportwide)
+      if (strlen(lbuf) >= LSIDE_LEN)
+        lbuf[LSIDE_LEN] = 0;
+    // without space between because all the fields on the right side are with space-indent
+    printf("%s%s\n", lbuf, rbuf);
 
-    /* This feature shows 'loadbalances' on routes */
 
-    /* z is starting at 1 because addrs[0] is the same that addr */
-    int z;
-    for (z = 1; z < MAXPATH ; z++) {
-      ip_t *addr2 = &(host[at].addrs[z]);
+    // body-extra-lines: multipath, mpls, etc.
+    struct mplslen *mpls = &host[at].mpls;
+    ip_t *addrs = host[at].addrs;
+    int z = 1;
+    for (int z = 1; z < MAXPATH ; z++) { // z is starting at 1 because addrs[0] is the same that addr
+      ip_t *addr2 = addrs + z;
       struct mplslen *mplss = &(host[at].mplss[z]);
-      if (!unaddrcmp(addr2))
+      if (!unaddrcmp(addr2))	// break from loop at the first unassigned
         break;
-      int found = 0;
-      int w;
-      for (w = 0; w < z; w++)
-        /* Ok... checking if there are ips repeated on same hop */
-        if (!addrcmp(addr2, &(host[at].addrs[w]))) {
-           found = 1;
-           break;
-        }
 
-      if (!found) {
-        if (mpls->labels && z == 1 && enablempls)
+      if (!found_addr_in_addrs(z, addr2, addrs)) {
+        if ((mpls->labels) && (z == 1) && enablempls)
           print_mpls(mpls);
-        printf("    ");	// 2d._
+        snprint_addr(name, MAXDNAME, addr2);
 #ifdef IPINFO
         if (ii_ready())
-          printf("%s", fmt_ipinfo(addr2));
+          snprintf(lbuf, MAXDNAME, dfmt, fmt_ipinfo(addr2), name);
+        else
 #endif
-        snprint_addr(name, sizeof(name), addr2);
-        printf("%s\n", name);
+          snprintf(lbuf, MAXDNAME, dfmt, name);
+        printf("%s\n", lbuf);
         if (enablempls)
           print_mpls(mplss);
       }
     }
 
-    /* No multipath */
-    if (mpls->labels && z == 1 && enablempls)
+    if (mpls->labels && (z == 1) && enablempls) // no multipath?
       print_mpls(mpls);
-  )
+  }
+
+  free(name);
+  free(rbuf);
+  free(lbuf);
 }
+
 
 #ifdef OUTPUT_FORMAT_TXT
 void txt_close(void) {
@@ -227,10 +235,14 @@ void txt_close(void) {
 }
 #endif
 
+
 #ifdef OUTPUT_FORMAT_XML
 #define XML_MARGIN1	4
 #define XML_MARGIN2	8
 void xml_close(void) {
+  char *buf = calloc(1, MAXDNAME);
+  assert(buf);
+
   printf("<?xml version=\"1.0\"?>\n");
   printf("<MTR SRC=\"%s\" DST=\"%s\"", LocalHostname, Hostname);
   printf(" TOS=\"0x%X\"", tos);
@@ -238,28 +250,23 @@ void xml_close(void) {
   printf(" BITPATTERN=\"0x%02X\"", (unsigned char) abs(bitpattern));
   printf(" TESTS=\"%d\">\n", MaxPing);
 
-  char name[MAXDNAME];
-  int at, max = net_max();
-  for (at = net_min(); at < max; at++) {
-    snprint_addr(name, sizeof(name), &host[at].addr);
-    printf("%*s<HUB COUNT=\"%d\" HOST=\"%s\">\n", XML_MARGIN1, " ", at + 1, name);
+  int max = net_max();
+  for (int at = net_min(); at < max; at++) {
+    snprint_addr(buf, MAXDNAME, &host[at].addr);
+    printf("%*s<HUB COUNT=\"%d\" HOST=\"%s\">\n", XML_MARGIN1, " ", at + 1, buf);
 
-    int i;
-    for (i=0; i < MAXFLD; i++) {
+    for (int i = 0; i < MAXFLD; i++) {
       int j = fld_index[fld_active[i]];
-      if (j <= 0)
-        continue;
-
-      strcpy(name, "%*s<%s>");
-      strcat(name, data_fields[j].format);
-      strcat(name, "</%s>\n");
-#define REPORT_FLD2(factor) { printf(name, XML_MARGIN2, " ", data_fields[j].title, \
-  net_elem(at, data_fields[j].key) factor, data_fields[j].title ); }
-      /* 1000.0 is a temporay hack for stats usec to ms, impacted net_loss. */
-      if (index(data_fields[j].format, 'f'))
-        REPORT_FLD2(/1000.0)
-      else
-        REPORT_FLD2();
+      if (j > 0) {
+#define REPORT_FLD2(factor) { snprintf(buf, MAXDNAME, data_fields[j].format, \
+  net_elem(at, data_fields[j].key) factor ); }
+        // 1000.0 is a temporary hack for stats usec to ms, impacted net_loss
+        if (index(data_fields[j].format, 'f'))
+          REPORT_FLD2(/1000.)
+        else
+          REPORT_FLD2();
+        printf("%*s<%s>%s</%s>\n", XML_MARGIN2, " ", data_fields[j].title, trim(buf), data_fields[j].title);
+      }
     }
 #ifdef IPINFO
       if (ii_ready())
@@ -268,72 +275,76 @@ void xml_close(void) {
     printf("%*s</HUB>\n", XML_MARGIN1, " ");
   }
   printf("</MTR>\n");
+  free(buf);
 }
 #endif
 
+
 #ifdef OUTPUT_FORMAT_CSV
-#define CSV_SEPARATOR	";"
+#define COMA	";"
+
 void prupper(const char *str) {
   while (*str)
     putchar(toupper((int) *str++));
 }
 
+
 void csv_close(time_t now) {
-  printf("PROGRAM" CSV_SEPARATOR "TIME" CSV_SEPARATOR "DESTINATION" CSV_SEPARATOR "HOP"
-    CSV_SEPARATOR "STATUS" CSV_SEPARATOR "HOSTNAME/IP");
+  char *buf = calloc(1, MAXDNAME);
+  assert(buf);
+
+  printf("PROGRAM" COMA "TIME" COMA "DESTINATION" COMA "HOP" COMA "STATUS" COMA "HOSTNAME/IP");
 #ifdef IPINFO
   if (ii_ready())
-    printf(CSV_SEPARATOR "IPINFO");
+    printf(COMA "IPINFO");
 #endif
-  int i;
-  for (i = 0; i < MAXFLD; i++) {
+  for (int i = 0; i < MAXFLD; i++) {
     int j = fld_index[fld_active[i]];
-    if (j <= 0)
-      continue;
-    printf(CSV_SEPARATOR);
-    prupper(data_fields[j].title);
+    if (j > 0) {
+      printf(COMA);
+      prupper(data_fields[j].title);
+    }
   }
   printf("\n");
 
-  char name[MAXDNAME];
-  int at, max = net_max();
-  for (at = net_min(); at < max; at++) {
+  int max = net_max();
+  for (int at = net_min(); at < max; at++) {
     ip_t *addr = &host[at].addr;
-    snprint_addr(name, sizeof(name), addr);
+    snprint_addr(buf, MAXDNAME, addr);
 
     printf("%s-%s", PACKAGE_NAME, MTR_VERSION);
-    printf(CSV_SEPARATOR "%s", get_time_string(now));
-    printf(CSV_SEPARATOR "%s", Hostname);
-    printf(CSV_SEPARATOR "%d", at + 1);
-    printf(CSV_SEPARATOR "%s", host[at].up ? "up" : "down");
-    printf(CSV_SEPARATOR "%s", name);
+    printf(COMA "%s", get_time_string(now));
+    printf(COMA "%s", Hostname);
+    printf(COMA "%d", at + 1);
+    printf(COMA "%s", host[at].up ? "up" : "down");
+    printf(COMA "%s", buf);
 #ifdef IPINFO
     if (ii_ready())
-      printf(CSV_SEPARATOR "%s", fmt_ipinfo(addr));
+      printf(COMA "%s", fmt_ipinfo(addr));
 #endif
 
-    int i;
-    for (i = 0; i < MAXFLD; i++) {
+    for (int i = 0; i < MAXFLD; i++) {
       int j = fld_index[fld_active[i]];
-      if (j <= 0)
-        continue;
-
-      /* 1000.0 is a temporay hack for stats usec to ms, impacted net_loss. */
-      if (index(data_fields[j].format, 'f'))
-        printf(CSV_SEPARATOR "%.2f", net_elem(at, data_fields[j].key) / 1000.0);
-      else
-        printf(CSV_SEPARATOR "%d", net_elem(at, data_fields[j].key));
+      if (j > 0) {
+        // 1000.0 is a temporary hack for stats usec to ms, impacted net_loss
+        if (index(data_fields[j].format, 'f'))
+          printf(COMA "%.2f", net_elem(at, data_fields[j].key) / 1000.);
+        else
+          printf(COMA "%d", net_elem(at, data_fields[j].key));
+      }
     }
     printf("\n");
   }
+  free(buf);
 }
 #endif
+
 
 #ifdef OUTPUT_FORMAT_RAW
 int enable_raw;
 static int havename[MaxHost];
 
-void raw_rawping (int at, int msec) {
+void raw_rawping(int at, int msec) {
   if (!havename[at]) {
     const char *name = dns_lookup(&host[at].addr);
     if (name) {
@@ -345,7 +356,7 @@ void raw_rawping (int at, int msec) {
   fflush(stdout);
 }
 
-void raw_rawhost (int at, ip_t * ip_addr) {
+void raw_rawhost(int at, ip_t * ip_addr) {
   printf("h %d %s\n", at, strlongip(ip_addr));
   fflush(stdout);
 }
