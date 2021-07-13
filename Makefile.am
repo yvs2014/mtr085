@@ -58,8 +58,10 @@ AM_CPPFLAGS += @libidn_CFLAGS@
 mtr_LDADD += @libidn_LIBS@
 endif
 
+AM_CFLAGS	= -fcommon	# GCC-10
+
 if LIBASAN
-AM_CFLAGS	= -fno-omit-frame-pointer
+AM_CFLAGS	+= -fno-omit-frame-pointer
 AM_CFLAGS	+= -fsanitize=undefined
 AM_CFLAGS	+= -fsanitize=address
 endif

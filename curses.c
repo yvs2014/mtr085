@@ -197,7 +197,7 @@ int mtr_curses_keyaction(void)
       return ActionMPLS;
     case 'f': {
       mvprintw(2, 0, "First TTL: %d\n\n", fstTTL);
-      int i;
+      int i = fstTTL;
       mtr_curses_get_int(11, &i);
       if ((i > 0) && (i <= maxTTL))
         fstTTL = i;
@@ -216,7 +216,7 @@ int mtr_curses_keyaction(void)
       return ActionNone;
     case 'm': {
       mvprintw(2, 0, "Max TTL: %d\n\n", maxTTL);
-      int i;
+      int i = maxTTL;
       mtr_curses_get_int(9, &i);
       if ((i >= fstTTL) || (i < MaxHost))
         maxTTL = i;
