@@ -856,9 +856,8 @@ void cr_redraw(int *data) {
 		cairo_fill(cr);
 		cairo_set_source_rgb(cr, 0, 0, 0);
 		cairo_move_to(cr, vp.x, (vp.y - font_size) / 2);
-		char buf[128], *c;
-		c = stpncpy(buf, asctime(localtime(&(now.tv_sec))), sizeof(buf));
-		*(--c) = 0;
+		char buf[32];
+		strftime(buf, sizeof(buf), "%c", localtime(&(now.tv_sec)));
 		pango_layout_set_text(pl, buf, -1);
 		pango_cairo_show_layout(cr, pl);
 		pango_layout_set_alignment(pl, PANGO_ALIGN_LEFT);
