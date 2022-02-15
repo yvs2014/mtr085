@@ -25,3 +25,5 @@ stamp-h1*
 /version.h.tmp
 .*.swp
 
+/zig-cache/
+/zig-out/

@@ -112,9 +112,8 @@ void report_close(void) {
   assert(rbuf);
 
   int len = get_longest_name(strlen(HOSTTITLE), MAXDNAME);
-  char fmt[16];
-  char lfmt[16];	// left side format
-  char dfmt[16];
+  char lfmt[32];	// left side format
+  char dfmt[32];
 
   // header: left
 #ifdef IPINFO
@@ -130,13 +129,15 @@ void report_close(void) {
     snprintf(lbuf, MAXDNAME, dfmt, HOSTTITLE);
   }
 
-  // header: right
+  { // header: right
+  char fmt[16];
   for (int i = 0, r = 0; i < sizeof(fld_active); i++) {
     int j = fld_index[fld_active[i]];
     if (j >= 0) {
       snprintf(fmt, sizeof(fmt), "%%%ds", data_fields[j].length);
       r += snprintf(rbuf + r, MAXDNAME - r, fmt, data_fields[j].title);
     }
+  }
   }
 
   // header: left + right
