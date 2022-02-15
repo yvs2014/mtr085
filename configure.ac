@@ -4,6 +4,7 @@ AM_INIT_AUTOMAKE([foreign subdir-objects])
 
 AC_CONFIG_FILES([version.h.tmp:version.h.in])
 
+#AC_PROG_CC(["zig cc"])
 AC_PROG_CC_C99
 AM_PROG_CC_C_O
 AC_PROG_RANLIB

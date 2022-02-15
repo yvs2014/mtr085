@@ -77,27 +77,31 @@ struct resolve {
   ip_t ip;
 };
 
-static int init;
-int resfd;
+// externed
+bool enable_dns = true;	// use DNS by default
+//
+
+static bool dns_init = false;
+static int resfd;
 #ifdef ENABLE_IPV6
-int resfd6;
+static int resfd6;
 #endif
 
 #ifdef ENABLE_IPV6
-struct sockaddr_storage from_sastruct;
-struct sockaddr_in6 * from6 = (struct sockaddr_in6 *) &from_sastruct;
+static struct sockaddr_storage from_sastruct;
+static struct sockaddr_in6 * from6 = (struct sockaddr_in6 *) &from_sastruct;
 #else
-struct sockaddr_in from_sastruct;
+static struct sockaddr_in from_sastruct;
 #endif
-struct sockaddr_in * from4 = (struct sockaddr_in *) &from_sastruct;
-struct sockaddr * from = (struct sockaddr *) &from_sastruct;
+static struct sockaddr_in * from4 = (struct sockaddr_in *) &from_sastruct;
+static struct sockaddr * from = (struct sockaddr *) &from_sastruct;
 
-char lookup_key[MAXDNAME];
+static char lookup_key[MAXDNAME];
 
 #define myres _res
 #ifdef NEED_RES_STATE_EXT
 /* __res_state_ext is missing on many (most?) BSD systems */
-struct __res_state_ext {
+static struct __res_state_ext {
   union res_sockaddr_union nsaddrs[MAXNS];
   struct sort_list {
     int  af;
@@ -121,7 +125,7 @@ int dns_waitfd(int family) {
 }
 
 void dns_open(void) {
-  if (!enable_dns || init)
+  if (!enable_dns || dns_init)
     return;
   DNSLOG_MSG("%s", "dns init");
 
@@ -130,7 +134,7 @@ void dns_open(void) {
       perror("hcreate()");
       return;
     }
-    hinit = 1;
+    hinit = true;
   }
 
   res_init();
@@ -160,7 +164,7 @@ void dns_open(void) {
    || (resfd6 >= 0)
 #endif
      )
-    init = 1;
+    dns_init = true;
   else
     fprintf(stderr, "dns_open() failed: out of sockets\n");
 
@@ -176,14 +180,14 @@ void dns_close(void) {
 #endif
   if (hinit) {
     hdestroy();
-    hinit = 0;
+    hinit = false;
   }
-  init = 0;
+  dns_init = false;
 }
 
 #ifdef ENABLE_IPV6
 /* Returns an ip6.arpa character string. */
-void addr2ip6arpa( ip_t * ip, char * buf ) {
+static void addr2ip6arpa( ip_t * ip, char * buf ) {
   unsigned char * p = (unsigned char *) ip;
   char * b = buf;
   int i;
@@ -207,7 +211,7 @@ char* set_lookup_key(ip_t *ip) {
   return lookup_key;
 }
 
-void sendrequest(struct resolve *rp) {
+static void sendrequest(struct resolve *rp) {
   set_lookup_key(&(rp->ip));
   word id = str2hash(lookup_key);
   DNSLOG_MSG("Send \"%s\" (id=%d)", lookup_key, id);
@@ -219,8 +223,8 @@ void sendrequest(struct resolve *rp) {
 
   HEADER *hp = (HEADER*)buf;
   hp->id = id;	/* htons() deliberately left out (redundant) */
-  int re = 0, i;
-  for (i = 0; i < myres.nscount; i++) {
+  int re = 0;
+  for (int i = 0; i < myres.nscount; i++) {
 
 #ifdef LOG_DNS
     char straddr[INET6_ADDRSTRLEN] = {0};
@@ -251,7 +255,7 @@ void sendrequest(struct resolve *rp) {
   }
 }
 
-struct resolve *hfind_res(word id) {
+static struct resolve *hfind_res(word id) {
   word ids[2] = { id, 0 };
   ENTRY item = { (void*)ids };
   ENTRY *hr = hsearch(item, FIND);
@@ -298,7 +302,7 @@ const char *dns_lookup(ip_t *ip) {
   return NULL;
 }
 
-void parserespacket(unsigned char *buf, int l) {
+static void parserespacket(unsigned char *buf, int l) {
   static char answer[MAXDNAME];
 
   if (l < (int) sizeof(HEADER))

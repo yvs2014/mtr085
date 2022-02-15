@@ -37,21 +37,19 @@
 #include "graphcairo-mtr.h"
 #endif
 
-extern int DisplayMode;
-
 #ifdef SPLITMODE
 #include "split.h"
 #endif
 
 void display_detect(int *argc, char ***argv) {
-  DisplayMode = DisplayReport;
+  display_mode = DisplayReport;
 #ifdef CURSES
-  DisplayMode = DisplayCurses;
+  display_mode = DisplayCurses;
 #endif
 }
 
 void display_open(void) {
-  switch(DisplayMode) {
+  switch(display_mode) {
   case DisplayReport:
     report_open();
     break;
@@ -75,7 +73,7 @@ void display_open(void) {
 }
 
 void display_close(time_t now) {
-  switch(DisplayMode) {
+  switch(display_mode) {
   case DisplayReport:
     report_close();
     break;
@@ -117,7 +115,7 @@ void display_close(time_t now) {
 }
 
 void display_redraw(void) {
-  switch(DisplayMode) {
+  switch(display_mode) {
 #ifdef CURSES
   case DisplayCurses:
     mtr_curses_redraw();
@@ -137,7 +135,7 @@ void display_redraw(void) {
 }
 
 int display_keyaction(void) {
-  switch(DisplayMode) {
+  switch(display_mode) {
 #ifdef CURSES
   case DisplayCurses:
     return mtr_curses_keyaction();
@@ -151,7 +149,7 @@ int display_keyaction(void) {
 }
 
 void display_loop(void) {
-  switch(DisplayMode) {
+  switch(display_mode) {
   case DisplayReport:
 #ifdef OUTPUT_FORMAT_CSV
   case DisplayCSV:
@@ -177,7 +175,7 @@ void display_loop(void) {
 
 void display_clear(void) {
 #ifdef CURSES
-  if (DisplayMode == DisplayCurses)
+  if (display_mode == DisplayCurses)
     mtr_curses_clear();
 #endif
 }

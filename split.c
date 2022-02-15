@@ -43,7 +43,7 @@
 #define SPLIT_SEPARATOR	"\t"
 
 #ifdef IPINFO
-void split_ipinfo_print(ip_t *addr) {
+static void split_ipinfo_print(ip_t *addr) {
   int i;
   for (i = 0; (i < IPINFO_MAX_ITEMS) && (ipinfo_no[i] >= 0); i++) {
     char *ipinfo = unaddrcmp(addr) ? get_ipinfo(addr, ipinfo_no[i]) : NULL;

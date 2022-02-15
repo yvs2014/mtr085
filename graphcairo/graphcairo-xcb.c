@@ -19,7 +19,7 @@ static xcb_atom_t delete_window_atom;
 static frontend_resize_t frontend_resize;
 static int shiftkey_pressed;
 
-void root_visual_type(void) {
+static void root_visual_type(void) {
     xcb_depth_iterator_t depth_iter;
     for (depth_iter = xcb_screen_allowed_depths_iterator(screen);
 		depth_iter.rem; xcb_depth_next(&depth_iter)) {
@@ -125,7 +125,7 @@ void backend_flush(void) {
 	xcb_flush(connection);
 }
 
-int keysym_to_char(xcb_keysym_t keysym) {
+static int keysym_to_char(xcb_keysym_t keysym) {
 	int c = 0;
 	// [a-zA-Z\-\+ ]
 	if ((keysym >= XK_a) && (keysym <= XK_z)) {
@@ -145,7 +145,7 @@ int keysym_to_char(xcb_keysym_t keysym) {
 	return c;
 }
 
-int keycode_to_char(xcb_key_release_event_t *ev) {
+static int keycode_to_char(xcb_key_release_event_t *ev) {
 	static xcb_key_symbols_t *key_symbols;
 	if (!key_symbols)
 		key_symbols = xcb_key_symbols_alloc(connection);

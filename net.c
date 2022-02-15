@@ -45,6 +45,7 @@
 
 #include "mtr.h"
 #include "net.h"
+#include "select.h"
 #include "display.h"
 #include "dns.h"
 #include "report.h"
@@ -110,7 +111,18 @@ struct sequence {
   struct timeval time;
 };
 
-unsigned *tcp_sockets;
+// externed
+ip_t unspec_addr;	// zero by definition
+int (*unaddrcmp)(const void *);
+int (*addrcmp)(const void *a, const void *b);
+void* (*addrcpy)(void *a, const void *b);
+int af;	// address family
+int packetsize;	// packet size used by ping
+struct nethost host[MAXHOST];
+char localaddr[INET6_ADDRSTRLEN];
+//
+
+static unsigned *tcp_sockets;
 
 
 /* Configuration parameter: How many queries to unknown hosts do we
@@ -118,71 +130,54 @@ unsigned *tcp_sockets;
    reachable) */
 #define MAX_UNKNOWN_HOSTS 10
 
-struct nethost host[MaxHost];
 static struct sequence sequence[SEQ_MAX];
 static struct timeval reset;
 
-int    timestamp;
-int    sendsock4;
-int    sendsock4_icmp;
-int    sendsock4_udp;
-int    recvsock4;
-int    sendsock6;
-int    sendsock6_icmp;
-int    sendsock6_udp;
-int    recvsock6;
-int    sendsock;
-int    recvsock;
+static int sendsock4;
+static int sendsock4_icmp;
+static int sendsock4_udp;
+static int recvsock4;
+static int sendsock6;
+static int sendsock6_icmp;
+static int sendsock6_udp;
+static int recvsock6;
+static int sendsock;
+static int recvsock;
 
 #ifdef ENABLE_IPV6
-struct sockaddr_storage sourcesockaddr_struct;
-struct sockaddr_storage remotesockaddr_struct;
-struct sockaddr_in6 * ssa6 = (struct sockaddr_in6 *) &sourcesockaddr_struct;
-struct sockaddr_in6 * rsa6 = (struct sockaddr_in6 *) &remotesockaddr_struct;
+static struct sockaddr_storage sourcesockaddr_struct;
+static struct sockaddr_storage remotesockaddr_struct;
+static struct sockaddr_in6 * ssa6 = (struct sockaddr_in6 *) &sourcesockaddr_struct;
+static struct sockaddr_in6 * rsa6 = (struct sockaddr_in6 *) &remotesockaddr_struct;
 #else
-struct sockaddr_in sourcesockaddr_struct;
-struct sockaddr_in remotesockaddr_struct;
+static struct sockaddr_in sourcesockaddr_struct;
+static struct sockaddr_in remotesockaddr_struct;
 #endif
 
-struct sockaddr * sourcesockaddr = (struct sockaddr *) &sourcesockaddr_struct;
-struct sockaddr * remotesockaddr = (struct sockaddr *) &remotesockaddr_struct;
-struct sockaddr_in * ssa4 = (struct sockaddr_in *) &sourcesockaddr_struct;
-struct sockaddr_in * rsa4 = (struct sockaddr_in *) &remotesockaddr_struct;
+static struct sockaddr * sourcesockaddr = (struct sockaddr *) &sourcesockaddr_struct;
+static struct sockaddr * remotesockaddr = (struct sockaddr *) &remotesockaddr_struct;
+static struct sockaddr_in * ssa4 = (struct sockaddr_in *) &sourcesockaddr_struct;
+static struct sockaddr_in * rsa4 = (struct sockaddr_in *) &remotesockaddr_struct;
 
-ip_t * sourceaddress;
-ip_t * remoteaddress;
-
-char localaddr[INET6_ADDRSTRLEN];
+static ip_t * sourceaddress;
+static ip_t * remoteaddress;
 
 static int batch_at;
 static int numhosts = 10;
-
-extern int fstTTL;		/* initial hub(ttl) to ping byMin */
-extern int endpoint_mode;	/* -fz option */
-extern int cpacketsize;		/* default packet size, or user-defined */
-int packetsize;			/* packet size used by ping */
-extern int bitpattern;		/* packet bit pattern used by ping */
-extern int tos;			/* type of service set in ping packet*/
-extern int remoteport;          /* target port */
-extern int timeout;             /* timeout for TCP connections */
-extern fd_set writefd;		/* TCP sockets */
-extern int maxfd;
-extern pid_t mypid;
 static int portpid;
 
-/* return the number of microseconds to wait before sending the next
-   ping */
-int calc_deltatime(float waittime) {
+// return the number of microseconds to wait before sending the next ping
+int calc_deltatime(float t) {
   int n = numhosts;
   int f = fstTTL - 1;
   if (f)
     if (n > f)
       n -= f;
-  waittime /= n;
-  return 1000000 * waittime;
+  t /= n;
+  return 1000000 * t;
 }
 
-unsigned short checksum(const void *data, int sz) {
+static unsigned short checksum(const void *data, int sz) {
   const unsigned short *ch = data;
   unsigned sum = 0;
   for (; sz > 1; sz -= 2)
@@ -194,9 +189,8 @@ unsigned short checksum(const void *data, int sz) {
   return ~sum;
 }
 
-/* Prepend pseudoheader to the udp datagram and calculate checksum */
-int udp_checksum(void *pheader, void *udata, int psize, int dsize)
-{
+// Prepend pseudoheader to the udp datagram and calculate checksum
+static int udp_checksum(void *pheader, void *udata, int psize, int dsize) {
   unsigned tsize = psize + dsize;
   char csumpacket[tsize];
   memset(csumpacket, (unsigned char) abs(bitpattern), tsize);
@@ -219,7 +213,7 @@ int udp_checksum(void *pheader, void *udata, int psize, int dsize)
   return checksum(csumpacket,tsize);
 }
 
-void save_sequence(int index, int seq) {
+static void save_sequence(int index, int seq) {
   sequence[seq].index = index;
   sequence[seq].transit = 1;
   sequence[seq].saved_seq = ++host[index].xmit;
@@ -232,7 +226,7 @@ void save_sequence(int index, int seq) {
 
   if (host[index].saved[SAVED_PINGS - 1] != -2) {
     int at;
-    for (at = 0; at < MaxHost; at++) {
+    for (at = 0; at < MAXHOST; at++) {
       memmove(host[at].saved, host[at].saved + 1, (SAVED_PINGS - 1) * sizeof(int));
       host[at].saved[SAVED_PINGS - 1] = -2;
       host[at].saved_seq_offset += 1;
@@ -241,7 +235,7 @@ void save_sequence(int index, int seq) {
   host[index].saved[SAVED_PINGS - 1] = -1;
 }
 
-int new_sequence(int index) {
+static int new_sequence(int index) {
   static int max_seqs[] = { [IPPROTO_ICMP] = SEQ_MAX, [IPPROTO_UDP] = UDPPORTS };
   static int next_sequence;
   int seq = next_sequence++;
@@ -269,11 +263,8 @@ int net_tcp_init(void) {
   namelen = sizeof(*loc); \
 }
 
-/*  Attempt to connect to a TCP port with a TTL */
-void net_send_tcp(int index) {
-  int ttl, s;
-  int opt = 1;
-  int port;
+// Attempt to connect to a TCP port with a TTL
+static void net_send_tcp(int index) {
   struct sockaddr_storage local;
   struct sockaddr_storage remote;
   struct sockaddr_in *local4 = (struct sockaddr_in *) &local;
@@ -284,9 +275,9 @@ void net_send_tcp(int index) {
 #endif
   socklen_t len;
 
-  ttl = index + 1;
+  int ttl = index + 1;
 
-  s = socket(af, SOCK_STREAM, 0);
+  int s = socket(af, SOCK_STREAM, 0);
   if (s < 0)
     ERR_N_EXIT("socket()");
 
@@ -314,7 +305,7 @@ void net_send_tcp(int index) {
   if (getsockname(s, (struct sockaddr *) &local, &len))
     ERR_N_EXIT("getsockname()");
 
-  opt = 1;
+  int opt = 1;
   if (ioctl(s, FIONBIO, &opt))
     ERR_N_EXIT("ioctl FIONBIO");
 
@@ -333,6 +324,7 @@ void net_send_tcp(int index) {
 #endif
   }
 
+  int port;
   switch (local.ss_family) {
   case AF_INET:
     port = ntohs(local4->sin_port);
@@ -365,8 +357,8 @@ void net_send_tcp(int index) {
   udp->uh_dport = htons(dport); \
 }
 
-/*  Attempt to find the host at a particular number of hops away  */
-void net_send_query(int index) {
+// Attempt to find the host at a particular number of hops away
+static void net_send_query(int index) {
   char packet[MAXPACKET];
   struct IPHeader *ip = (struct IPHeader *)packet;
   struct ICMPHeader*icmp = NULL;
@@ -380,11 +372,7 @@ void net_send_query(int index) {
   int offset = 6;
 #endif
 
-  if (packetsize < MINPACKET)
-    packetsize = MINPACKET;
-  else if (packetsize > MAXPACKET)
-    packetsize = MAXPACKET;
-
+  limit_it(MINPACKET, MAXPACKET, &packetsize);
   memset(packet, (unsigned char) abs(bitpattern), packetsize);
 
   switch ( af ) {
@@ -472,7 +460,7 @@ void net_send_query(int index) {
   sendto(sendsock, packet, packetsize, 0, remotesockaddr, salen);
 }
 
-void tcp_seq_close(unsigned at) {
+static void tcp_seq_close(unsigned at) {
   if (!tcp_sockets)
     return;
   unsigned fd = tcp_sockets[at];
@@ -485,9 +473,8 @@ void tcp_seq_close(unsigned at) {
   }
 }
 
-/*   We got a return on something we sent out.  Record the address and
-     time.  */
-void net_process_ping(unsigned port, struct mplslen mpls, void *addr, struct timeval now) {
+// We got a return on something we sent out. Record the address and time.
+static void net_process_ping(unsigned port, struct mplslen mpls, void *addr, struct timeval now) {
   int index;
   int totusec;
   int oldavg;	/* usedByMin */
@@ -791,8 +778,7 @@ int net_min (void) {
 }
 
 void net_end_transit(void) {
-  int at;
-  for(at = 0; at < MaxHost; at++)
+  for (int at = 0; at < MAXHOST; at++)
     host[at].transit = 0;
 }
 
@@ -832,12 +818,12 @@ int net_send_batch(void) {
 	when host[i].addr == 0 */
     if (!addrcmp(&(host[i].addr), remoteaddress)
 	/* || (host[i].addr == host[batch_at].addr)  */)
-      n_unknown = MaxHost; /* Make sure we drop into "we should restart" */
+      n_unknown = MAXHOST; // Make sure we drop into "we should restart"
   }
 
-  if (!addrcmp(&(host[batch_at].addr), remoteaddress) // success in reaching target
-     || (n_unknown > MAX_UNKNOWN_HOSTS) // fail in consecuitive MAX_UNKNOWN_HOSTS (firewall?)
-     || (batch_at >= (maxTTL - 1))) { // or reach limit
+  if (!addrcmp(&(host[batch_at].addr), remoteaddress)	// success in reaching target
+     || (n_unknown > MAX_UNKNOWN_HOSTS)	// fail in consecuitive MAX_UNKNOWN_HOSTS (firewall?)
+     || (batch_at >= (maxTTL - 1))) {	// or reach limit
     numhosts = batch_at + 1;
     batch_at = fstTTL - 1;
     return 1;
@@ -848,8 +834,7 @@ int net_send_batch(void) {
 }
 
 
-static void set_fd_flags(int fd)
-{
+static void set_fd_flags(int fd) {
 #if defined(HAVE_FCNTL) && defined(FD_CLOEXEC)
   int oldflags;
 
@@ -865,8 +850,7 @@ static void set_fd_flags(int fd)
 #endif
 }
 
-int net_preopen(void)
-{
+int net_preopen(void) {
   int trueopt = 1;
 
 #if !defined(IP_HDRINCL) && defined(IP_TOS) && defined(IP_TTL)
@@ -905,8 +889,7 @@ int net_preopen(void)
 }
 
 
-int net_selectsocket(void)
-{
+int net_selectsocket(void) {
 #if !defined(IP_HDRINCL) && defined(IP_TOS) && defined(IP_TTL)
   switch ( mtrtype ) {
   case IPPROTO_ICMP:
@@ -935,8 +918,7 @@ int net_selectsocket(void)
  return 0;
 }
 
-int net_open(struct hostent * host)
-{
+int net_open(struct hostent * host) {
 #ifdef ENABLE_IPV6
   struct sockaddr_storage name_struct;
 #else
@@ -976,8 +958,8 @@ int net_open(struct hostent * host)
   }
 
   len = sizeof name_struct;
-  getsockname (recvsock, name, &len);
-  sockaddrtop( name, localaddr, sizeof localaddr );
+  getsockname(recvsock, name, &len);
+  sockaddrtop(name, localaddr, sizeof(localaddr));
 
   portpid = IPPORT_RESERVED + mypid % (65535 - IPPORT_RESERVED);
   return 0;
@@ -1012,8 +994,7 @@ void net_reset(void) {
   batch_at = fstTTL - 1;	/* above replacedByMin */
   numhosts = 10;
 
-  unsigned at;
-  for (at = 0; at < MaxHost; at++) {
+  for (int at = 0; at < MAXHOST; at++) {
     host[at].xmit = 0;
     host[at].transit = 0;
     host[at].returned = 0;
@@ -1029,13 +1010,12 @@ void net_reset(void) {
     host[at].javg = 0;
     host[at].jworst = 0;
     host[at].jinta = 0;
-    int i;
-    for (i = 0; i < SAVED_PINGS; i++)
-      host[at].saved[i] = -2;	/* unsent */
-    host[at].saved_seq_offset = -SAVED_PINGS+2;
+    for (int i = 0; i < SAVED_PINGS; i++)
+      host[at].saved[i] = -2;	// unsent
+    host[at].saved_seq_offset = -SAVED_PINGS + 2;
   }
 
-  for (at = 0; at < SEQ_MAX; at++) {
+  for (int at = 0; at < SEQ_MAX; at++) {
     sequence[at].transit = 0;
     if (mtrtype == IPPROTO_TCP)
       tcp_seq_close(at);
@@ -1122,7 +1102,7 @@ void sockaddrtop( struct sockaddr * saddr, char * strptr, size_t len ) {
   }
 }
 
-/* Decode MPLS */
+// Decode MPLS
 void decodempls(int num, char *packet, struct mplslen *mpls, int offset) {
 
   int i;
@@ -1142,7 +1122,7 @@ void decodempls(int num, char *packet, struct mplslen *mpls, int offset) {
     obj_hdr_type = packet[offset+7];
 
     /* make sure we have an MPLS extension */
-    if (obj_hdr_len >= 8 && obj_hdr_class == 1 && obj_hdr_type == 1) {
+    if ((obj_hdr_len >= 8) && (obj_hdr_class == 1) && (obj_hdr_type == 1)) {
       /* how many labels do we have?  will be at least 1 */
       mpls->labels = (obj_hdr_len-4)/4;
 
@@ -1161,7 +1141,7 @@ void decodempls(int num, char *packet, struct mplslen *mpls, int offset) {
   }
 }
 
-int err_slippage(int sock) {
+static int err_slippage(int sock) {
   struct sockaddr *addr = NULL;
   socklen_t namelen;
   switch (af) {
@@ -1188,10 +1168,10 @@ int err_slippage(int sock) {
   return r;
 }
 
-/* check if we got connection or error on any fds */
-int net_process_tcp_fds(void) {
+// check if we got connection or error on any fds
+bool net_process_tcp_fds(void) {
   if (!tcp_sockets)
-    return -1;
+    return false;
 
   struct timeval now;
   uint64_t unow, utime;
@@ -1203,7 +1183,7 @@ int net_process_tcp_fds(void) {
   gettimeofday(&now, NULL);
   unow = now.tv_sec * 1000000L + now.tv_usec;
 
-  int ret = 0;
+  bool ret = false;
   unsigned at;
   for (at = 0; at < SEQ_MAX; at++) {
     unsigned fd = tcp_sockets[at];
@@ -1211,21 +1191,21 @@ int net_process_tcp_fds(void) {
       if (FD_ISSET(fd, &writefd)) {
 //        r = write(fd, "G", 1);
         errno = err_slippage(fd);
-        int r = errno ? 0 : 1; // like write()
+        bool r = errno ? false : true; // like write()
         /* if write was successful, or connection refused we have
          * (probably) reached the remote address. Anything else happens to the
          * connection, we write it off to avoid leaking sockets */
-        if (r == 1 || errno == ECONNREFUSED) {
+        if (r || (errno == ECONNREFUSED)) {
           net_process_ping(at, mpls, remoteaddress, now);
-          ret = 1;
+          ret = true;
 //        } else if ((errno != EAGAIN) && (errno != EHOSTUNREACH)) {
 //          sequence[at].transit = 0;
 //          tcp_seq_close(at);
         }
       }
       utime = sequence[at].time.tv_sec * 1000000L + sequence[at].time.tv_usec;
-      if (unow - utime > timeout) {
-        NETLOG_MSG((LOG_INFO, "close sequence[%d] after %d sec", at, timeout / 1000000));
+      if (unow - utime > tcp_timeout) {
+        NETLOG_MSG((LOG_INFO, "close sequence[%d] after %d sec", at, tcp_timeout / 1000000));
         sequence[at].transit = 0;
         tcp_seq_close(at);
       }

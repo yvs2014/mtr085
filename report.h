@@ -27,7 +27,7 @@ void report_close(void);
 void csv_close(time_t now);
 #endif
 #ifdef OUTPUT_FORMAT_RAW
-int enable_raw;
+bool enable_raw;
 void raw_rawping(int at, int msec);
 void raw_rawhost(int at, ip_t *addr);
 #endif

@@ -19,6 +19,10 @@
 #ifndef SELECT_H
 #define SELECT_H
 
+extern fd_set writefd;
+extern fd_set *p_writefd;
+extern int maxfd;
+
 void select_loop(void);
 
 #endif

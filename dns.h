@@ -22,7 +22,7 @@
 #include <netinet/in.h>
 #include <resolv.h>
 
-int enable_dns;
+extern bool enable_dns;
 
 void dns_open(void);
 void dns_close(void);

@@ -38,38 +38,31 @@
 #endif
 #include "display.h"
 
-extern int Interactive;
-extern int DisplayMode;
-extern int MaxPing;
-extern int ForceMaxPing;
-extern float WaitTime;
-extern unsigned iargs;
-#ifdef IPINFO
-extern int enable_ipinfo;
-#endif
-
 static struct timeval intervaltime;
 
+// externed
 fd_set writefd, *p_writefd;
-int dnsfd;
-#ifdef ENABLE_IPV6
-  int dnsfd6;
-#endif
 int maxfd;
+//
+
+static int dnsfd;
+#ifdef ENABLE_IPV6
+static int dnsfd6;
+#endif
 
 #define GRACETIME (5 * 1000*1000)
 
 void select_loop(void) {
   fd_set readfd;
   int netfd;
-  int anyset = 0;
-  int NumPing = 0;
-  int paused = 0;
+  bool anyset = false;
+  bool paused = false;
+  int ping_no = 0;
   struct timeval lasttime, thistime, selecttime;
   struct timeval startgrace;
   int dt;
   int rv; 
-  int graceperiod = 0;
+  bool graceperiod = false;
 
   memset(&startgrace, 0, sizeof(startgrace));
   gettimeofday(&lasttime, NULL);
@@ -77,7 +70,7 @@ void select_loop(void) {
   p_writefd = (mtrtype == IPPROTO_TCP) ? &writefd : NULL;
 
   while(1) {
-    dt = calc_deltatime(WaitTime);
+    dt = calc_deltatime(wait_time);
     intervaltime.tv_sec  = dt / 1000000;
     intervaltime.tv_usec = dt % 1000000;
 
@@ -85,7 +78,7 @@ void select_loop(void) {
     if (mtrtype == IPPROTO_TCP)
       FD_ZERO(&writefd);
 
-    if(Interactive) {
+    if (interactive) {
       FD_SET(0, &readfd);
       if (maxfd == 0)
         maxfd++;
@@ -127,7 +120,7 @@ void select_loop(void) {
     if(netfd >= maxfd) maxfd = netfd + 1;
 
     do {
-      if(anyset || paused) {
+      if (anyset || paused) {
 	/* Set timeout to 0.1s.
 	 * While this is almost instantaneous for human operators,
 	 * it's slow enough for computers to go do something else;
@@ -139,11 +132,11 @@ void select_loop(void) {
 	rv = select(maxfd, &readfd, p_writefd, NULL, &selecttime);
 
       } else {
-        if (Interactive)
+        if (interactive)
           display_redraw();
 #ifdef IPINFO
         if (ii_ready()) {
-          switch (DisplayMode) {
+          switch (display_mode) {
             case DisplayReport:
 #ifdef OUTPUT_FORMAT_CSV
             case DisplayCSV:
@@ -166,14 +159,14 @@ void select_loop(void) {
 	  lasttime = thistime;
 
 	  if (!graceperiod) {
-	    if (NumPing >= MaxPing && (!Interactive || ForceMaxPing)) {
-	      graceperiod = 1;
+	    if ((ping_no >= max_ping) && (!interactive || alter_ping)) {
+	      graceperiod = true;
 	      startgrace = thistime;
 	    }
 
 	    /* do not send out batch when we've already initiated grace period */
 	    if (!graceperiod && net_send_batch())
-	      NumPing++;
+	      ping_no++;
 	  }
 	}
 
@@ -205,24 +198,24 @@ void select_loop(void) {
       perror ("Select failed");
       exit (1);
     }
-    anyset = 0;
+    anyset = false;
 
     /*  Have we got new packets back?  */
     if (FD_ISSET(netfd, &readfd)) {
       net_process_return();
-      anyset = 1;
+      anyset = true;
     }
 
     /*  Have we finished a nameservice lookup?  */
     if (enable_dns) {
       if (dnsfd && FD_ISSET(dnsfd, &readfd)) {
         dns_ack(dnsfd, AF_INET);
-        anyset = 1;
+        anyset = true;
       }
 #ifdef ENABLE_IPV6
       if (dnsfd6 && FD_ISSET(dnsfd6, &readfd)) {
         dns_ack(dnsfd6, AF_INET6);
-        anyset = 1;
+        anyset = true;
       }
 #endif
     }
@@ -231,7 +224,7 @@ void select_loop(void) {
     if (ii_waitfd()) {
       if (FD_ISSET(iifd, &readfd)) {
         ii_ack();
-        anyset = 1;
+        anyset = true;
       }
     }
 #endif
@@ -252,11 +245,11 @@ void select_loop(void) {
           break;
 #if defined(CURSES) || defined(GRAPHCAIRO)
         case ActionDisplay:
-          display_mode = (display_mode + 1) % display_mode_max;
+          curses_mode = (curses_mode + 1) % curses_mode_max;
           // bits 7,8: display-type
           CLRBIT(iargs, 7);
           CLRBIT(iargs, 8);
-          iargs |= (display_mode & 3) << 7;
+          iargs |= (curses_mode & 3) << 7;
 #endif
         case ActionClear:
           display_clear();
@@ -265,7 +258,7 @@ void select_loop(void) {
           paused = !paused;
           break;
         case ActionMPLS:
-          enablempls = !enablempls;
+          enable_mpls = !enable_mpls;
           TGLBIT(iargs, 2);	// 2nd bit: MPLS on/off
           display_clear();
           break;
@@ -313,7 +306,7 @@ void select_loop(void) {
           }
           break;
       }
-      anyset = 1;
+      anyset = true;
     }
   }
   return;

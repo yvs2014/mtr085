@@ -24,7 +24,7 @@ void ii_parsearg(char *arg);
 void ii_action(int action_asn);
 void ii_ack(void);
 int ii_waitfd(void);
-int ii_ready(void);
+bool ii_ready(void);
 int ii_getwidth(void);
 char* ii_getheader(void);
 char *fmt_ipinfo(ip_t *addr);
@@ -34,7 +34,9 @@ void query_ipinfo(void);
 #define ASLOOKUP_DEFAULT	NULL	// cymru
 //#define ASLOOKUP_DEFAULT	"10,2"	// riswhois
 #define IPINFO_MAX_ITEMS	25
-int ipinfo_no[IPINFO_MAX_ITEMS];
-int ipinfo_max;
+extern int ipinfo_no[IPINFO_MAX_ITEMS];
+extern int ipinfo_max;
+extern bool enable_ipinfo;
+
 
 #endif

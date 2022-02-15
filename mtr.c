@@ -67,71 +67,79 @@
 #endif
 #include "version.h"
 
-pid_t mypid;
-int   DisplayMode;
-#if defined(CURSES) || defined(GRAPHCAIRO)
-int   display_mode_max = 3;
-#endif
-int   Interactive = 1;
-int   MaxPing = 10;
-int   ForceMaxPing;
-float WaitTime = 1.0;
-char *Hostname = NULL;
-char *InterfaceAddress = NULL;
-char  LocalHostname[128];
-char  mtr_args[1024];	// posix/susvn: 4096+
-unsigned iargs;	// args passed interactively
-int   cpacketsize = 64;          /* default packet size */
-int   bitpattern;
-int   tos;
-int   reportwide;
-int   mtrtype = IPPROTO_ICMP;    /* Use ICMP as default packet type */
-int   fstTTL = 1;                /* default start at first hop */
-int   endpoint_mode;             /* set by -fz option */
-int   remoteport = -1;
-int   timeout = 10 * 1000000;    /* for TCP tracing */
-
-/* default display field(defined by key in net.h) and order */
-FLD_BUF_T fld_active;
-FLD_BUF_T fld_active_save;
-char      fld_avail[AVLFLD + 1];
-int       fld_index[256];
-
-
-const struct fields data_fields[AVLFLD + 1] = {
-  /* key, Remark, Header, Format, Width */
-  {' ', "<sp>: Space between fields", " ",  " ",        1},
-  {'L', "L: Loss Ratio",          "Loss",   " %4.1f%%", 6},
-  {'D', "D: Dropped Packets",     "Drop",   " %4d",     5},
-  {'R', "R: Received Packets",    "Rcv",    " %5d",     6},
-  {'S', "S: Sent Packets",        "Snt",    " %5d",     6},
-  {'N', "N: Newest RTT(ms)",      "Last",   " %5.1f",   6},
-  {'B', "B: Min/Best RTT(ms)",    "Best",   " %5.1f",   6},
-  {'A', "A: Average RTT(ms)",     "Avg",    " %5.1f",   6},
-  {'W', "W: Max/Worst RTT(ms)",   "Wrst",   " %5.1f",   6},
-  {'V', "V: Standard Deviation",  "StDev",  " %5.1f",   6},
-  {'G', "G: Geometric Mean",      "Gmean",  " %5.1f",   6},
-  {'J', "J: Current Jitter",      "Jttr",   " %4.1f",   5},
-  {'M', "M: Jitter Mean/Avg.",    "Javg",   " %4.1f",   5},
-  {'X', "X: Worst Jitter",        "Jmax",   " %4.1f",   5},
-  {'I', "I: Interarrival Jitter", "Jint",   " %4.1f",   5},
-  {'\0', NULL, NULL, NULL, 0}
-};
-
 typedef struct names {
-  char*                 name;
-  struct names*         next;
+	char*		name;
+	struct names*	next;
 } names_t;
+
+// externed
+pid_t mypid;
+char mtr_args[1024];	// posix/susvn: 4096+
+unsigned iargs;		// args passed interactively
+bool show_ips = false;
+bool enable_mpls = false;
+bool report_wide = false;
+bool endpoint_mode = false;	// -fz option
+bool hinit = false;	// make sure that a hashtable already exists or not
+int fstTTL = 1;		// default start at first hop
+int maxTTL = 30;	// enough?
+int bitpattern;	// packet bit pattern used by ping
+int remoteport = -1;	// target port
+int tos;	// type of service set in ping packet
+int cpacketsize = 64;	// default packet size
+int tcp_timeout = 10 * 1000000;	// for TCP tracing
+//
+int display_offset;
+int color_mode;
+int curses_mode;
+#if defined(CURSES) || defined(GRAPHCAIRO)
+int curses_mode_max = 3;
+#endif
+int mtrtype = IPPROTO_ICMP;	// Use ICMP as default packet type
+	// default display field and order
+int fld_index[256];
+char fld_avail[AVLFLD + 1];
+FLD_BUF_T fld_active;
+FLD_BUF_T fld_save;
+const struct fields data_fields[AVLFLD + 1] = {
+	// Key, Remark, Header, Format, Width
+	{' ', "<sp>: Space between fields", " ",  " ",        1},
+	{'L', "L: Loss Ratio",          "Loss",   " %4.1f%%", 6},
+	{'D', "D: Dropped Packets",     "Drop",   " %4d",     5},
+	{'R', "R: Received Packets",    "Rcv",    " %5d",     6},
+	{'S', "S: Sent Packets",        "Snt",    " %5d",     6},
+	{'N', "N: Newest RTT(ms)",      "Last",   " %5.1f",   6},
+	{'B', "B: Min/Best RTT(ms)",    "Best",   " %5.1f",   6},
+	{'A', "A: Average RTT(ms)",     "Avg",    " %5.1f",   6},
+	{'W', "W: Max/Worst RTT(ms)",   "Wrst",   " %5.1f",   6},
+	{'V', "V: Standard Deviation",  "StDev",  " %5.1f",   6},
+	{'G', "G: Geometric Mean",      "Gmean",  " %5.1f",   6},
+	{'J', "J: Current Jitter",      "Jttr",   " %4.1f",   5},
+	{'M', "M: Jitter Mean/Avg.",    "Javg",   " %4.1f",   5},
+	{'X', "X: Worst Jitter",        "Jmax",   " %4.1f",   5},
+	{'I', "I: Interarrival Jitter", "Jint",   " %4.1f",   5},
+	{'\0', NULL, NULL, NULL, 0}
+};
+	//
+char srchost[NAMELEN];
+char *dsthost = NULL;
+int display_mode;
+float wait_time = 1.0;
+bool interactive = true;
+int max_ping = 10;
+bool alter_ping = false;
+//
+
+static char *iface_addr = NULL;
 static names_t *names = NULL;
 
-char* trim(char *s) {
-  char *p = s;
-  int l = strlen(p);
-  while (isspace((int)p[l-1]) && l)
-    p[--l] = 0;
-  while (isspace((int)*p))
-    p++;
-  return p;
+void set_fld_active(const char *s) {
+  static FLD_BUF_T s_copy;
+  strncpy((char*)s_copy, s, sizeof(s_copy) - 1);
+  memset(fld_save, 0, sizeof(fld_save));
+  strncpy((char*)fld_save, (char*)fld_active, sizeof(fld_save));
+  memset(fld_active, 0, sizeof(fld_active));
+  strncpy((char*)fld_active, (char*)s_copy, sizeof(fld_active));
 }
 
 word str2hash(const char* s) {
@@ -142,13 +150,14 @@ word str2hash(const char* s) {
   return h;
 }
 
-void set_fld_active(const char *s) {
-  static FLD_BUF_T s_copy;
-  strncpy((char*)s_copy, s, sizeof(s_copy) - 1);
-  memset(fld_active_save, 0, sizeof(fld_active_save));
-  strncpy((char*)fld_active_save, (char*)fld_active, sizeof(fld_active_save));
-  memset(fld_active, 0, sizeof(fld_active));
-  strncpy((char*)fld_active, (char*)s_copy, sizeof(fld_active));
+char* trim(char *s) {
+  char *p = s;
+  int l = strlen(p);
+  while (isspace((int)p[l-1]) && l)
+    p[--l] = 0;
+  while (isspace((int)*p))
+    p++;
+  return p;
 }
 
 static void append_to_names(const char* item) {
@@ -293,7 +302,7 @@ static struct option long_options[] = {
 
 static char *short_options;
 
-int my_getopt_long(int argc, char *argv[]) {
+static int my_getopt_long(int argc, char *argv[]) {
   if (!short_options) {
     short_options = malloc((sizeof(long_options) / sizeof(long_options[0])) * 2 + 1);
     if (!short_options)
@@ -311,7 +320,7 @@ int my_getopt_long(int argc, char *argv[]) {
   return getopt_long(argc, argv, short_options, long_options, NULL);
 }
 
-char *get_opt_desc(char opt) {
+static char *get_opt_desc(char opt) {
   switch (opt) {
     case 'm':
     case 'f':
@@ -352,7 +361,7 @@ char *get_opt_desc(char opt) {
   return NULL;
 }
 
-void usage(char *name) {
+static void usage(char *name) {
   printf("Usage: %s [-", name);
   int i, l = strlen(short_options);
   for (i = 0; i < l; i++)
@@ -370,17 +379,22 @@ void usage(char *name) {
   }
 }
 
-void parse_arg(int argc, char **argv) {
-  int opt;
-  int i;
-  opt = 0;
-  while(1) {
+void limit_it(const int v0, const int v1, int *v) {
+	if (*v > v1)
+		*v = v1;
+	else if (*v < v0)
+		*v = v0;
+}
+ 
+static void parse_arg(int argc, char **argv) {
+  int opt = 0;
+  while (1) {
     /* added f:m:o: byMin */
     opt = my_getopt_long(argc, argv);
-    if(opt == -1)
+    if (opt == -1)
       break;
 
-    switch(opt) {
+    switch (opt) {
     case '?':
       usage(argv[0]);
       exit(-1);
@@ -388,15 +402,15 @@ void parse_arg(int argc, char **argv) {
       printf ("%s-%s\n", argv[0], MTR_VERSION);
       exit(0);
     case 'r':
-      DisplayMode = DisplayReport;
+      display_mode = DisplayReport;
       break;
     case 'w':
-      reportwide = 1;
-      DisplayMode = DisplayReport;
+      report_wide = true;
+      display_mode = DisplayReport;
       break;
 #ifdef SPLITMODE
     case 'p':
-      DisplayMode = DisplaySplit;
+      display_mode = DisplaySplit;
       break;
 #endif
 #if defined(OUTPUT_FORMAT_CSV) || defined(OUTPUT_FORMAT_RAW) || defined(OUTPUT_FORMAT_TXT) || defined(OUTPUT_FORMAT_XML)
@@ -404,23 +418,23 @@ void parse_arg(int argc, char **argv) {
       switch (tolower((int)optarg[0])) {
 #ifdef OUTPUT_FORMAT_CSV
         case 'c':
-          DisplayMode = DisplayCSV;
+          display_mode = DisplayCSV;
           break;
 #endif
 #ifdef OUTPUT_FORMAT_RAW
         case 'r':
-          DisplayMode = DisplayRaw;
-          enable_raw = 1;
+          display_mode = DisplayRaw;
+          enable_raw = true;
           break;
 #endif
 #ifdef OUTPUT_FORMAT_TXT
         case 't':
-          DisplayMode = DisplayTXT;
+          display_mode = DisplayTXT;
           break;
 #endif
 #ifdef OUTPUT_FORMAT_XML
         case 'x':
-          DisplayMode = DisplayXML;
+          display_mode = DisplayXML;
           break;
 #endif
         default:
@@ -431,59 +445,52 @@ void parse_arg(int argc, char **argv) {
 #endif
 #if defined(CURSES) || defined(GRAPHCAIRO)
     case 'd':
-      display_mode = ((atoi(optarg)) & ~8) % display_mode_max;
+      curses_mode = ((atoi(optarg)) & ~8) % curses_mode_max;
       color_mode = ((atoi(optarg)) & 8) ? 1 : 0;
       break;
 #endif
     case 'c':
-      MaxPing = atoi(optarg);
-      ForceMaxPing = 1;
+      max_ping = atoi(optarg);
+      alter_ping = true;
       break;
     case 's':
       cpacketsize = atoi(optarg);
       break;
     case 'a':
-      InterfaceAddress = optarg;
+      iface_addr = optarg;
       break;
     case 'e':
-      enablempls = 1;
+      enable_mpls = true;
       break;
     case 'n':
-      enable_dns = 0;
+      enable_dns = false;
       break;
     case 'i':
-      WaitTime = atof(optarg);
-      if (WaitTime <= 0) {
+      wait_time = atof(optarg);
+      if (wait_time <= 0) {
         fprintf(stderr, "Wait time must be positive\n");
         exit(1);
       }
-      if (getuid() && (WaitTime < 1)) {
+      if (getuid() && (wait_time < 1)) {
         fprintf(stderr, "Non-root users cannot request an interval < 1.0 seconds\n");
         exit(1);
       }
       break;
     case 'f':
       if (optarg[0] == 'z') {
-        endpoint_mode = 1;
+        endpoint_mode = true;
         break;
       }
       fstTTL = atoi(optarg);
-      if (fstTTL > maxTTL)
-        fstTTL = maxTTL;
-      if (fstTTL < 1)	/* prevent 0 hop */
-        fstTTL = 1;
+      limit_it(1, maxTTL, &fstTTL);
       break;
     case 'F':
       read_from_file(optarg);
       break;
     case 'm':
       maxTTL = atoi(optarg);
-      if (maxTTL > (MaxHost - 1))
-        maxTTL = MaxHost - 1;
-      if (maxTTL < 1)	/* prevent 0 hop */
-        maxTTL = 1;
-      if (fstTTL > maxTTL) /* don't know the pos of -m or -f */
-        fstTTL = maxTTL;
+      limit_it(1, MAXHOST - 1, &maxTTL);
+      limit_it(1, maxTTL, &fstTTL);
       break;
     case 'o':
       /* Check option before passing it on to fld_active. */
@@ -491,7 +498,7 @@ void parse_arg(int argc, char **argv) {
         fprintf(stderr, "Too many fields (max=%zd): %s\n", sizeof(fld_active) - 1, optarg);
         exit(1);
       }
-      for (i = 0; optarg[i]; i++) {
+      for (int i = 0; optarg[i]; i++) {
         if(!strchr(fld_avail, optarg[i])) {
           fprintf(stderr, "Unknown field identifier: %c\n", optarg[i]);
           exit(1);
@@ -529,7 +536,7 @@ void parse_arg(int argc, char **argv) {
       }
       break;
     case 'b':
-      show_ips = 1;
+      show_ips = true;
       break;
     case 'P':
       remoteport = atoi(optarg);
@@ -539,8 +546,8 @@ void parse_arg(int argc, char **argv) {
       }
       break;
     case 'Z':
-      timeout = atoi(optarg);
-      timeout *= 1000000;
+      tcp_timeout = atoi(optarg);
+      tcp_timeout *= 1000000;
       break;
     case '4':
       net_init(0);
@@ -561,17 +568,17 @@ void parse_arg(int argc, char **argv) {
 #ifdef GRAPHCAIRO
     case 'G':
       gc_parsearg(optarg);
-      DisplayMode = DisplayGraphCairo;
+      display_mode = DisplayGraphCairo;
       break;
 #endif
     }
   }
 
   static int sz;
-  for (i = 1; i < argc; i++)
+  for (int i = 1; i < argc; i++)
     sz += snprintf(mtr_args + sz, sizeof(mtr_args) - sz, " %s", argv[i]);
 
-  switch (DisplayMode) {
+  switch (display_mode) {
     case DisplayReport:
 #ifdef OUTPUT_FORMAT_CSV
     case DisplayCSV:
@@ -585,7 +592,7 @@ void parse_arg(int argc, char **argv) {
 #ifdef OUTPUT_FORMAT_XML
     case DisplayXML:
 #endif
-      Interactive = 0;
+      interactive = false;
   }
 
   if (optind > argc - 1)
@@ -593,7 +600,7 @@ void parse_arg(int argc, char **argv) {
 }
 
 
-void parse_mtr_options(char *string) {
+static void parse_mtr_options(char *string) {
   int argc;
   char *argv[128];
 
@@ -637,7 +644,7 @@ void parse_mtr_options(char *string) {
   optind = 0;
 }
 
-int set_hostent(struct addrinfo *res) {
+static int set_hostent(struct addrinfo *res) {
     struct addrinfo *ai;
     for (ai = res; ai; ai = ai->ai_next)
       if (af == ai->ai_family)	// use only the desired AF
@@ -667,7 +674,7 @@ int set_hostent(struct addrinfo *res) {
       perror("Unable to start net module");
       return 0;	// unsuccess
 	}
-    if (net_set_interfaceaddress(InterfaceAddress)) {
+    if (net_set_interfaceaddress(iface_addr)) {
       perror("Couldn't set interface address");
       return 0;	// unsuccess
     }
@@ -677,8 +684,6 @@ int set_hostent(struct addrinfo *res) {
 
 int main(int argc, char **argv) {
   net_init(0);		// Use IPv4 by default
-  enable_dns = 1;	// Use DNS
-  maxTTL = 30;		// Is it enough?
 
   /*  Get the raw sockets first thing, so we can drop to user euid immediately  */
   if (net_preopen()) {
@@ -705,7 +710,7 @@ int main(int argc, char **argv) {
 
   display_detect(&argc, &argv);
 #if defined(CURSES) || defined(GRAPHCAIRO)
-  display_mode = 0;
+  curses_mode = 0;
 #endif
 
   /* The field options are now in a static array all together,
@@ -718,17 +723,17 @@ int main(int argc, char **argv) {
   }
 
 #ifdef UNICODE
-  int dm_histogram = 0;
+  bool dm_histogram = false;
   char *lc_ctype = setlocale(LC_CTYPE, NULL);
   setlocale(LC_CTYPE, "");
   if (strcasecmp("UTF-8", nl_langinfo(CODESET)) == 0) {
     if (iswprint(L'▁'))
-      dm_histogram = 1;
+      dm_histogram = true;
     else
       perror("Unicode block elements are not printable");
   }
   if (dm_histogram)
-    display_mode_max++;
+    curses_mode_max++;
   else
     setlocale(LC_CTYPE, lc_ctype);
 #endif
@@ -756,31 +761,31 @@ int main(int argc, char **argv) {
   time_t now = time(NULL);
   names_t *n;
   for (n = names; n; n = n->next) {
-    Hostname = n->name;
-    if (gethostname(LocalHostname, sizeof(LocalHostname)))
-      strcpy(LocalHostname, "UNKNOWNHOST");
+    dsthost = n->name;
+    if (gethostname(srchost, sizeof(srchost)))
+      strcpy(srchost, "UNKNOWNHOST");
 
     struct addrinfo hints, *res;
     memset(&hints, 0, sizeof(hints));
     hints.ai_family = af;
     hints.ai_socktype = SOCK_DGRAM;
-    int error = getaddrinfo(Hostname, NULL, &hints, &res);
+    int error = getaddrinfo(dsthost, NULL, &hints, &res);
 #ifdef HAVE_LIBIDN
     if (error) {
       char *z_hostname;
-      if (idna_to_ascii_lz(Hostname, &z_hostname, 0) == IDNA_SUCCESS)
+      if (idna_to_ascii_lz(dsthost, &z_hostname, 0) == IDNA_SUCCESS)
         error = getaddrinfo(z_hostname, NULL, &hints, &res);
       if (error)
-        if (idna_to_ascii_8z(Hostname, &z_hostname, 0) == IDNA_SUCCESS)
+        if (idna_to_ascii_8z(dsthost, &z_hostname, 0) == IDNA_SUCCESS)
           error = getaddrinfo(z_hostname, NULL, &hints, &res);
     } else
 #endif
     {
       if (error) {
         if (error == EAI_SYSTEM)
-          perror(Hostname);
+          perror(dsthost);
         else
-          fprintf(stderr, "Failed to resolve \"%s\": %s\n", Hostname, gai_strerror(error));
+          fprintf(stderr, "Failed to resolve \"%s\": %s\n", dsthost, gai_strerror(error));
       } else if (set_hostent(res)) {
         lock(stdout);
         display_open();

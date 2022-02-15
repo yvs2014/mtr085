@@ -41,22 +41,14 @@
 #define HOSTTITLE	"Host"	// report mode
 #define LSIDE_LEN	40	// non-wide report mode: left side of output
 
-extern char LocalHostname[];
-extern char *Hostname;
-extern int packetsize;
-extern int bitpattern;
-extern int tos;
-extern int MaxPing;
-extern int reportwide;
-
-char *get_time_string(time_t now) {
+static char *get_time_string(time_t now) {
   char *t = ctime(&now);
   t[strlen(t) - 1] = 0; // remove the trailing newline
   return t;
 }
 
 void report_open(void) {
-  printf("Local host: %s\n", LocalHostname);
+  printf("Local host: %s\n", srchost);
   printf("Start time: %s\n", get_time_string(time(NULL)));
 }
 
@@ -82,14 +74,14 @@ static size_t snprint_addr(char *dst, size_t len, ip_t *addr) {
     return snprintf(dst, len, "%s", "???");
 }
 
-void print_mpls(struct mplslen *m) {
+static void print_mpls(struct mplslen *m) {
 #define MPLS_LINE_FMT "%4s[MPLS: Lbl %lu Exp %u S %u TTL %u]"
   if (m)
     for (int i = 0; i < m->labels; i++)
       printf(MPLS_LINE_FMT "\n", "", m->label[i], m->exp[i], m->s[i], m->ttl[i]);
 }
 
-int get_longest_name(int min, int max) {
+static int get_longest_name(int min, int max) {
   char *buf = malloc(max);
   assert(buf);
   int l = min;
@@ -103,7 +95,7 @@ int get_longest_name(int min, int max) {
   return l;
 }
 
-int found_addr_in_addrs(int z, ip_t *addr, ip_t *addrs) {
+static int found_addr_in_addrs(int z, ip_t *addr, ip_t *addrs) {
   for (int w = 0; w < z; w++) { // Ok... checking if there are ips repeated on same hop
     if (!addrcmp(addr, &(addrs[w])))
       return 1;
@@ -148,7 +140,7 @@ void report_close(void) {
   }
 
   // header: left + right
-  if (!reportwide)
+  if (!report_wide)
     if (strlen(lbuf) >= LSIDE_LEN)
       lbuf[LSIDE_LEN] = 0;
   // without space between because all the fields on the right side are supposed to be with some indent
@@ -186,7 +178,7 @@ void report_close(void) {
     }
 
     // body: left + right
-    if (!reportwide)
+    if (!report_wide)
       if (strlen(lbuf) >= LSIDE_LEN)
         lbuf[LSIDE_LEN] = 0;
     // without space between because all the fields on the right side are with space-indent
@@ -197,14 +189,14 @@ void report_close(void) {
     struct mplslen *mpls = &host[at].mpls;
     ip_t *addrs = host[at].addrs;
     int z = 1;
-    for (int z = 1; z < MAXPATH ; z++) { // z is starting at 1 because addrs[0] is the same that addr
+    for (; z < MAXPATH; z++) { // z is starting at 1 because addrs[0] is the same that addr
       ip_t *addr2 = addrs + z;
       struct mplslen *mplss = &(host[at].mplss[z]);
       if (!unaddrcmp(addr2))	// break from loop at the first unassigned
         break;
 
       if (!found_addr_in_addrs(z, addr2, addrs)) {
-        if ((mpls->labels) && (z == 1) && enablempls)
+        if ((mpls->labels) && (z == 1) && enable_mpls)
           print_mpls(mpls);
         snprint_addr(name, MAXDNAME, addr2);
 #ifdef IPINFO
@@ -214,12 +206,12 @@ void report_close(void) {
 #endif
           snprintf(lbuf, MAXDNAME, dfmt, name);
         printf("%s\n", lbuf);
-        if (enablempls)
+        if (enable_mpls)
           print_mpls(mplss);
       }
     }
 
-    if (mpls->labels && (z == 1) && enablempls) // no multipath?
+    if (mpls->labels && (z == 1) && enable_mpls) // no multipath?
       print_mpls(mpls);
   }
 
@@ -244,11 +236,11 @@ void xml_close(void) {
   assert(buf);
 
   printf("<?xml version=\"1.0\"?>\n");
-  printf("<MTR SRC=\"%s\" DST=\"%s\"", LocalHostname, Hostname);
+  printf("<MTR SRC=\"%s\" DST=\"%s\"", srchost, dsthost);
   printf(" TOS=\"0x%X\"", tos);
   printf(" PSIZE=\"%d\"", packetsize);
   printf(" BITPATTERN=\"0x%02X\"", (unsigned char) abs(bitpattern));
-  printf(" TESTS=\"%d\">\n", MaxPing);
+  printf(" TESTS=\"%d\">\n", max_ping);
 
   int max = net_max();
   for (int at = net_min(); at < max; at++) {
@@ -283,7 +275,7 @@ void xml_close(void) {
 #ifdef OUTPUT_FORMAT_CSV
 #define COMA	";"
 
-void prupper(const char *str) {
+static void prupper(const char *str) {
   while (*str)
     putchar(toupper((int) *str++));
 }
@@ -314,7 +306,7 @@ void csv_close(time_t now) {
 
     printf("%s-%s", PACKAGE_NAME, MTR_VERSION);
     printf(COMA "%s", get_time_string(now));
-    printf(COMA "%s", Hostname);
+    printf(COMA "%s", dsthost);
     printf(COMA "%d", at + 1);
     printf(COMA "%s", host[at].up ? "up" : "down");
     printf(COMA "%s", buf);
@@ -341,8 +333,10 @@ void csv_close(time_t now) {
 
 
 #ifdef OUTPUT_FORMAT_RAW
-int enable_raw;
-static int havename[MaxHost];
+// externed
+bool enable_raw = false;
+//
+static int havename[MAXHOST];
 
 void raw_rawping(int at, int msec) {
   if (!havename[at]) {

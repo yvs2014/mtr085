@@ -56,7 +56,7 @@ void backend_flush(void) {
 	XFlush(display);
 }
 
-int keysym_to_char(KeySym keysym) {
+static int keysym_to_char(KeySym keysym) {
 	int c = 0;
 	// [a-zA-Z\-\+ ]
 	if ((keysym >= XK_a) && (keysym <= XK_z)) {
@@ -76,7 +76,7 @@ int keysym_to_char(KeySym keysym) {
 	return c;
 }
 
-int keycode_to_char(XKeyEvent *ev) {
+static int keycode_to_char(XKeyEvent *ev) {
 	int keysyms_per_keycode_return;
 	KeySym *p = XGetKeyboardMapping(display, ev->keycode, 2, &keysyms_per_keycode_return);
 	KeySym keysym = 0;

@@ -33,56 +33,21 @@
 #define INET6_ADDRSTRLEN	46
 #endif
 
-int net_preopen(void);
-int net_selectsocket(void);
-int net_open(struct hostent *host);
-void net_reopen(struct hostent *address);
-int net_set_interfaceaddress (char *InterfaceAddress);
-void net_reset(void);
-void net_close(void);
-int net_waitfd(void);
-void net_process_return(void);
-
-int net_max(void);
-int net_min(void);
-int net_elem(int at, char c);
-int net_send_batch(void);
-void net_end_transit(void);
-int calc_deltatime (float WaitTime);
-
-#define SAVED_PINGS 200
-int net_duplicate(int at, int seq);
-int net_process_tcp_fds(void);
-int net_tcp_init(void);
-
-void sockaddrtop( struct sockaddr * saddr, char * strptr, size_t len );
-
-int af;
-ip_t unspec_addr;	// zero by definition
-int (*unaddrcmp)(const void *);
-int (*addrcmp)(const void *a, const void *b);
-int addr4cmp(const void *a, const void *b);
-int addr6cmp(const void *a, const void *b);
-void* (*addrcpy)(void *a, const void *b);
-void* addr4cpy(void *a, const void *b);
-void* addr6cpy(void *a, const void *b);
-void net_init(int ipv6_mode);
-const char *strlongip(ip_t *ip);
-
 #define MAXPATH 8
-#define MaxHost 256
+#define MAXHOST 256
 
 #define MAXPACKET 4470		/* largest test packet size */
 #define MINPACKET 28		/* 20 bytes IP header and 8 bytes ICMP or UDP */
 #define MAXLABELS 8		/* http://kb.juniper.net/KB2190 (+ 3 just in case) */
 
-/* stuff used by display such as report, curses... */
-#define AVLFLD 20			/* max available stat-fields to display */
-#define MAXFLD (2 * AVLFLD)	/* max stat-fields to display */
-typedef unsigned char FLD_BUF_T[MAXFLD + 1];
+#define SAVED_PINGS 200
 
-/* XXX This doesn't really belong in this header file, but as the
-   right c-files include it, it will have to do for now. */
+extern int af;
+extern int packetsize;
+extern ip_t unspec_addr;	// zero by definition
+extern int (*unaddrcmp)(const void *);
+extern int (*addrcmp)(const void *a, const void *b);
+extern void* (*addrcpy)(void *a, const void *b);
 
 /* MPLS label object */
 struct mplslen {
@@ -118,23 +83,34 @@ struct nethost {
 };
 extern struct nethost host[];
 
-/* dynamic field drawing */
-struct fields {
-  const unsigned char key;
-  const char *descr;
-  const char *title;
-  const char *format;
-  int length;
-};
-extern const struct fields data_fields[];
-
-/* keys: the value in the array is the index number in data_fields[] */
-extern FLD_BUF_T fld_active;
-extern FLD_BUF_T fld_active_save;
-extern char      fld_avail[];
-extern int       fld_index[];
 extern char localaddr[];
 
+void net_init(int ipv6_mode);
+int net_tcp_init(void);
+int net_preopen(void);
+int net_open(struct hostent *host);
+int net_selectsocket(void);
+void net_reopen(struct hostent *address);
+int net_set_interfaceaddress(char *InterfaceAddress);
+void net_reset(void);
+void net_close(void);
+int net_waitfd(void);
+void net_process_return(void);
+int net_max(void);
+int net_min(void);
+int net_elem(int at, char c);
+int net_send_batch(void);
+void net_end_transit(void);
+int net_duplicate(int at, int seq);
+bool net_process_tcp_fds(void);
+
+void sockaddrtop(struct sockaddr *saddr, char *strptr, size_t len);
 void decodempls(int, char *, struct mplslen *, int);
+const char *strlongip(ip_t *ip);
+int calc_deltatime(float t);
+int addr4cmp(const void *a, const void *b);
+int addr6cmp(const void *a, const void *b);
+void* addr4cpy(void *a, const void *b);
+void* addr6cpy(void *a, const void *b);
 
 #endif

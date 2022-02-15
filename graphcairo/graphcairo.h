@@ -21,9 +21,9 @@
 typedef struct {
 	int graph_type;
 	int period;
-	int enable_legend;
-	int enable_multipath;
-	int jitter_graph;
+	bool enable_legend;
+	bool enable_multipath;
+	bool jitter_graph;
 	int cols_max;
 	int path_max;
 	int label_max;

@@ -60,20 +60,21 @@
 #define COMMA	','
 #define VSLASH	'|'
 #define II_RESP_LINES	100
-#define NAMELEN	256
 #define UNKN	"?"
 #define RECV_BUFF_SZ	3000
 #define TCP_CONN_TIMEOUT	3
 #define CHAR_QOUTES	"\"'"
 #define CHAR_BRACKETS	"{}"
 
-extern struct __res_state _res;
-extern char mtr_args[];
+//extern struct __res_state _res;
 
-int enable_ipinfo;
+// externed
+int ipinfo_max;
 int ipinfo_no[] = {-1};
+bool enable_ipinfo = false;
+//
 
-static int init;
+static bool ii_initiated;
 static int origin_no;
 static int skipped_items;
 static int skipped_props;
@@ -91,7 +92,7 @@ typedef struct {
 #define TMPFILE_SUFF	".html"
 #define TMPFILE	TMPFILE_BASE TMPFILE_SUFF
 
-char tmpfn[] = TMPFILE;
+static char tmpfn[] = TMPFILE;
 static int tmpfd;
 typedef char* tcp_resp_t[II_RESP_LINES];
 static tcp_resp_t tcp_resp;
@@ -160,7 +161,7 @@ static origin_t origins[] = {
         NULL, 3, {}, "-M " },
 };
 
-int split_with_sep(char** args, int max, char sep, char quote) {
+static int split_with_sep(char** args, int max, char sep, char quote) {
     if (!*args)
         return 0;
 
@@ -186,7 +187,7 @@ int split_with_sep(char** args, int max, char sep, char quote) {
     return got_items;
 }
 
-char* split_rec(char *rec) {
+static char* split_rec(char *rec) {
     IILOG_MSG("%s(%s)", __FUNCTION__, rec);
     if (!(items = malloc(sizeof(*items)))) {
         free(rec);
@@ -213,7 +214,7 @@ char* split_rec(char *rec) {
     return (ipinfo_no[0] < n) ? (*items)[ipinfo_no[0]] : (*items)[0];
 }
 
-void add_rec(char *hkey) {
+static void add_rec(char *hkey) {
     if (origins[origin_no].ndx[0]) {
         items_t it;
         memcpy(&it, items, sizeof(it));
@@ -255,7 +256,7 @@ void add_rec(char *hkey) {
     IILOG_MSG("Key %s: add %s", hkey, buff);
 }
 
-ENTRY* search_hashed_id(word id) {
+static ENTRY* search_hashed_id(word id) {
     word ids[2] = { id, 0 };
     ENTRY *hr, item = { (void*)ids };
     if (!(hr = hsearch(item, FIND))) {
@@ -268,7 +269,7 @@ ENTRY* search_hashed_id(word id) {
     return hr;
 }
 
-void process_dns_response(void *buff, int r) {
+static void process_dns_response(void *buff, int r) {
     HEADER* header = (HEADER*)buff;
     ENTRY *hr;
     if (!(hr = search_hashed_id(header->id)))
@@ -317,13 +318,13 @@ void process_dns_response(void *buff, int r) {
     add_rec(((ii_q_t*)hr->data)->key);
 }
 
-char trim_c(char *s, char *sc) {
+static char trim_c(char *s, char *sc) {
     char c;
     while ((c = *sc++)) if (*s == c) { *s = 0; break;}
     return (*s);
 }
 
-char* trim_str(char *s, char *sc) {
+static char* trim_str(char *s, char *sc) {
     char *p;
     int i, l = strlen(s);
     for (i = l - 1, p = s + l - 1; i >= 0; i--, p--)
@@ -333,14 +334,15 @@ char* trim_str(char *s, char *sc) {
     return p;
 }
 
-int in_str_list(const char *str, char* const* list) {
+static int in_str_list(const char *str, char* const* list) {
     int i;
     for (i = 0; (i < IPINFO_MAX_ITEMS) && list[i]; i++)
         if (strncmp(str, list[i], NAMELEN) == 0)
             return i;
     return -1;
 }
-int in_ndx_list(const int ndx, const int* list) {
+
+static int in_ndx_list(const int ndx, const int* list) {
     int i;
     for (i = 0; (i < IPINFO_MAX_ITEMS) && list[i]; i++)
         if ((ndx + 1) == list[i])
@@ -348,7 +350,7 @@ int in_ndx_list(const int ndx, const int* list) {
     return -1;
 }
 
-void split_pairs(char sep) {
+static void split_pairs(char sep) {
     items_t it;
     memcpy(&it, items, sizeof(it));
     memset(items, 0, sizeof(*items));
@@ -383,7 +385,7 @@ void split_pairs(char sep) {
     }
 }
 
-void process_http_response(void *buff, int r) {
+static void process_http_response(void *buff, int r) {
     static char h11[] = "HTTP/1.1";
     static int h11_ln = sizeof(h11) - 1;
     static char h11ok[] = "HTTP/1.1 200 OK";
@@ -477,7 +479,7 @@ void process_http_response(void *buff, int r) {
 #endif
 }
 
-void process_whois_response(void *buff, int r) {
+static void process_whois_response(void *buff, int r) {
     IILOG_MSG("Got[%d]: \"%s\"", r, (char*)buff);
 
     char *txt;
@@ -559,7 +561,7 @@ void ii_ack(void) {
     }
 }
 
-int init_dns(void) {
+static int init_dns(void) {
     IILOG_MSG("%s", "Create DNS socket");
     if (res_init() < 0) {
         perror("res_init()");
@@ -573,7 +575,7 @@ int init_dns(void) {
     return 0;
 }
 
-int open_tcp_connection(void) {
+static int open_tcp_connection(void) {
     IILOG_MSG("Open connection to %s", origins[origin_no].host);
     struct hostent* h;
     if (!(h = gethostbyname(origins[origin_no].host))) {
@@ -637,7 +639,7 @@ int open_tcp_connection(void) {
 typedef int (*open_connection_f)(void);
 static open_connection_f open_connection[] = { init_dns, open_tcp_connection, open_tcp_connection, open_tcp_connection };
 
-int send_dns_query(const char *request, word id) {
+static int send_dns_query(const char *request, word id) {
     unsigned char buff[RECV_BUFF_SZ];
     int r = res_mkquery(QUERY, request, C_IN, T_TXT, NULL, 0, NULL, buff, RECV_BUFF_SZ);
     if (r < 0) {
@@ -649,13 +651,13 @@ int send_dns_query(const char *request, word id) {
     return sendto(origins[origin_no].fd, buff, r, 0, (struct sockaddr *)&_res.nsaddr_list[0], sizeof(struct sockaddr));
 }
 
-int send_http_query(const char *request, word id) {
+static int send_http_query(const char *request, word id) {
     char buff[RECV_BUFF_SZ];
     snprintf(buff, sizeof(buff), "GET %s HTTP/1.1\r\nHost: %s\r\nUser-Agent: mtr/%s\r\nAccept: */*\r\n\r\n", request, origins[origin_no].host, MTR_VERSION);
     return send(origins[origin_no].fd, buff, strlen(buff), 0);
 }
 
-int send_whois_query(const char *request, word id) {
+static int send_whois_query(const char *request, word id) {
     char buff[RECV_BUFF_SZ];
     snprintf(buff, sizeof(buff), "%s\r\n", request);
     return send(origins[origin_no].fd, buff, strlen(buff), 0);
@@ -664,7 +666,7 @@ int send_whois_query(const char *request, word id) {
 typedef int (*send_query_f)(const char*, word);
 static send_query_f send_query[] = { send_dns_query, send_http_query, send_http_query, send_whois_query };
 
-int ii_send_query(const char *lkey, const char *hkey) {
+static int ii_send_query(const char *lkey, const char *hkey) {
     word id[2] = { str2hash(hkey), 0 };
     ENTRY item = { (void*)id };
     if (hsearch(item, FIND)) {
@@ -704,7 +706,7 @@ int ii_send_query(const char *lkey, const char *hkey) {
 
 #ifdef ENABLE_IPV6
 #define BYTES_TO_PROCESS	8
-void al_reves_chars(int al_reves, const unsigned char *s6a, int i, char *b0) {
+static void al_reves_chars(int al_reves, const unsigned char *s6a, int i, char *b0) {
     static char hex4bits[] = "0123456789abcdef";
     if (al_reves) {
         char c = s6a[BYTES_TO_PROCESS - 1 - i];
@@ -719,7 +721,7 @@ void al_reves_chars(int al_reves, const unsigned char *s6a, int i, char *b0) {
     *(b0 + 3) = '.';
 }
 
-char *al_reves_host6(struct in6_addr *addr, char *buff, int len, int dir) {	// 0: frontward, 1: backward
+static char *al_reves_host6(struct in6_addr *addr, char *buff, int len, int dir) {	// 0: frontward, 1: backward
     if (len < (4 * BYTES_TO_PROCESS))
         return NULL;
     for (int i = 0; i < BYTES_TO_PROCESS; i++)
@@ -730,7 +732,7 @@ char *al_reves_host6(struct in6_addr *addr, char *buff, int len, int dir) {	// 0
 #endif
 
 
-void set_tcp_lkey(char *lkey, const char *hkey) {
+static void set_tcp_lkey(char *lkey, const char *hkey) {
   sprintf(lkey, "%s%s", origins[origin_no].prefix, hkey);
   if (origins[origin_no].suffix)
     sprintf(lkey + strlen(lkey), "%s", origins[origin_no].suffix);
@@ -837,22 +839,22 @@ char *fmt_ipinfo(ip_t *addr) {
 }
 
 int ii_waitfd(void) {
-    return (enable_ipinfo && init) ? origins[origin_no].fd : 0;
+    return (enable_ipinfo && ii_initiated) ? origins[origin_no].fd : 0;
 }
 
-int ii_ready(void) {
-    return (enable_ipinfo && init) ? 1 : 0;
+bool ii_ready(void) {
+    return (enable_ipinfo && ii_initiated);
 }
 
-void ii_open(void) {
-   if (init)
+static void ii_open(void) {
+   if (ii_initiated)
        return;
    if (!hinit) {
        if (!hcreate(maxTTL * 4)) {
            perror("hcreate()");
            return;
        }
-       hinit = 1;
+       hinit = true;
    }
    if (open_connection[origins[origin_no].type]() < 0)
        return;
@@ -868,7 +870,7 @@ void ii_open(void) {
        origins[origin_no].width[i] = strnlen(origins[origin_no].name[i], NAMELEN);
    }
 
-   init = 1;
+   ii_initiated = true;
 }
 
 void ii_close(void) {
@@ -876,9 +878,9 @@ void ii_close(void) {
         close(origins[origin_no].fd);
     if (hinit) {
         hdestroy();
-        hinit = 0;
+        hinit = false;
     }
-    enable_ipinfo = 0;
+    enable_ipinfo = false;
     if (tmpfd) {
         close(tmpfd);
 #ifndef LOG_IPINFO
@@ -912,21 +914,21 @@ void ii_parsearg(char *arg) {
 
     if (args[0])
         free(args[0]);
-    enable_ipinfo = 1;
+    enable_ipinfo = true;
     IILOG_MSG("Data source: %s/%s", origins[origin_no].host, origins[origin_no].host6?origins[origin_no].host6:"-");
 
-    if (!init)
+    if (!ii_initiated)
         ii_open();
 }
 
-char hhead_script[] = "<script src=\"https://unpkg.com/leaflet@1.4.0/dist/leaflet.js\"></script>";
-char hhead_link[] = "<link rel=\"stylesheet\" href=\"https://unpkg.com/leaflet@1.4.0/dist/leaflet.css\">";
-char hbody_begin[] =
+static char hhead_script[] = "<script src=\"https://unpkg.com/leaflet@1.4.0/dist/leaflet.js\"></script>";
+static char hhead_link[] = "<link rel=\"stylesheet\" href=\"https://unpkg.com/leaflet@1.4.0/dist/leaflet.css\">";
+static char hbody_begin[] =
 "<body>"
 "	<div id=\"mtr_div\" style=\"width:100%; height:100%;\"></div>"
 "	<script>"
 "		var hopes = [";
-char hbody_end[] =
+static char hbody_end[] =
 "		];"
 "		var map = L.map('mtr_div');"
 "		L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {"
@@ -952,7 +954,7 @@ char hbody_end[] =
 #define TMP_WRITE(x) if (write(tmpfd, x, strlen(x)) < -1) return -1;
 #endif
 
-int ii_gen_n_open_html(int mode) {
+static int ii_gen_n_open_html(int mode) {
     static int geo_ndx[][5] = {
         // lat, lng, city, region, country
         { 7, 8, 4, 3, 1 },	// y6
@@ -1032,14 +1034,13 @@ void ii_action(int action_asn) {
                 enable_ipinfo = !enable_ipinfo;
                 break;
             case ActionII: {	// `y'
-                int i;
-                enable_ipinfo = 1;
-                for (i = 0; (i < IPINFO_MAX_ITEMS) && (ipinfo_no[i] >= 0); i++) {
+                enable_ipinfo = true;
+                for (int i = 0; (i < IPINFO_MAX_ITEMS) && (ipinfo_no[i] >= 0); i++) {
                     ipinfo_no[i]++;
                     if (ipinfo_no[i] > ipinfo_max)
                         ipinfo_no[i] = 0;
                     if (ipinfo_no[i] == ipinfo_max)
-                        enable_ipinfo = 0;
+                        enable_ipinfo = false;
                 }
                break;
                }
@@ -1059,18 +1060,18 @@ void ii_action(int action_asn) {
     } else // init
         ii_parsearg(ASLOOKUP_DEFAULT);
 
-    if (!init)
+    if (!ii_initiated)
         ii_open();
 }
 
-void query_iiaddr(ip_t *addr) {
+static void query_iiaddr(ip_t *addr) {
   int i;
   for (i = 0; (i < IPINFO_MAX_ITEMS) && (ipinfo_no[i] >= 0); i++)
     get_ipinfo(addr, ipinfo_no[i]);
 }
 
 void query_ipinfo(void) {
-  if (!init)
+  if (!ii_initiated)
       return;
   int at, max = net_max();
   for (at = net_min(); at < max; at++) {
