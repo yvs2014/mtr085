@@ -337,7 +337,7 @@ static int printw_mpls(struct mplslen *mpls) {
 static void printw_addr(ip_t *addr, int up) {
 #ifdef IPINFO
   if (ii_ready())
-    printw(fmt_ipinfo(addr));
+    printw("%s", fmt_ipinfo(addr));
 #endif
   if (!up)
     attron(A_BOLD);
@@ -557,7 +557,7 @@ static void mtr_curses_graph(int startstat, int cols) {
 		if (unaddrcmp(addr)) {
 #ifdef IPINFO
 		if (ii_ready())
-			printw(fmt_ipinfo(addr));
+			printw("%s", fmt_ipinfo(addr));
 #endif
 			const char *name = dns_lookup(addr);
 			printw("%s", name?name:strlongip(addr));
@@ -709,7 +709,7 @@ void mtr_curses_redraw(void) {
 
   mvprintw(1, 0, "%s (%s)", srchost, localaddr);
   time(&t);
-  mvprintw(1, maxx - 25, ctime(&t));
+  mvprintw(1, maxx - 25, "%s", ctime(&t));
 
   printw("Keys:  ");
   attron(A_BOLD); addch('H'); attroff(A_BOLD); printw("elp   ");
@@ -739,14 +739,13 @@ void mtr_curses_redraw(void) {
     else
       l = snprintf(redraw_buf, sizeof(redraw_buf), "Packets      Pings");
     l = l >= hd_len ? maxx - l : maxx - hd_len + 1;
-    mvprintw(rowstat - 2, l > 0 ? l : 0, redraw_buf);
+    mvprintw(rowstat - 2, l > 0 ? l : 0, "%s", redraw_buf);
     attroff(A_BOLD);
 
     if (move(rowstat, 0) != ERR)
       mtr_curses_hosts(maxx - hd_len - 1);
 
   } else {
-    char msg[80];
     startstat = STARTSTAT;
 #ifdef IPINFO
     if (ii_ready())
@@ -754,10 +753,7 @@ void mtr_curses_redraw(void) {
 #endif
     int max_cols = (maxx <= (SAVED_PINGS + startstat)) ? (maxx - startstat) : SAVED_PINGS;
     startstat -= 2;
-
-    sprintf(msg, " Last %3d pings", max_cols);
-    mvprintw(rowstat - 1, startstat, msg);
-
+    mvprintw(rowstat - 1, startstat, " Last %3d pings", max_cols);
 	if (move(rowstat, 0) != ERR) {
 		attroff(A_BOLD);
 		mtr_gen_scale_gc();
