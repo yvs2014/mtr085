@@ -644,13 +644,25 @@ static void parse_mtr_options(char *string) {
   optind = 0;
 }
 
+#define IDNA_RESOLV(func) { \
+  rc = func(dsthost, &z_hostname, 0); \
+  if (rc == IDNA_SUCCESS) \
+    rc = getaddrinfo(z_hostname, NULL, &hints, &res); \
+  else \
+    rc_msg = idna_strerror(rc); \
+  if (z_hostname) \
+    free(z_hostname); \
+}
+
 static int set_hostent(struct addrinfo *res) {
     struct addrinfo *ai;
     for (ai = res; ai; ai = ai->ai_next)
       if (af == ai->ai_family)	// use only the desired AF
         break;
-    if (af != ai->ai_family)	// not found
+    if (af != ai->ai_family) {	// not found
+      fprintf(stderr, "Desired address family not found: %d\n", af);
       return 0;	// unsuccess
+    }
 
     char* alptr[2] = { NULL, NULL };
     if (af == AF_INET)
@@ -659,8 +671,10 @@ static int set_hostent(struct addrinfo *res) {
     else if (af == AF_INET6)
       alptr[0] = (void*) &(((struct sockaddr_in6 *)ai->ai_addr)->sin6_addr);
 #endif
-    else
+    else {
+      fprintf(stderr, "Desired address family not found: %d\n", af);
       return 0;	// unsuccess
+    }
 
     static struct hostent host;
     memset(&host, 0, sizeof(host));
@@ -673,7 +687,7 @@ static int set_hostent(struct addrinfo *res) {
     if (net_open(&host)) {
       perror("Unable to start net module");
       return 0;	// unsuccess
-	}
+    }
     if (net_set_interfaceaddress(iface_addr)) {
       perror("Couldn't set interface address");
       return 0;	// unsuccess
@@ -716,8 +730,7 @@ int main(int argc, char **argv) {
   /* The field options are now in a static array all together,
      but that requires a run-time initialization. */
   memset(fld_index, -1, sizeof(fld_index));
-  int i;
-  for (i = 0; (data_fields[i].key) && (i < sizeof(fld_avail)); i++) {
+  for (int i = 0; (data_fields[i].key) && (i < sizeof(fld_avail)); i++) {
     fld_avail[i] = data_fields[i].key;
     fld_index[data_fields[i].key] = i;
   }
@@ -769,24 +782,23 @@ int main(int argc, char **argv) {
     memset(&hints, 0, sizeof(hints));
     hints.ai_family = af;
     hints.ai_socktype = SOCK_DGRAM;
-    int error = getaddrinfo(dsthost, NULL, &hints, &res);
+    int rc = getaddrinfo(dsthost, NULL, &hints, &res);
+    const char *rc_msg = NULL;
 #ifdef HAVE_LIBIDN
-    if (error) {
-      char *z_hostname;
-      if (idna_to_ascii_lz(dsthost, &z_hostname, 0) == IDNA_SUCCESS)
-        error = getaddrinfo(z_hostname, NULL, &hints, &res);
-      if (error)
-        if (idna_to_ascii_8z(dsthost, &z_hostname, 0) == IDNA_SUCCESS)
-          error = getaddrinfo(z_hostname, NULL, &hints, &res);
-    } else
+    if (rc) {
+      char *z_hostname = NULL;
+      IDNA_RESOLV(idna_to_ascii_lz);
+      if (rc)
+        IDNA_RESOLV(idna_to_ascii_8z);
+    }
 #endif
-    {
-      if (error) {
-        if (error == EAI_SYSTEM)
-          perror(dsthost);
-        else
-          fprintf(stderr, "Failed to resolve \"%s\": %s\n", dsthost, gai_strerror(error));
-      } else if (set_hostent(res)) {
+    if (rc) {
+      if (rc == EAI_SYSTEM)
+        perror(dsthost);
+      else
+        fprintf(stderr, "Failed to resolve \"%s\": %s\n", dsthost, rc_msg ? rc_msg : gai_strerror(rc));
+    } else {
+      if (set_hostent(res)) {
         lock(stdout);
         display_open();
         dns_open();
@@ -795,8 +807,8 @@ int main(int argc, char **argv) {
         display_close(now);
         unlock(stdout);
       }
+      freeaddrinfo(res);
     }
-    freeaddrinfo(res);
   }
 
   net_close();
