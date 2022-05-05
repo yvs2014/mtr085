@@ -98,6 +98,7 @@ AC_ARG_WITH([libidn],
 	AS_HELP_STRING([--with-libidn], [IDN support (libidn)]),
 	[libidn="${withval}"], [libidn=no])
 AM_CONDITIONAL([LIBIDN], [test "x$libidn" = "xyes"])
+
 AC_ARG_WITH([sys_getopt],
 	    AS_HELP_STRING([--without-sys-getopt], [do not use your system getopt]),
 	[sys_getopt="${withval}"], [sys_getopt=yes])
@@ -167,7 +168,7 @@ m4_ifndef([PKG_CHECK_MODULES], [m4_defun([PKG_CHECK_MODULES], [AC_MSG_ERROR([
     .../share/aclocal/pkg.m4
   Before running bootstrap try setting the environment variable
     ACLOCAL_PATH="/own/dir"
-  or configure --without-graphcairo-*
+  or configure --without-libidn --without-graphcairo-*
 ])])])
 
 PKG_PROG_PKG_CONFIG
@@ -193,10 +194,16 @@ AS_IF([test "x$graphcairo_xlib" = "xyes"], [
 ])
 
 AS_IF([test "x$libidn" = "xyes"], [
+	PKG_CHECK_MODULES([libidn2], [libidn2], [
+		AC_SUBST(libidn2_CFLAGS)
+		AC_SUBST(libidn2_LIBS)
+		AC_DEFINE([HAVE_LIBIDN2], [1], [Define to enable libidn2])
+	], [
 	PKG_CHECK_MODULES([libidn], [libidn], [
 		AC_SUBST(libidn_CFLAGS)
 		AC_SUBST(libidn_LIBS)
 		AC_DEFINE([HAVE_LIBIDN], [1], [Define to enable libidn])
+	])
 	])
 ])
 

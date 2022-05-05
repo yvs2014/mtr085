@@ -54,8 +54,8 @@ mtr_SOURCES += $(graphcairo_a_SOURCES)
 endif
 
 if LIBIDN
-AM_CPPFLAGS += @libidn_CFLAGS@
-mtr_LDADD += @libidn_LIBS@
+AM_CPPFLAGS += @libidn_CFLAGS@ @libidn2_CFLAGS@
+mtr_LDADD += @libidn_LIBS@ @libidn2_LIBS@
 endif
 
 AM_CFLAGS	= -fcommon	# GCC-10

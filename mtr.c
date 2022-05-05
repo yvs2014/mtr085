@@ -34,8 +34,15 @@
 #include <assert.h>
 #include <fcntl.h>
 #include <sys/stat.h>
-#ifdef HAVE_LIBIDN
+
+#ifdef HAVE_LIBIDN2
+#include <idn2.h>
+#define IDN_TO_ASCII_LZ	idn2_to_ascii_lz
+#define IDN_TO_ASCII_8Z	idn2_to_ascii_8z
+#elif HAVE_LIBIDN
 #include <idna.h>
+#define IDN_TO_ASCII_LZ	idna_to_ascii_lz
+#define IDN_TO_ASCII_8Z	idna_to_ascii_8z
 #endif
 
 #ifdef UNICODE
@@ -784,12 +791,12 @@ int main(int argc, char **argv) {
     hints.ai_socktype = SOCK_DGRAM;
     int rc = getaddrinfo(dsthost, NULL, &hints, &res);
     const char *rc_msg = NULL;
-#ifdef HAVE_LIBIDN
+#if defined(HAVE_LIBIDN) || defined(HAVE_LIBIDN2)
     if (rc) {
       char *z_hostname = NULL;
-      IDNA_RESOLV(idna_to_ascii_lz);
+      IDNA_RESOLV(IDN_TO_ASCII_LZ);
       if (rc)
-        IDNA_RESOLV(idna_to_ascii_8z);
+        IDNA_RESOLV(IDN_TO_ASCII_8Z);
     }
 #endif
     if (rc) {
