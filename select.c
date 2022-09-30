@@ -132,7 +132,7 @@ void select_loop(void) {
 	rv = select(maxfd, &readfd, p_writefd, NULL, &selecttime);
 
       } else {
-        if (interactive)
+        if (interactive || (display_mode == DisplaySplit))
           display_redraw();
 #ifdef IPINFO
         if (ii_ready()) {

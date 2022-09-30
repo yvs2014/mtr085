@@ -106,19 +106,25 @@ void split_redraw(void) {
 void split_open(void) {
   struct termios t;
   if (tcgetattr(0, &t) < 0) {
-    perror("split_open()");
+    perror("split_open(): tcgetattr()");
+    fprintf(stderr, "non-interactive mode is ON\n");
+    interactive = false;
     return;
   }
   t.c_lflag &= ~ICANON;
   t.c_lflag &= ~ECHO;
   t.c_cc[VMIN] = 1;
   t.c_cc[VTIME] = 0;
-  if (tcsetattr(0, TCSANOW, &t) < 0)
-    perror("split_open()");
+  if (tcsetattr(0, TCSANOW, &t) < 0) {
+    perror("split_open(): tcsetattr()");
+    interactive = false;
+  }
 }
 
 void split_close(void) {
   struct termios t;
+  if (!interactive)
+    return;
   if (tcgetattr(0, &t) < 0) {
     perror("split_close()");
     return;
