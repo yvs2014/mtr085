@@ -56,9 +56,11 @@ Specifies bit pattern to use in payload.  Should be within range 0 - 255.
 Use this option to set the number of pings sent to determine both the machines on the network and the reliability of those machines.  Each cycle lasts one second.
 
 .TP
-.B -d, --displaymode MODE
+.B -d, --display MODE
 Use this option to select the initial display mode:
 .RS
+.RS
+.B 1st and 2nd bits
 .RS
 .B 0
 default
@@ -76,18 +78,33 @@ with latency information
 
 .RS
 .B 3
-the unicode histogram
+unicode histogram
+.RE
 .RE
 
 .RS
-.B 4-7
+.B 3rd bit
 reserved
 .RE
 
 .RS
 .B 4th bit
-toggle color on/off
+color/mono mode, on/off
 .RE
+
+.RS
+.B 5th bit
+audible bell (beep), on/off
+.RE
+
+.RS
+.B 6th bit
+visible bell (flash), on/off
+.RE
+
+.RS
+.B 7th bit
+bell for target host only, on/off
 .RE
 
 .TP

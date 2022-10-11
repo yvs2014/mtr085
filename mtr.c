@@ -97,11 +97,14 @@ int cpacketsize = 64;	// default packet size
 int tcp_timeout = 10 * 1000000;	// for TCP tracing
 //
 int display_offset;
-int color_mode;
-int curses_mode;
+int curses_mode;	// 1st and 2nd bits
 #if defined(CURSES) || defined(GRAPHCAIRO)
 int curses_mode_max = 3;
 #endif
+int color_mode;	// 4th bit
+int audible_bell;	// 5th bit
+int visible_bell;	// 6th bit
+int target_bell_only;	// 7th bit
 int mtrtype = IPPROTO_ICMP;	// Use ICMP as default packet type
 	// default display field and order
 int fld_index[256];
@@ -454,6 +457,9 @@ static void parse_arg(int argc, char **argv) {
     case 'd':
       curses_mode = ((atoi(optarg)) & ~8) % curses_mode_max;
       color_mode = ((atoi(optarg)) & 8) ? 1 : 0;
+      audible_bell = ((atoi(optarg)) & 16) ? 1 : 0;
+      visible_bell = ((atoi(optarg)) & 32) ? 1 : 0;
+      target_bell_only = ((atoi(optarg)) & 64) ? 1 : 0;
       break;
 #endif
     case 'c':

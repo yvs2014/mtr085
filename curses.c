@@ -352,12 +352,23 @@ static void printw_addr(ip_t *addr, int up) {
     attroff(A_BOLD);
 }
 
+#define BELL_AT	SAVED_PINGS - 3	// wait at least -i interval for reliability
+static void mtr_curses_seal(int at, int max) {
+	if (host[at].saved[BELL_AT] == -1) {
+		host[at].saved[BELL_AT] = -3;	// sealed
+		if (target_bell_only)
+			if (at != (max - 1))
+				return;
+		if (audible_bell) beep();
+		if (visible_bell) flash();
+	}
+}
+
 #define CHK_NL(y) { int re = move(y, 0); if (re == ERR) break; }
 
 static void mtr_curses_hosts(int startstat) {
   int max = net_max();
-  int at;
-  for (at = net_min() + display_offset; at < max; at++) {
+  for (int at = net_min() + display_offset; at < max; at++) {
     int y;
     getyx(stdscr, y, __unused_int);
     CHK_NL(y);
@@ -371,23 +382,23 @@ static void mtr_curses_hosts(int startstat) {
     }
 
     printw_addr(addr, host[at].up);
-    { // print stat
+    { // statistics
       char buf[1024];
       mtr_fill_data(at, buf);
       mvprintw(y, startstat, "%s", buf);
+      if (audible_bell || visible_bell)
+        mtr_curses_seal(at, max);
       CHK_NL(y + 1);
     }
     if (enable_mpls)
       printw_mpls(&host[at].mpls);
 
-    /* Multi path */
-    for (int i = 0; i < MAXPATH; i++) {
+    for (int i = 0; i < MAXPATH; i++) {  // multipath
       ip_t *addrs = &(host[at].addrs[i]);
       if (!addrcmp(addrs, addr))
         continue;
       if (!unaddrcmp(addrs))
         break;
-
       printw("    ");
       printw_addr(addrs, host[at].up);
       getyx(stdscr, y, __unused_int);
@@ -507,14 +518,18 @@ void mtr_curses_init(void) {
 #endif
 }
 
+#define NA_MAP(map) { \
+	if (saved_int == -2) \
+		return map[0];	/* unsent */ \
+	if ((saved_int == -1) || (saved_int == -3)) \
+		return map[1];	/* no response */ \
+}
+
 static chtype mtr_saved_ch(int saved_int) {
-	if (saved_int == -2)
-		return map_na2[0];	// unsent
-	if (saved_int == -1)
-		return map_na2[1];	// has not responded
-	if (curses_mode == 1) {
+	NA_MAP(map_na2);
+	if (curses_mode == 1)
 		return map1[(saved_int <= scale2[NUM_FACTORS2 - 2]) ? 0 : 1];
-	} else if (curses_mode == 2) {
+	if (curses_mode == 2) {
 		for (int i = 0; i < NUM_FACTORS2; i++)
 			if (saved_int <= scale2[i])
 				return map2[i];
@@ -524,10 +539,7 @@ static chtype mtr_saved_ch(int saved_int) {
 
 #ifdef UNICODE
 static cchar_t* mtr_saved_cc(int saved_int) {
-	if (saved_int == -2)
-		return &map_na3[0];
-	if (saved_int == -1)
-		return &map_na3[1];
+	NA_MAP(&map_na3);
 	int num_factors = color_mode ? NUM_FACTORS3 : (NUM_FACTORS3_MONO + 1);
 	for (int i = 0; i < num_factors; i++)
 		if (saved_int <= scale3[i])
@@ -537,9 +549,8 @@ static cchar_t* mtr_saved_cc(int saved_int) {
 #endif
 
 static void mtr_curses_graph(int startstat, int cols) {
-    int max = net_max();
-    int at;
-	for (at = net_min() + display_offset; at < max; at++) {
+	int max = net_max();
+	for (int at = net_min() + display_offset; at < max; at++) {
 		int y;
 		getyx(stdscr, y, __unused_int);
 		CHK_NL(y);
@@ -566,15 +577,16 @@ static void mtr_curses_graph(int startstat, int cols) {
 		attroff(A_BOLD);
 
 		mvprintw(y, startstat, " ");
-		int i;
 #ifdef UNICODE
 		if (curses_mode == 3)
-			for (i = SAVED_PINGS - cols; i < SAVED_PINGS; i++)
+			for (int i = SAVED_PINGS - cols; i < SAVED_PINGS; i++)
 				add_wch(mtr_saved_cc(host[at].saved[i]));
 		else
 #endif
-			for (i = SAVED_PINGS - cols; i < SAVED_PINGS; i++)
+			for (int i = SAVED_PINGS - cols; i < SAVED_PINGS; i++)
 				addch(mtr_saved_ch(host[at].saved[i]));
+		if (audible_bell || visible_bell)
+			mtr_curses_seal(at, max);
 		CHK_NL(y + 1);
 	}
 }

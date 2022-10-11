@@ -121,6 +121,9 @@ extern int display_offset;
 extern int curses_mode;
 extern int curses_mode_max;
 extern int color_mode;
+extern int audible_bell;
+extern int visible_bell;
+extern int target_bell_only;
 #endif
 // keys: the value in the array is the index number in data_fields[]
 extern int fld_index[];
