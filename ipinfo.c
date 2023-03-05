@@ -66,7 +66,7 @@
 #define CHAR_QOUTES	"\"'"
 #define CHAR_BRACKETS	"{}"
 
-//extern struct __res_state _res;
+#define myres _res
 
 // externed
 int ipinfo_max;
@@ -648,7 +648,7 @@ static int send_dns_query(const char *request, word id) {
     }
     HEADER* h = (HEADER*)buff;
     h->id = id;
-    return sendto(origins[origin_no].fd, buff, r, 0, (struct sockaddr *)&_res.nsaddr_list[0], sizeof(struct sockaddr));
+    return sendto(origins[origin_no].fd, buff, r, 0, (struct sockaddr *)&myres.nsaddr_list[0], sizeof(struct sockaddr));
 }
 
 static int send_http_query(const char *request, word id) {
