@@ -104,65 +104,61 @@ AC_ARG_WITH([sys_getopt],
 	[sys_getopt="${withval}"], [sys_getopt=yes])
 AM_CONDITIONAL([LOCAL_GETOPT], [test "x$sys_getopt" = "xno"])
 
-AC_ARG_ENABLE([syslog_debug],
-	AS_HELP_STRING([--enable-syslog-debug[[[=net,dns,ipinfo]]]],
-		[syslog debug on (default: dns,ipinfo)]),
-	[syslog_debug="${enableval}"], [syslog_debug=no])
 
-AS_IF([test "x$syslog_debug" != "xno"], [
-	AC_DEFINE([MTR_SYSLOG], [LOG_INFO], [Define syslog level])
-	AS_IF([test "x$syslog_debug" = "xyes"], [
-#		AC_DEFINE([LOG_NET], 1, [Enable Net module debug logging])
-		AC_DEFINE([LOG_DNS], 1, [Enable DNS debug logging])
-		AC_DEFINE([LOG_IPINFO], 1, [Enable IPinfo logging])
-	], [AS_IF([test "x$syslog_debug" = "xnet"], [
-		AC_DEFINE([LOG_NET], 1, [Enable Net debug logging])
-	], [AS_IF([test "x$syslog_debug" = "xdns"], [
-		AC_DEFINE([LOG_DNS], 1, [Enable DNS debug logging])
-	], [AS_IF([test "x$syslog_debug" = "xipinfo"], [
-		AC_DEFINE([LOG_IPINFO], 1, [Enable IPinfo logging])
-	])
-	])
-	])
-	])
-])
+dnl
+dnl Add some syslog debug: net, dns, ipinfo
 
-AC_ARG_WITH([output_format],
-	AS_HELP_STRING([--with-output-format[[[=csv,raw,txt,xml]]]],
-		[additional output formats (default: all)]),
-	[output_format="${withval}"], [output_format=no])
+AC_ARG_WITH([syslog_net],
+	AS_HELP_STRING([--with-syslog-net], [Enable debug: net syslog]),
+	[syslog_net="${withval}"], [syslog_net=no])
+AS_IF([test "x$syslog_net" != "xno"], [AC_DEFINE([LOG_NET], 1, [Enable debug: net syslog])])
 
-AS_IF([test "x$output_format" != "xno"], [
-	AS_IF([test "x$output_format" = "xyes"], [
-		AC_DEFINE([OUTPUT_FORMAT_CSV], 1, [Support CSV output format])
-		AC_DEFINE([OUTPUT_FORMAT_RAW], 1, [Support RAW output format])
-		AC_DEFINE([OUTPUT_FORMAT_TXT], 1, [Support TXT output format])
-		AC_DEFINE([OUTPUT_FORMAT_XML], 1, [Support XML output format])
-	], [AS_IF([test "x$output_format" = "xall"], [
-		AC_DEFINE([OUTPUT_FORMAT_CSV], 1, [Support CSV output format])
-		AC_DEFINE([OUTPUT_FORMAT_RAW], 1, [Support RAW output format])
-		AC_DEFINE([OUTPUT_FORMAT_TXT], 1, [Support TXT output format])
-		AC_DEFINE([OUTPUT_FORMAT_XML], 1, [Support XML output format])
-	], [AS_IF([test "x$output_format" = "xcsv"], [
-		AC_DEFINE([OUTPUT_FORMAT_CSV], 1, [Support CSV output format])
-	], [AS_IF([test "x$output_format" = "xraw"], [
-		AC_DEFINE([OUTPUT_FORMAT_RAW], 1, [Support RAW output format])
-	], [AS_IF([test "x$output_format" = "xtxt"], [
-		AC_DEFINE([OUTPUT_FORMAT_TXT], 1, [Support TXT output format])
-	], [AS_IF([test "x$output_format" = "xxml"], [
-		AC_DEFINE([OUTPUT_FORMAT_XML], 1, [Support XML output format])
-	])
-	])
-	])
-	])
-	])
-	])
-])
+AC_ARG_WITH([syslog_dns],
+	AS_HELP_STRING([--with-syslog-dns], [Enable debug: dns syslog]),
+	[syslog_dns="${withval}"], [syslog_dns=no])
+AS_IF([test "x$syslog_dns" != "xno"], [AC_DEFINE([LOG_DNS], 1, [Enable debug: dns syslog])])
 
+AC_ARG_WITH([syslog_ipinfo],
+	AS_HELP_STRING([--with-syslog-ipinfo], [Enable debug: ipinfo syslog]),
+	[syslog_ipinfo="${withval}"], [syslog_ipinfo=no])
+AS_IF([test "x$syslog_ipinfo" != "xno"], [AC_DEFINE([LOG_IPINFO], 1, [Enable debug: ipinfo syslog])])
+
+
+dnl
+dnl Extra output formats: csv, raw, txt, xml, json
+dnl 	"csv, json" enabled by default
+
+AC_ARG_WITH([output_csv],
+	AS_HELP_STRING([--with-output-csv], [CSV output format]),
+	[output_csv="${withval}"], [output_csv=yes])
+AS_IF([test "x$output_csv" != "xno"], [AC_DEFINE([OUTPUT_FORMAT_CSV], 1, [Support CSV output format])])
+
+AC_ARG_WITH([output_raw],
+	AS_HELP_STRING([--with-output-raw], [RAW output format]),
+	[output_raw="${withval}"], [output_raw=no])
+AS_IF([test "x$output_raw" != "xno"], [AC_DEFINE([OUTPUT_FORMAT_RAW], 1, [Support RAW output format])])
+
+AC_ARG_WITH([output_txt],
+	AS_HELP_STRING([--with-output-txt], [TXT output format]),
+	[output_txt="${withval}"], [output_txt=no])
+AS_IF([test "x$output_txt" != "xno"], [AC_DEFINE([OUTPUT_FORMAT_TXT], 1, [Support TXT output format])])
+
+AC_ARG_WITH([output_xml],
+	AS_HELP_STRING([--with-output-xml], [XML output format]),
+	[output_xml="${withval}"], [output_xml=no])
+AS_IF([test "x$output_xml" != "xno"], [AC_DEFINE([OUTPUT_FORMAT_XML], 1, [Support XML output format])])
+
+AC_ARG_WITH([output_json],
+	AS_HELP_STRING([--with-output-json], [JSON output format]),
+	[output_json="${withval}"], [output_json=yes])
+AS_IF([test "x$output_json" != "xno"], [AC_DEFINE([OUTPUT_FORMAT_JSON], 1, [Support JSON output format])])
+
+dnl IPv6 support
 AC_ARG_ENABLE(ipv6,
 	AS_HELP_STRING([--disable-ipv6], [do not enable IPv6]),
 	WANTS_IPV6=$enableval, WANTS_IPV6=yes)
 
+dnl
 m4_ifndef([PKG_CHECK_MODULES], [m4_defun([PKG_CHECK_MODULES], [AC_MSG_ERROR([
   Could not locate the pkg-config automake macros, these are usually located in
     .../share/aclocal/pkg.m4
@@ -387,8 +383,6 @@ else
   CFLAGS="$CFLAGS $extra_CFLAGS"
   AC_MSG_RESULT($extra_CFLAGS)
 fi
-
-
 
 
 AC_CONFIG_HEADERS([config.h])
