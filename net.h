@@ -29,6 +29,36 @@
 #include <netinet/icmp6.h>
 #endif
 
+// just in case
+#define timer2usec(t) ((t)->tv_sec * 1000000 + (t)->tv_usec)
+#ifndef timercmp
+#define timercmp(a, b, CMP)          \
+  (((a)->tv_sec  ==  (b)->tv_sec)  ? \
+   ((a)->tv_usec CMP (b)->tv_usec) : \
+   ((a)->tv_sec  CMP (b)->tv_sec))
+#endif
+#ifndef timeradd
+#define timeradd(a, b, s) do {                \
+  (s)->tv_sec  = (a)->tv_sec  + (b)->tv_sec;  \
+  (s)->tv_usec = (a)->tv_usec + (b)->tv_usec; \
+  if ((s)->tv_usec >= 1000000) {              \
+    ++(s)->tv_sec;                            \
+    (s)->tv_usec -= 1000000;                  \
+  }                                           \
+} while (0)
+#endif
+#ifndef timersub
+#define timersub(a, b, s) do {                \
+  (s)->tv_sec  = (a)->tv_sec  - (b)->tv_sec;  \
+  (s)->tv_usec = (a)->tv_usec - (b)->tv_usec; \
+  if ((s)->tv_usec < 0) {                     \
+    --(s)->tv_sec;                            \
+    (s)->tv_usec += 1000000;                  \
+  }                                           \
+} while (0)
+#endif
+//
+
 #ifndef INET6_ADDRSTRLEN
 #define INET6_ADDRSTRLEN	46
 #endif
@@ -107,7 +137,7 @@ bool net_process_tcp_fds(void);
 void sockaddrtop(struct sockaddr *saddr, char *strptr, size_t len);
 void decodempls(int, char *, struct mplslen *, int);
 const char *strlongip(ip_t *ip);
-int calc_deltatime(float t);
+time_t calc_deltatime(float t);
 int addr4cmp(const void *a, const void *b);
 int addr6cmp(const void *a, const void *b);
 void* addr4cpy(void *a, const void *b);

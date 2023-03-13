@@ -327,9 +327,10 @@ void gc_redraw(void) {
 
 	cr_set_hops(hops, min);
 
-	struct timeval now;
+	struct timeval now, _tv;
 	gettimeofday(&now, NULL);
-	int dt = (now.tv_sec - lasttime.tv_sec) * USECONDS + (now.tv_usec - lasttime.tv_usec);
+	timersub(&now, &lasttime, &_tv);
+	time_t dt = timer2usec(&_tv);
 	lasttime = now;
 
 	if (dt < timeout) {

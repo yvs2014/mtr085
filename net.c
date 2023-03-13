@@ -111,7 +111,7 @@ struct sequence {
   struct timeval time;
 };
 
-// externed
+// global vars
 ip_t unspec_addr;	// zero by definition
 int (*unaddrcmp)(const void *);
 int (*addrcmp)(const void *a, const void *b);
@@ -167,12 +167,11 @@ static int numhosts = 10;
 static int portpid;
 
 // return the number of microseconds to wait before sending the next ping
-int calc_deltatime(float t) {
+time_t calc_deltatime(float t) {
   int n = numhosts;
   int f = fstTTL - 1;
-  if (f)
-    if (n > f)
-      n -= f;
+  if ((f > 0) && (n > f))
+    n -= f;
   t /= n;
   return 1000000 * t;
 }
@@ -372,7 +371,8 @@ static void net_send_query(int index) {
   int offset = 6;
 #endif
 
-  limit_it(MINPACKET, MAXPACKET, &packetsize);
+  if (packetsize < MINPACKET) packetsize = MINPACKET;
+  else if (packetsize > MAXPACKET) packetsize = MAXPACKET;
   memset(packet, (unsigned char) abs(bitpattern), packetsize);
 
   switch ( af ) {
@@ -476,7 +476,7 @@ static void tcp_seq_close(unsigned at) {
 // We got a return on something we sent out. Record the address and time.
 static void net_process_ping(unsigned port, struct mplslen mpls, void *addr, struct timeval now) {
   int index;
-  int totusec;
+  time_t totusec;
   int oldavg;	/* usedByMin */
   int oldjavg;	/* usedByMin */
   int i;	/* usedByMin */
@@ -495,8 +495,9 @@ static void net_process_ping(unsigned port, struct mplslen mpls, void *addr, str
     tcp_seq_close(seq);
 
   index = sequence[seq].index;
-  totusec = (now.tv_sec  - sequence[seq].time.tv_sec ) * 1000000 +
-            (now.tv_usec - sequence[seq].time.tv_usec);
+  struct timeval _tv;
+  timersub(&now, &(sequence[seq].time), &_tv);
+  totusec = timer2usec(&_tv);
   /* impossible? if( totusec < 0 ) totusec = 0 */;
 
   if (!unaddrcmp(&(host[index].addr))) {
@@ -1174,14 +1175,14 @@ bool net_process_tcp_fds(void) {
     return false;
 
   struct timeval now;
-  uint64_t unow, utime;
+  time_t unow, utime;
 
   /* Can't do MPLS decoding */
   struct mplslen mpls;
   mpls.labels = 0;
 
   gettimeofday(&now, NULL);
-  unow = now.tv_sec * 1000000L + now.tv_usec;
+  unow = timer2usec(&now);
 
   bool ret = false;
   unsigned at;
@@ -1203,7 +1204,7 @@ bool net_process_tcp_fds(void) {
 //          tcp_seq_close(at);
         }
       }
-      utime = sequence[at].time.tv_sec * 1000000L + sequence[at].time.tv_usec;
+      utime = timer2usec(&(sequence[at].time));
       if (unow - utime > tcp_timeout) {
         NETLOG_MSG((LOG_INFO, "close sequence[%d] after %d sec", at, tcp_timeout / 1000000));
         sequence[at].transit = 0;

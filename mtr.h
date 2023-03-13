@@ -145,6 +145,5 @@ extern bool alter_ping;
 char *trim(char *s);
 word str2hash(const char* s);
 void set_fld_active(const char *s);
-void limit_it(const int v0, const int v1, int *v);
 
 #endif

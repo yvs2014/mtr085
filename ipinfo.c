@@ -68,7 +68,7 @@
 
 #define myres _res
 
-// externed
+// global
 int ipinfo_max;
 int ipinfo_no[] = {-1};
 bool enable_ipinfo = false;

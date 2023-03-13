@@ -79,14 +79,14 @@ typedef struct names {
 	struct names*	next;
 } names_t;
 
-// externed
+// global vars
 pid_t mypid;
 char mtr_args[1024];	// posix/susvn: 4096+
 unsigned iargs;		// args passed interactively
 bool show_ips = false;
 bool enable_mpls = false;
 bool report_wide = false;
-bool endpoint_mode = false;	// -fz option
+bool endpoint_mode = false;	// -fa option, i.e. auto, corresponding to TTL of the destination host
 bool hinit = false;	// make sure that a hashtable already exists or not
 int fstTTL = 1;		// default start at first hop
 int maxTTL = 30;	// enough?
@@ -389,11 +389,20 @@ static void usage(char *name) {
   }
 }
 
-void limit_it(const int v0, const int v1, int *v) {
-	if (*v > v1)
-		*v = v1;
-	else if (*v < v0)
-		*v = v0;
+static void say_limit(const int v0, const int v1, int v, const char *it, const int res) {
+  fprintf(stderr, "WARN: '%s' is out of range %d..%d: %d -> %d\n", it, v0, v1, v, res);
+}
+
+static int limit_int(const int v0, const int v1, const int v, const char *it) {
+  if (v < v0) {
+    say_limit(v0, v1, v, it, v0);
+    return v0;
+  }
+  if (v > v1) {
+    say_limit(v0, v1, v, it, v1);
+    return v1;
+  }
+  return v;
 }
  
 static void parse_arg(int argc, char **argv) {
@@ -490,20 +499,17 @@ static void parse_arg(int argc, char **argv) {
       }
       break;
     case 'f':
-      if (optarg[0] == 'z') {
+      if (optarg[0] == 'a') {
         endpoint_mode = true;
         break;
       }
-      fstTTL = atoi(optarg);
-      limit_it(1, maxTTL, &fstTTL);
+      fstTTL = limit_int(1, maxTTL, atoi(optarg), "first ttl");
       break;
     case 'F':
       read_from_file(optarg);
       break;
     case 'm':
-      maxTTL = atoi(optarg);
-      limit_it(1, MAXHOST - 1, &maxTTL);
-      limit_it(1, maxTTL, &fstTTL);
+      maxTTL = limit_int(1, ((MAXHOST - 1) > maxTTL) ? maxTTL : (MAXHOST - 1), atoi(optarg), "maximum ttl");
       break;
     case 'o':
       /* Check option before passing it on to fld_active. */

@@ -10,6 +10,7 @@
 
 #include "config.h"
 #include "mtr.h"
+#include "net.h"
 
 #ifdef UNICODE
 #ifdef HAVE_WCHAR_H
@@ -753,11 +754,11 @@ void cr_redraw(int *data) {
 	bool f_repaint = false;
 
 	// timing
-	int dt;
 	static int remaining_time;
-	struct timeval now;
+	struct timeval now, _tv;
 	gettimeofday(&now, NULL);
-	dt = (now.tv_sec - lasttime.tv_sec) * USECONDS + (now.tv_usec - lasttime.tv_usec);
+	timersub(&now, &lasttime, &_tv);
+	time_t dt = timer2usec(&_tv);
 	int unclosed_dt = dt + remaining_time;
 	lasttime = now;
 
@@ -768,7 +769,7 @@ void cr_redraw(int *data) {
 		cycle_period = cycle_datamax = 0;
 	}
 
-	int dx = unclosed_dt / x_point_in_usec;
+	time_t dx = unclosed_dt / x_point_in_usec;
 	remaining_time = unclosed_dt % x_point_in_usec;
 
 	if (dx) {	// work
@@ -914,9 +915,10 @@ void cr_net_reset(int paused) {
 	if (paused) {
 		struct timeval now;
 		gettimeofday(&now, NULL);
-		int dt = now.tv_sec - lasttime.tv_sec;
-		if (dt < params->period)	{ // more precisely
-			dx = (dt * USECONDS + (now.tv_usec - lasttime.tv_usec)) / x_point_in_usec;
+		if ((now.tv_sec - lasttime.tv_sec) < params->period) { // more precisely
+			struct timeval _tv;
+			timersub(&now, &lasttime, &_tv);
+			dx = timer2usec(&_tv) / x_point_in_usec;
 			// shift
 			cairo_t *cr = cairos[CR_TEMP].cairo;
 			cairo_save(cr);

@@ -334,9 +334,7 @@ void csv_close(time_t now) {
 
 
 #ifdef OUTPUT_FORMAT_RAW
-// externed
-bool enable_raw = false;
-//
+bool enable_raw = false; // global var
 static int havename[MAXHOST];
 
 void raw_rawping(int at, int msec) {

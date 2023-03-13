@@ -38,9 +38,7 @@
 #endif
 #include "display.h"
 
-static struct timeval intervaltime;
-
-// externed
+// global vars
 fd_set writefd, *p_writefd;
 int maxfd;
 //
@@ -51,6 +49,16 @@ static int dnsfd6;
 #endif
 
 #define GRACETIME (5 * 1000*1000)
+static struct timeval gracetime = { GRACETIME, 0 };
+
+#define SET_DNSFD(fd, family) { \
+  fd = dns_waitfd(family); \
+  if (fd < 0) fd = 0; \
+  else { \
+    FD_SET(fd, &readfd); \
+    if (fd >= maxfd) maxfd = dnsfd + 1; \
+  } \
+}
 
 void select_loop(void) {
   fd_set readfd;
@@ -58,9 +66,9 @@ void select_loop(void) {
   bool anyset = false;
   bool paused = false;
   int ping_no = 0;
-  struct timeval lasttime, thistime, selecttime;
+  struct timeval lasttime, selecttime;
   struct timeval startgrace;
-  int dt;
+  time_t dt;
   int rv; 
   bool graceperiod = false;
 
@@ -71,6 +79,7 @@ void select_loop(void) {
 
   while(1) {
     dt = calc_deltatime(wait_time);
+    static struct timeval intervaltime;
     intervaltime.tv_sec  = dt / 1000000;
     intervaltime.tv_usec = dt % 1000000;
 
@@ -83,16 +92,6 @@ void select_loop(void) {
       if (maxfd == 0)
         maxfd++;
     }
-
-#define SET_DNSFD(fd, family) { \
-  fd = dns_waitfd(family); \
-  if (fd >= 0) { \
-    FD_SET(fd, &readfd); \
-    if (fd >= maxfd) \
-      maxfd = dnsfd + 1; \
-  } else \
-    fd = 0; \
-}
 
     if (enable_dns) {
       SET_DNSFD(dnsfd, AF_INET);
@@ -126,11 +125,8 @@ void select_loop(void) {
 	 * it's slow enough for computers to go do something else;
 	 * this prevents mtr from hogging 100% CPU time on one core.
 	 */
-	selecttime.tv_sec = 0;
-	selecttime.tv_usec = paused?100000:0;
-
-	rv = select(maxfd, &readfd, p_writefd, NULL, &selecttime);
-
+        selecttime = (struct timeval) { 0, paused ? 100000 : 0 };
+        rv = select(maxfd, &readfd, p_writefd, NULL, &selecttime);
       } else {
         if (interactive || (display_mode == DisplaySplit))
           display_redraw();
@@ -149,48 +145,39 @@ void select_loop(void) {
 #endif
               query_ipinfo();
           }
-	}
+        }
 #endif
-	gettimeofday(&thistime, NULL);
+        {
+          struct timeval now, _tv;
+          gettimeofday(&now, NULL);
+          timeradd(&lasttime, &intervaltime, &_tv);
 
-	if(thistime.tv_sec > lasttime.tv_sec + intervaltime.tv_sec ||
-	   (thistime.tv_sec == lasttime.tv_sec + intervaltime.tv_sec &&
-	    thistime.tv_usec >= lasttime.tv_usec + intervaltime.tv_usec)) {
-	  lasttime = thistime;
+          if (timercmp(&now, &_tv, >)) {
+            lasttime = now;
+            if (!graceperiod) {
+              if ((ping_no >= max_ping) && (!interactive || alter_ping)) {
+                graceperiod = true;
+                startgrace = now;
+              }
+              /* do not send out batch when we've already initiated grace period */
+              if (!graceperiod && net_send_batch())
+                ping_no++;
+            }
+          }
 
-	  if (!graceperiod) {
-	    if ((ping_no >= max_ping) && (!interactive || alter_ping)) {
-	      graceperiod = true;
-	      startgrace = thistime;
-	    }
+          if (graceperiod) {
+            timersub(&now, &startgrace, &_tv);
+            if (timercmp(&_tv, &gracetime, >)) {
+              dt = timer2usec(&_tv);
+              return;
+            }
+          }
 
-	    /* do not send out batch when we've already initiated grace period */
-	    if (!graceperiod && net_send_batch())
-	      ping_no++;
-	  }
-	}
+          timersub(&now, &lasttime, &selecttime);
+          timersub(&intervaltime, &selecttime, &selecttime);
+        }
 
-	if (graceperiod) {
-	  dt = (thistime.tv_usec - startgrace.tv_usec) +
-		    1000000 * (thistime.tv_sec - startgrace.tv_sec);
-	  if (dt > GRACETIME)
-	    return;
-	}
-
-	selecttime.tv_usec = (thistime.tv_usec - lasttime.tv_usec);
-	selecttime.tv_sec = (thistime.tv_sec - lasttime.tv_sec);
-	if (selecttime.tv_usec < 0) {
-	  --selecttime.tv_sec;
-	  selecttime.tv_usec += 1000000;
-	}
-	selecttime.tv_usec = intervaltime.tv_usec - selecttime.tv_usec;
-	selecttime.tv_sec = intervaltime.tv_sec - selecttime.tv_sec;
-	if (selecttime.tv_usec < 0) {
-	  --selecttime.tv_sec;
-	  selecttime.tv_usec += 1000000;
-	}
-
-	rv = select(maxfd, &readfd, p_writefd, NULL, &selecttime);
+        rv = select(maxfd, &readfd, p_writefd, NULL, &selecttime);
       }
     } while ((rv < 0) && (errno == EINTR));
 
