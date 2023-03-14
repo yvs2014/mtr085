@@ -39,5 +39,4 @@ extern int ipinfo_no[IPINFO_MAX_ITEMS];
 extern int ipinfo_max;
 extern bool enable_ipinfo;
 
-
 #endif

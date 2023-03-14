@@ -93,30 +93,32 @@ struct mplslen {
 
 struct nethost {
   ip_t addr;
-  ip_t addrs[MAXPATH];	/* for multi paths byMin */
+  ip_t addrs[MAXPATH]; // for multi paths byMin
   int xmit;
   int returned;
   int sent;
   int up;
-  long long var;/* variance, could be overflowed */
+  long long var;       // variance, could be overflowed
   int last;
   int best;
   int worst;
-  int avg;	/* average:  addByMin */
-  int gmean;	/* geometirc mean: addByMin */
-  int jitter;	/* current jitter, defined as t1-t0 addByMin */
-  int javg;	/* avg jitter */
-  int jworst;	/* max jitter */
-  int jinta;	/* estimated variance,? rfc1889's "Interarrival Jitter" */
+  int avg;             // average, addByMin
+  int gmean;           // geometirc mean, addByMin
+  int jitter;          // current jitter, defined as t1-t0, addByMin
+  int javg;            // avg jitter
+  int jworst;          // max jitter
+  int jinta;           // estimated variance,? rfc1889's "Interarrival Jitter"
   int transit;
   int saved[SAVED_PINGS];
   int saved_seq_offset;
   struct mplslen mpls;
   struct mplslen mplss[MAXPATH];
+  time_t seen;         // timestamp for caching, last seen
 };
 extern struct nethost host[];
 
 extern char localaddr[];
+extern int cycles;     // to see progress on curses screen in cache mode
 
 void net_init(int ipv6_mode);
 int net_tcp_init(void);
@@ -140,7 +142,7 @@ bool net_process_tcp_fds(void);
 void sockaddrtop(struct sockaddr *saddr, char *strptr, size_t len);
 void decodempls(int, char *, struct mplslen *, int);
 const char *strlongip(ip_t *ip);
-time_t calc_deltatime(float t);
+time_t wait_usec(float t);
 int addr4cmp(const void *a, const void *b);
 int addr6cmp(const void *a, const void *b);
 void* addr4cpy(void *a, const void *b);

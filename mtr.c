@@ -86,7 +86,9 @@ unsigned iargs;		// args passed interactively
 bool show_ips = false;
 bool enable_mpls = false;
 bool report_wide = false;
-bool endpoint_mode = false;	// -fa option, i.e. auto, corresponding to TTL of the destination host
+bool endpoint_mode = false; // -fa option, i.e. auto, corresponding to TTL of the destination host
+bool cache_mode = false;    // cache mode skipping pings of known hops
+int cache_timeout = 60;     // cache timeout in seconds
 bool hinit = false;	// make sure that a hashtable already exists or not
 int fstTTL = 1;		// default start at first hop
 int maxTTL = 30;	// enough?
@@ -270,53 +272,58 @@ static void unlock(FILE *f) {
         perror("fcntl()");
 }
 
+const static char CACHE_MODE_OPT[] = "use-cache";
+const static char CACHE_TIMEOUT_OPT[] = "cache-timeout";
+
 static struct option long_options[] = {
-  { "address",	1, 0, 'a' },
-  { "show-ips",	0, 0, 'b' },
-  { "bitpattern",	1, 0, 'B' },	/* overload b>255, ->rand(0,255) */
-  { "report-cycles",	1, 0, 'c' },
+  { "address",    1, 0, 'a' },
+  { "show-ips",   0, 0, 'b' },
+  { "bitpattern", 1, 0, 'B' },   // overload b>255, ->rand(0,255)
+  { "report-cycles", 1, 0, 'c' },
 #if defined(CURSES) || defined(GRAPHCAIRO)
-  { "display",	1, 0, 'd' },
+  { "display",    1, 0, 'd' },
 #endif
-  { "mpls",	0, 0, 'e' },
-  { "first-ttl",	1, 0, 'f' },	/* -f & -m are borrowed from traceroute */
-  { "filename",	1, 0, 'F' },
+  { "mpls",       0, 0, 'e' },
+  { "first-ttl",  1, 0, 'f' },   // -f and -m are borrowed from traceroute
+  { "filename",   1, 0, 'F' },
 #ifdef GRAPHCAIRO
-  { "graphcairo",	1, 0, 'G' },
+  { "graphcairo", 1, 0, 'G' },
 #endif
-  { "interval",	1, 0, 'i' },
+  { "interval",   1, 0, 'i' },
 #ifdef OUTPUT_FORMAT
-  { "output",	1, 0, 'l' },
+  { "output",     1, 0, 'l' },
 #endif
-  { "max-ttl",	1, 0, 'm' },
-  { "no-dns",	0, 0, 'n' },
-  { "order",	1, 0, 'o' },	/* fileds to display & their order */
+  { "max-ttl",    1, 0, 'm' },
+  { "no-dns",     0, 0, 'n' },
+  { "order",      1, 0, 'o' },   // fields to display and their order
 #ifdef SPLITMODE
-  { "split",	0, 0, 'p' },
+  { "split",      0, 0, 'p' },
 #endif
-  { "port",	1, 0, 'P' },	/* target port number for TCP */
-  { "tos",	1, 0, 'Q' },	/* typeof service (0,255) */
-  { "report",	0, 0, 'r' },
-  { "psize",	1, 0, 's' },	/* changed 'p' to 's' to match ping option, overload psize<0, ->rand(min,max) */
-  { "tcp",	0, 0, 'T' },	/* TCP (default is ICMP) */
-  { "udp",	0, 0, 'u' },	/* UDP (default is ICMP) */
-  { "version",	0, 0, 'v' },
-  { "report-wide",	0, 0, 'w' },
+  { "port",       1, 0, 'P' },  // target port number for TCP
+  { "tos",        1, 0, 'Q' },  // typeof service (0,255)
+  { "report",     0, 0, 'r' },
+  { "psize",      1, 0, 's' },  // changed 'p' to 's' to match ping option, overload psize<0, ->rand(min,max)
+  { "tcp",        0, 0, 'T' },  // TCP (default is ICMP)
+  { "udp",        0, 0, 'u' },  // UDP (default is ICMP)
+  { "version",    0, 0, 'v' },
+  { "report-wide", 0, 0, 'w' },
 #ifdef IPINFO
-  { "ipinfo",	1, 0, 'y' },
-  { "aslookup",	0, 0, 'z' },
+  { "ipinfo",     1, 0, 'y' },
+  { "aslookup",   0, 0, 'z' },
 #endif
-  { "timeout",	1, 0, 'Z' },	/* timeout for TCP sockets */
-  { "inet",	0, 0, '4' },	/* use IPv4 */
+  { "timeout",    1, 0, 'Z' },  // timeout for TCP sockets
+  { "inet",       0, 0, '4' },  // use IPv4
 #ifdef ENABLE_IPV6
-  { "inet6",	0, 0, '6' },	/* use IPv6 */
+  { "inet6",      0, 0, '6' },  // use IPv6
 #endif
+  { CACHE_MODE_OPT,    0, 0, 0 },  // cache mode, no ping to known hops
+  { CACHE_TIMEOUT_OPT, 1, 0, 0 },  // cache timeout in seconds
   { 0, 0, 0, 0 }
 };
 
 static char *short_options;
 
-static int my_getopt_long(int argc, char *argv[]) {
+static int my_getopt_long(int argc, char *argv[], int *opt_ndx) {
   if (!short_options) {
     short_options = malloc((sizeof(long_options) / sizeof(long_options[0])) * 2 + 1);
     if (!short_options)
@@ -331,7 +338,7 @@ static int my_getopt_long(int argc, char *argv[]) {
     }
     *p++ = '\0';
   }
-  return getopt_long(argc, argv, short_options, long_options, NULL);
+  return getopt_long(argc, argv, short_options, long_options, opt_ndx);
 }
 
 static char *get_opt_desc(char opt) {
@@ -386,12 +393,17 @@ static void usage(char *name) {
       putchar(short_options[i]);
   printf("] HOSTNAME ...\n");
   for (i = 0; long_options[i].name; i++) {
-    printf("\t[-%c|--%s", (char)long_options[i].val, long_options[i].name);
-    if (long_options[i].has_arg) {
-      char *desc = get_opt_desc((char)long_options[i].val);
-      if (desc)
-        printf(" %s", trim(desc));
-    }
+    printf("\t[");
+    char c = (char)long_options[i].val;
+    if (c)
+      printf("-%c|", c);
+    printf("--%s", long_options[i].name);
+    if (!c) // LATER: do it in more common way
+      if (!strncmp(long_options[i].name, CACHE_TIMEOUT_OPT, sizeof(CACHE_TIMEOUT_OPT)))
+        c = 'i'; // seconds
+    char *desc = long_options[i].has_arg ? get_opt_desc(c) : NULL;
+    if (desc)
+      printf(" %s", desc);
     printf("]\n");
   }
 }
@@ -413,14 +425,24 @@ static int limit_int(const int v0, const int v1, const int v, const char *it) {
 }
  
 static void parse_arg(int argc, char **argv) {
-  int opt = 0;
+  int opt = 0, opt_ndx = 0;
   while (1) {
     /* added f:m:o: byMin */
-    opt = my_getopt_long(argc, argv);
+    opt = my_getopt_long(argc, argv, &opt_ndx);
     if (opt == -1)
       break;
 
     switch (opt) {
+    case 0: // no corresponding short option
+      if (!strncmp(CACHE_MODE_OPT, long_options[opt_ndx].name, sizeof(CACHE_MODE_OPT)))
+        cache_mode = true;
+      else if (!strncmp(CACHE_TIMEOUT_OPT, long_options[opt_ndx].name, sizeof(CACHE_TIMEOUT_OPT))) {
+        if (optarg) {
+          int tm = atoi(optarg);
+          (tm > 0) ? cache_timeout = tm :
+            fprintf(stderr, "WARN: '%s' must be positive: %d -> %d\n", CACHE_TIMEOUT_OPT, tm, cache_timeout);
+        }
+      } break;
     case '?':
       usage(argv[0]);
       exit(-1);

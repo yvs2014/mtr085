@@ -46,7 +46,7 @@ int maxfd;
 //
 #define WRITEFD_P ((mtrtype == IPPROTO_TCP) ? &wset : NULL)
 
-static struct timeval gracetime = { 5, 0 }; // 5 seconds
+const struct timeval GRACETIME = { 5, 0 }; // 5 seconds
 
 #define SET_MTRFD(fd) { \
   if (fd >= 0) { \
@@ -77,8 +77,7 @@ void set_fds(fd_set *rset, fd_set *wset, mtrfd_t *fd) {
   SET_MTRFD(fd->net);
 }
 
-int timing(struct timeval *last, struct timeval *interval, struct timeval *start, struct timeval *timeout,
-    int grace, int *cnt) {
+int timing(struct timeval *last, struct timeval *interval, struct timeval *start, struct timeval *timeout, int grace) {
   // return bool grace, or -1
   int re = grace;
   struct timeval now, tv;
@@ -88,18 +87,19 @@ int timing(struct timeval *last, struct timeval *interval, struct timeval *start
   if (timercmp(&now, &tv, >)) {
     *last = now;
     if (!re) {
-      if ((*cnt >= max_ping) && (!interactive || alter_ping)) {
+      static int numpings;
+      if ((numpings >= max_ping) && (!interactive || alter_ping)) {
         re = 1;
         *start = now;
       }
       if (!re && net_send_batch()) // send batch unless grace period
-        (*cnt) += 1;
+        numpings++;
     }
   }
 
   if (re) {
     timersub(&now, start, &tv);
-    if (timercmp(&tv, &gracetime, >))
+    if (timercmp(&tv, &GRACETIME, >))
       return -1;
   }
 
@@ -222,9 +222,11 @@ bool something_new(mtrfd_t *fd, fd_set *rset) {
 #endif
   }
 #ifdef IPINFO
-  if ((fd->ii > 0) && FD_ISSET(fd->ii, rset)) { // ipinfo lookup ready
-    ii_ack();
-    re = true;
+  if (ii_ready()) {
+    if ((fd->ii > 0) && FD_ISSET(fd->ii, rset)) { // ipinfo lookup ready
+      ii_ack();
+      re = true;
+    }
   }
 #endif
   if (mtrtype == IPPROTO_TCP)
@@ -233,18 +235,18 @@ bool something_new(mtrfd_t *fd, fd_set *rset) {
   return re;
 }
 
-
+// main mtr loop
 void select_loop(void) {
   fd_set rset;
   bool anyset = false, paused = false;
-  int rv, ping_no = 0, graceperiod = 0;
+  int rv, graceperiod = 0;
 
   struct timeval lasttime, startgrace;
   gettimeofday(&lasttime, NULL);
   timerclear(&startgrace);
 
   while (1) {
-    time_t dt = calc_deltatime(wait_time);
+    time_t dt = wait_usec(wait_time);
     struct timeval timeout, interval = { dt / 1000000, dt % 1000000 };
 
     mtrfd_t mtrfd;
@@ -265,7 +267,7 @@ void select_loop(void) {
         if (ii_ready())
           display_ipinfo();
 #endif
-        if ((graceperiod = timing(&lasttime, &interval, &startgrace, &timeout, graceperiod, &ping_no)) < 0)
+        if ((graceperiod = timing(&lasttime, &interval, &startgrace, &timeout, graceperiod)) < 0)
           return;
       }
       rv = select(maxfd, &rset, WRITEFD_P, NULL, &timeout);

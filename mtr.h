@@ -101,20 +101,22 @@ struct fields {
 //
 extern pid_t mypid;
 extern char mtr_args[];
-extern unsigned iargs;	// args passed interactively
-extern int mtrtype;	// default packet type
+extern unsigned iargs;     // args passed interactively
+extern int mtrtype;        // default packet type
 extern bool enable_mpls;
 extern bool report_wide;
 extern bool show_ips;
-extern bool hinit;	// make sure that a hashtable already exists or not
+extern bool hinit;         // make sure that a hashtable already exists or not
 extern int fstTTL;
 extern int maxTTL;
-extern int bitpattern;	// packet bit pattern used by ping
-extern int remoteport;	// target port
-extern int tos;		// type of service set in ping packet
-extern bool endpoint_mode;	// -fz option
-extern int cpacketsize;	// default packet size, or user-defined
-extern int tcp_timeout;	// timeout for TCP connections
+extern int bitpattern;     // packet bit pattern used by ping
+extern int remoteport;     // target port
+extern int tos;            // type of service set in ping packet
+extern bool endpoint_mode; // -fa option
+extern bool cache_mode;    // no ping to known hops
+int cache_timeout;         // cache timeout in seconds
+extern int cpacketsize;    // default packet size, or user-defined
+extern int tcp_timeout;    // timeout for TCP connections
 //
 extern int display_offset;
 #if defined(CURSES) || defined(GRAPHCAIRO)

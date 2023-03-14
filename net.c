@@ -42,6 +42,7 @@
 #include <math.h>
 #include <errno.h>
 #include <string.h>
+#include <time.h>
 
 #include "mtr.h"
 #include "net.h"
@@ -120,14 +121,15 @@ int af;	// address family
 int packetsize;	// packet size used by ping
 struct nethost host[MAXHOST];
 char localaddr[INET6_ADDRSTRLEN];
+int cycles;
 //
 
 static unsigned *tcp_sockets;
 
 
-/* Configuration parameter: How many queries to unknown hosts do we
-   send? (This limits the amount of traffic generated if a host is not
-   reachable) */
+/* How many queries to unknown hosts do we send?
+ * It limits the amount of traffic generated if a host is not reachable
+ */
 #define MAX_UNKNOWN_HOSTS 10
 
 static struct sequence sequence[SEQ_MAX];
@@ -167,7 +169,7 @@ static int numhosts = 10;
 static int portpid;
 
 // return the number of microseconds to wait before sending the next ping
-time_t calc_deltatime(float t) {
+time_t wait_usec(float t) {
   int n = numhosts;
   int f = fstTTL - 1;
   if ((f > 0) && (n > f))
@@ -224,8 +226,7 @@ static void save_sequence(int index, int seq) {
   host[index].sent = 1;
 
   if (host[index].saved[SAVED_PINGS - 1] != -2) {
-    int at;
-    for (at = 0; at < MAXHOST; at++) {
+    for (int at = 0; at < MAXHOST; at++) {
       memmove(host[at].saved, host[at].saved + 1, (SAVED_PINGS - 1) * sizeof(int));
       host[at].saved[SAVED_PINGS - 1] = -2;
       host[at].saved_seq_offset += 1;
@@ -375,7 +376,7 @@ static void net_send_query(int index) {
   else if (packetsize > MAXPACKET) packetsize = MAXPACKET;
   memset(packet, (unsigned char) abs(bitpattern), packetsize);
 
-  switch ( af ) {
+  switch (af) {
   case AF_INET:
 #if !defined(IP_HDRINCL) && defined(IP_TOS) && defined(IP_TTL)
     iphsize = 0;
@@ -475,11 +476,6 @@ static void tcp_seq_close(unsigned at) {
 
 // We got a return on something we sent out. Record the address and time.
 static void net_process_ping(unsigned port, struct mplslen mpls, void *addr, struct timeval now) {
-  int index;
-  time_t totusec;
-  int oldavg;	/* usedByMin */
-  int oldjavg;	/* usedByMin */
-  int i;	/* usedByMin */
   ip_t addrcopy;
 
   /* Copy the from address ASAP because it can be overwritten */
@@ -494,11 +490,10 @@ static void net_process_ping(unsigned port, struct mplslen mpls, void *addr, str
   if (mtrtype == IPPROTO_TCP)
     tcp_seq_close(seq);
 
-  index = sequence[seq].index;
+  int index = sequence[seq].index;
   struct timeval _tv;
   timersub(&now, &(sequence[seq].time), &_tv);
-  totusec = timer2usec(&_tv);
-  /* impossible? if( totusec < 0 ) totusec = 0 */;
+  time_t totusec = timer2usec(&_tv); // impossible? [if (totusec < 0) totusec = 0;]
 
   if (!unaddrcmp(&(host[index].addr))) {
     /* should be out of if as addr can change */
@@ -512,7 +507,8 @@ static void net_process_ping(unsigned port, struct mplslen mpls, void *addr, str
     addrcpy(&(host[index].addrs[0]), &addrcopy);
     host[index].mplss[0] = mpls;
   } else {
-    for (i = 0; i < MAXPATH; i++)
+    int i = 0;
+    for (; i < MAXPATH; i++)
       if (!addrcmp(&(host[index].addrs[i]), &addrcopy) || !unaddrcmp(&(host[index].addrs[i])))
         break;
     if (addrcmp(&(host[index].addrs[i]), &addrcopy) && (i < MAXPATH)) {
@@ -530,8 +526,7 @@ static void net_process_ping(unsigned port, struct mplslen mpls, void *addr, str
 
   if (host[index].returned < 1) {
     host[index].best = host[index].worst = host[index].gmean = totusec;
-    host[index].avg = host[index].var = 0;
-    host[index].jitter = host[index].jworst = host[index].jinta = 0;
+    host[index].avg = host[index].var = host[index].jitter = host[index].jworst = host[index].jinta = 0;
   }
 
   if (totusec < host[index].best)
@@ -542,25 +537,28 @@ static void net_process_ping(unsigned port, struct mplslen mpls, void *addr, str
      host[index].jworst = host[index].jitter;
 
   host[index].returned++;
-  oldavg = host[index].avg;
-  host[index].avg += (totusec - oldavg +.0) / host[index].returned;
-  host[index].var += (totusec - oldavg +.0) * (totusec - host[index].avg) / 1000000;
+  int oldavg = host[index].avg;
+  host[index].avg += ((double)(totusec - oldavg)) / host[index].returned;
+  host[index].var += ((double)(totusec - oldavg)) * (totusec - host[index].avg) / 1000000;
 
-  oldjavg = host[index].javg;
+  int oldjavg = host[index].javg;
   host[index].javg += (host[index].jitter - oldjavg) / host[index].returned;
   /* below algorithm is from rfc1889, A.8 */
   host[index].jinta += host[index].jitter - ((host[index].jinta + 8) >> 4);
 
-  if ( host[index].returned > 1 )
-  host[index].gmean = pow( (double) host[index].gmean, (host[index].returned-1.0)/host[index].returned )
-			* pow( (double) totusec, 1.0/host[index].returned );
+  if (host[index].returned > 1)
+    host[index].gmean =
+      pow((double)host[index].gmean, (host[index].returned - 1.0) / host[index].returned)
+      * pow((double)totusec, 1.0 / host[index].returned);
   host[index].sent = 0;
   host[index].up = 1;
   host[index].transit = 0;
+  if (cache_mode)
+    host[index].seen = time(NULL);
 
-  int idx = sequence[seq].saved_seq - host[index].saved_seq_offset;
-  if ((idx >= 0) && (idx <= SAVED_PINGS))
-    host[index].saved[idx] = totusec;
+  int ndx = sequence[seq].saved_seq - host[index].saved_seq_offset;
+  if ((ndx >= 0) && (ndx <= SAVED_PINGS))
+    host[index].saved[ndx] = totusec;
 
 #ifdef OUTPUT_FORMAT_RAW
   if (enable_raw) {
@@ -739,7 +737,7 @@ int net_elem(int at, char c) {
     case 'W':	// Max/Worst RTT(ms)
       return host[at].worst;
     case 'V':	// Standard Deviation
-      return (host[at].returned > 1) ? (1000.0 * sqrt(host[at].var / (host[at].returned -1.0))) : 0;
+      return (host[at].returned > 1) ? (1000.0 * sqrt(host[at].var / (host[at].returned - 1.0))) : 0;
     case 'G':	// Geometric Mean
       return host[at].gmean;
     case 'J':	// Current Jitter
@@ -802,13 +800,17 @@ int net_send_batch(void) {
       bitpattern = - (int)(256 + 255 * (rand() / (RAND_MAX + 0.1)));
   }
 
-  if (mtrtype == IPPROTO_TCP)
-    net_send_tcp(batch_at);
-  else
-    net_send_query(batch_at);
+  bool ping = true;
+  if (cache_mode)
+    if (host[batch_at].up && (host[batch_at].seen > 0))
+      if ((time(NULL) - host[batch_at].seen) <= cache_timeout)
+        ping = false;
 
-  int n_unknown=0, i;
-  for (i = fstTTL - 1; i < batch_at; i++) {
+  if (ping)
+    (mtrtype == IPPROTO_TCP) ? net_send_tcp(batch_at) : net_send_query(batch_at);
+
+  int n_unknown = 0;
+  for (int i = fstTTL - 1; i < batch_at; i++) {
     if (!unaddrcmp(&(host[i].addr)))
       n_unknown++;
 
@@ -827,6 +829,8 @@ int net_send_batch(void) {
      || (batch_at >= (maxTTL - 1))) {	// or reach limit
     numhosts = batch_at + 1;
     batch_at = fstTTL - 1;
+    if (cache_mode)
+      cycles++; // to see progress on curses screen
     return 1;
   }
 

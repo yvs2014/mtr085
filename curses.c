@@ -681,7 +681,6 @@ void mtr_curses_redraw(void) {
   int maxx, maxy;
   int startstat;
   int rowstat;
-  time_t t;
 
   int  hd_len;
   static char redraw_buf[1024];
@@ -720,7 +719,11 @@ void mtr_curses_redraw(void) {
   attroff(A_BOLD);
 
   mvprintw(1, 0, "%s (%s)", srchost, localaddr);
-  time(&t);
+  time_t t = time(NULL);
+  if (cache_mode) {
+    snprintf(redraw_buf, sizeof(redraw_buf), "%d cycles", cycles);
+    mvprintw(1, 25, "%*s", (int)(getmaxx(stdscr) - 50 + strlen(redraw_buf)) / 2, redraw_buf);
+  }
   mvprintw(1, maxx - 25, "%s", ctime(&t));
 
   printw("Keys:  ");
