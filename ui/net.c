@@ -120,9 +120,14 @@ static int numhosts = 10;
 /* return the number of microseconds to wait before sending the next
    ping */
 int calc_deltatime(
-    float waittime)
+    struct mtr_ctl *ctl)
 {
-    waittime /= numhosts;
+    float waittime = ctl->WaitTime;
+    int n = numhosts;
+    int f = ctl->fstTTL - 1;
+    if ((f > 0) && (n > f))
+      n -= f;
+    waittime /= n;
     return 1000000 * waittime;
 }
 

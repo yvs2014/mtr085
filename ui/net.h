@@ -99,7 +99,7 @@ extern void net_end_transit(
     void);
 
 extern int calc_deltatime(
-    float WaitTime);
+    struct mtr_ctl *ctl);
 
 extern int net_returned(
     int at);

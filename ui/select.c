@@ -67,7 +67,7 @@ void select_loop(
     gettimeofday(&lasttime, NULL);
 
     while (1) {
-        dt = calc_deltatime(ctl->WaitTime);
+        dt = calc_deltatime(ctl);
         intervaltime.tv_sec = dt / 1000000;
         intervaltime.tv_usec = dt % 1000000;
 
