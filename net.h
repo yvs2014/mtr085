@@ -31,6 +31,9 @@
 
 // just in case
 #define timer2usec(t) ((t)->tv_sec * 1000000 + (t)->tv_usec)
+#ifndef timerclear
+#define timerclear(t) ((t)->tv_sec = (t)->tv_usec = 0)
+#endif
 #ifndef timercmp
 #define timercmp(a, b, CMP)          \
   (((a)->tv_sec  ==  (b)->tv_sec)  ? \

@@ -116,12 +116,11 @@ static struct __res_state_ext {
 #endif
 
 int dns_waitfd(int family) {
+  return
 #ifdef ENABLE_IPV6
-  if (family == AF_INET6)
-    return resfd6;
-  else
+  (family == AF_INET6) ? resfd6 :
 #endif
-    return resfd;
+  resfd;
 }
 
 void dns_open(void) {

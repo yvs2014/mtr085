@@ -345,7 +345,7 @@ static void net_send_tcp(int index) {
     tcp_sockets[pseq] = s;
 
   connect(s, (struct sockaddr *) &remote, namelen);
-  FD_SET(s, &writefd);
+  FD_SET(s, &wset);
   if (s >= maxfd)
     maxfd = s + 1;
   NETLOG_MSG((LOG_INFO, "net_send_tcp(index=%d): sequence=%d, socket=%d", index, pseq, s));
@@ -467,7 +467,7 @@ static void tcp_seq_close(unsigned at) {
   if (fd) {
     tcp_sockets[at] = 0;
     close(fd);
-    FD_CLR(fd, &writefd);
+    FD_CLR(fd, &wset);
     if ((fd + 1) == maxfd)
       maxfd--;
   }
@@ -1189,7 +1189,7 @@ bool net_process_tcp_fds(void) {
   for (at = 0; at < SEQ_MAX; at++) {
     unsigned fd = tcp_sockets[at];
     if (fd) {
-      if (FD_ISSET(fd, &writefd)) {
+      if (FD_ISSET(fd, &wset)) {
 //        r = write(fd, "G", 1);
         errno = err_slippage(fd);
         bool r = errno ? false : true; // like write()

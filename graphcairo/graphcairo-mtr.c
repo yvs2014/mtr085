@@ -282,11 +282,9 @@ static void gc_keyaction(int c) {
 		case 't':	// TCP on/off
 			if (mtrtype == IPPROTO_TCP) {
 				mtrtype = IPPROTO_ICMP;
-				p_writefd = NULL;
 				GCDEBUG_MSG(("icmp_echo packets\n"));
 			} else if (net_tcp_init()) {
 				mtrtype = IPPROTO_TCP;
-				p_writefd = &writefd;
 				GCDEBUG_MSG(("tcp_syn packets\n"));
 			}
 			break;

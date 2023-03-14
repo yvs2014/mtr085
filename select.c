@@ -38,266 +38,250 @@
 #endif
 #include "display.h"
 
+typedef struct mtrfd { int net; int dns; int dns6; int ii; } mtrfd_t;
+
 // global vars
-fd_set writefd, *p_writefd;
+fd_set wset;
 int maxfd;
 //
-
-static int dnsfd;
-#ifdef ENABLE_IPV6
-static int dnsfd6;
-#endif
+#define WRITEFD_P ((mtrtype == IPPROTO_TCP) ? &wset : NULL)
 
 static struct timeval gracetime = { 5, 0 }; // 5 seconds
 
-#define SET_DNSFD(fd, family) { \
-  fd = dns_waitfd(family); \
-  if (fd < 0) fd = 0; \
-  else { \
-    FD_SET(fd, &readfd); \
-    if (fd >= maxfd) maxfd = dnsfd + 1; \
+#define SET_MTRFD(fd) { \
+  if (fd >= 0) { \
+    FD_SET(fd, rset); \
+    if (fd >= maxfd) maxfd = fd + 1; \
   } \
 }
 
-void select_loop(void) {
-  fd_set readfd;
-  int netfd;
-  bool anyset = false;
-  bool paused = false;
-  int ping_no = 0;
-  struct timeval lasttime, selecttime;
-  struct timeval startgrace;
-  time_t dt;
-  int rv; 
-  bool graceperiod = false;
-
-  memset(&startgrace, 0, sizeof(startgrace));
-  gettimeofday(&lasttime, NULL);
-
-  p_writefd = (mtrtype == IPPROTO_TCP) ? &writefd : NULL;
-
-  while(1) {
-    dt = calc_deltatime(wait_time);
-    static struct timeval intervaltime;
-    intervaltime.tv_sec  = dt / 1000000;
-    intervaltime.tv_usec = dt % 1000000;
-
-    FD_ZERO(&readfd);
-    if (mtrtype == IPPROTO_TCP)
-      FD_ZERO(&writefd);
-
-    if (interactive) {
-      FD_SET(0, &readfd);
-      if (maxfd == 0)
-        maxfd++;
-    }
-
-    if (enable_dns) {
-      SET_DNSFD(dnsfd, AF_INET);
+void set_fds(fd_set *rset, fd_set *wset, mtrfd_t *fd) {
+  if (mtrtype == IPPROTO_TCP)
+    FD_ZERO(wset);
+  FD_ZERO(rset);
+  if (interactive)
+    SET_MTRFD(0);
+  if (enable_dns) {
+    fd->dns = dns_waitfd(AF_INET);
+    SET_MTRFD(fd->dns);
 #ifdef ENABLE_IPV6
-      SET_DNSFD(dnsfd6, AF_INET6);
+    fd->dns6 = dns_waitfd(AF_INET6);
+    SET_MTRFD(fd->dns6);
 #endif
-	} else {
-      dnsfd = 0;
-#ifdef ENABLE_IPV6
-      dnsfd6 = 0;
+  }
+#ifdef IPINFO
+  fd->ii = ii_waitfd();
+  SET_MTRFD(fd->ii);
 #endif
+  fd->net = net_waitfd();
+  SET_MTRFD(fd->net);
+}
+
+int timing(struct timeval *last, struct timeval *interval, struct timeval *start, struct timeval *timeout,
+    int grace, int *cnt) {
+  // return bool grace, or -1
+  int re = grace;
+  struct timeval now, tv;
+  gettimeofday(&now, NULL);
+  timeradd(last, interval, &tv);
+
+  if (timercmp(&now, &tv, >)) {
+    *last = now;
+    if (!re) {
+      if ((*cnt >= max_ping) && (!interactive || alter_ping)) {
+        re = 1;
+        *start = now;
+      }
+      if (!re && net_send_batch()) // send batch unless grace period
+        (*cnt) += 1;
     }
+  }
+
+  if (re) {
+    timersub(&now, start, &tv);
+    if (timercmp(&tv, &gracetime, >))
+      return -1;
+  }
+
+  timersub(&now, last, timeout);
+  timersub(interval, timeout, timeout);
+  return re;
+}
+
+
+int chk_kbd_click(bool* paused) { // Has a key been pressed?
+  int action = display_keyaction();
+  switch (action) {
+    case ActionQuit:
+      return -1;
+      break;
+    case ActionReset:
+      net_reset();
+      break;
+#if defined(CURSES) || defined(GRAPHCAIRO)
+    case ActionDisplay:
+      curses_mode = (curses_mode + 1) % curses_mode_max;
+      // bits 7,8: display-type
+      CLRBIT(iargs, 7);
+      CLRBIT(iargs, 8);
+      iargs |= (curses_mode & 3) << 7;
+#endif
+    case ActionClear:
+      display_clear();
+      break;
+    case ActionPauseResume:
+      *paused = !(*paused);
+      break;
+    case ActionMPLS:
+      enable_mpls = !enable_mpls;
+      TGLBIT(iargs, 2);	// 2nd bit: MPLS on/off
+      display_clear();
+      break;
+    case ActionDNS:
+      enable_dns = !enable_dns;
+      TGLBIT(iargs, 5);	// 5th bit: DNS on/off
+      dns_open();
+      display_clear();
+      break;
+#ifdef IPINFO
+    case ActionAS:
+    case ActionII:
+      ii_action(action);
+      // 3,4 bits: ASN Lookup, IPInfo
+      CLRBIT(iargs, 3);
+      CLRBIT(iargs, 4);
+      if (enable_ipinfo)
+        SETBIT(iargs, (action == ActionAS) ? 3 : 4);
+      break;
+    case ActionII_Map:
+      ii_action(action);
+      break;
+#endif
+    case ActionScrollDown:
+      display_offset += 5;
+      break;
+    case ActionScrollUp:
+      display_offset -= 5;
+      if (display_offset < 0)
+        display_offset = 0;
+      break;
+    case ActionTCP:
+      iargs &= ~3;	// CLR tcp/udp bits
+      if (mtrtype == IPPROTO_TCP) {
+        mtrtype = IPPROTO_ICMP;
+      } else if (net_tcp_init()) {
+        mtrtype = IPPROTO_TCP;
+        SETBIT(iargs, 1);
+      } else {
+        fprintf(stderr, "\rPress any key to continue..\r\n");
+        getchar();
+        display_clear();
+      }
+      break;
+  }
+  return 0;
+}
 
 #ifdef IPINFO
-    int iifd;
-    if ((iifd = ii_waitfd())) {
-      FD_SET(iifd, &readfd);
-      if (iifd >= maxfd)
-        maxfd = iifd + 1;
-    }
+void display_ipinfo() {
+  switch (display_mode) {
+    case DisplayReport:
+#ifdef OUTPUT_FORMAT_TXT
+    case DisplayTXT:
+#endif
+#ifdef OUTPUT_FORMAT_CSV
+    case DisplayCSV:
+#endif
+#ifdef OUTPUT_FORMAT_JSON
+    case DisplayJSON:
+#endif
+#ifdef OUTPUT_FORMAT_XML
+    case DisplayXML:
+#endif
+      query_ipinfo();
+  }
+}
 #endif
 
-    netfd = net_waitfd();
-    FD_SET(netfd, &readfd);
-    if(netfd >= maxfd) maxfd = netfd + 1;
+bool something_new(mtrfd_t *fd, fd_set *rset) {
+  bool re = false;
+  if ((fd->net > 0) && FD_ISSET(fd->net, rset)) { // net packets ready
+    net_process_return();
+    re = true;
+  }
+  if (enable_dns) {
+    if ((fd->dns > 0) && FD_ISSET(fd->dns, rset)) { // dns lookup ready
+      dns_ack(fd->dns, AF_INET);
+      re = true;
+    }
+#ifdef ENABLE_IPV6
+    if ((fd->dns6 > 0) && FD_ISSET(fd->dns6, rset)) {
+      dns_ack(fd->dns6, AF_INET6);
+      re = true;
+    }
+#endif
+  }
+#ifdef IPINFO
+  if ((fd->ii > 0) && FD_ISSET(fd->ii, rset)) { // ipinfo lookup ready
+    ii_ack();
+    re = true;
+  }
+#endif
+  if (mtrtype == IPPROTO_TCP)
+    if (net_process_tcp_fds()) // tcp data ready
+      re = true;
+  return re;
+}
+
+
+void select_loop(void) {
+  fd_set rset;
+  bool anyset = false, paused = false;
+  int rv, ping_no = 0, graceperiod = 0;
+
+  struct timeval lasttime, startgrace;
+  gettimeofday(&lasttime, NULL);
+  timerclear(&startgrace);
+
+  while (1) {
+    time_t dt = calc_deltatime(wait_time);
+    struct timeval timeout, interval = { dt / 1000000, dt % 1000000 };
+
+    mtrfd_t mtrfd;
+    set_fds(&rset, &wset, &mtrfd);
 
     do {
-      if (anyset || paused) {
-	/* Set timeout to 0.1s.
-	 * While this is almost instantaneous for human operators,
-	 * it's slow enough for computers to go do something else;
-	 * this prevents mtr from hogging 100% CPU time on one core.
-	 */
-        selecttime = (struct timeval) { 0, paused ? 100000 : 0 };
-        rv = select(maxfd, &readfd, p_writefd, NULL, &selecttime);
-      } else {
+      if (anyset || paused)
+        /* Set timeout to 0.1sec */
+        timeout = (struct timeval) { 0, paused ? 100000 : 0 };
+        /* While this is almost instantaneous for human operators,
+         * it's slow enough for computers to go do something else;
+         * this prevents mtr from hogging 100% CPU time on one core
+         */
+      else {
         if (interactive || (display_mode == DisplaySplit))
           display_redraw();
 #ifdef IPINFO
-        if (ii_ready()) {
-          switch (display_mode) {
-            case DisplayReport:
-#ifdef OUTPUT_FORMAT_TXT
-            case DisplayTXT:
+        if (ii_ready())
+          display_ipinfo();
 #endif
-#ifdef OUTPUT_FORMAT_CSV
-            case DisplayCSV:
-#endif
-#ifdef OUTPUT_FORMAT_JSON
-            case DisplayJSON:
-#endif
-#ifdef OUTPUT_FORMAT_XML
-            case DisplayXML:
-#endif
-              query_ipinfo();
-          }
-        }
-#endif
-        {
-          struct timeval now, _tv;
-          gettimeofday(&now, NULL);
-          timeradd(&lasttime, &intervaltime, &_tv);
-
-          if (timercmp(&now, &_tv, >)) {
-            lasttime = now;
-            if (!graceperiod) {
-              if ((ping_no >= max_ping) && (!interactive || alter_ping)) {
-                graceperiod = true;
-                startgrace = now;
-              }
-              /* do not send out batch when we've already initiated grace period */
-              if (!graceperiod && net_send_batch())
-                ping_no++;
-            }
-          }
-
-          if (graceperiod) {
-            timersub(&now, &startgrace, &_tv);
-            if (timercmp(&_tv, &gracetime, >)) {
-              dt = timer2usec(&_tv);
-              return;
-            }
-          }
-
-          timersub(&now, &lasttime, &selecttime);
-          timersub(&intervaltime, &selecttime, &selecttime);
-        }
-
-        rv = select(maxfd, &readfd, p_writefd, NULL, &selecttime);
+        if ((graceperiod = timing(&lasttime, &interval, &startgrace, &timeout, graceperiod, &ping_no)) < 0)
+          return;
       }
+      rv = select(maxfd, &rset, WRITEFD_P, NULL, &timeout);
     } while ((rv < 0) && (errno == EINTR));
 
     if (rv < 0) {
-      perror ("Select failed");
-      exit (1);
-    }
-    anyset = false;
-
-    /*  Have we got new packets back?  */
-    if (FD_ISSET(netfd, &readfd)) {
-      net_process_return();
-      anyset = true;
+      perror("Select failed");
+      exit(1);
     }
 
-    /*  Have we finished a nameservice lookup?  */
-    if (enable_dns) {
-      if (dnsfd && FD_ISSET(dnsfd, &readfd)) {
-        dns_ack(dnsfd, AF_INET);
-        anyset = true;
-      }
-#ifdef ENABLE_IPV6
-      if (dnsfd6 && FD_ISSET(dnsfd6, &readfd)) {
-        dns_ack(dnsfd6, AF_INET6);
-        anyset = true;
-      }
-#endif
-    }
-
-#ifdef IPINFO
-    if (ii_waitfd()) {
-      if (FD_ISSET(iifd, &readfd)) {
-        ii_ack();
-        anyset = true;
-      }
-    }
-#endif
-
-    /* Check for activity on open sockets */
-    if (mtrtype == IPPROTO_TCP)
-      anyset = net_process_tcp_fds();
-
-    /*  Has a key been pressed?  */
-    if (FD_ISSET(0, &readfd)) {
-      int action = display_keyaction();
-      switch (action) {
-        case ActionQuit: 
-          return;
-          break;
-        case ActionReset:
-          net_reset();
-          break;
-#if defined(CURSES) || defined(GRAPHCAIRO)
-        case ActionDisplay:
-          curses_mode = (curses_mode + 1) % curses_mode_max;
-          // bits 7,8: display-type
-          CLRBIT(iargs, 7);
-          CLRBIT(iargs, 8);
-          iargs |= (curses_mode & 3) << 7;
-#endif
-        case ActionClear:
-          display_clear();
-          break;
-        case ActionPauseResume:
-          paused = !paused;
-          break;
-        case ActionMPLS:
-          enable_mpls = !enable_mpls;
-          TGLBIT(iargs, 2);	// 2nd bit: MPLS on/off
-          display_clear();
-          break;
-        case ActionDNS:
-          enable_dns = !enable_dns;
-          TGLBIT(iargs, 5);	// 5th bit: DNS on/off
-          dns_open();
-          display_clear();
-          break;
-#ifdef IPINFO
-        case ActionAS:
-        case ActionII:
-          ii_action(action);
-          // 3,4 bits: ASN Lookup, IPInfo
-          CLRBIT(iargs, 3);
-          CLRBIT(iargs, 4);
-          if (enable_ipinfo)
-            SETBIT(iargs, (action == ActionAS) ? 3 : 4);
-          break;
-        case ActionII_Map:
-          ii_action(action);
-          break;
-#endif
-        case ActionScrollDown:
-          display_offset += 5;
-          break;
-        case ActionScrollUp:
-          display_offset -= 5;
-          if (display_offset < 0)
-            display_offset = 0;
-          break;
-        case ActionTCP:
-          iargs &= ~3;	// CLR tcp/udp bits
-          if (mtrtype == IPPROTO_TCP) {
-            mtrtype = IPPROTO_ICMP;
-            p_writefd = NULL;
-          } else if (net_tcp_init()) {
-            mtrtype = IPPROTO_TCP;
-            p_writefd = &writefd;
-            SETBIT(iargs, 1);
-          } else {
-            fprintf(stderr, "\rPress any key to continue..\r\n");
-            getchar();
-            display_clear();
-          }
-          break;
-      }
+    anyset = something_new(&mtrfd, &rset);
+    if (FD_ISSET(0, &rset)) { // check keyboard events too
+      if (chk_kbd_click(&paused) < 0)
+        return;
       anyset = true;
     }
   }
-  return;
 }
 
