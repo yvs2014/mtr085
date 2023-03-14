@@ -23,9 +23,6 @@
 
 void report_open(void);
 void report_close(void);
-#ifdef OUTPUT_FORMAT_CSV
-void csv_close(time_t now);
-#endif
 #ifdef OUTPUT_FORMAT_RAW
 extern bool enable_raw;
 void raw_rawping(int at, int msec);
@@ -34,8 +31,14 @@ void raw_rawhost(int at, ip_t *addr);
 #ifdef OUTPUT_FORMAT_TXT
 void txt_close(void);
 #endif
+#ifdef OUTPUT_FORMAT_CSV
+void csv_close(time_t now);
+#endif
 #ifdef OUTPUT_FORMAT_XML
 void xml_close(void);
+#endif
+#ifdef OUTPUT_FORMAT_JSON
+void json_close(void);
 #endif
 
 #endif

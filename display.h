@@ -34,14 +34,17 @@ enum { ActionNone,  ActionQuit,  ActionReset,  ActionDisplay,
 #endif
        ActionScrollDown, ActionScrollUp  };
 enum { DisplayReport, DisplayCurses,
-#ifdef OUTPUT_FORMAT_CSV
-       DisplayCSV,
-#endif
 #ifdef OUTPUT_FORMAT_RAW
        DisplayRaw,
 #endif
 #ifdef OUTPUT_FORMAT_TXT
        DisplayTXT,
+#endif
+#ifdef OUTPUT_FORMAT_CSV
+       DisplayCSV,
+#endif
+#ifdef OUTPUT_FORMAT_JSON
+       DisplayJSON,
 #endif
 #ifdef OUTPUT_FORMAT_XML
        DisplayXML,

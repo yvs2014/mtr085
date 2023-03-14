@@ -48,8 +48,7 @@ static int dnsfd;
 static int dnsfd6;
 #endif
 
-#define GRACETIME (5 * 1000*1000)
-static struct timeval gracetime = { GRACETIME, 0 };
+static struct timeval gracetime = { 5, 0 }; // 5 seconds
 
 #define SET_DNSFD(fd, family) { \
   fd = dns_waitfd(family); \
@@ -134,11 +133,14 @@ void select_loop(void) {
         if (ii_ready()) {
           switch (display_mode) {
             case DisplayReport:
+#ifdef OUTPUT_FORMAT_TXT
+            case DisplayTXT:
+#endif
 #ifdef OUTPUT_FORMAT_CSV
             case DisplayCSV:
 #endif
-#ifdef OUTPUT_FORMAT_TXT
-            case DisplayTXT:
+#ifdef OUTPUT_FORMAT_JSON
+            case DisplayJSON:
 #endif
 #ifdef OUTPUT_FORMAT_XML
             case DisplayXML:

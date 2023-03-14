@@ -104,6 +104,9 @@ static int found_addr_in_addrs(int z, ip_t *addr, ip_t *addrs) {
 }
 
 
+#define REPORT_FACTOR(factor) snprintf(rbuf + r, MAXDNAME - r, data_fields[j].format, \
+  net_elem(at, data_fields[j].key) factor)
+
 void report_close(void) {
   assert(LSIDE_LEN < MAXDNAME);
   char *lbuf = calloc(1, MAXDNAME);	// left side
@@ -120,7 +123,8 @@ void report_close(void) {
   if (ii_ready()) {
     snprintf(lfmt, sizeof(lfmt), "%%2d. %%-%ds %%-%ds", ii_getwidth(), len); // "at. IPINFO HOST"
     snprintf(dfmt, sizeof(dfmt), "    %%-%ds %%-%ds", ii_getwidth(), len);
-    snprintf(lbuf, MAXDNAME, dfmt, ii_getheader(), HOSTTITLE);
+    char* h = ii_getheader();
+    snprintf(lbuf, MAXDNAME, dfmt, h ? h : "", HOSTTITLE);
   } else
 #endif
   {
@@ -166,16 +170,10 @@ void report_close(void) {
       snprintf(lbuf, MAXDNAME, lfmt, at + 1, name);
 
     // body: right
-#define REPORT_FLD1(factor) { r += snprintf(rbuf + r, MAXDNAME - r, data_fields[j].format, net_elem(at, data_fields[j].key) factor); }
     for (int i = 0, r = 0; i < sizeof(fld_active); i++) {
       int j = fld_index[fld_active[i]];
-// j=0 fmt=" " elem=0: printed as " " with printf(" ", 0)
-      if (j > 0) {
-        if (index(data_fields[j].format, 'f'))
-          REPORT_FLD1(/1000.0)
-        else
-          REPORT_FLD1();
-      }
+      if (j > 0)
+        r += (index(data_fields[j].format, 'f')) ? REPORT_FACTOR(/1000.0) : REPORT_FACTOR();
     }
 
     // body: left + right
@@ -232,6 +230,8 @@ void txt_close(void) {
 #ifdef OUTPUT_FORMAT_XML
 #define XML_MARGIN1	4
 #define XML_MARGIN2	8
+#define XML_FACTOR(factor) { snprintf(buf, MAXDNAME, data_fields[j].format, \
+  net_elem(at, data_fields[j].key) factor ); }
 void xml_close(void) {
   char *buf = calloc(1, MAXDNAME);
   assert(buf);
@@ -251,19 +251,14 @@ void xml_close(void) {
     for (int i = 0; i < MAXFLD; i++) {
       int j = fld_index[fld_active[i]];
       if (j > 0) {
-#define REPORT_FLD2(factor) { snprintf(buf, MAXDNAME, data_fields[j].format, \
-  net_elem(at, data_fields[j].key) factor ); }
         // 1000.0 is a temporary hack for stats usec to ms, impacted net_loss
-        if (index(data_fields[j].format, 'f'))
-          REPORT_FLD2(/1000.)
-        else
-          REPORT_FLD2();
+        (index(data_fields[j].format, 'f')) ?  XML_FACTOR(/1000.) : XML_FACTOR();
         printf("%*s<%s>%s</%s>\n", XML_MARGIN2, " ", data_fields[j].title, trim(buf), data_fields[j].title);
       }
     }
 #ifdef IPINFO
-      if (ii_ready())
-        printf("%*s<IPInfo>%s</IPInfo>\n", XML_MARGIN2, " ", fmt_ipinfo(&host[at].addr));
+    if (ii_ready())
+      printf("%*s<IPInfo>%s</IPInfo>\n", XML_MARGIN2, " ", fmt_ipinfo(&host[at].addr));
 #endif
     printf("%*s</HUB>\n", XML_MARGIN1, " ");
   }
@@ -273,8 +268,42 @@ void xml_close(void) {
 #endif
 
 
+#ifdef OUTPUT_FORMAT_JSON
+#define JSON_FACTOR(factor) snprintf(buf, MAXDNAME, data_fields[j].format, net_elem(at, data_fields[j].key) factor)
+void json_close(void) {
+  char *buf = calloc(1, MAXDNAME);
+  assert(buf);
+  printf("[");
+  int min = net_min(), max = net_max();
+ for (int at = min; at < max; at++) {
+    ip_t *addr = &host[at].addr;
+    printf((at == min) ? "\n" : ",\n");
+    snprint_addr(buf, MAXDNAME, addr);
+    printf("{\"host\":\"%s\",\"hop\":%d,\"up\":%d", buf, at + 1, host[at].up);
+    for (int i = 0; i < MAXFLD; i++) {
+      int j = fld_index[fld_active[i]];
+      if (j > 0) {
+        // 1000.0 is a temporary hack for stats usec to ms, impacted net_loss
+		int l = (index(data_fields[j].format, 'f')) ? JSON_FACTOR(/1000.) : JSON_FACTOR();
+		if ((l > 0) && (buf[l - 1] == '%')) buf[l - 1] = 0;
+        printf(",\"%s\":%s", data_fields[j].title, trim(buf));
+      }
+    }
+#ifdef IPINFO
+    if (ii_ready())
+      printf(",\"ipinfo\":[%s]", rpt_ipinfo(addr, ','));
+#endif
+    printf("}");
+  }
+  printf("\n]\n");
+  free(buf);
+}
+#endif
+
+
 #ifdef OUTPUT_FORMAT_CSV
-#define COMA	";"
+#define CSV_DELIMITER	";"
+#define COMA	','
 
 static void prupper(const char *str) {
   while (*str)
@@ -286,15 +315,15 @@ void csv_close(time_t now) {
   char *buf = calloc(1, MAXDNAME);
   assert(buf);
 
-  printf("PROGRAM" COMA "TIME" COMA "DESTINATION" COMA "HOP" COMA "STATUS" COMA "HOSTNAME/IP");
+  printf("HOP" CSV_DELIMITER "STATUS" CSV_DELIMITER "HOST");
 #ifdef IPINFO
   if (ii_ready())
-    printf(COMA "IPINFO");
+    printf(CSV_DELIMITER "INFO");
 #endif
   for (int i = 0; i < MAXFLD; i++) {
     int j = fld_index[fld_active[i]];
     if (j > 0) {
-      printf(COMA);
+      printf(CSV_DELIMITER);
       prupper(data_fields[j].title);
     }
   }
@@ -305,25 +334,21 @@ void csv_close(time_t now) {
     ip_t *addr = &host[at].addr;
     snprint_addr(buf, MAXDNAME, addr);
 
-    printf("%s-%s", PACKAGE_NAME, MTR_VERSION);
-    printf(COMA "%s", get_time_string(now));
-    printf(COMA "%s", dsthost);
-    printf(COMA "%d", at + 1);
-    printf(COMA "%s", host[at].up ? "up" : "down");
-    printf(COMA "%s", buf);
+    printf("%d", at + 1);
+    printf(CSV_DELIMITER "%s", host[at].up ? "up" : "down");
+    printf(CSV_DELIMITER "%s", buf);
 #ifdef IPINFO
     if (ii_ready())
-      printf(COMA "%s", fmt_ipinfo(addr));
+      printf(CSV_DELIMITER "%s", rpt_ipinfo(addr, COMA));
 #endif
 
     for (int i = 0; i < MAXFLD; i++) {
       int j = fld_index[fld_active[i]];
       if (j > 0) {
         // 1000.0 is a temporary hack for stats usec to ms, impacted net_loss
-        if (index(data_fields[j].format, 'f'))
-          printf(COMA "%.2f", net_elem(at, data_fields[j].key) / 1000.);
-        else
-          printf(COMA "%d", net_elem(at, data_fields[j].key));
+        (index(data_fields[j].format, 'f')) ?
+          printf(CSV_DELIMITER "%.1f", net_elem(at, data_fields[j].key) / 1000.) :
+          printf(CSV_DELIMITER "%d", net_elem(at, data_fields[j].key));
       }
     }
     printf("\n");

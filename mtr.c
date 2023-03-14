@@ -143,6 +143,10 @@ bool alter_ping = false;
 static char *iface_addr = NULL;
 static names_t *names = NULL;
 
+#if defined(OUTPUT_FORMAT_RAW) || defined(OUTPUT_FORMAT_TXT) || defined(OUTPUT_FORMAT_CSV) || defined(OUTPUT_FORMAT_JSON) || defined(OUTPUT_FORMAT_XML)
+#define OUTPUT_FORMAT
+#endif
+
 void set_fld_active(const char *s) {
   static FLD_BUF_T s_copy;
   strncpy((char*)s_copy, s, sizeof(s_copy) - 1);
@@ -281,7 +285,7 @@ static struct option long_options[] = {
   { "graphcairo",	1, 0, 'G' },
 #endif
   { "interval",	1, 0, 'i' },
-#if defined(OUTPUT_FORMAT_CSV) || defined(OUTPUT_FORMAT_RAW) || defined(OUTPUT_FORMAT_TXT) || defined(OUTPUT_FORMAT_XML)
+#ifdef OUTPUT_FORMAT
   { "output",	1, 0, 'l' },
 #endif
   { "max-ttl",	1, 0, 'm' },
@@ -345,16 +349,19 @@ static char *get_opt_desc(char opt) {
     case 's': return "BYTES";
     case 'o': return "FIELDS";
     case 'F': return "FILE";
-#if defined(OUTPUT_FORMAT_CSV) || defined(OUTPUT_FORMAT_RAW) || defined(OUTPUT_FORMAT_TXT) || defined(OUTPUT_FORMAT_XML)
+#ifdef OUTPUT_FORMAT
     case 'l': return ""
-#ifdef OUTPUT_FORMAT_CSV
-" CSV"
-#endif
 #ifdef OUTPUT_FORMAT_RAW
 " RAW"
 #endif
 #ifdef OUTPUT_FORMAT_TXT
 " TXT"
+#endif
+#ifdef OUTPUT_FORMAT_CSV
+" CSV"
+#endif
+#ifdef OUTPUT_FORMAT_JSON
+" JSON"
 #endif
 #ifdef OUTPUT_FORMAT_XML
 " XML"
@@ -432,14 +439,9 @@ static void parse_arg(int argc, char **argv) {
       display_mode = DisplaySplit;
       break;
 #endif
-#if defined(OUTPUT_FORMAT_CSV) || defined(OUTPUT_FORMAT_RAW) || defined(OUTPUT_FORMAT_TXT) || defined(OUTPUT_FORMAT_XML)
+#ifdef OUTPUT_FORMAT
     case 'l':
       switch (tolower((int)optarg[0])) {
-#ifdef OUTPUT_FORMAT_CSV
-        case 'c':
-          display_mode = DisplayCSV;
-          break;
-#endif
 #ifdef OUTPUT_FORMAT_RAW
         case 'r':
           display_mode = DisplayRaw;
@@ -449,6 +451,16 @@ static void parse_arg(int argc, char **argv) {
 #ifdef OUTPUT_FORMAT_TXT
         case 't':
           display_mode = DisplayTXT;
+          break;
+#endif
+#ifdef OUTPUT_FORMAT_CSV
+        case 'c':
+          display_mode = DisplayCSV;
+          break;
+#endif
+#ifdef OUTPUT_FORMAT_JSON
+        case 'j':
+          display_mode = DisplayJSON;
           break;
 #endif
 #ifdef OUTPUT_FORMAT_XML
@@ -599,14 +611,17 @@ static void parse_arg(int argc, char **argv) {
 
   switch (display_mode) {
     case DisplayReport:
-#ifdef OUTPUT_FORMAT_CSV
-    case DisplayCSV:
-#endif
 #ifdef OUTPUT_FORMAT_RAW
     case DisplayRaw:
 #endif
 #ifdef OUTPUT_FORMAT_TXT
     case DisplayTXT:
+#endif
+#ifdef OUTPUT_FORMAT_CSV
+    case DisplayCSV:
+#endif
+#ifdef OUTPUT_FORMAT_JSON
+    case DisplayJSON:
 #endif
 #ifdef OUTPUT_FORMAT_XML
     case DisplayXML:

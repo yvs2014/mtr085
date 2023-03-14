@@ -838,6 +838,25 @@ char *fmt_ipinfo(ip_t *addr) {
     return fmtinfo;
 }
 
+char *rpt_ipinfo(ip_t *addr, char sep) {
+    static char rptinfo[NAMELEN];
+    int l = 0, i;
+    for (i = 0; (i < IPINFO_MAX_ITEMS) && (ipinfo_no[i] >= 0); i++) {
+        char *ipinfo = unaddrcmp(addr) ? get_ipinfo(addr, ipinfo_no[i]) : NULL;
+        int width = origins[origin_no].width[ipinfo_no[i]];
+        if (!width)
+            continue;
+        if (!ipinfo) {
+            if (ipinfo_no[i] >= ipinfo_max)
+                continue;
+            ipinfo = UNKN;
+        }
+        if (i) l += snprintf(rptinfo + l, sizeof(rptinfo) - l, "%c", sep);
+        l += snprintf(rptinfo + l, sizeof(rptinfo) - l, "\"%s\"", ipinfo);
+    }
+    return rptinfo;
+}
+
 int ii_waitfd(void) {
     return (enable_ipinfo && ii_initiated) ? origins[origin_no].fd : 0;
 }

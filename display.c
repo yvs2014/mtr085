@@ -82,14 +82,19 @@ void display_close(time_t now) {
     txt_close();
     break;
 #endif
-#ifdef OUTPUT_FORMAT_XML
-  case DisplayXML:
-    xml_close();
-    break;
-#endif
 #ifdef OUTPUT_FORMAT_CSV
   case DisplayCSV:
     csv_close(now);
+    break;
+#endif
+#ifdef OUTPUT_FORMAT_JSON
+  case DisplayJSON:
+    json_close();
+    break;
+#endif
+#ifdef OUTPUT_FORMAT_XML
+  case DisplayXML:
+    xml_close();
     break;
 #endif
 #ifdef CURSES
@@ -151,14 +156,17 @@ int display_keyaction(void) {
 void display_loop(void) {
   switch(display_mode) {
   case DisplayReport:
-#ifdef OUTPUT_FORMAT_CSV
-  case DisplayCSV:
-#endif
 #ifdef OUTPUT_FORMAT_RAW
   case DisplayRaw:
 #endif
 #ifdef OUTPUT_FORMAT_TXT
   case DisplayTXT:
+#endif
+#ifdef OUTPUT_FORMAT_CSV
+  case DisplayCSV:
+#endif
+#ifdef OUTPUT_FORMAT_JSON
+  case DisplayJSON:
 #endif
 #ifdef OUTPUT_FORMAT_XML
   case DisplayXML:
