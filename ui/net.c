@@ -26,6 +26,7 @@
 #include <string.h>
 #include <sys/select.h>
 #include <unistd.h>
+#include <time.h>
 
 #ifdef HAVE_ERROR_H
 #include <error.h>
@@ -69,6 +70,7 @@ struct nethost {
     int saved_seq_offset;
     struct mplslen mpls;
     struct mplslen mplss[MAX_PATH];
+    time_t seen;               /* timestamp for caching, last seen */
 };
 
 
@@ -108,6 +110,7 @@ static char remoteaddr[INET_ADDRSTRLEN];
 
 static int batch_at = 0;
 static int numhosts = 10;
+int cycles;
 
 
 #define host_addr_cmp(index, other, af) \
@@ -319,6 +322,8 @@ static void net_process_ping(
     nh->sent = 0;
     nh->up = 1;
     nh->transit = 0;
+    if (ctl->cache_mode)
+      nh->seen = time(NULL);
 
     net_save_return(index, sequence[seq].saved_seq, totusec);
     display_rawping(ctl, index, totusec, seq);
@@ -577,7 +582,14 @@ int net_send_batch(
         }
     }
 
-    net_send_query(ctl, batch_at, abs(packetsize));
+    int ping = 1;
+    if (ctl->cache_mode)
+        if (host[batch_at].up && (host[batch_at].seen > 0))
+            if ((time(NULL) - host[batch_at].seen) <= ctl->cache_timeout)
+                ping = 0;
+
+    if (ping)
+        net_send_query(ctl, batch_at, abs(packetsize));
 
     for (i = ctl->fstTTL - 1; i < batch_at; i++) {
         if (host_addr_cmp(i, &ctl->unspec_addr, ctl->af) == 0)
@@ -607,6 +619,8 @@ int net_send_batch(
 
     if (restart) {
         batch_at = ctl->fstTTL - 1;
+        if (ctl->cache_mode)
+            cycles++; /* to see progress on curses screen */
         return 1;
     }
 

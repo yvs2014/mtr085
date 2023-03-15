@@ -698,6 +698,11 @@ void mtr_curses_redraw(
     pwcenter(buf);
     attroff(A_BOLD);
 
+    if (ctl->cache_mode) {
+      snprintf(buf, sizeof(buf), "%d cycles", cycles);
+      move(1, 0);
+      pwcenter(buf);
+    }
     mvprintw(1, 0, "%s (%s) -> %s (%s)",
 	ctl->LocalHostname, net_localaddr(),
 	ctl->Hostname, net_remoteaddr());

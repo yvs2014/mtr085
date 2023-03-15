@@ -126,3 +126,6 @@ extern int addrcmp(
 extern void net_add_fds(
     fd_set * writefd,
     int *maxfd);
+
+extern int cycles; /* to see progress on curses screen in cache mode */
+

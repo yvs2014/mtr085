@@ -442,6 +442,12 @@ netfilter MARK target but socket-based.
 is 32 unsigned integer.  See
 .BR socket (7)
 for full description of this socket option.
+.TP
+.B \-\-use\-cache
+Don't ping known hops during cache-timeout period.
+.TP
+.B \-\-cache\-timeout SECONDS
+Wait SECONDS to validate cache again. Default is 60 seconds.
 .SH ENVIRONMENT
 .B mtr
 recognizes a few environment variables.
