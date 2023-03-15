@@ -115,6 +115,12 @@ mtr \- a network diagnostic tool
 [\c
 .BI \-M \ MARK\c
 ]
+[\c
+.B \-\-use\-cache\c
+]
+[\c
+.B \-\-cache\-timeout\c
+]
 .I HOSTNAME
 .SH DESCRIPTION
 .B mtr
@@ -509,6 +515,7 @@ can be controlled while it is running with the following keys:
   b <c>   set ping bit pattern to c(0..255) or random(c<0)
   Q <t>   set ping packet's TOS to t
   u       switch between ICMP ECHO and UDP datagrams
+  x       toggle cache mode on/off
   y       switching IP info
   z       toggle ASN info on/off
   q       exit

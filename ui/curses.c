@@ -176,6 +176,8 @@ int mtr_curses_keyaction(
         return ActionMPLS;
     case 'n':
         return ActionDNS;
+    case 'x':
+        return ActionCache;
 #ifdef HAVE_IPINFO
     case 'y':
         return ActionII;
@@ -365,6 +367,7 @@ int mtr_curses_keyaction(
         printw("  Q <t>   set ping packet's TOS to t\n");
         printw("  u       switch between ICMP ECHO and UDP datagrams\n");
         printw("  t       switch between ICMP ECHO and TCP\n");
+        printw("  x       toggle cache mode on/off\n");
 #ifdef HAVE_IPINFO
         printw("  y       switching IP info\n");
         printw("  z       toggle ASN info on/off\n");

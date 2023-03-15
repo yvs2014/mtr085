@@ -243,6 +243,9 @@ void select_loop(
                     display_clear(ctl);
                 }
                 break;
+            case ActionCache:
+                ctl->cache_mode = !ctl->cache_mode;
+                break;
 #ifdef HAVE_IPINFO
             case ActionII:
                 ctl->ipinfo_no++;
