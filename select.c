@@ -143,6 +143,10 @@ int chk_kbd_click(bool* paused) { // Has a key been pressed?
       dns_open();
       display_clear();
       break;
+    case ActionCache:
+      cache_mode = !cache_mode;
+      TGLBIT(iargs, 9);	// 9th bit: cache mode
+      break;
 #ifdef IPINFO
     case ActionAS:
     case ActionII:

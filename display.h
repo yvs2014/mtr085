@@ -28,7 +28,7 @@
 /* Don't put a trailing comma in enumeration lists. Some compilers 
    (notably the one on Irix 5.2) do not like that. */ 
 enum { ActionNone,  ActionQuit,  ActionReset,  ActionDisplay, 
-       ActionClear, ActionPauseResume, ActionMPLS, ActionDNS, ActionTCP,
+       ActionClear, ActionPauseResume, ActionMPLS, ActionDNS, ActionTCP, ActionCache,
 #ifdef IPINFO
        ActionAS, ActionII, ActionII_Map,
 #endif

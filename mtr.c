@@ -425,10 +425,9 @@ static int limit_int(const int v0, const int v1, const int v, const char *it) {
 }
  
 static void parse_arg(int argc, char **argv) {
-  int opt = 0, opt_ndx = 0;
   while (1) {
-    /* added f:m:o: byMin */
-    opt = my_getopt_long(argc, argv, &opt_ndx);
+    int opt_ndx;
+    int opt = my_getopt_long(argc, argv, &opt_ndx);
     if (opt == -1)
       break;
 

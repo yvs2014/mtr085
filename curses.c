@@ -153,21 +153,24 @@ static void mtr_curses_get_float(int y, float* res) {
   "  r       reset all counters\n" \
   "  s <n>   set the packet size to n or random(n<0)\n" \
   "  t       switch between ICMP ECHO and TCP SYN\n" \
-  "  u       switch between ICMP ECHO and UDP datagrams\n"
+  "  u       switch between ICMP ECHO and UDP datagrams\n" \
+  "  x       toggle cache mode on/off\n"
+#ifdef IPINFO
+#define CURSES_HELP_IPINFO \
+  "  y       switching IP Info\n" \
+  "  Y       show hops on GoogleMaps (in -y[6-9] modes)\n" \
+  "  z       toggle ASN Lookup on/off\n"
+#endif
 
 int mtr_curses_keyaction(void) {
   int c = getch();
 
-  switch (tolower(c)) {
+  switch (tolower(c)) { // lowercase/uppercase independent
     case '?':
     case 'h':
       erase();
-      mvprintw(2, 0, "%s", CURSES_HELP_MESSAGE);
-#ifdef IPINFO
-      printw("  y       switching IP Info\n");
-      printw("  Y       show hops on GoogleMaps (in -y[6-9] modes)\n");
-      printw("  z       toggle ASN Lookup on/off\n");
-#endif
+      mvprintw(2, 0, CURSES_HELP_MESSAGE);
+      printw(CURSES_HELP_IPINFO);
       addch('\n');
       printw(" press any key to go back...");
       getch();
@@ -264,39 +267,42 @@ int mtr_curses_keyaction(void) {
       } else
         mtrtype = IPPROTO_ICMP;
       return ActionNone;
+  }
+
+  switch (c) { // exact match
+    case 3:
+      return ActionQuit;
+    case 12:
+      return ActionClear;
+    case 17:
+    case 19:
+    case ' ':
+      return ActionPauseResume;
+    case 'q':
+      return ActionQuit;
+    case 'x':
+      return ActionCache;
 #ifdef IPINFO
+    case 'y':
+      return ActionII;
+    case 'Y':
+      return ActionII_Map;
     case 'z':
       return ActionAS;
 #endif
+    case '+':
+      return ActionScrollDown;
+    case '-':
+      return ActionScrollUp;
+    case 'Q':
+      mvprintw(2, 0, "Type of Service(tos): %d\n", tos );
+      mvprintw(3, 0, "default 0x00, min cost 0x02, rel 0x04,, thr 0x08, low del 0x10...\n");
+      mtr_curses_get_int(22, &tos);
+      if ((tos > 255) || (tos < 0))
+        tos = 0;
+      return ActionNone;
   }
-  if(c == 'q')
-    return ActionQuit;
-  if(c == 3)
-     return ActionQuit;
-  if (c == 12)
-     return ActionClear;
-  if ((c == 17) || (c == 19) || (c == ' '))
-     return ActionPauseResume;
-#ifdef IPINFO
-  if (c == 'y')
-    return ActionII;
-  if (c == 'Y')
-    return ActionII_Map;
-#endif
-  if (c == '+')
-    return ActionScrollDown;
-  if (c == '-')
-    return ActionScrollUp;
-
- if ( c == 'Q') {    /* can not be tolower(c) */
-    mvprintw(2, 0, "Type of Service(tos): %d\n", tos );
-    mvprintw(3, 0, "default 0x00, min cost 0x02, rel 0x04,, thr 0x08, low del 0x10...\n");
-    mtr_curses_get_int(22, &tos);
-    if ((tos > 255) || (tos < 0))
-      tos = 0;
-    return ActionNone;
-  }
-  return ActionNone;          /* ignore unknown input */
+  return ActionNone; // ignore unknown input
 }
 
 void mtr_fill_data(int at, char *buf) {
@@ -712,18 +718,19 @@ void mtr_curses_redraw(void) {
         l += snprintf(redraw_buf + l, sizeof(redraw_buf) - l, ", ");
       l += snprintf(redraw_buf + l, sizeof(redraw_buf) - l, "Display-Type: %d", (iargs >> 7) & 3);
     }
+    l += chk_n_print(9, redraw_buf + l, sizeof(redraw_buf) - l, "Cache-mode");	// cache mode
 
     snprintf(redraw_buf + l, sizeof(redraw_buf) - l, ")");
   }
   printw("%*s", (int)(getmaxx(stdscr) + strlen(redraw_buf)) / 2, redraw_buf);
   attroff(A_BOLD);
 
-  mvprintw(1, 0, "%s (%s)", srchost, localaddr);
-  time_t t = time(NULL);
   if (cache_mode) {
     snprintf(redraw_buf, sizeof(redraw_buf), "%d cycles", cycles);
-    mvprintw(1, 25, "%*s", (int)(getmaxx(stdscr) - 50 + strlen(redraw_buf)) / 2, redraw_buf);
+    mvprintw(1, 0, "%*s", (int)(getmaxx(stdscr) + strlen(redraw_buf)) / 2, redraw_buf);
   }
+  mvprintw(1, 0, "%s (%s)", srchost, localaddr);
+  time_t t = time(NULL);
   mvprintw(1, maxx - 25, "%s", ctime(&t));
 
   printw("Keys:  ");

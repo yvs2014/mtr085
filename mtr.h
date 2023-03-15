@@ -101,7 +101,18 @@ struct fields {
 //
 extern pid_t mypid;
 extern char mtr_args[];
-extern unsigned iargs;     // args passed interactively
+extern unsigned iargs;     // args passed interactively (used to display hints)
+  // bits:
+  //   0 [u]: UDP mode
+  //   1 [t]: TCP mode
+  //   2 [e]: MPLS on/off
+  //   3 [z]: ASN lookup
+  //   4 [y]: IP Info (ASN, etc)
+  //   5 [n]: DNS on/off
+  //   6 [j]: latency / jitter
+  //   7 [d]: display types (4 modes: 2bits)
+  //   8 [d]: -//-
+  //   9 [x]: cache mode
 extern int mtrtype;        // default packet type
 extern bool enable_mpls;
 extern bool report_wide;
@@ -114,7 +125,7 @@ extern int remoteport;     // target port
 extern int tos;            // type of service set in ping packet
 extern bool endpoint_mode; // -fa option
 extern bool cache_mode;    // no ping to known hops
-int cache_timeout;         // cache timeout in seconds
+extern int cache_timeout;  // cache timeout in seconds
 extern int cpacketsize;    // default packet size, or user-defined
 extern int tcp_timeout;    // timeout for TCP connections
 //
