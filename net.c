@@ -922,7 +922,7 @@ int net_selectsocket(void) {
  return 0;
 }
 
-int net_open(struct hostent * host) {
+int net_open(struct hostent *entry) {
 #ifdef ENABLE_IPV6
   struct sockaddr_storage name_struct;
 #else
@@ -931,34 +931,35 @@ int net_open(struct hostent * host) {
   struct sockaddr * name = (struct sockaddr *) &name_struct;
   socklen_t len;
 
+  memset(host, 0, sizeof(host));
   net_reset();
 
-  remotesockaddr->sa_family = host->h_addrtype;
+  remotesockaddr->sa_family = entry->h_addrtype;
 
-  switch ( host->h_addrtype ) {
+  switch (entry->h_addrtype) {
   case AF_INET:
     sendsock = sendsock4;
     recvsock = recvsock4;
-    addr4cpy(&(rsa4->sin_addr), host->h_addr);
+    addr4cpy(&(rsa4->sin_addr), entry->h_addr);
     sourceaddress = (ip_t *) &(ssa4->sin_addr);
     remoteaddress = (ip_t *) &(rsa4->sin_addr);
     break;
 #ifdef ENABLE_IPV6
   case AF_INET6:
     if (sendsock6 < 0 || recvsock6 < 0) {
-      fprintf( stderr, "Could not open IPv6 socket\n" );
-      exit( EXIT_FAILURE );
+      fprintf(stderr, "Could not open IPv6 socket\n");
+      exit(EXIT_FAILURE);
     }
     sendsock = sendsock6;
     recvsock = recvsock6;
-    addr6cpy(&(rsa6->sin6_addr), host->h_addr);
+    addr6cpy(&(rsa6->sin6_addr), entry->h_addr);
     sourceaddress = (ip_t *) &(ssa6->sin6_addr);
     remoteaddress = (ip_t *) &(rsa6->sin6_addr);
     break;
 #endif
   default:
-    fprintf( stderr, "net_open bad address type\n" );
-    exit( EXIT_FAILURE );
+    fprintf(stderr, "net_open bad address type\n");
+    exit(EXIT_FAILURE);
   }
 
   len = sizeof name_struct;
@@ -969,35 +970,9 @@ int net_open(struct hostent * host) {
   return 0;
 }
 
-void net_reopen(struct hostent * addr) {
-  memset(host, 0, sizeof(host));
-  remotesockaddr->sa_family = addr->h_addrtype;
-
-  switch (addr->h_addrtype) {
-  case AF_INET:
-    addr4cpy(remoteaddress, addr->h_addr);
-    addr4cpy(&(rsa4->sin_addr), addr->h_addr);
-    break;
-#ifdef ENABLE_IPV6
-  case AF_INET6:
-    addr6cpy(remoteaddress, addr->h_addr);
-    addr6cpy(&(rsa6->sin6_addr), addr->h_addr);
-    break;
-#endif
-  default:
-    fprintf( stderr, "net_reopen bad address type\n" );
-    exit( EXIT_FAILURE );
-  }
-
-  net_reset ();
-  net_send_batch();
-}
-
-
 void net_reset(void) {
   batch_at = fstTTL - 1;	/* above replacedByMin */
   numhosts = 10;
-
   for (int at = 0; at < MAXHOST; at++) {
     host[at].xmit = 0;
     host[at].transit = 0;
@@ -1018,13 +993,11 @@ void net_reset(void) {
       host[at].saved[i] = -2;	// unsent
     host[at].saved_seq_offset = -SAVED_PINGS + 2;
   }
-
   for (int at = 0; at < SEQ_MAX; at++) {
     sequence[at].transit = 0;
     if (mtrtype == IPPROTO_TCP)
       tcp_seq_close(at);
   }
-
   gettimeofday(&reset, NULL);
 }
 

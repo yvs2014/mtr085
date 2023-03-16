@@ -47,6 +47,7 @@ int maxfd;
 #define WRITEFD_P ((mtrtype == IPPROTO_TCP) ? &wset : NULL)
 
 const struct timeval GRACETIME = { 5, 0 }; // 5 seconds
+static int numpings;
 
 #define SET_MTRFD(fd) { \
   if (fd >= 0) { \
@@ -90,7 +91,6 @@ int timing(struct timeval *last, struct timeval *interval, struct timeval *start
   if (timercmp(&now, &tv, >)) {
     *last = now;
     if (!re) {
-      static int numpings;
       if ((numpings >= max_ping) && (!interactive || alter_ping)) {
         re = 1;
         *start = now;
@@ -248,6 +248,7 @@ void select_loop(void) {
   fd_set rset;
   bool anyset = false, paused = false;
   int rv, graceperiod = 0;
+  numpings = 0;
 
   struct timeval lasttime, startgrace;
   gettimeofday(&lasttime, NULL);

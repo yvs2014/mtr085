@@ -1,0 +1,2 @@
+jq < output.json
+xmllint --format output.xml

@@ -284,6 +284,7 @@ static struct option long_options[] = {
   { "display",    1, 0, 'd' },
 #endif
   { "mpls",       0, 0, 'e' },
+  { "help",       0, 0, 'h' },
   { "first-ttl",  1, 0, 'f' },   // -f and -m are borrowed from traceroute
   { "filename",   1, 0, 'F' },
 #ifdef GRAPHCAIRO
@@ -325,7 +326,7 @@ static char *short_options;
 
 static int my_getopt_long(int argc, char *argv[], int *opt_ndx) {
   if (!short_options) {
-    short_options = malloc((sizeof(long_options) / sizeof(long_options[0])) * 2 + 1);
+    short_options = calloc((sizeof(long_options) / sizeof(long_options[0])) * 2 + 1, 1);
     if (!short_options)
       return -1;
     char *p = short_options;
@@ -334,7 +335,6 @@ static int my_getopt_long(int argc, char *argv[], int *opt_ndx) {
       if (long_options[i].has_arg)
         *p++ = ':';
     }
-    *p++ = '\0';
   }
   return getopt_long(argc, argv, short_options, long_options, opt_ndx);
 }
@@ -355,7 +355,7 @@ static char *get_opt_desc(char opt) {
     case 'o': return "FIELDS";
     case 'F': return "FILE";
 #ifdef OUTPUT_FORMAT
-    case 'l': return ""
+    case 'l': return trim(""
 #ifdef OUTPUT_FORMAT_RAW
 " RAW"
 #endif
@@ -371,7 +371,7 @@ static char *get_opt_desc(char opt) {
 #ifdef OUTPUT_FORMAT_XML
 " XML"
 #endif
-;
+);
 #endif
 #ifdef IPINFO
     case 'y': return "ORIGIN,FIELDS";
@@ -440,9 +440,9 @@ static void parse_arg(int argc, char **argv) {
             fprintf(stderr, "WARN: '%s' must be positive: %d -> %d\n", CACHE_TIMEOUT_OPT, tm, cache_timeout);
         }
       } break;
-    case '?':
+    case 'h':
       usage(argv[0]);
-      exit(-1);
+      exit(0);
     case 'v':
       printf ("%s-%s\n", argv[0], MTR_VERSION);
       exit(0);
@@ -729,15 +729,15 @@ static int set_hostent(struct addrinfo *res) {
       return 0;	// unsuccess
     }
 
-    static struct hostent host;
-    memset(&host, 0, sizeof(host));
-    host.h_name = ai->ai_canonname;
-    host.h_aliases = NULL;
-    host.h_addrtype = ai->ai_family;
-    host.h_length = ai->ai_addrlen;
-    host.h_addr_list = alptr;
+    static struct hostent entry;
+    memset(&entry, 0, sizeof(entry));
+    entry.h_name = ai->ai_canonname;
+    entry.h_aliases = NULL;
+    entry.h_addrtype = ai->ai_family;
+    entry.h_length = ai->ai_addrlen;
+    entry.h_addr_list = alptr;
 
-    if (net_open(&host)) {
+    if (net_open(&entry)) {
       perror("Unable to start net module");
       return 0;	// unsuccess
     }
@@ -828,11 +828,13 @@ int main(int argc, char **argv) {
 #ifdef IPINFO
   ii_open();
 #endif
+  if (gethostname(srchost, sizeof(srchost)))
+    strncpy(srchost, "UNKNOWN", sizeof(srchost));
+  display_start();
 
   for (names_t* n = names; n; n = n->next) {
+    static bool notfirst;
     dsthost = n->name;
-    if (gethostname(srchost, sizeof(srchost)))
-      strcpy(srchost, "UNKNOWNHOST");
 
     struct addrinfo hints, *res;
     memset(&hints, 0, sizeof(hints));
@@ -859,13 +861,15 @@ int main(int argc, char **argv) {
         display_open();
         display_loop();
         net_end_transit();
-        display_close();
+        display_close(notfirst);
         unlock(stdout);
       }
       freeaddrinfo(res);
     }
+    notfirst = true;
   }
 
+  display_finish();
 #ifdef IPINFO
   ii_close();
 #endif
@@ -873,3 +877,4 @@ int main(int argc, char **argv) {
   net_close();
   return 0;
 }
+

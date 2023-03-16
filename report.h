@@ -22,23 +22,27 @@
 #include "config.h"
 
 void report_open(void);
-void report_close(void);
+void report_close(bool wide);
 #ifdef OUTPUT_FORMAT_RAW
 extern bool enable_raw;
 void raw_rawping(int at, int msec);
 void raw_rawhost(int at, ip_t *addr);
 #endif
 #ifdef OUTPUT_FORMAT_TXT
-void txt_close(void);
+void txt_close(bool notfirst);
 #endif
 #ifdef OUTPUT_FORMAT_CSV
-void csv_close(time_t now);
+void csv_close(bool notfirst);
 #endif
 #ifdef OUTPUT_FORMAT_XML
 void xml_close(void);
+void xml_head(void);
+void xml_tail(void);
 #endif
 #ifdef OUTPUT_FORMAT_JSON
-void json_close(void);
+void json_close(bool notfirst);
+void json_head(void);
+void json_tail(void);
 #endif
 
 #endif

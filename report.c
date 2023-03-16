@@ -104,10 +104,9 @@ static int found_addr_in_addrs(int z, ip_t *addr, ip_t *addrs) {
 }
 
 
-#define REPORT_FACTOR(factor) snprintf(rbuf + r, MAXDNAME - r, data_fields[j].format, \
-  net_elem(at, data_fields[j].key) factor)
+#define REPORT_FACTOR(factor) snprintf(rbuf + r, MAXDNAME - r, data_fields[j].format, net_elem(at, data_fields[j].key) factor)
 
-void report_close(void) {
+void report_close(bool wide) {
   assert(LSIDE_LEN < MAXDNAME);
   char *lbuf = calloc(1, MAXDNAME);	// left side
   assert(lbuf);
@@ -145,7 +144,7 @@ void report_close(void) {
   }
 
   // header: left + right
-  if (!report_wide)
+  if (!wide)
     if (strlen(lbuf) >= LSIDE_LEN)
       lbuf[LSIDE_LEN] = 0;
   // without space between because all the fields on the right side are supposed to be with some indent
@@ -177,7 +176,7 @@ void report_close(void) {
     }
 
     // body: left + right
-    if (!report_wide)
+    if (!wide)
       if (strlen(lbuf) >= LSIDE_LEN)
         lbuf[LSIDE_LEN] = 0;
     // without space between because all the fields on the right side are with space-indent
@@ -221,65 +220,79 @@ void report_close(void) {
 
 
 #ifdef OUTPUT_FORMAT_TXT
-void txt_close(void) {
-  report_close();
+void txt_close(bool notfirst) {
+  if (notfirst)
+    printf("\n");
+  report_close(true);
 }
 #endif
 
 
 #ifdef OUTPUT_FORMAT_XML
-#define XML_MARGIN1	4
-#define XML_MARGIN2	8
-#define XML_FACTOR(factor) { snprintf(buf, MAXDNAME, data_fields[j].format, \
-  net_elem(at, data_fields[j].key) factor ); }
+
+#define XML_MARGIN 2
+#define XML_FACTOR(factor) snprintf(buf, MAXDNAME, data_fields[j].format, net_elem(at, data_fields[j].key) factor)
+
+void xml_head(void) {
+  printf("<?xml version=\"1.0\"?>\n");
+  printf("<MTR SRC=\"%s\"", srchost);
+  printf(" TOS=\"0x%X\"", tos);
+  printf(" PSIZE=\"%d\"", packetsize);
+  printf(" BITPATTERN=\"0x%02X\"", (unsigned char)abs(bitpattern));
+  printf(" TESTS=\"%d\">\n", max_ping);
+}
+
+void xml_tail(void) { printf("</MTR>\n"); }
+
 void xml_close(void) {
   char *buf = calloc(1, MAXDNAME);
   assert(buf);
-
-  printf("<?xml version=\"1.0\"?>\n");
-  printf("<MTR SRC=\"%s\" DST=\"%s\"", srchost, dsthost);
-  printf(" TOS=\"0x%X\"", tos);
-  printf(" PSIZE=\"%d\"", packetsize);
-  printf(" BITPATTERN=\"0x%02X\"", (unsigned char) abs(bitpattern));
-  printf(" TESTS=\"%d\">\n", max_ping);
-
+  printf("%*s<DST HOST=\"%s\">\n", XML_MARGIN, " ", dsthost);
   int max = net_max();
   for (int at = net_min(); at < max; at++) {
     snprint_addr(buf, MAXDNAME, &host[at].addr);
-    printf("%*s<HUB COUNT=\"%d\" HOST=\"%s\">\n", XML_MARGIN1, " ", at + 1, buf);
+    printf("%*s<HOP TTL=\"%d\" HOST=\"%s\">\n", XML_MARGIN * 2, " ", at + 1, buf);
 
     for (int i = 0; i < MAXFLD; i++) {
       int j = fld_index[fld_active[i]];
       if (j > 0) {
         // 1000.0 is a temporary hack for stats usec to ms, impacted net_loss
         (index(data_fields[j].format, 'f')) ?  XML_FACTOR(/1000.) : XML_FACTOR();
-        printf("%*s<%s>%s</%s>\n", XML_MARGIN2, " ", data_fields[j].title, trim(buf), data_fields[j].title);
+        printf("%*s<%s>%s</%s>\n", XML_MARGIN * 3, " ", data_fields[j].title, trim(buf), data_fields[j].title);
       }
     }
 #ifdef IPINFO
     if (ii_ready())
-      printf("%*s<IPInfo>%s</IPInfo>\n", XML_MARGIN2, " ", fmt_ipinfo(&host[at].addr));
+      printf("%*s<IpInfo>[%s]</IpInfo>\n", XML_MARGIN * 3, " ", sep_ipinfo(&host[at].addr, ','));
 #endif
-    printf("%*s</HUB>\n", XML_MARGIN1, " ");
+    printf("%*s</HOP>\n", XML_MARGIN * 2, " ");
   }
-  printf("</MTR>\n");
+  printf("%*s</DST>\n", XML_MARGIN, " ");
   free(buf);
 }
 #endif
 
 
 #ifdef OUTPUT_FORMAT_JSON
+
+#define JSON_MARGIN 4
 #define JSON_FACTOR(factor) snprintf(buf, MAXDNAME, data_fields[j].format, net_elem(at, data_fields[j].key) factor)
-void json_close(void) {
+
+void json_head(void) { printf("["); }
+void json_tail(void) { printf("\n]\n"); }
+
+void json_close(bool notfirst) {
   char *buf = calloc(1, MAXDNAME);
   assert(buf);
-  printf("[");
+  if (notfirst)
+    printf(",");
+  printf("\n%*s{\"destination\":\"%s\",\"data\":[", JSON_MARGIN, " ", dsthost);
   int min = net_min(), max = net_max();
- for (int at = min; at < max; at++) {
+  for (int at = min; at < max; at++) {
     ip_t *addr = &host[at].addr;
     printf((at == min) ? "\n" : ",\n");
     snprint_addr(buf, MAXDNAME, addr);
-    printf("{\"host\":\"%s\",\"hop\":%d,\"up\":%d", buf, at + 1, host[at].up);
+    printf("%*s{\"host\":\"%s\",\"hop\":%d,\"up\":%d", JSON_MARGIN * 2, " ", buf, at + 1, host[at].up);
     for (int i = 0; i < MAXFLD; i++) {
       int j = fld_index[fld_active[i]];
       if (j > 0) {
@@ -295,13 +308,14 @@ void json_close(void) {
 #endif
     printf("}");
   }
-  printf("\n]\n");
+  printf("\n%*s]}", JSON_MARGIN, " ");
   free(buf);
 }
 #endif
 
 
 #ifdef OUTPUT_FORMAT_CSV
+
 #define CSV_DELIMITER	";"
 #define COMA	','
 
@@ -311,11 +325,13 @@ static void prupper(const char *str) {
 }
 
 
-void csv_close(time_t now) {
+void csv_close(bool notfirst) {
   char *buf = calloc(1, MAXDNAME);
   assert(buf);
 
-  printf("HOP" CSV_DELIMITER "STATUS" CSV_DELIMITER "HOST");
+  if (notfirst)
+    printf("\n");
+  printf("DESTINATION" CSV_DELIMITER "HOP" CSV_DELIMITER "STATUS" CSV_DELIMITER "HOST");
 #ifdef IPINFO
   if (ii_ready())
     printf(CSV_DELIMITER "INFO");
@@ -334,7 +350,8 @@ void csv_close(time_t now) {
     ip_t *addr = &host[at].addr;
     snprint_addr(buf, MAXDNAME, addr);
 
-    printf("%d", at + 1);
+    printf("%s", dsthost);
+    printf(CSV_DELIMITER "%d", at + 1);
     printf(CSV_DELIMITER "%s", host[at].up ? "up" : "down");
     printf(CSV_DELIMITER "%s", buf);
 #ifdef IPINFO
@@ -359,6 +376,7 @@ void csv_close(time_t now) {
 
 
 #ifdef OUTPUT_FORMAT_RAW
+
 bool enable_raw = false; // global var
 static int havename[MAXHOST];
 

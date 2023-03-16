@@ -125,7 +125,6 @@ int net_tcp_init(void);
 int net_preopen(void);
 int net_open(struct hostent *host);
 int net_selectsocket(void);
-void net_reopen(struct hostent *address);
 int net_set_interfaceaddress(char *InterfaceAddress);
 void net_reset(void);
 void net_close(void);

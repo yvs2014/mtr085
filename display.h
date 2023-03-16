@@ -58,10 +58,12 @@ enum { DisplayReport, DisplayCurses,
 /*  Prototypes for display.c  */
 void display_detect(int *argc, char ***argv);
 void display_open(void);
-void display_close(void);
+void display_close(bool notfirst);
 void display_redraw(void);
 int display_keyaction(void);
 void display_loop(void);
 void display_clear(void);
+void display_start(void);
+void display_finish(void);
 
 #endif

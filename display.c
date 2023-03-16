@@ -21,7 +21,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/types.h>
-#include <time.h>
 
 #include "mtr.h"
 #include "display.h"
@@ -50,7 +49,7 @@ void display_detect(int *argc, char ***argv) {
 }
 
 void display_open(void) {
-  switch(display_mode) {
+  switch (display_mode) {
   case DisplayReport:
     report_open();
     break;
@@ -73,24 +72,24 @@ void display_open(void) {
   }
 }
 
-void display_close(void) {
-  switch(display_mode) {
+void display_close(bool notfirst) {
+  switch (display_mode) {
   case DisplayReport:
-    report_close();
+    report_close(report_wide);
     break;
 #ifdef OUTPUT_FORMAT_TXT
   case DisplayTXT:
-    txt_close();
+    txt_close(notfirst);
     break;
 #endif
 #ifdef OUTPUT_FORMAT_CSV
   case DisplayCSV:
-    csv_close(time(NULL));
+    csv_close(notfirst);
     break;
 #endif
 #ifdef OUTPUT_FORMAT_JSON
   case DisplayJSON:
-    json_close();
+    json_close(notfirst);
     break;
 #endif
 #ifdef OUTPUT_FORMAT_XML
@@ -111,6 +110,36 @@ void display_close(void) {
 #ifdef GRAPHCAIRO
   case DisplayGraphCairo:
     gc_close();  
+    break;
+#endif
+  }
+}
+
+void display_start(void) {
+  switch (display_mode) {
+#ifdef OUTPUT_FORMAT_JSON
+  case DisplayJSON:
+    json_head();
+    break;
+#endif
+#ifdef OUTPUT_FORMAT_XML
+  case DisplayXML:
+    xml_head();
+    break;
+#endif
+  }
+}
+
+void display_finish(void) {
+  switch (display_mode) {
+#ifdef OUTPUT_FORMAT_JSON
+  case DisplayJSON:
+    json_tail();
+    break;
+#endif
+#ifdef OUTPUT_FORMAT_XML
+  case DisplayXML:
+    xml_tail();
     break;
 #endif
   }
