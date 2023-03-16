@@ -291,7 +291,7 @@ void json_close(void) {
     }
 #ifdef IPINFO
     if (ii_ready())
-      printf(",\"ipinfo\":[%s]", rpt_ipinfo(addr, ','));
+      printf(",\"ipinfo\":[%s]", sep_ipinfo(addr, ','));
 #endif
     printf("}");
   }
@@ -339,7 +339,7 @@ void csv_close(time_t now) {
     printf(CSV_DELIMITER "%s", buf);
 #ifdef IPINFO
     if (ii_ready())
-      printf(CSV_DELIMITER "%s", rpt_ipinfo(addr, COMA));
+      printf(CSV_DELIMITER "%s", sep_ipinfo(addr, COMA));
 #endif
 
     for (int i = 0; i < MAXFLD; i++) {

@@ -21,6 +21,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/types.h>
+#include <time.h>
 
 #include "mtr.h"
 #include "display.h"
@@ -72,7 +73,7 @@ void display_open(void) {
   }
 }
 
-void display_close(time_t now) {
+void display_close(void) {
   switch(display_mode) {
   case DisplayReport:
     report_close();
@@ -84,7 +85,7 @@ void display_close(time_t now) {
 #endif
 #ifdef OUTPUT_FORMAT_CSV
   case DisplayCSV:
-    csv_close(now);
+    csv_close(time(NULL));
     break;
 #endif
 #ifdef OUTPUT_FORMAT_JSON

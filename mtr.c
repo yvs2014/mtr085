@@ -327,11 +327,9 @@ static int my_getopt_long(int argc, char *argv[], int *opt_ndx) {
   if (!short_options) {
     short_options = malloc((sizeof(long_options) / sizeof(long_options[0])) * 2 + 1);
     if (!short_options)
-      return -1; // Trouble!
-
+      return -1;
     char *p = short_options;
-    int i;
-    for (i = 0; long_options[i].name; i++) {
+    for (int i = 0; long_options[i].name; i++) {
       *p++ = (char)long_options[i].val;
       if (long_options[i].has_arg)
         *p++ = ':';
@@ -387,12 +385,12 @@ static char *get_opt_desc(char opt) {
 
 static void usage(char *name) {
   printf("Usage: %s [-", name);
-  int i, l = strlen(short_options);
-  for (i = 0; i < l; i++)
+  int l = strlen(short_options);
+  for (int i = 0; i < l; i++)
     if (short_options[i] != ':')
       putchar(short_options[i]);
   printf("] HOSTNAME ...\n");
-  for (i = 0; long_options[i].name; i++) {
+  for (int i = 0; long_options[i].name; i++) {
     printf("\t[");
     char c = (char)long_options[i].val;
     if (c)
@@ -826,9 +824,7 @@ int main(int argc, char **argv) {
     exit(EXIT_FAILURE);
   }
 
-  time_t now = time(NULL);
-  names_t *n;
-  for (n = names; n; n = n->next) {
+  for (names_t* n = names; n; n = n->next) {
     dsthost = n->name;
     if (gethostname(srchost, sizeof(srchost)))
       strcpy(srchost, "UNKNOWNHOST");
@@ -859,7 +855,7 @@ int main(int argc, char **argv) {
         dns_open();
         display_loop();
         net_end_transit();
-        display_close(now);
+        display_close();
         unlock(stdout);
       }
       freeaddrinfo(res);

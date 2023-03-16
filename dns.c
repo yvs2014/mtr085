@@ -186,16 +186,12 @@ void dns_close(void) {
 
 #ifdef ENABLE_IPV6
 /* Returns an ip6.arpa character string. */
-static void addr2ip6arpa( ip_t * ip, char * buf ) {
-  unsigned char * p = (unsigned char *) ip;
-  char * b = buf;
-  int i;
-
-  for ( i = sizeof (struct in6_addr) - 1; i >= 0; i-- ) {
-        sprintf( b, "%x.%x.", p[i] % 16, p[i] >> 4 );
-        b += 4;
-  }
-  sprintf( b, "ip6.arpa" );
+static void addr2ip6arpa(ip_t *ip, char *buf) {
+  unsigned char *p = (unsigned char *)ip;
+  char *b = buf;
+  for (int i = sizeof(struct in6_addr) - 1; i >= 0; i--, b += 4)
+    sprintf(b, "%x.%x.", p[i] % 16, p[i] >> 4);
+  sprintf(b, "ip6.arpa");
   return;
 }
 #endif
@@ -369,8 +365,7 @@ static void parserespacket(unsigned char *buf, int l) {
     DNSLOG_RET("Received unimplemented query type %u", type)
   c += INT16SZ;	// skip class
 
-  int i;
-  for (i = hp->ancount + hp->nscount + hp->arcount; i; i--) {
+  for (int i = hp->ancount + hp->nscount + hp->arcount; i; i--) {
     if (c > eob)
       DNSLOG_RET("%s", "Packet does not contain all specified resouce records");
     memset(answer, 0, sizeof(answer));

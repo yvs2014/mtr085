@@ -44,8 +44,7 @@
 
 #ifdef IPINFO
 static void split_ipinfo_print(ip_t *addr) {
-  int i;
-  for (i = 0; (i < IPINFO_MAX_ITEMS) && (ipinfo_no[i] >= 0); i++) {
+  for (int i = 0; (i < IPINFO_MAX_ITEMS) && (ipinfo_no[i] >= 0); i++) {
     char *ipinfo = unaddrcmp(addr) ? get_ipinfo(addr, ipinfo_no[i]) : NULL;
     if (!ipinfo) {
       if (ipinfo_no[i] >= ipinfo_max)
@@ -59,8 +58,7 @@ static void split_ipinfo_print(ip_t *addr) {
 
 void split_redraw(void) {
   int max = net_max();
-  int at;
-  for (at = net_min() + display_offset; at < max; at++) {
+  for (int at = net_min() + display_offset; at < max; at++) {
     ip_t *addr = &host[at].addr;
     printf("%2d", at + 1);
     if (unaddrcmp(addr)) {
@@ -80,8 +78,7 @@ void split_redraw(void) {
 #endif
       printf("\n");
 
-      int i;
-      for (i = 0; i < MAXPATH; i++) {	// multipath
+      for (int i = 0; i < MAXPATH; i++) {	// multipath
         ip_t *addrs = &(host[at].addrs[i]);
         if (!addrcmp(addrs, addr))
           continue;

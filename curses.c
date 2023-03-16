@@ -616,17 +616,12 @@ int mtr_curses_data_fields(char *buf) {
 }
 
 #ifdef UNICODE
-static void mtr_print_scale3(int num_factors, int i0, int di) {
-	int i;
-	for (i = i0; i < num_factors; i += di) {
-//		printw("  %lc:%dms", map3[i].CCHAR_chars[0], scale3[i] / 1000);
+static void mtr_print_scale3(int num_factors, int ndx, int di) {
+	for (int i = ndx; i < num_factors; i += di) {
 		addstr("  ");
 		add_wch(&map3[i]);
 		int sc = scale3[i] / 1000;
-		if (sc)
-			printw(":%dms", sc);
-		else
-			printw(":%.1fms", (double)scale3[i] / 1000);
+		(sc) ? printw(":%dms", sc) : printw(":%.1fms", scale3[i] / 1000.);
 	}
 	addstr("  ");
 	add_wch(&map3[num_factors]);

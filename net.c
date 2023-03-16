@@ -754,8 +754,7 @@ int net_elem(int at, char c) {
 
 int net_max(void) {
   int max = 0;
-  int at;
-  for (at = 0; at < maxTTL; at++) {
+  for (int at = 0; at < maxTTL; at++) {
     if (!addrcmp(&(host[at].addr), remoteaddress)) {
       max = at + 1;
       if (endpoint_mode)
@@ -1109,8 +1108,6 @@ void sockaddrtop( struct sockaddr * saddr, char * strptr, size_t len ) {
 
 // Decode MPLS
 void decodempls(int num, char *packet, struct mplslen *mpls, int offset) {
-
-  int i;
   unsigned ext_ver, ext_res, ext_chk, obj_hdr_len;
   u_char obj_hdr_class, obj_hdr_type;
 
@@ -1131,16 +1128,16 @@ void decodempls(int num, char *packet, struct mplslen *mpls, int offset) {
       /* how many labels do we have?  will be at least 1 */
       mpls->labels = (obj_hdr_len-4)/4;
 
-      /* save all label objects */
-      for(i=0; (i<mpls->labels) && (i < MAXLABELS) && (num >= (offset+8)+(i*4)); i++) {
-
-        /* piece together the 20 byte label value */
-        mpls->label[i] = ((unsigned long) (packet[(offset+8)+(i*4)] << 12 & 0xff000) +
-            (unsigned)(packet[(offset+9)+(i*4)] << 4 & 0xff0) +
-            (packet[(offset+10)+(i*4)] >> 4 & 0xf));
-        mpls->exp[i] = (packet[(offset+10)+(i*4)] >> 1) & 0x7;
-        mpls->s[i] = (packet[(offset+10)+(i*4)] & 0x1); /* should be 1 if only one label */
-        mpls->ttl[i] = packet[(offset+11)+(i*4)];
+      // save all label objects
+      for (int i = 0, j = offset + 8; (i < mpls->labels) && (i < MAXLABELS) && (num >= j); i++, j += i * 4) {
+        // piece together the 20 byte label value
+        unsigned long lab = (packet[j] << 12) & 0xff000;
+        lab += (packet[j + 1] << 4) & 0xff0;
+        lab += (packet[j + 2] >> 4) & 0xf;
+        mpls->label[i] = lab;
+        mpls->exp[i] = (packet[j + 2] >> 1) & 0x7;
+        mpls->s[i]   = packet[j + 2] & 0x1; // should be 1 if only one label
+        mpls->ttl[i] = packet[j + 3];
       }
     }
   }
@@ -1189,8 +1186,7 @@ bool net_process_tcp_fds(void) {
   unow = timer2usec(&now);
 
   bool ret = false;
-  unsigned at;
-  for (at = 0; at < SEQ_MAX; at++) {
+  for (int at = 0; at < SEQ_MAX; at++) {
     unsigned fd = tcp_sockets[at];
     if (fd) {
       if (FD_ISSET(fd, &wset)) {

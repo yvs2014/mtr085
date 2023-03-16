@@ -28,7 +28,7 @@ bool ii_ready(void);
 int ii_getwidth(void);
 char* ii_getheader(void);
 char *fmt_ipinfo(ip_t *addr);
-char *rpt_ipinfo(ip_t *addr, char sep);
+char *sep_ipinfo(ip_t *addr, char sep);
 char *get_ipinfo(ip_t *addr, int nd);
 void query_ipinfo(void);
 
