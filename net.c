@@ -53,11 +53,11 @@
 
 #ifdef LOG_NET
 #include <syslog.h>
-#define NETLOG_MSG(x)   { syslog x ; }
-#define NETLOG_ERR(x)   { syslog x ; return; }
+#define NETLOG_MSG(format, ...) { syslog(LOG_PRIORITY, format, __VA_ARGS__); }
+#define NETLOG_RET(format, ...) { syslog(LOG_PRIORITY, format, __VA_ARGS__); return; }
 #else
-#define NETLOG_MSG(x)   {}
-#define NETLOG_ERR(x)   { return; }
+#define NETLOG_MSG(format, ...)  {}
+#define NETLOG_RET(format, ...)  { return; }
 #endif
 
 /*  We can't rely on header files to provide this information, because
@@ -349,7 +349,7 @@ static void net_send_tcp(int index) {
   FD_SET(s, &wset);
   if (s >= maxfd)
     maxfd = s + 1;
-  NETLOG_MSG((LOG_INFO, "net_send_tcp(index=%d): sequence=%d, socket=%d", index, pseq, s));
+  NETLOG_MSG("net_send_tcp(index=%d): sequence=%d, socket=%d", index, pseq, s);
 }
 
 #define SET_UDP_UH_PORTS(sport, dport) { \
@@ -422,7 +422,7 @@ static void net_send_query(int index) {
     icmp->sequence = new_sequence(index);
     icmp->checksum = checksum(icmp, packetsize - iphsize);
     gettimeofday(&sequence[icmp->sequence].time, NULL);
-    NETLOG_MSG((LOG_INFO, "net_send_icmp(index=%d): sequence=%d", index, icmp->sequence));
+    NETLOG_MSG("net_send_icmp(index=%d): sequence=%d", index, icmp->sequence);
   } else if (mtrtype == IPPROTO_UDP) {
     udp = (struct udphdr *)(packet + iphsize);
     udp->uh_sum  = 0;
@@ -435,7 +435,7 @@ static void net_send_query(int index) {
     };
 
     gettimeofday(&sequence[useq].time, NULL);
-    NETLOG_MSG((LOG_INFO, "net_send_udp(index=%d): sequence=%d, port=%d", index, useq, ntohs(udp->uh_dport)));
+    NETLOG_MSG("net_send_udp(index=%d): sequence=%d, port=%d", index, useq, ntohs(udp->uh_dport));
     if (af == AF_INET) {
       /* checksum is not mandatory. only calculate if we know ip->saddr */
       if (ip->saddr) {
@@ -485,7 +485,7 @@ static void net_process_ping(unsigned port, struct mplslen mpls, void *addr, str
   if (!sequence[seq].transit)
     return;
 
-  NETLOG_MSG((LOG_INFO, "net_process_ping(port=%d, seq=%d)", port, seq));
+  NETLOG_MSG("net_process_ping(port=%d, seq=%d)", port, seq);
   sequence[seq].transit = 0;
   if (mtrtype == IPPROTO_TCP)
     tcp_seq_close(seq);
@@ -562,7 +562,7 @@ static void net_process_ping(unsigned port, struct mplslen mpls, void *addr, str
 
 #ifdef OUTPUT_FORMAT_RAW
   if (enable_raw) {
-    NETLOG_MSG((LOG_INFO, "raw_rawping(index=%d, totusec=%d)", index, totusec));
+    NETLOG_MSG("raw_rawping(index=%d, totusec=%d)", index, totusec);
     raw_rawping(index, totusec);
   }
 #endif
@@ -627,7 +627,7 @@ void net_process_return(void) {
   }
 
   num = recvfrom(recvsock, packet, MAXPACKET, 0, fromsockaddr, &fromsockaddrsize);
-  NETLOG_MSG((LOG_INFO, "net_process_return(): got %d bytes", num));
+  NETLOG_MSG("net_process_return(): got %d bytes", num);
   switch (af) {
   case AF_INET:
     if (num < (sizeof(struct IPHeader) + sizeof(struct ICMPHeader)))
@@ -666,7 +666,7 @@ void net_process_return(void) {
       if (header->id != (uint16)mypid)
         return;
       sequence = header->sequence;
-      NETLOG_MSG((LOG_INFO, "ICMP: net_process_return(): id=%d, seq=%d", header->id, sequence));
+      NETLOG_MSG("ICMP: net_process_return(): id=%d, seq=%d", header->id, sequence);
     }
     break;
 
@@ -692,7 +692,7 @@ void net_process_return(void) {
         sequence = ntohs(uh->uh_sport);
       }
       sequence -= LO_UDPPORT;
-      NETLOG_MSG((LOG_INFO, "UDP: net_process_return: portpid=%d, seq=%d", portpid, sequence));
+      NETLOG_MSG("UDP: net_process_return: portpid=%d, seq=%d", portpid, sequence);
     }
     break;
 
@@ -709,7 +709,7 @@ void net_process_return(void) {
 #endif
       }
       sequence = ntohs(th->th_sport);
-      NETLOG_MSG((LOG_INFO, "TCP: net_process_return(): sequence=%d", sequence));
+      NETLOG_MSG("TCP: net_process_return(): sequence=%d", sequence);
     }
     break;
   }
@@ -1206,7 +1206,7 @@ bool net_process_tcp_fds(void) {
       }
       utime = timer2usec(&(sequence[at].time));
       if (unow - utime > tcp_timeout) {
-        NETLOG_MSG((LOG_INFO, "close sequence[%d] after %d sec", at, tcp_timeout / 1000000));
+        NETLOG_MSG("close sequence[%d] after %d sec", at, tcp_timeout / 1000000);
         sequence[at].transit = 0;
         tcp_seq_close(at);
       }

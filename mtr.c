@@ -824,6 +824,11 @@ int main(int argc, char **argv) {
     exit(EXIT_FAILURE);
   }
 
+  dns_open();
+#ifdef IPINFO
+  ii_open();
+#endif
+
   for (names_t* n = names; n; n = n->next) {
     dsthost = n->name;
     if (gethostname(srchost, sizeof(srchost)))
@@ -852,7 +857,6 @@ int main(int argc, char **argv) {
       if (set_hostent(res)) {
         lock(stdout);
         display_open();
-        dns_open();
         display_loop();
         net_end_transit();
         display_close();
@@ -862,6 +866,10 @@ int main(int argc, char **argv) {
     }
   }
 
+#ifdef IPINFO
+  ii_close();
+#endif
+  dns_close();
   net_close();
   return 0;
 }

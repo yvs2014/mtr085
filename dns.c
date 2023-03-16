@@ -65,8 +65,8 @@
 
 #ifdef LOG_DNS
 #include <syslog.h>
-#define DNSLOG_MSG(format, ...) { syslog(MTR_SYSLOG, format, __VA_ARGS__); }
-#define DNSLOG_RET(format, ...) { syslog(MTR_SYSLOG, format, __VA_ARGS__); return; }
+#define DNSLOG_MSG(format, ...) { syslog(LOG_PRIORITY, format, __VA_ARGS__); }
+#define DNSLOG_RET(format, ...) { syslog(LOG_PRIORITY, format, __VA_ARGS__); return; }
 #else
 #define DNSLOG_MSG(format, ...)  {}
 #define DNSLOG_RET(format, ...)  { return; }
@@ -77,11 +77,12 @@ struct resolve {
   ip_t ip;
 };
 
-// externed
+// global
 bool enable_dns = true;	// use DNS by default
+struct __res_state myres;
 //
 
-static bool dns_init = false;
+static bool dns_initiated = false;
 static int resfd;
 #ifdef ENABLE_IPV6
 static int resfd6;
@@ -98,9 +99,9 @@ static struct sockaddr * from = (struct sockaddr *) &from_sastruct;
 
 static char lookup_key[MAXDNAME];
 
-#define myres _res
+/*
 #ifdef NEED_RES_STATE_EXT
-/* __res_state_ext is missing on many (most?) BSD systems */
+// __res_state_ext is missing on many (most?) BSD systems
 static struct __res_state_ext {
   union res_sockaddr_union nsaddrs[MAXNS];
   struct sort_list {
@@ -114,20 +115,61 @@ static struct __res_state_ext {
   char nsuffix2[64];
 };
 #endif
+*/
 
 int dns_waitfd(int family) {
-  return
+ return (enable_dns && hinit && dns_initiated) ? (
 #ifdef ENABLE_IPV6
   (family == AF_INET6) ? resfd6 :
 #endif
-  resfd;
+  resfd) : 0;
+}
+
+bool dns_init(void) {
+  if (dns_initiated)
+    return true;
+  if (res_ninit(&myres) < 0) { // ? myres.options &= ~ (RES_INIT | RES_XINIT);
+    perror("dns_init(): res_ninit()");
+    return false;
+  }
+  if (!myres.nscount) {
+    perror("dns_init(): no defined nameservers");
+    return false;
+  }
+//  myres.options |= RES_DEFAULT; // i.e. RES_RECURSE | RES_DEFNAMES | RES_DNSRCH
+  myres.options |= RES_RECURSE;
+  myres.options &= ~(RES_DNSRCH | RES_DEFNAMES);  // turn off adding domain names
+  dns_initiated = true;
+  return true;
+}
+
+void dns_socket(void) {
+  int option = 1;
+  if ((resfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
+    perror("dns_socket(): socket()");
+  else
+    if (setsockopt(resfd, SOL_SOCKET, SO_BROADCAST, (char *)&option, sizeof(option)) < 0)
+      perror("dns_socket(): setsockopt()");
+#ifdef ENABLE_IPV6
+  if ((resfd6 = socket(AF_INET6, SOCK_DGRAM, 0)) < 0)
+//    perror("dns_open(): socket6()");
+  {}
+  else
+    if (setsockopt(resfd6, SOL_SOCKET, SO_BROADCAST, (char *)&option, sizeof(option)) < 0)
+      perror("dns_socket(): setsockopt6()");
+#endif
+  if ((resfd <= 0)
+#ifdef ENABLE_IPV6
+   || (resfd6 <= 0)
+#endif
+     )
+    fprintf(stderr, "dns_socket() failed: out of sockets\n");
 }
 
 void dns_open(void) {
-  if (!enable_dns || dns_init)
+  if (!enable_dns)
     return;
-  DNSLOG_MSG("%s", "dns init");
-
+  DNSLOG_MSG("%s", "dns open");
   if (!hinit) {
     if (!hcreate(maxTTL * 4)) {
       perror("hcreate()");
@@ -135,42 +177,18 @@ void dns_open(void) {
     }
     hinit = true;
   }
-
-  res_init();
-  if (!myres.nscount) {
-    perror("No nameservers defined");
-    return;
-  }
-  myres.options |= RES_RECURSE | RES_DEFNAMES | RES_DNSRCH;
-  int option = 1;
-
-  if ((resfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
-    perror("dns_open(): socket4()");
-  else
-	if (setsockopt(resfd, SOL_SOCKET, SO_BROADCAST, (char *)&option, sizeof(option)) < 0)
-      perror("dns_open(): setsockopt4()");
-#ifdef ENABLE_IPV6
-  if ((resfd6 = socket(AF_INET6, SOCK_DGRAM, 0)) < 0)
-//    perror("dns_open(): socket6()");
-  {}
-  else
-	if (setsockopt(resfd6, SOL_SOCKET, SO_BROADCAST, (char *)&option, sizeof(option)) < 0)
-      perror("dns_open(): setsockopt6()");
-#endif
-
-  if ((resfd >= 0)
-#ifdef ENABLE_IPV6
-   || (resfd6 >= 0)
-#endif
-     )
-    dns_init = true;
-  else
-    fprintf(stderr, "dns_open() failed: out of sockets\n");
-
-  return;
+  if (!dns_initiated)
+    dns_init();
+  dns_socket();
 }
 
 void dns_close(void) {
+  if (!enable_dns)
+    return;
+  if (dns_initiated) {
+    res_nclose(&myres);
+    dns_initiated = false;
+  }
   if (resfd)
     close(resfd);
 #ifdef ENABLE_IPV6
@@ -181,7 +199,6 @@ void dns_close(void) {
     hdestroy();
     hinit = false;
   }
-  dns_init = false;
 }
 
 #ifdef ENABLE_IPV6

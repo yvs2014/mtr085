@@ -101,10 +101,6 @@ void display_close(void) {
 #ifdef CURSES
   case DisplayCurses:
     mtr_curses_close();
-    dns_close();
-#ifdef IPINFO
-    ii_close();
-#endif
     break;
 #endif
 #ifdef SPLITMODE

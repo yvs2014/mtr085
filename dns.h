@@ -23,7 +23,9 @@
 #include <resolv.h>
 
 extern bool enable_dns;
+extern struct __res_state myres;
 
+bool dns_init(void);
 void dns_open(void);
 void dns_close(void);
 int dns_waitfd(int family);

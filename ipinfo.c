@@ -50,8 +50,8 @@
 
 #ifdef LOG_IPINFO
 #include <syslog.h>
-#define IILOG_MSG(format, ...) { syslog(MTR_SYSLOG, format, __VA_ARGS__); }
-#define IILOG_RET(format, ...) { syslog(MTR_SYSLOG, format, __VA_ARGS__); return; }
+#define IILOG_MSG(format, ...) { syslog(LOG_PRIORITY, format, __VA_ARGS__); }
+#define IILOG_RET(format, ...) { syslog(LOG_PRIORITY, format, __VA_ARGS__); return; }
 #else
 #define IILOG_MSG(format, ...)  {}
 #define IILOG_RET(format, ...)  { return; }
@@ -66,15 +66,14 @@
 #define CHAR_QOUTES	"\"'"
 #define CHAR_BRACKETS	"{}"
 
-#define myres _res
-
 // global
 int ipinfo_max;
 int ipinfo_no[] = {-1};
-bool enable_ipinfo = false;
+bool enable_ipinfo;  // disabled by default
 //
 
 static bool ii_initiated;
+
 static int origin_no;
 static int skipped_items;
 static int skipped_props;
@@ -840,16 +839,17 @@ inline char *fmt_ipinfo(ip_t *addr) { return fill_ipinfo(addr, 0); }
 inline char *sep_ipinfo(ip_t *addr, char sep) { return fill_ipinfo(addr, sep); }
 
 int ii_waitfd(void) {
-    return (enable_ipinfo && ii_initiated) ? origins[origin_no].fd : 0;
+    return (enable_ipinfo && hinit && ii_initiated) ? origins[origin_no].fd : 0;
 }
 
 bool ii_ready(void) {
-    return (enable_ipinfo && ii_initiated);
+    return (enable_ipinfo && hinit && ii_initiated);
 }
 
-static void ii_open(void) {
-   if (ii_initiated)
+void ii_open(void) {
+   if (!enable_ipinfo)
        return;
+   IILOG_MSG("%s", "ipinfo open");
    if (!hinit) {
        if (!hcreate(maxTTL * 4)) {
            perror("hcreate()");
@@ -857,35 +857,40 @@ static void ii_open(void) {
        }
        hinit = true;
    }
-   if (open_connection[origins[origin_no].type]() < 0)
-       return;
-   while ((skipped_items < IPINFO_MAX_ITEMS) && origins[origin_no].ndx[skipped_items])
-       skipped_items++;
-   while ((skipped_props < IPINFO_MAX_ITEMS) && origins[origin_no].skip_prop[skipped_props])
-       skipped_props++;
-
-   for (int i = 0; i < IPINFO_MAX_ITEMS; i++) {
-       if (!origins[origin_no].name[i])
-           break;
-       origins[origin_no].width[i] = strnlen(origins[origin_no].name[i], NAMELEN);
+   if (!ii_initiated) {
+       if (open_connection[origins[origin_no].type]() < 0)
+           return;
+       while ((skipped_items < IPINFO_MAX_ITEMS) && origins[origin_no].ndx[skipped_items])
+           skipped_items++;
+       while ((skipped_props < IPINFO_MAX_ITEMS) && origins[origin_no].skip_prop[skipped_props])
+           skipped_props++;
+       for (int i = 0; i < IPINFO_MAX_ITEMS; i++) {
+           if (!origins[origin_no].name[i])
+               break;
+           origins[origin_no].width[i] = strnlen(origins[origin_no].name[i], NAMELEN);
+       }
+       ii_initiated = true;
    }
-
-   ii_initiated = true;
+   dns_init();  // just in case if enable_dns=false
 }
 
 void ii_close(void) {
-    if (origins[origin_no].fd)
-        close(origins[origin_no].fd);
+   if (!enable_ipinfo)
+       return;
+    if (ii_initiated) {
+        if (origins[origin_no].fd)
+            close(origins[origin_no].fd);
+        if (tmpfd) {
+            close(tmpfd);
+#ifndef LOG_IPINFO
+            unlink(tmpfn);
+#endif
+        }
+       ii_initiated = false;
+    }
     if (hinit) {
         hdestroy();
         hinit = false;
-    }
-    enable_ipinfo = false;
-    if (tmpfd) {
-        close(tmpfd);
-#ifndef LOG_IPINFO
-        unlink(tmpfn);
-#endif
     }
 }
 
@@ -914,11 +919,9 @@ void ii_parsearg(char *arg) {
 
     if (args[0])
         free(args[0]);
-    enable_ipinfo = true;
     IILOG_MSG("Data source: %s/%s", origins[origin_no].host, origins[origin_no].host6?origins[origin_no].host6:"-");
 
-    if (!ii_initiated)
-        ii_open();
+    enable_ipinfo = true;
 }
 
 static char hhead_script[] = "<script src=\"https://unpkg.com/leaflet@1.4.0/dist/leaflet.js\"></script>";
@@ -1060,8 +1063,7 @@ void ii_action(int action_asn) {
     } else // init
         ii_parsearg(ASLOOKUP_DEFAULT);
 
-    if (!ii_initiated)
-        ii_open();
+    ii_open();  // just in case
 }
 
 static void query_iiaddr(ip_t *addr) {

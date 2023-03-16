@@ -19,7 +19,8 @@
 #ifndef IPINFO_H
 #define IPINFO_H
 
-void ii_close();
+void ii_open(void);
+void ii_close(void);
 void ii_parsearg(char *arg);
 void ii_action(int action_asn);
 void ii_ack(void);

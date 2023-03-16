@@ -63,15 +63,18 @@ void set_fds(fd_set *rset, fd_set *wset, mtrfd_t *fd) {
     SET_MTRFD(0);
   if (enable_dns) {
     fd->dns = dns_waitfd(AF_INET);
-    SET_MTRFD(fd->dns);
+    if (fd->dns > 0)
+      SET_MTRFD(fd->dns);
 #ifdef ENABLE_IPV6
     fd->dns6 = dns_waitfd(AF_INET6);
-    SET_MTRFD(fd->dns6);
+    if (fd->dns6 > 0)
+      SET_MTRFD(fd->dns6);
 #endif
   }
 #ifdef IPINFO
   fd->ii = ii_waitfd();
-  SET_MTRFD(fd->ii);
+  if (fd->ii > 0)
+    SET_MTRFD(fd->ii);
 #endif
   fd->net = net_waitfd();
   SET_MTRFD(fd->net);
@@ -141,7 +144,6 @@ int chk_kbd_click(bool* paused) { // Has a key been pressed?
       enable_dns = !enable_dns;
       TGLBIT(iargs, 5);	// 5th bit: DNS on/off
       dns_open();
-      display_clear();
       break;
     case ActionCache:
       cache_mode = !cache_mode;
@@ -156,9 +158,11 @@ int chk_kbd_click(bool* paused) { // Has a key been pressed?
       CLRBIT(iargs, 4);
       if (enable_ipinfo)
         SETBIT(iargs, (action == ActionAS) ? 3 : 4);
+      ii_open();
       break;
     case ActionII_Map:
       ii_action(action);
+      ii_open();
       break;
 #endif
     case ActionScrollDown:

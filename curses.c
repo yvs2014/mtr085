@@ -682,14 +682,11 @@ void mtr_curses_redraw(void) {
   int maxx, maxy;
   int startstat;
   int rowstat;
-
   int  hd_len;
   static char redraw_buf[1024];
 
-
   erase();
   getmaxyx(stdscr, maxy, maxx);
-
   rowstat = 5;
 
   // title

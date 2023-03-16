@@ -70,6 +70,8 @@ typedef struct in_addr ip_t;
 #define UNUSED
 #endif
 
+#define LOG_PRIORITY LOG_INFO
+
 #ifndef HAVE_SOCKLEN_T
 typedef int socklen_t; 
 #endif
