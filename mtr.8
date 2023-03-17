@@ -6,7 +6,7 @@ mtr - a network diagnostic tool
 
 
 .SH SYNOPSIS
-.B mtr [-abBcdefFGilmnopPQrsTuvwyzZ46] HOSTNAME ...
+.B mtr [-abBcdefFGilmnopPQrsTuvwxyzZ46] HOSTNAME ...
 
 .SH DESCRIPTION
 
@@ -301,6 +301,10 @@ into wide report mode.  When in this mode,
 will not cut hostnames in the report.
 
 .TP
+.B -x, --cache SECONDS
+Cache mode. Don't ping known hops during cache-timeout period (0 means default 60 seconds).
+
+.TP
 .B -y, --ipinfo ORIGIN,FIELDS
 Use this option to specify the IP info origin and its fields.
 
@@ -411,14 +415,6 @@ Turn on ASN lookups. Use the `z' key to toggle ASN info on/off. The data source 
 .TP
 .B -Z, --timeout SECONDS
 The number of seconds to keep the TCP socket open before giving up on the connection.  This will only affect the final hop.  Using large values for this, especially combined with a short interval, will use up a lot of file descriptors.
-
-.TP
-.B --use-cache
-Don't ping known hops during cache-timeout period.
-
-.TP
-.B --cache-timeout SECONDS
-Wait SECONDS to validate cache again. Default is 60 seconds.
 
 .TP
 .B -4

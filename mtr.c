@@ -79,6 +79,8 @@ typedef struct names {
 	struct names*	next;
 } names_t;
 
+#define CACHE_TIMEOUT	60
+
 // global vars
 pid_t mypid;
 char mtr_args[1024];	// posix/susvn: 4096+
@@ -87,8 +89,8 @@ bool show_ips = false;
 bool enable_mpls = false;
 bool report_wide = false;
 bool endpoint_mode = false; // -fa option, i.e. auto, corresponding to TTL of the destination host
-bool cache_mode = false;    // cache mode skipping pings of known hops
-int cache_timeout = 60;     // cache timeout in seconds
+bool cache_mode = false;            // don't ping known hops
+int cache_timeout = CACHE_TIMEOUT;  // cache timeout in seconds
 bool hinit = false;	// make sure that a hashtable already exists or not
 int fstTTL = 1;		// default start at first hop
 int maxTTL = 30;	// enough?
@@ -272,9 +274,6 @@ static void unlock(FILE *f) {
         perror("fcntl()");
 }
 
-const static char CACHE_MODE_OPT[] = "use-cache";
-const static char CACHE_TIMEOUT_OPT[] = "cache-timeout";
-
 static struct option long_options[] = {
   { "address",    1, 0, 'a' },
   { "show-ips",   0, 0, 'b' },
@@ -308,6 +307,7 @@ static struct option long_options[] = {
   { "udp",        0, 0, 'u' },  // UDP (default is ICMP)
   { "version",    0, 0, 'v' },
   { "report-wide", 0, 0, 'w' },
+  { "cache",      1, 0, 'x' },  // enable cache with timeout in seconds (0 means default 60sec)
 #ifdef IPINFO
   { "ipinfo",     1, 0, 'y' },
   { "aslookup",   0, 0, 'z' },
@@ -317,8 +317,6 @@ static struct option long_options[] = {
 #ifdef ENABLE_IPV6
   { "inet6",      0, 0, '6' },  // use IPv6
 #endif
-  { CACHE_MODE_OPT,    0, 0, 0 },  // cache mode, no ping to known hops
-  { CACHE_TIMEOUT_OPT, 1, 0, 0 },  // cache timeout in seconds
   { 0, 0, 0, 0 }
 };
 
@@ -347,6 +345,7 @@ static char *get_opt_desc(char opt) {
     case 'Q':
     case 'P': return "NUMBER";
     case 'i':
+    case 'x':
     case 'Z': return "SECONDS";
     case 'a': return "IP.ADD.RE.SS";
     case 'c': return "COUNT";
@@ -396,9 +395,9 @@ static void usage(char *name) {
     if (c)
       printf("-%c|", c);
     printf("--%s", long_options[i].name);
-    if (!c) // LATER: do it in more common way
-      if (!strncmp(long_options[i].name, CACHE_TIMEOUT_OPT, sizeof(CACHE_TIMEOUT_OPT)))
-        c = 'i'; // seconds
+//    if (!c) // LATER: do it in more common way
+//      if (!strncmp(long_options[i].name, SOME_LONG_OPTION, sizeof(SOME_LOG_OPTION)))
+//        c = 'i'; // seconds
     char *desc = long_options[i].has_arg ? get_opt_desc(c) : NULL;
     if (desc)
       printf(" %s", desc);
@@ -424,22 +423,11 @@ static int limit_int(const int v0, const int v1, const int v, const char *it) {
  
 static void parse_arg(int argc, char **argv) {
   while (1) {
-    int opt_ndx;
-    int opt = my_getopt_long(argc, argv, &opt_ndx);
+    int opt = my_getopt_long(argc, argv, NULL);
     if (opt == -1)
       break;
 
     switch (opt) {
-    case 0: // no corresponding short option
-      if (!strncmp(CACHE_MODE_OPT, long_options[opt_ndx].name, sizeof(CACHE_MODE_OPT)))
-        cache_mode = true;
-      else if (!strncmp(CACHE_TIMEOUT_OPT, long_options[opt_ndx].name, sizeof(CACHE_TIMEOUT_OPT))) {
-        if (optarg) {
-          int tm = atoi(optarg);
-          (tm > 0) ? cache_timeout = tm :
-            fprintf(stderr, "WARN: '%s' must be positive: %d -> %d\n", CACHE_TIMEOUT_OPT, tm, cache_timeout);
-        }
-      } break;
     case 'h':
       usage(argv[0]);
       exit(0);
@@ -515,6 +503,12 @@ static void parse_arg(int argc, char **argv) {
     case 'e':
       enable_mpls = true;
       break;
+#ifdef GRAPHCAIRO
+    case 'G':
+      gc_parsearg(optarg);
+      display_mode = DisplayGraphCairo;
+      break;
+#endif
     case 'n':
       enable_dns = false;
       break;
@@ -591,10 +585,27 @@ static void parse_arg(int argc, char **argv) {
     case 'P':
       remoteport = atoi(optarg);
       if (remoteport > 65535 || remoteport < 1) {
-        fprintf(stderr, "Illegal port number.\n");
+        fprintf(stderr, "Illegal port number: %d\n", remoteport);
         exit(EXIT_FAILURE);
       }
       break;
+    case 'x':
+      cache_mode = true;
+      cache_timeout = atoi(optarg);
+	  if (cache_timeout < 0) {
+        fprintf(stderr, "Cache timeout must be positive: %d\n", cache_timeout);
+        exit(EXIT_FAILURE);
+      } else if (cache_timeout == 0)
+        cache_timeout = CACHE_TIMEOUT;  // default 60 seconds
+      break;
+#ifdef IPINFO
+    case 'y':
+      ii_parsearg(optarg);
+      break;
+    case 'z':
+      ii_parsearg(ASLOOKUP_DEFAULT);
+      break;
+#endif
     case 'Z':
       tcp_timeout = atoi(optarg);
       tcp_timeout *= 1000000;
@@ -605,20 +616,6 @@ static void parse_arg(int argc, char **argv) {
 #ifdef ENABLE_IPV6
     case '6':
       net_init(1);
-      break;
-#endif
-#ifdef IPINFO
-    case 'y':
-      ii_parsearg(optarg);
-      break;
-    case 'z':
-      ii_parsearg(ASLOOKUP_DEFAULT);
-      break;
-#endif
-#ifdef GRAPHCAIRO
-    case 'G':
-      gc_parsearg(optarg);
-      display_mode = DisplayGraphCairo;
       break;
 #endif
     }

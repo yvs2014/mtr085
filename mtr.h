@@ -126,7 +126,7 @@ extern int bitpattern;     // packet bit pattern used by ping
 extern int remoteport;     // target port
 extern int tos;            // type of service set in ping packet
 extern bool endpoint_mode; // -fa option
-extern bool cache_mode;    // no ping to known hops
+extern bool cache_mode;    // don't ping known hops
 extern int cache_timeout;  // cache timeout in seconds
 extern int cpacketsize;    // default packet size, or user-defined
 extern int tcp_timeout;    // timeout for TCP connections
