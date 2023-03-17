@@ -213,11 +213,12 @@ case "$host_os" in
   linux*)
     AC_DEFINE(_DEFAULT_SOURCE, 1, [enable "default" definitions (since glibc 2.20)])
   ;;
-  solaris*)
+  solaris*|freebsd*|openbsd*)
     AC_DEFINE(BSD_COMP, 1, [enable BSD compatibility])
   ;;
   netbsd*)
     AC_DEFINE(NETBSD_CURSES, 1, [NetBSD: a hybrid of BSD-curses with X/Open curses])
+    AC_DEFINE(BSD_COMP, 1, [enable BSD compatibility])
   ;;
 esac
 

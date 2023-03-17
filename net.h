@@ -99,12 +99,12 @@ struct nethost {
   int sent;
   int up;
   long long var;       // variance, could be overflowed
-  int last;
+  time_t last;
   int best;
   int worst;
   int avg;             // average, addByMin
   int gmean;           // geometirc mean, addByMin
-  int jitter;          // current jitter, defined as t1-t0, addByMin
+  time_t jitter;       // current jitter, defined as t1-t0, addByMin
   int javg;            // avg jitter
   int jworst;          // max jitter
   int jinta;           // estimated variance,? rfc1889's "Interarrival Jitter"

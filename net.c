@@ -18,9 +18,6 @@
 
 #include "config.h"
 
-#ifndef _BSD_SOURCE
-#define _BSD_SOURCE 1
-#endif
 
 #include <sys/types.h>
 #include <sys/time.h>
@@ -521,7 +518,7 @@ static void net_process_ping(unsigned port, struct mplslen mpls, void *addr, str
     }
   }
 
-  host[index].jitter = abs(totusec - host[index].last);
+  host[index].jitter = labs(totusec - host[index].last);
   host[index].last = totusec;
 
   if (host[index].returned < 1) {
