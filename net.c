@@ -354,6 +354,14 @@ static void net_send_tcp(int index) {
   udp->uh_dport = htons(dport); \
 }
 
+#ifdef __FreeBSD_version
+#if __FreeBSD_version >= 1100000
+#define IPLEN_RAW(sz) htons(sz)
+#endif
+#else
+#define IPLEN_RAW(sz) sz
+#endif
+
 // Attempt to find the host at a particular number of hops away
 static void net_send_query(int index) {
   char packet[MAXPACKET];
@@ -385,9 +393,9 @@ static void net_send_query(int index) {
     iphsize = sizeof(struct IPHeader);
     ip->version = 0x45;
     ip->tos = tos;
-    ip->len = packetsize;
+    ip->len = IPLEN_RAW(packetsize);
     ip->id = 0;
-    ip->frag = 0;    /* 1, if want to find mtu size? Min */
+    ip->frag = 0;
     ip->ttl = ttl;
     ip->protocol = mtrtype;
     ip->check = 0;
@@ -455,7 +463,12 @@ static void net_send_query(int index) {
 #endif
   }
 
-  sendto(sendsock, packet, packetsize, 0, remotesockaddr, salen);
+  if (sendto(sendsock, packet, packetsize, 0, remotesockaddr, salen) < 0) {
+    char *emsg = strerror(errno);
+    display_clear();
+    fprintf(stderr, "sendto(%d, data, %d, 0, 0x%x, %d): %s.\n", sendsock, packetsize,
+      ((struct sockaddr_in*)remotesockaddr)->sin_addr.s_addr, salen, emsg);
+  }
 }
 
 static void tcp_seq_close(unsigned at) {

@@ -217,7 +217,7 @@ case "$host_os" in
     AC_DEFINE(BSD_COMP, 1, [enable BSD compatibility])
   ;;
   netbsd*)
-    AC_DEFINE(NETBSD_CURSES, 1, [NetBSD: a hybrid of BSD-curses with X/Open curses])
+    AC_DEFINE(NETBSD_CURSES, 1, [a bit different NetBSD curses])
     AC_DEFINE(BSD_COMP, 1, [enable BSD compatibility])
   ;;
 esac
