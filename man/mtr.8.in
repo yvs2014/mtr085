@@ -110,16 +110,13 @@ mtr \- a network diagnostic tool
 .BI \-L \ LOCALPORT\c
 ]
 [\c
-.BI \-Z \ TIMEOUT\c
+.BI \-X \ CACHE\-TIMEOUT\c
+]
+[\c
+.BI \-Z \ TCP\-TIMEOUT\c
 ]
 [\c
 .BI \-M \ MARK\c
-]
-[\c
-.B \-\-use\-cache\c
-]
-[\c
-.B \-\-cache\-timeout\c
 ]
 .I HOSTNAME
 .SH DESCRIPTION
@@ -436,6 +433,9 @@ The target port number for TCP/SCTP/UDP traces.
 .B \-L \fILOCALPORT\fR, \fB\-\-localport \fILOCALPORT
 The source port number for UDP traces.
 .TP
+.B \-X \fISECONDS\fR, \fB\-\-cache \fISECONDS
+Cache mode. Don't ping known hops during cache timeout period (0 means default 60 seconds).
+.TP
 .B \-Z \fISECONDS\fR, \fB\-\-timeout \fISECONDS
 The number of seconds to keep probe sockets open before giving up on
 the connection.  Using large values for this, especially combined with
@@ -448,12 +448,6 @@ netfilter MARK target but socket-based.
 is 32 unsigned integer.  See
 .BR socket (7)
 for full description of this socket option.
-.TP
-.B \-\-use\-cache
-Don't ping known hops during cache-timeout period.
-.TP
-.B \-\-cache\-timeout SECONDS
-Wait SECONDS to validate cache again. Default is 60 seconds.
 .SH ENVIRONMENT
 .B mtr
 recognizes a few environment variables.

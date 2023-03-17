@@ -140,6 +140,7 @@ static void __attribute__ ((__noreturn__)) usage(FILE * out)
     fputs(" -n, --no-dns                     do not resolve host names\n", out);
     fputs(" -b, --show-ips                   show IP numbers and host names\n", out);       
     fputs(" -o, --order FIELDS               select output fields\n", out);
+    fputs(" -X, --cache SECONDS              enable cache with timeout in seconds\n", out);
 #ifdef HAVE_IPINFO       
     fputs(" -y, --ipinfo NUMBER              select IP information in output\n",
           out);       
@@ -147,8 +148,6 @@ static void __attribute__ ((__noreturn__)) usage(FILE * out)
 #endif       
     fputs(" -h, --help                       display this help and exit\n", out);
     fputs(" -v, --version                    output version information and exit\n", out);  
-    fputs(" --use-cache                      don't ping known hops during 'cache-timeout' period\n", out);
-    fputs(" --cache-timeout SECONDS          wait SECONDS to validate cache again (default: 60)\n", out);
     fputs("\n", out);
     fputs("See the 'man 8 mtr' for details.\n", out);
     exit(out == stderr ? EXIT_FAILURE : EXIT_SUCCESS);
@@ -298,8 +297,6 @@ static void parse_arg(
     enum {
         OPT_DISPLAYMODE = CHAR_MAX + 1
     };
-    static const char CACHE_MODE_OPT[] = "use-cache";
-    static const char CACHE_TIMEOUT_OPT[] = "cache-timeout";
     static const struct option long_options[] = {
         /* option name, has argument, NULL, short name */
         {"help", 0, NULL, 'h'},
@@ -332,6 +329,7 @@ static void parse_arg(
         {"no-dns", 0, NULL, 'n'},
         {"show-ips", 0, NULL, 'b'},
         {"order", 1, NULL, 'o'},        /* fields to display & their order */
+        {"cache", 1, NULL, 'X'},        /* cache mode with timeout in seconds (0 means default 60sec) */
 #ifdef HAVE_IPINFO
         {"ipinfo", 1, NULL, 'y'},       /* IP info lookup */
         {"aslookup", 0, NULL, 'z'},     /* Do AS lookup (--ipinfo 0) */
@@ -361,8 +359,6 @@ static void parse_arg(
 #ifdef SO_MARK
         {"mark", 1, NULL, 'M'}, /* use SO_MARK */
 #endif
-        { CACHE_MODE_OPT,    0, NULL, 0 }, /* cache mode, no ping to known hops */
-        { CACHE_TIMEOUT_OPT, 1, NULL, 0 }, /* cache timeout in seconds */
         {NULL, 0, NULL, 0}
     };
     enum { num_options = sizeof(long_options) / sizeof(struct option) };
@@ -384,21 +380,11 @@ static void parse_arg(
 
     opt = 0;
     while (1) {
-        int opt_ndx = 0;
-        opt = getopt_long(argc, argv, short_options, long_options, &opt_ndx);
+        opt = getopt_long(argc, argv, short_options, long_options, NULL);
         if (opt == -1)
             break;
 
         switch (opt) {
-        case 0: /* no corresponding short option */
-            if (!strncmp(CACHE_MODE_OPT, long_options[opt_ndx].name, sizeof(CACHE_MODE_OPT)))
-                ctl->cache_mode = 1;
-            else if (!strncmp(CACHE_TIMEOUT_OPT, long_options[opt_ndx].name, sizeof(CACHE_TIMEOUT_OPT))) {
-                if (optarg) {
-                    int tm = atoi(optarg);
-                    (tm > 0) ? ctl->cache_timeout = tm : fprintf(stderr, "WARN: '%s' must be positive: %d -> %d\n", CACHE_TIMEOUT_OPT, tm, ctl->cache_timeout);
-                }
-            } break;
         case 'v':
             printf("mtr " PACKAGE_VERSION "\n");
             exit(EXIT_SUCCESS);
@@ -614,6 +600,15 @@ static void parse_arg(
             ctl->af = AF_INET6;
             break;
 #endif
+        case 'X':
+            ctl->cache_mode = 1;
+            ctl->cache_timeout = atoi(optarg);
+            if (ctl->cache_timeout < 0) {
+                fprintf(stderr, "Cache timeout must be positive: %d\n", ctl->cache_timeout);
+                exit(EXIT_FAILURE);
+            } else if (ctl->cache_timeout == 0)
+                ctl->cache_timeout = 60;  // default 60 seconds
+            break;
 #ifdef HAVE_IPINFO
         case 'y':
             ctl->ipinfo_no =
