@@ -164,6 +164,8 @@ static ip_t * remoteaddress;
 static int batch_at;
 static int numhosts = 10;
 static int portpid;
+static int stopper = MAXHOST;
+enum RE_REASONS { RE_PONG, RE_EXCEED, RE_UNREACH };
 
 // return the number of microseconds to wait before sending the next ping
 time_t wait_usec(float t) {
@@ -251,7 +253,12 @@ int net_tcp_init(void) {
   return 1;
 }
  
-#define ERR_N_EXIT(s) { display_clear(); perror(s); exit(EXIT_FAILURE);}
+#define ERR_N_EXIT(s) { \
+  int e = errno; \
+  display_clear(); \
+  fprintf(stderr, "%s: %s\n", s, strerror(e)); \
+  exit(e); \
+}
 
 #define NST_ADRR_FILL(lo_addr, ssa_addr, re_addr, re_port, loc) { \
   addrcpy(&lo_addr, &ssa_addr); \
@@ -463,12 +470,8 @@ static void net_send_query(int index) {
 #endif
   }
 
-  if (sendto(sendsock, packet, packetsize, 0, remotesockaddr, salen) < 0) {
-    char *emsg = strerror(errno);
-    display_clear();
-    fprintf(stderr, "sendto(%d, data, %d, 0, 0x%x, %d): %s.\n", sendsock, packetsize,
-      ((struct sockaddr_in*)remotesockaddr)->sin_addr.s_addr, salen, emsg);
-  }
+  if (sendto(sendsock, packet, packetsize, 0, remotesockaddr, salen) < 0)
+    ERR_N_EXIT("sendto()");
 }
 
 static void tcp_seq_close(unsigned at) {
@@ -485,7 +488,7 @@ static void tcp_seq_close(unsigned at) {
 }
 
 // We got a return on something we sent out. Record the address and time.
-static void net_process_ping(unsigned port, struct mplslen mpls, void *addr, struct timeval now) {
+static void net_process_ping(unsigned port, struct mplslen mpls, void *addr, struct timeval now, int reason) {
   ip_t addrcopy;
 
   /* Copy the from address ASAP because it can be overwritten */
@@ -501,20 +504,25 @@ static void net_process_ping(unsigned port, struct mplslen mpls, void *addr, str
     tcp_seq_close(seq);
 
   int index = sequence[seq].index;
+  if (reason == RE_UNREACH) {
+    if (index < stopper)
+      stopper = index; // set stopper
+  } else if (stopper == index)
+    stopper = MAXHOST; // clear stopper
+
   struct timeval _tv;
   timersub(&now, &(sequence[seq].time), &_tv);
   time_t totusec = timer2usec(&_tv); // impossible? [if (totusec < 0) totusec = 0;]
 
+  if (index <= stopper) { // if reachable, set addr
   if (!unaddrcmp(&(host[index].addr))) {
-    /* should be out of if as addr can change */
     addrcpy(&(host[index].addr), &addrcopy);
     host[index].mpls = mpls;
 #ifdef OUTPUT_FORMAT_RAW
     if (enable_raw)
       raw_rawhost(index, &(host[index].addr));
 #endif
-    /* multi paths */
-    addrcpy(&(host[index].addrs[0]), &addrcopy);
+    addrcpy(&(host[index].addrs[0]), &addrcopy); // for multipath
     host[index].mplss[0] = mpls;
   } else {
     int i = 0;
@@ -529,7 +537,7 @@ static void net_process_ping(unsigned port, struct mplslen mpls, void *addr, str
         raw_rawhost(index, &(host[index].addrs[i]));
 #endif
     }
-  }
+  }}
 
   host[index].jitter = labs(totusec - host[index].last);
   host[index].last = totusec;
@@ -653,7 +661,7 @@ void net_process_return(void) {
 #endif
   }
 
-  int sequence = -1;
+  int sequence = -1, reason = -1;
 
   switch (mtrtype) {
   case IPPROTO_ICMP:
@@ -661,7 +669,9 @@ void net_process_return(void) {
       if (header->id != (uint16)mypid)
         return;
       sequence = header->sequence;
+      reason = RE_PONG;
     } else if ((header->type == timeexceededtype) || (header->type == unreachabletype)) {
+      reason = (header->type == timeexceededtype) ? RE_EXCEED : RE_UNREACH;
       switch (af) {
       case AF_INET:
         USER_DATA(header, FDATA_OFF, struct ICMPHeader, 160);
@@ -672,11 +682,11 @@ void net_process_return(void) {
       break;
 #endif
       }
-
       if (header->id != (uint16)mypid)
         return;
       sequence = header->sequence;
-      NETLOG_MSG("ICMP: net_process_return(): id=%d, seq=%d", header->id, sequence);
+      NETLOG_MSG("ICMP: net_process_return(): id=%u, seq=%d, type=%d, code=%d",
+        header->id, sequence, header->type, header->code);
     }
     break;
 
@@ -725,7 +735,7 @@ void net_process_return(void) {
   }
 
   if (sequence >= 0)
-    net_process_ping(sequence, mpls, fromaddress, now);
+    net_process_ping(sequence, mpls, fromaddress, now, reason);
 }
 
 int net_elem(int at, char c) {
@@ -771,13 +781,13 @@ int net_max(void) {
         fstTTL = max;
       break;
     } else if (unaddrcmp(&(host[at].addr))) {
-      if (endpoint_mode)
-        fstTTL = at + 1;
       max = at + 2;
+      if (endpoint_mode)
+        fstTTL = max - 1; // -1: show previous known hop
     }
   }
   if (max > maxTTL)
-     max = maxTTL;
+    max = maxTTL;
   return max;
 }
 
@@ -814,7 +824,6 @@ int net_send_batch(void) {
     if (host[batch_at].up && (host[batch_at].seen > 0))
       if ((time(NULL) - host[batch_at].seen) <= cache_timeout)
         ping = false;
-
   if (ping)
     (mtrtype == IPPROTO_TCP) ? net_send_tcp(batch_at) : net_send_query(batch_at);
 
@@ -822,20 +831,14 @@ int net_send_batch(void) {
   for (int i = fstTTL - 1; i < batch_at; i++) {
     if (!unaddrcmp(&(host[i].addr)))
       n_unknown++;
-
-    /* The second condition in the next "if" statement was added in mtr-0.56,
-	but I don't remember why. It makes mtr stop skipping sections of unknown
-	hosts. Removed in 0.65.
-	If the line proves neccesary, it should at least NOT trigger that line
-	when host[i].addr == 0 */
-    if (!addrcmp(&(host[i].addr), remoteaddress)
-	/* || (host[i].addr == host[batch_at].addr)  */)
+    if (!addrcmp(&(host[i].addr), remoteaddress))
       n_unknown = MAXHOST; // Make sure we drop into "we should restart"
   }
 
   if (!addrcmp(&(host[batch_at].addr), remoteaddress)	// success in reaching target
-     || (n_unknown > MAX_UNKNOWN_HOSTS)	// fail in consecuitive MAX_UNKNOWN_HOSTS (firewall?)
-     || (batch_at >= (maxTTL - 1))) {	// or reach limit
+     || (n_unknown > MAX_UNKNOWN_HOSTS) // fail in consecuitive MAX_UNKNOWN_HOSTS (firewall?)
+     || (batch_at >= (maxTTL - 1))      // or reach limit
+     || (batch_at >= stopper)) {        // or learnt unreachable
     numhosts = batch_at + 1;
     batch_at = fstTTL - 1;
     if (cache_mode)
@@ -983,22 +986,9 @@ int net_open(struct hostent *entry) {
 void net_reset(void) {
   batch_at = fstTTL - 1;	/* above replacedByMin */
   numhosts = 10;
+  stopper = MAXHOST;
+  memset(host, 0, sizeof(host));
   for (int at = 0; at < MAXHOST; at++) {
-    host[at].xmit = 0;
-    host[at].transit = 0;
-    host[at].returned = 0;
-    host[at].sent = 0;
-    host[at].up = 0;
-    host[at].last = 0;
-    host[at].avg  = 0;
-    host[at].best = 0;
-    host[at].worst = 0;
-    host[at].gmean = 0;
-    host[at].var = 0;
-    host[at].jitter = 0;
-    host[at].javg = 0;
-    host[at].jworst = 0;
-    host[at].jinta = 0;
     for (int i = 0; i < SAVED_PINGS; i++)
       host[at].saved[i] = -2;	// unsent
     host[at].saved_seq_offset = -SAVED_PINGS + 2;
@@ -1180,7 +1170,7 @@ bool net_process_tcp_fds(void) {
          * (probably) reached the remote address. Anything else happens to the
          * connection, we write it off to avoid leaking sockets */
         if (r || (errno == ECONNREFUSED)) {
-          net_process_ping(at, mpls, remoteaddress, now);
+          net_process_ping(at, mpls, remoteaddress, now, -1);
           ret = true;
 //        } else if ((errno != EAGAIN) && (errno != EHOSTUNREACH)) {
 //          sequence[at].transit = 0;
