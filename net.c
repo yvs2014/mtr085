@@ -118,7 +118,6 @@ int af;	// address family
 int packetsize;	// packet size used by ping
 struct nethost host[MAXHOST];
 char localaddr[INET6_ADDRSTRLEN];
-int cycles;
 //
 
 static unsigned *tcp_sockets;
@@ -510,11 +509,13 @@ static void net_process_ping(unsigned port, struct mplslen mpls, void *addr, str
   } else if (stopper == index)
     stopper = MAXHOST; // clear stopper
 
+  if (index > stopper) // return unless reachable
+    return;
+
   struct timeval _tv;
   timersub(&now, &(sequence[seq].time), &_tv);
   time_t totusec = timer2usec(&_tv); // impossible? [if (totusec < 0) totusec = 0;]
 
-  if (index <= stopper) { // if reachable, set addr
   if (!unaddrcmp(&(host[index].addr))) {
     addrcpy(&(host[index].addr), &addrcopy);
     host[index].mpls = mpls;
@@ -537,7 +538,7 @@ static void net_process_ping(unsigned port, struct mplslen mpls, void *addr, str
         raw_rawhost(index, &(host[index].addrs[i]));
 #endif
     }
-  }}
+  }
 
   host[index].jitter = labs(totusec - host[index].last);
   host[index].last = totusec;
@@ -841,8 +842,6 @@ int net_send_batch(void) {
      || (batch_at >= stopper)) {        // or learnt unreachable
     numhosts = batch_at + 1;
     batch_at = fstTTL - 1;
-    if (cache_mode)
-      cycles++; // to see progress on curses screen
     return 1;
   }
 

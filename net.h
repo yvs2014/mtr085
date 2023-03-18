@@ -118,7 +118,6 @@ struct nethost {
 extern struct nethost host[];
 
 extern char localaddr[];
-extern int cycles;     // to see progress on curses screen in cache mode
 
 void net_init(int ipv6_mode);
 int net_tcp_init(void);

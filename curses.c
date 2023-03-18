@@ -305,7 +305,7 @@ int mtr_curses_keyaction(void) {
   return ActionNone; // ignore unknown input
 }
 
-void mtr_fill_data(int at, char *buf) {
+void mtr_fill_data(int at, char *buf, int sz) {
   int hd_len = 0;
   /* net_xxx returns times in usecs. Just display millisecs */
   for (int i = 0; i < sizeof(fld_active); i++) {
@@ -317,12 +317,20 @@ void mtr_fill_data(int at, char *buf) {
       continue;
 
 // 1) temporay hack for stats usec to ms...
-// 2) j=0: printf(" ", 0);
-#define CURSES_FLD(factor) { sprintf(buf + hd_len, data_fields[j].format, net_elem(at, data_fields[j].key) factor); }
-    if (index(data_fields[j].format, 'f'))
-      CURSES_FLD(/1000.)
-    else
-      CURSES_FLD();
+#define CURSES_FLD(factor) snprintf(buf + hd_len, sz - hd_len, data_fields[j].format, net_elem(at, data_fields[j].key) factor)
+    char key = data_fields[j].key;
+    if (host[at].returned)
+      index(data_fields[j].format, 'f') ? CURSES_FLD(/1000.) : CURSES_FLD();
+    else switch (key) { // if there's no replies, show only packet counters
+      case 'L':
+      case 'D':
+      case 'R':
+      case 'S':
+        index(data_fields[j].format, 'f') ? CURSES_FLD(/1000.) : CURSES_FLD();
+        break;
+      default:
+        snprintf(buf + hd_len, sz - hd_len, "%*s", data_fields[j].length, " ");
+    }
     hd_len += data_fields[j].length;
   }
   buf[hd_len] = 0;
@@ -370,48 +378,56 @@ static void mtr_curses_seal(int at, int max) {
 	}
 }
 
-#define CHK_NL(y) { int re = move(y, 0); if (re == ERR) break; }
+static int print_stat(int at, int y, int start, int max) { // statistics
+  static char statbuf[1024];
+  mtr_fill_data(at, statbuf, sizeof(statbuf));
+  mvprintw(y, start, "%s", statbuf);
+  if (audible_bell || visible_bell)
+    mtr_curses_seal(at, max);
+  return move(y + 1, 0);
+}
+
+static void print_addr_extra(int at, int y, ip_t *addr) { // mpls + multipath
+  if (enable_mpls)
+    printw_mpls(&host[at].mpls);
+  for (int i = 0; i < MAXPATH; i++) {  // multipath
+    ip_t *addrs = &(host[at].addrs[i]);
+    if (!addrcmp(addrs, addr))
+      continue;
+    if (!unaddrcmp(addrs))
+      break;
+    printw("    ");
+    printw_addr(addrs, host[at].up);
+    getyx(stdscr, y, __unused_int);
+    if (move(y + 1, 0) == ERR)
+        break;
+    if (enable_mpls)
+      if (printw_mpls(&(host[at].mplss[i])) == ERR)
+        break;
+  }
+}
 
 static void mtr_curses_hosts(int startstat) {
   int max = net_max();
   for (int at = net_min() + display_offset; at < max; at++) {
     int y;
     getyx(stdscr, y, __unused_int);
-    CHK_NL(y);
+    move(y, 0);
     printw("%2d. ", at + 1);
-
     ip_t *addr = &host[at].addr;
     if (!unaddrcmp(addr)) {
       printw("%s", UNKN_ITEM);
-      CHK_NL(y + 1);
-      continue;
-    }
-
-    printw_addr(addr, host[at].up);
-    { // statistics
-      char buf[1024];
-      mtr_fill_data(at, buf);
-      mvprintw(y, startstat, "%s", buf);
-      if (audible_bell || visible_bell)
-        mtr_curses_seal(at, max);
-      CHK_NL(y + 1);
-    }
-    if (enable_mpls)
-      printw_mpls(&host[at].mpls);
-
-    for (int i = 0; i < MAXPATH; i++) {  // multipath
-      ip_t *addrs = &(host[at].addrs[i]);
-      if (!addrcmp(addrs, addr))
-        continue;
-      if (!unaddrcmp(addrs))
+      if (move(y + 1, 0) == ERR)
         break;
-      printw("    ");
-      printw_addr(addrs, host[at].up);
-      getyx(stdscr, y, __unused_int);
-      CHK_NL(y + 1);
-      if (enable_mpls)
-        if (printw_mpls(&(host[at].mplss[i])) == ERR)
+//    continue;
+      if (at < (max - 1))
+        if (print_stat(at, y, startstat, max) == ERR)
           break;
+    } else {
+      printw_addr(addr, host[at].up);
+      if (print_stat(at, y, startstat, max) == ERR)
+        break;
+      print_addr_extra(at, y, addr);
     }
   }
   move(2, 0);
@@ -559,13 +575,14 @@ static void mtr_curses_graph(int startstat, int cols) {
 	for (int at = net_min() + display_offset; at < max; at++) {
 		int y;
 		getyx(stdscr, y, __unused_int);
-		CHK_NL(y);
+		move(y, 0);
 		printw("%2d. ", at + 1);
 
 		ip_t *addr = &host[at].addr;
 		if (!unaddrcmp(addr)) {
 			printw("%s", UNKN_ITEM);
-			CHK_NL(y + 1);
+			if (move(y + 1, 0) == ERR)
+				break;
 			continue;
 		}
 
@@ -593,7 +610,8 @@ static void mtr_curses_graph(int startstat, int cols) {
 				addch(mtr_saved_ch(host[at].saved[i]));
 		if (audible_bell || visible_bell)
 			mtr_curses_seal(at, max);
-		CHK_NL(y + 1);
+		if (move(y + 1, 0) == ERR)
+			break;
 	}
 }
 
@@ -717,10 +735,6 @@ void mtr_curses_redraw(void) {
   printw("%*s", (int)(getmaxx(stdscr) + strlen(redraw_buf)) / 2, redraw_buf);
   attroff(A_BOLD);
 
-  if (cache_mode) {
-    snprintf(redraw_buf, sizeof(redraw_buf), "%d cycles", cycles);
-    mvprintw(1, 0, "%*s", (int)(getmaxx(stdscr) + strlen(redraw_buf)) / 2, redraw_buf);
-  }
   mvprintw(1, 0, "%s (%s)", srchost, localaddr);
   time_t t = time(NULL);
   mvprintw(1, maxx - 25, "%s", ctime(&t));
