@@ -16,24 +16,24 @@
     Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 */
 
-#include "config.h"
-
-#include <sys/types.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 #include <errno.h>
 #include <strings.h>
-
 #include <netdb.h>
 #include <netinet/in.h>
-#include <sys/socket.h>
 #include <time.h>
 #include <ctype.h>
 #include <assert.h>
 #include <fcntl.h>
+#include <limits.h>
+#include <sys/socket.h>
+#include <sys/types.h>
 #include <sys/stat.h>
+
+#include "config.h"
 
 #ifdef HAVE_LIBIDN2
 #include <idn2.h>
@@ -58,6 +58,7 @@
 #endif
 
 #include "mtr.h"
+
 #ifdef CURSES
 #include "mtr-curses.h"
 #endif

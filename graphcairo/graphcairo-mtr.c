@@ -378,7 +378,8 @@ void gc_redraw(void) {
 				// hostinfo
 				fill_hostinfo(at, addr);
 
-				char *stat = buf + strlen(buf) + 1;
+				int stat_pos = strlen(buf) + 1;
+				char *stat = buf + stat_pos;
 				// statistics
 				if (curses_mode) {
 					mtr_gen_scale_gc();
@@ -400,7 +401,7 @@ void gc_redraw(void) {
 						*pos = 0;
 					}
 				} else
-					mtr_fill_data(at, stat);
+					mtr_fill_data(at, stat, sizeof(buf) - stat_pos);
 				cr_print_host(i, data[i], buf, stat);
 
 				// mpls

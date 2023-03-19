@@ -16,19 +16,17 @@
     Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 */
 
-#include "config.h"
-
 #include <sys/types.h>
 #include <sys/time.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <unistd.h>
 #include <time.h>
-#include <sys/select.h>
 #include <string.h>
 #include <math.h>
 #include <errno.h>
 
+#include "config.h"
 #include "mtr.h"
 #include "select.h"
 #include "dns.h"

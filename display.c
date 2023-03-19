@@ -16,12 +16,11 @@
     Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 */
 
-#include "config.h"
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/types.h>
 
+#include "config.h"
 #include "mtr.h"
 #include "display.h"
 #ifdef CURSES
@@ -36,7 +35,6 @@
 #ifdef GRAPHCAIRO
 #include "graphcairo-mtr.h"
 #endif
-
 #ifdef SPLITMODE
 #include "split.h"
 #endif

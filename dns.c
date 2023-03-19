@@ -21,17 +21,24 @@
     Copyright (C) 1998 by Simon Kirby <sim@neato.org>
     Released under GPL, as above.
 */
-
-#include "config.h"
-
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <string.h>
+#include <search.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <ctype.h>
+#include <time.h>
 #include <sys/types.h>
 #include <sys/time.h>
-#include <sys/select.h>
 #include <sys/stat.h>
 #include <sys/errno.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+
+#include "config.h"
 
 #ifndef __APPLE__
 #define BIND_8_COMPAT
@@ -41,16 +48,6 @@
 #include <arpa/nameser_compat.h>
 #endif
 
-#include <unistd.h>
-#include <fcntl.h>
-#include <ctype.h>
-#include <string.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <search.h>
-#include <errno.h>
-#include <time.h>
-
 #include "mtr.h"
 #include "dns.h"
 #include "net.h"
@@ -58,10 +55,12 @@
 #ifdef ENABLE_IPV6
 #ifdef __GLIBC__
 #define NSSOCKADDR6(i) (myres._u._ext.nsaddrs[i])
+#elif defined(__OpenBSD__)
+#define NSSOCKADDR6(i) ((struct sockaddr_in6 *) &(_res_ext.nsaddr_list[i]))
 #else
 #define NSSOCKADDR6(i) (&(myres._u._ext.ext->nsaddrs[i].sin6))
 #endif
-#ifdef BSD_COMP
+#if defined(__FreeBSD__) || defined(__NetBSD__)
 struct __res_state_ext {
   union res_sockaddr_union nsaddrs[MAXNS];
   struct sort_list {
@@ -80,6 +79,14 @@ struct __res_state_ext {
 #endif
 #endif
 
+#ifdef __OpenBSD__
+#define MYRES_INIT(res) res_init()
+#define MYRES_CLOSE(res)
+#else
+#define MYRES_INIT(res) res_ninit(&res)
+#define MYRES_CLOSE(res) res_nclose(&res)
+#endif
+
 #ifdef LOG_DNS
 #include <syslog.h>
 #define DNSLOG_MSG(format, ...) { syslog(LOG_PRIORITY, format, __VA_ARGS__); }
@@ -96,7 +103,9 @@ struct resolve {
 
 // global
 bool enable_dns = true;	// use DNS by default
+#ifndef __OpenBSD__
 struct __res_state myres;
+#endif
 //
 
 static bool dns_initiated = false;
@@ -116,24 +125,6 @@ static struct sockaddr * from = (struct sockaddr *) &from_sastruct;
 
 static char lookup_key[MAXDNAME];
 
-/*
-#ifdef NEED_RES_STATE_EXT
-// __res_state_ext is missing on many (most?) BSD systems
-static struct __res_state_ext {
-  union res_sockaddr_union nsaddrs[MAXNS];
-  struct sort_list {
-    int  af;
-    union {
-      struct in_addr  ina;
-      struct in6_addr in6a;
-    } addr, mask;
-  } sort_list[MAXRESOLVSORT];
-  char nsuffix[64];
-  char nsuffix2[64];
-};
-#endif
-*/
-
 int dns_waitfd(int family) {
  return (enable_dns && hinit && dns_initiated) ? (
 #ifdef ENABLE_IPV6
@@ -145,8 +136,8 @@ int dns_waitfd(int family) {
 bool dns_init(void) {
   if (dns_initiated)
     return true;
-  if (res_ninit(&myres) < 0) { // ? myres.options &= ~ (RES_INIT | RES_XINIT);
-    perror("dns_init(): res_ninit()");
+  if (MYRES_INIT(myres) < 0) {
+    perror("dns_init()");
     return false;
   }
   if (!myres.nscount) {
@@ -203,7 +194,7 @@ void dns_close(void) {
   if (!enable_dns)
     return;
   if (dns_initiated) {
-    res_nclose(&myres);
+    MYRES_CLOSE(myres);
     dns_initiated = false;
   }
   if (resfd)

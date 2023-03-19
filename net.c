@@ -16,14 +16,10 @@
     Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 */
 
-#include "config.h"
-
-
 #include <sys/types.h>
 #include <sys/time.h>
 #include <sys/socket.h>
 #include <sys/ioctl.h>
-#include <sys/select.h>
 #include <netinet/in.h>
 #include <netinet/ip.h>
 #include <netinet/tcp.h>
@@ -31,15 +27,18 @@
 #include <netinet/ip_icmp.h>
 #include <memory.h>
 #include <unistd.h>
-#ifdef HAVE_FCNTL_H
-#include <fcntl.h>
-#endif
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
 #include <errno.h>
 #include <string.h>
 #include <time.h>
+
+#include "config.h"
+
+#ifdef HAVE_FCNTL_H
+#include <fcntl.h>
+#endif
 
 #include "mtr.h"
 #include "net.h"
@@ -55,6 +54,14 @@
 #else
 #define NETLOG_MSG(format, ...)  {}
 #define NETLOG_RET(format, ...)  { return; }
+#endif
+
+#ifdef __OpenBSD__
+#define ABS llabs
+#define LLD "%lld"
+#else
+#define ABS labs
+#define LLD "%ld"
 #endif
 
 /*  We can't rely on header files to provide this information, because
@@ -364,6 +371,8 @@ static void net_send_tcp(int index) {
 #if __FreeBSD_version >= 1100000
 #define IPLEN_RAW(sz) htons(sz)
 #endif
+#elif __OpenBSD__
+#define IPLEN_RAW(sz) htons(sz)
 #else
 #define IPLEN_RAW(sz) sz
 #endif
@@ -540,7 +549,7 @@ static void net_process_ping(unsigned port, struct mplslen mpls, void *addr, str
     }
   }
 
-  host[index].jitter = labs(totusec - host[index].last);
+  host[index].jitter = ABS(totusec - host[index].last);
   host[index].last = totusec;
 
   if (host[index].returned < 1) {
@@ -581,7 +590,7 @@ static void net_process_ping(unsigned port, struct mplslen mpls, void *addr, str
 
 #ifdef OUTPUT_FORMAT_RAW
   if (enable_raw) {
-    NETLOG_MSG("raw_rawping(index=%d, totusec=%d)", index, totusec);
+    NETLOG_MSG("raw_rawping(index=%d, totusec=" LLD ")", index, totusec);
     raw_rawping(index, totusec);
   }
 #endif

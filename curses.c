@@ -16,15 +16,17 @@
     Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 */
 
-#include "config.h"
-
 #include <strings.h>
 #include <unistd.h>
-
 #include <ctype.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+
+#include "config.h"
 
 /* MacOSX may need this before scoket.h...*/
 #if defined(HAVE_SYS_TYPES_H)
@@ -33,10 +35,6 @@
 /* If a system doesn't have sys/types.h, lets hope that time_t is an int */
 #define time_t int
 #endif
-
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
 
 #if defined(UNICODE)
 #define _XOPEN_SOURCE_EXTENDED
@@ -52,7 +50,7 @@
 #if defined(HAVE_WCHAR_H)
 #  include <wchar.h>
 #endif
-#ifdef NETBSD_CURSES
+#ifdef __NetBSD__
 #define CCHAR_attr attributes
 #define CCHAR_chars vals
 /*
@@ -90,14 +88,13 @@
 #endif
 
 #include "mtr.h"
+#include "display.h"
 #include "mtr-curses.h"
 #include "net.h"
 #include "dns.h"
 #ifdef IPINFO
 #include "ipinfo.h"
 #endif
-#include "display.h"
-
 #include "version.h"
 
 static int __unused_int;

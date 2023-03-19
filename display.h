@@ -19,8 +19,7 @@
 #ifndef DISPLAY_H
 #define DISPLAY_H
 
-#include <netinet/in.h>
-
+#include <stdbool.h>
 #include "config.h"
 
 #define UNKN_ITEM	"???"

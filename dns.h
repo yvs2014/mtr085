@@ -24,6 +24,9 @@
 
 extern bool enable_dns;
 extern struct __res_state myres;
+#ifdef __OpenBSD__
+#define myres _res
+#endif
 
 bool dns_init(void);
 void dns_open(void);

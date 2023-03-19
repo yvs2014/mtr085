@@ -16,8 +16,6 @@
     Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 */
 
-#include "config.h"
-
 #include <unistd.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -28,6 +26,12 @@
 #include <sys/time.h>
 #include <ctype.h>
 #include <fcntl.h>
+#include <netdb.h>
+#include <netinet/in.h>
+#include <resolv.h>
+#include <sys/socket.h>
+
+#include "config.h"
 
 #ifdef __APPLE__
 #define BIND_8_COMPAT
@@ -36,17 +40,13 @@
 #ifdef HAVE_ARPA_NAMESER_COMPAT_H
 #include <arpa/nameser_compat.h>
 #endif
-#include <netdb.h>
-#include <netinet/in.h>
-#include <resolv.h>
-#include <sys/socket.h>
 
 #include "mtr.h"
-#include "version.h"
 #include "net.h"
 #include "dns.h"
 #include "display.h"
 #include "ipinfo.h"
+#include "version.h"
 
 #ifdef LOG_IPINFO
 #include <syslog.h>

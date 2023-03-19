@@ -208,20 +208,6 @@ AS_IF([test "x$sys_getopt" = "xyes"], [
 	AC_CHECK_FUNCS([getopt_long], AC_DEFINE([HAVE_GETOPT_LONG]), AC_MSG_ERROR([No system getopt_long found]))
 ])
 
-AC_CANONICAL_HOST
-case "$host_os" in
-  linux*)
-    AC_DEFINE(_DEFAULT_SOURCE, 1, [enable "default" definitions (since glibc 2.20)])
-  ;;
-  solaris*|freebsd*|openbsd*)
-    AC_DEFINE(BSD_COMP, 1, [enable BSD compatibility])
-  ;;
-  netbsd*)
-    AC_DEFINE(NETBSD_CURSES, 1, [a bit different NetBSD curses])
-    AC_DEFINE(BSD_COMP, 1, [enable BSD compatibility])
-  ;;
-esac
-
 AC_CHECK_FUNC(socket, ,
   AC_CHECK_LIB(socket, socket, , AC_MSG_ERROR(No socket library found)))
 
@@ -284,57 +270,6 @@ AC_CHECK_FUNC(getaddrinfo,
 	USES_IPV6=yes
 fi])
 
-AC_DEFUN([NEED_RES_STATE_EXT_TEST_SRC], [
-AC_LANG_PROGRAM([[
-#include <netinet/in.h>
-#include <resolv.h>
-#ifdef __GLIBC__
-#define RESEXTIN6(r,i) (*(r._u._ext.nsaddrs[i]))
-#else
-#define RESEXTIN6(r,i) (r._u._ext.ext->nsaddrs[i].sin6)
-#endif
-]], [[
-struct __res_state res;
-return RESEXTIN6(res,0).sin6_addr.s6_addr[0];
-]])])
-AC_DEFUN([DEFINE_RES_STATE_EXT_TEST_SRC], [
-AC_LANG_PROGRAM([[
-#include <netinet/in.h>
-#include <resolv.h>
-#ifdef __GLIBC__
-#define RESEXTIN6(r,i) (*(r._u._ext.nsaddrs[i]))
-#else
-#define RESEXTIN6(r,i) (r._u._ext.ext->nsaddrs[i].sin6)
-struct __res_state_ext {
-	union res_sockaddr_union nsaddrs[MAXNS];
-	struct sort_list {
-		int     af;
-		union {
-			struct in_addr  ina;
-			struct in6_addr in6a;
-		} addr, mask;
-	} sort_list[MAXRESOLVSORT];
-	char nsuffix[64];
-	char nsuffix2[64];
-};
-#endif
-]], [[
-struct __res_state res;
-return RESEXTIN6(res,0).sin6_addr.s6_addr[0];
-]])])
-if test "x$USES_IPV6" = "xyes"; then
-	AC_MSG_CHECKING([whether __res_state_ext needs to be defined])
-	AC_COMPILE_IFELSE([NEED_RES_STATE_EXT_TEST_SRC],
-		[AC_MSG_RESULT([no])],
-		[AC_MSG_RESULT([yes])
-		AC_MSG_CHECKING([whether provided __res_state_ext definition can be compiled])
-		AC_COMPILE_IFELSE([DEFINE_RES_STATE_EXT_TEST_SRC],
-			[AC_MSG_RESULT([yes])
-			AC_DEFINE(NEED_RES_STATE_EXT, 1, [Define if struct __res_state_ext needs to be defined.])],
-			[AC_MSG_RESULT([no])
-			AC_MSG_ERROR(Need definition for struct __res_state_ext but unable to define it.)])])
-fi
-
 AC_CHECK_TYPE(socklen_t, AC_DEFINE([HAVE_SOCKLEN_T], [], [Define if your system has socklen_t]) , , [[
 #include <netinet/in.h>
 #ifdef HAVE_SOCKET_H
@@ -387,6 +322,13 @@ fi
 
 
 AC_CONFIG_HEADERS([config.h])
+AH_TOP([
+#ifndef CONFIG_H
+#define CONFIG_H
+])
+AH_BOTTOM([
+#endif
+])
 AC_CONFIG_FILES([Makefile img/Makefile])
 AC_OUTPUT
 

@@ -20,8 +20,6 @@
     Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 */
 
-#include "config.h"
-
 #include <ctype.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -31,6 +29,7 @@
 #include <sys/time.h>
 #include <termios.h>
 
+#include "config.h"
 #include "mtr.h"
 #include "split.h"
 #include "display.h"

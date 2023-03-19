@@ -16,8 +16,6 @@
     Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 */
 
-#include "config.h"
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -28,7 +26,9 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <time.h>
+#include <arpa/nameser.h>
 
+#include "config.h"
 #include "mtr.h"
 #include "version.h"
 #include "report.h"

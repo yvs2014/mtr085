@@ -24,6 +24,8 @@
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
+
+#include "config.h"
 #ifdef ENABLE_IPV6
 #include <netinet/ip6.h>
 #include <netinet/icmp6.h>

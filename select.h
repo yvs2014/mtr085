@@ -19,6 +19,8 @@
 #ifndef SELECT_H
 #define SELECT_H
 
+#include <sys/select.h>
+
 extern fd_set wset; // write descriptors
 extern int maxfd;
 

@@ -21,7 +21,6 @@
 #ifndef SPLIT_H
 #define SPLIT_H
 
-/*  Prototypes for split.c  */
 void split_open(void);
 void split_close(void);
 void split_redraw(void);
