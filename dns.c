@@ -72,9 +72,11 @@ struct __res_state_ext {
   } sort_list[MAXRESOLVSORT];
   char nsuffix[64];
   char nsuffix2[64];
+#ifdef __FreeBSD__
   struct timespec conf_mtim;
   time_t conf_stat;
   u_short reload_period;
+#endif
 };
 #endif
 #endif

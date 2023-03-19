@@ -71,9 +71,8 @@
 #define MAXPATH 8
 #define MAXHOST 256
 
-#define MAXPACKET 4470		/* largest test packet size */
-#define MINPACKET 28		/* 20 bytes IP header and 8 bytes ICMP or UDP */
-#define MAXLABELS 8		/* http://kb.juniper.net/KB2190 (+ 3 just in case) */
+#define MAXPACKET 4470		// largest test packet size
+#define MINPACKET 28		// 20 bytes IP and 8 bytes ICMP or UDP
 
 #define SAVED_PINGS 200
 
@@ -83,15 +82,6 @@ extern ip_t unspec_addr;	// zero by definition
 extern int (*unaddrcmp)(const void *);
 extern int (*addrcmp)(const void *a, const void *b);
 extern void* (*addrcpy)(void *a, const void *b);
-
-/* MPLS label object */
-struct mplslen {
-  unsigned long label[MAXLABELS]; /* label value */
-  uint8 exp[MAXLABELS]; /* experimental bits */
-  uint8 ttl[MAXLABELS]; /* MPLS TTL */
-  char s[MAXLABELS]; /* bottom of stack */
-  char labels; /* how many labels did we get? */
-};
 
 struct nethost {
   ip_t addr;
@@ -113,8 +103,8 @@ struct nethost {
   int transit;
   int saved[SAVED_PINGS];
   int saved_seq_offset;
-  struct mplslen mpls;
-  struct mplslen mplss[MAXPATH];
+  mpls_data_t mpls;
+  mpls_data_t mplss[MAXPATH];
   time_t seen;         // timestamp for caching, last seen
 };
 extern struct nethost host[];
@@ -140,7 +130,7 @@ int net_duplicate(int at, int seq);
 bool net_process_tcp_fds(void);
 
 void sockaddrtop(struct sockaddr *saddr, char *strptr, size_t len);
-void decodempls(int, char *, struct mplslen *, int);
+void decodempls(int num, const uint8 *packet, mpls_data_t *mpls, int off);
 const char *strlongip(ip_t *ip);
 time_t wait_usec(float t);
 int addr4cmp(const void *a, const void *b);

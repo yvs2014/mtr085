@@ -77,6 +77,7 @@ typedef int socklen_t;
 #endif
 
 #define NAMELEN	256
+#define MAXLABELS 8
 
 #define FLD_ACTIVE_DEFAULT	"LS NABWV"
 #define FLD_ACTIVE_JITTER	"DR AGJMXI"
@@ -145,7 +146,6 @@ extern int fld_index[];
 extern char fld_avail[];
 extern FLD_BUF_T fld_active;
 extern FLD_BUF_T fld_save;
-//
 extern const struct fields data_fields[];
 //
 extern char srchost[];
@@ -156,9 +156,17 @@ extern bool interactive;
 extern int max_ping;
 extern bool alter_ping;
 //
+// MPLS description
+typedef struct { uint32 lab:20, exp:3, s:1, ttl:8; } mpls_label_t;
+typedef struct mpls_data {
+  mpls_label_t label[MAXLABELS];
+  uint8 n;
+} mpls_data_t;
+//
 
 char *trim(char *s);
 word str2hash(const char* s);
 void set_fld_active(const char *s);
+const char *mpls2str(const mpls_label_t *label, int indent);
 
 #endif

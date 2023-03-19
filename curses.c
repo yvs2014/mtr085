@@ -333,14 +333,13 @@ void mtr_fill_data(int at, char *buf, int sz) {
   buf[hd_len] = 0;
 }
 
-static int printw_mpls(struct mplslen *mpls) {
-  for (int i = 0; i < mpls->labels; i++) {
+static int printw_mpls(const mpls_data_t *m) {
+  for (int i = 0; i < m->n; i++) {
     int y;
     getyx(stdscr, y, __unused_int);
-    printw("    [MPLS: Lbl %lu Exp %u S %u TTL %u]", mpls->label[i], mpls->exp[i], mpls->s[i], mpls->ttl[i]);
-    int re = move(y + 1, 0);
-    if (re == ERR)
-      return re;
+    printw("%s", mpls2str(&(m->label[i]), 4));
+    if (move(y + 1, 0) == ERR)
+      return ERR;
   }
   return OK;
 }

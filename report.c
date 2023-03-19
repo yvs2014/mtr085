@@ -74,11 +74,9 @@ static size_t snprint_addr(char *dst, size_t len, ip_t *addr) {
     return snprintf(dst, len, "%s", "???");
 }
 
-static void print_mpls(struct mplslen *m) {
-#define MPLS_LINE_FMT "%4s[MPLS: Lbl %lu Exp %u S %u TTL %u]"
-  if (m)
-    for (int i = 0; i < m->labels; i++)
-      printf(MPLS_LINE_FMT "\n", "", m->label[i], m->exp[i], m->s[i], m->ttl[i]);
+static void print_mpls(const mpls_data_t *m) {
+  for (int i = 0; i < m->n; i++)
+    printf("%s\n", mpls2str(&(m->label[i]), 4));
 }
 
 static int get_longest_name(int min, int max) {
@@ -184,17 +182,18 @@ void report_close(bool wide) {
 
 
     // body-extra-lines: multipath, mpls, etc.
-    struct mplslen *mpls = &host[at].mpls;
+    mpls_data_t *mpls = &(host[at].mpls);
     ip_t *addrs = host[at].addrs;
-    int z = 1;
-    for (; z < MAXPATH; z++) { // z is starting at 1 because addrs[0] is the same that addr
-      ip_t *addr2 = addrs + z;
-      struct mplslen *mplss = &(host[at].mplss[z]);
-      if (!unaddrcmp(addr2))	// break from loop at the first unassigned
+    for (int i = 1; i < MAXPATH; i++) { // starting at 1 because addrs[0] is the same that addr
+      ip_t *addr2 = addrs + i;
+      mpls_data_t *mplss = &(host[at].mplss[i]);
+      if (!unaddrcmp(addr2)) { // break from loop at the first unassigned
+        if (enable_mpls && (i == 1))
+          print_mpls(mpls);
         break;
-
-      if (!found_addr_in_addrs(z, addr2, addrs)) {
-        if ((mpls->labels) && (z == 1) && enable_mpls)
+      }
+      if (!found_addr_in_addrs(i, addr2, addrs)) {
+        if (enable_mpls && (i == 1))
           print_mpls(mpls);
         snprint_addr(name, MAXDNAME, addr2);
 #ifdef IPINFO
@@ -208,9 +207,6 @@ void report_close(bool wide) {
           print_mpls(mplss);
       }
     }
-
-    if (mpls->labels && (z == 1) && enable_mpls) // no multipath?
-      print_mpls(mpls);
   }
 
   free(name);

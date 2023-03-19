@@ -496,7 +496,7 @@ static void tcp_seq_close(unsigned at) {
 }
 
 // We got a return on something we sent out. Record the address and time.
-static void net_process_ping(unsigned port, struct mplslen mpls, void *addr, struct timeval now, int reason) {
+static void net_process_ping(unsigned port, const mpls_data_t *mpls, const void *addr, struct timeval now, int reason) {
   ip_t addrcopy;
 
   /* Copy the from address ASAP because it can be overwritten */
@@ -527,13 +527,15 @@ static void net_process_ping(unsigned port, struct mplslen mpls, void *addr, str
 
   if (!unaddrcmp(&(host[index].addr))) {
     addrcpy(&(host[index].addr), &addrcopy);
-    host[index].mpls = mpls;
+    if (mpls) {
+      memcpy(&(host[index].mpls), mpls, sizeof(mpls_data_t));
+      memcpy(&(host[index].mplss[0]), mpls, sizeof(mpls_data_t));
+    }
 #ifdef OUTPUT_FORMAT_RAW
     if (enable_raw)
       raw_rawhost(index, &(host[index].addr));
 #endif
     addrcpy(&(host[index].addrs[0]), &addrcopy); // for multipath
-    host[index].mplss[0] = mpls;
   } else {
     int i = 0;
     for (; i < MAXPATH; i++)
@@ -541,7 +543,8 @@ static void net_process_ping(unsigned port, struct mplslen mpls, void *addr, str
         break;
     if (addrcmp(&(host[index].addrs[i]), &addrcopy) && (i < MAXPATH)) {
       addrcpy(&(host[index].addrs[i]), &addrcopy);
-      host[index].mplss[i] = mpls;
+      if (mpls)
+        memcpy(&(host[index].mplss[i]), mpls, sizeof(mpls_data_t));
 #ifdef OUTPUT_FORMAT_RAW
       if (enable_raw)
         raw_rawhost(index, &(host[index].addrs[i]));
@@ -619,7 +622,7 @@ static void net_process_ping(unsigned port, struct mplslen mpls, void *addr, str
     now we just need to read it, see if it is for us, and if it is a reply
     to something we sent, then call net_process_ping()  */
 void net_process_return(void) {
-  char packet[MAXPACKET];
+  unsigned char packet[MAXPACKET];
 #ifdef ENABLE_IPV6
   struct sockaddr_storage fromsockaddr_struct;
   struct sockaddr_in6 * fsa6 = (struct sockaddr_in6 *) &fromsockaddr_struct;
@@ -636,8 +639,8 @@ void net_process_return(void) {
   int echoreplytype = 0, timeexceededtype = 0, unreachabletype = 0;
 
   /* MPLS decoding */
-  struct mplslen mpls;
-  mpls.labels = 0;
+  mpls_data_t mpls;
+  mpls.n = 0;
 
   gettimeofday(&now, NULL);
   switch (af) {
@@ -745,7 +748,7 @@ void net_process_return(void) {
   }
 
   if (sequence >= 0)
-    net_process_ping(sequence, mpls, fromaddress, now, reason);
+    net_process_ping(sequence, &mpls, fromaddress, now, reason);
 }
 
 int net_elem(int at, char c) {
@@ -1088,37 +1091,33 @@ void sockaddrtop( struct sockaddr * saddr, char * strptr, size_t len ) {
 }
 
 // Decode MPLS
-void decodempls(int num, char *packet, struct mplslen *mpls, int offset) {
-  unsigned ext_ver, ext_res, ext_chk, obj_hdr_len;
-  u_char obj_hdr_class, obj_hdr_type;
-
+void decodempls(int num, const uint8 *packet, mpls_data_t *mpls, int off) {
   /* loosely derived from the traceroute-nanog.c
    * decoding by Jorge Boncompte */
-  ext_ver = packet[offset]>>4;
-  ext_res = (packet[offset]&15)+ packet[offset+1];
-  ext_chk = ((unsigned)packet[offset+2]<<8)+packet[offset+3];
-
-  /* Check for ICMP extension header */
-  if (ext_ver == 2 && ext_res == 0 && ext_chk != 0 && num >= (offset+6)) {
-    obj_hdr_len = ((int)packet[offset+4]<<8)+packet[offset+5];
-    obj_hdr_class = packet[offset+6];
-    obj_hdr_type = packet[offset+7];
-
-    /* make sure we have an MPLS extension */
-    if ((obj_hdr_len >= 8) && (obj_hdr_class == 1) && (obj_hdr_type == 1)) {
-      /* how many labels do we have?  will be at least 1 */
-      mpls->labels = (obj_hdr_len-4)/4;
-
-      // save all label objects
-      for (int i = 0, j = offset + 8; (i < mpls->labels) && (i < MAXLABELS) && (num >= j); i++, j += i * 4) {
+  uint32 ver = packet[off] >> 4;
+  uint32 res = packet[off++] & 15;   // +1
+  res += packet[off++];              // +2
+  uint32 chk = packet[off++] << 8;   // +3
+  chk += packet[off++];              // +4
+  // Check for ICMP extension header
+  if ((ver == 2) && (res == 0) && chk && (num >= (off + 2))) {
+    uint32 len = packet[off++] << 8; // +5
+    len += packet[off++];            // +6
+    uint8 class = packet[off++];     // +7
+    uint8 type  = packet[off++];     // +8
+    // make sure we have an MPLS extension
+    if ((len >= 8) && (class == 1) && (type == 1)) {
+      uint8 n = (len - 4) / 4;
+      mpls->n = (n > MAXLABELS) ? MAXLABELS : n;
+      for (int i = 0; (i < mpls->n) && (num >= off); i++) {
         // piece together the 20 byte label value
-        unsigned long lab = (packet[j] << 12) & 0xff000;
-        lab += (packet[j + 1] << 4) & 0xff0;
-        lab += (packet[j + 2] >> 4) & 0xf;
-        mpls->label[i] = lab;
-        mpls->exp[i] = (packet[j + 2] >> 1) & 0x7;
-        mpls->s[i]   = packet[j + 2] & 0x1; // should be 1 if only one label
-        mpls->ttl[i] = packet[j + 3];
+        uint32 l = packet[off++] << 12; // +1
+        l |= packet[off++] << 4;        // +2
+        l |= packet[off] >> 4;
+        mpls->label[i].lab = l;
+        mpls->label[i].exp = (packet[off] >> 1) & 0x7;
+        mpls->label[i].s = packet[off++] & 0x1; // +3
+        mpls->label[i].ttl = packet[off++];     // +4
       }
     }
   }
@@ -1159,9 +1158,9 @@ bool net_process_tcp_fds(void) {
   struct timeval now;
   time_t unow, utime;
 
-  /* Can't do MPLS decoding */
-  struct mplslen mpls;
-  mpls.labels = 0;
+  /* ??? can't do MPLS decoding */
+  mpls_data_t mpls;
+  mpls.n = 0;
 
   gettimeofday(&now, NULL);
   unow = timer2usec(&now);
@@ -1178,7 +1177,7 @@ bool net_process_tcp_fds(void) {
          * (probably) reached the remote address. Anything else happens to the
          * connection, we write it off to avoid leaking sockets */
         if (r || (errno == ECONNREFUSED)) {
-          net_process_ping(at, mpls, remoteaddress, now, -1);
+          net_process_ping(at, &mpls, remoteaddress, now, -1);
           ret = true;
 //        } else if ((errno != EAGAIN) && (errno != EHOSTUNREACH)) {
 //          sequence[at].transit = 0;

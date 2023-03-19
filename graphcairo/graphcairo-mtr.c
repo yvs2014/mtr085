@@ -300,12 +300,10 @@ static void gc_keyaction(int c) {
 	}
 }
 
-static void gc_print_mpls(int i, int d, struct mplslen *mpls) {
-	if (mpls) {
-		int j;
-		for (j = 0; (j < mpls->labels) && (j < MAXLABELS); j++) {
-			sprintf(buf, "[MPLS: Lbl %lu Exp %u S %u TTL %u]",
-				mpls->label[j], mpls->exp[j], mpls->s[j], mpls->ttl[j]);
+static void gc_print_mpls(int i, int d, const mpls_data_t *m) {
+	if (m) {
+		for (int j = 0; j < m->n; j++) {
+			sprintf(buf, "%s", mpls2str(&(m->label[i]), 0));
 			cr_print_host(i, d, buf, NULL);
 		}
 	}
@@ -406,7 +404,7 @@ void gc_redraw(void) {
 
 				// mpls
 				if (enable_mpls)
-					gc_print_mpls(i, data[i], &host[at].mpls);
+					gc_print_mpls(i, data[i], &(host[at].mpls));
 
 				// multipath
 				if (params.enable_multipath) {
