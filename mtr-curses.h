@@ -19,7 +19,14 @@
 #ifndef MTR_CURSES_H
 #define MTR_CURSES_H
 
-/*  Prototypes for curses.c  */
+#include "config.h"
+
+#ifdef UNICODE
+#ifdef HAVE_WCHAR_H
+#include <wchar.h>
+#endif
+#endif
+
 void mtr_curses_open(void);
 void mtr_curses_close(void);
 void mtr_curses_redraw(void);

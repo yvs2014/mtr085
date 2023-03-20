@@ -16,22 +16,13 @@
     Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 */
 
-#include <stdio.h>
-#include <stdint.h>
 #include <stdlib.h>
-#include <string.h>
 #include <unistd.h>
-#include <errno.h>
-#include <strings.h>
-#include <netdb.h>
-#include <netinet/in.h>
-#include <time.h>
+#include <string.h>
 #include <ctype.h>
 #include <assert.h>
 #include <fcntl.h>
 #include <limits.h>
-#include <sys/socket.h>
-#include <sys/types.h>
 #include <sys/stat.h>
 
 #include "config.h"

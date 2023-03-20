@@ -16,25 +16,20 @@
     Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 */
 
-#include <sys/types.h>
+#include <stdlib.h>
+#include <string.h>
+#include <errno.h>
+#include <limits.h>
+#include <math.h>
+#include <time.h>
 #include <sys/time.h>
-#include <sys/socket.h>
+#include <fcntl.h>
 #include <sys/ioctl.h>
 #include <netinet/in.h>
 #include <netinet/ip.h>
+#include <netinet/ip_icmp.h>
 #include <netinet/tcp.h>
 #include <netinet/udp.h>
-#include <netinet/ip_icmp.h>
-#include <memory.h>
-#include <stdio.h>
-#include <stdint.h>
-#include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
-#include <errno.h>
-#include <math.h>
-#include <time.h>
-#include <fcntl.h>
 
 #include "config.h"
 #include "mtr.h"
@@ -1061,26 +1056,25 @@ int net_waitfd(void) {
 }
 
 /* Similar to inet_ntop but uses a sockaddr as it's argument. */
-void sockaddrtop( struct sockaddr * saddr, char * strptr, size_t len ) {
-  struct sockaddr_in *  sa4;
+void sockaddrtop(struct sockaddr *saddr, char *strptr, size_t len) {
+  struct sockaddr_in *sa4;
 #ifdef ENABLE_IPV6
-  struct sockaddr_in6 * sa6;
+  struct sockaddr_in6 *sa6;
 #endif
-
-  switch ( saddr->sa_family ) {
+  switch (saddr->sa_family) {
   case AF_INET:
     sa4 = (struct sockaddr_in *) saddr;
-    strncpy( strptr, inet_ntoa( sa4->sin_addr ), len - 1 );
-    strptr[ len - 1 ] = '\0';
+    strncpy(strptr, inet_ntoa(sa4->sin_addr), len - 1);
+    strptr[len - 1] = '\0';
     return;
 #ifdef ENABLE_IPV6
   case AF_INET6:
     sa6 = (struct sockaddr_in6 *) saddr;
-    inet_ntop( sa6->sin6_family, &(sa6->sin6_addr), strptr, len );
+    inet_ntop(sa6->sin6_family, &(sa6->sin6_addr), strptr, len);
     return;
 #endif
   default:
-    fprintf( stderr, "sockaddrtop unknown address type\n" );
+    fprintf(stderr, "sockaddrtop unknown address type\n");
     strptr[0] = '\0';
     return;
   }

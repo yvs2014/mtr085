@@ -21,22 +21,9 @@
     Copyright (C) 1998 by Simon Kirby <sim@neato.org>
     Released under GPL, as above.
 */
-#include <stdio.h>
 #include <stdlib.h>
-#include <unistd.h>
 #include <string.h>
 #include <search.h>
-#include <errno.h>
-#include <fcntl.h>
-#include <ctype.h>
-#include <time.h>
-#include <sys/types.h>
-#include <sys/time.h>
-#include <sys/stat.h>
-#include <sys/errno.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
 #include <arpa/nameser.h>
 
 #include "config.h"
@@ -76,9 +63,11 @@ struct __res_state_ext {
 #ifdef __OpenBSD__
 #define MYRES_INIT(res) res_init()
 #define MYRES_CLOSE(res)
+#define MYRES_QUERY(res, ...) res_mkquery(__VA_ARGS__)
 #else
 #define MYRES_INIT(res) res_ninit(&res)
 #define MYRES_CLOSE(res) res_nclose(&res)
+#define MYRES_QUERY(res, ...) res_nmkquery(&res, __VA_ARGS__)
 #endif
 
 #ifdef LOG_DNS
@@ -125,6 +114,11 @@ int dns_waitfd(int family) {
   (family == AF_INET6) ? resfd6 :
 #endif
   resfd) : 0;
+}
+
+inline int dns_query(int op, const char *dname, int class, int type, const unsigned char *data, int datalen,
+  const unsigned char *newrr, unsigned char *buf, int buflen) {
+  return MYRES_QUERY(myres, op, dname, class, type, data, datalen, newrr, buf, buflen);
 }
 
 bool dns_init(void) {
@@ -232,7 +226,7 @@ static void sendrequest(struct resolve *rp) {
   DNSLOG_MSG("Send \"%s\" (id=%d)", lookup_key, id);
 
   unsigned char buf[PACKETSZ];
-  int r = res_mkquery(QUERY, lookup_key, C_IN, T_PTR, NULL, 0, NULL, buf, sizeof(buf));
+  int r = dns_query(QUERY, lookup_key, C_IN, T_PTR, NULL, 0, NULL, buf, sizeof(buf));
   if (r < 0)
     DNSLOG_RET("%s", "Query too large");
 

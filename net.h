@@ -19,11 +19,11 @@
 #ifndef NET_H
 #define NET_H
 
-#include <netdb.h>
-#include <arpa/inet.h>
-#include <netinet/in.h>
-#include <sys/socket.h>
 #include <stdint.h>
+#include <arpa/inet.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <netdb.h>
 
 #include "config.h"
 #ifdef ENABLE_IPV6

@@ -1,10 +1,6 @@
 
-#include <stdio.h>
-#include <string.h>
-#include <stdlib.h>
-#include <unistd.h>
-#include <sys/time.h>
 #include <math.h>
+#include <sys/time.h>
 #include <cairo.h>
 #include <pango/pangocairo.h>
 

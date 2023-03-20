@@ -19,6 +19,8 @@
 #ifndef IPINFO_H
 #define IPINFO_H
 
+#include <stdbool.h>
+
 void ii_open(void);
 void ii_close(void);
 void ii_parsearg(char *arg);

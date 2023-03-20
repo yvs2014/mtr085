@@ -1,6 +1,8 @@
 #ifndef GRAPHCAIRO_H
 #define GRAPHCAIRO_H
 
+#include <stdbool.h>
+
 /**/
 #ifndef GCDEBUG
 #define GCDEBUG

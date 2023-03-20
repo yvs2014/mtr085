@@ -74,9 +74,5 @@ version.h: version.h.tmp Makefile $(mtr_SOURCES)
 	fi;
 
 EXTRA_DIST = SECURITY mtr.8 Makefile Makefile.dist
-distclean-local:
-	(sleep 3; cp Makefile.dist Makefile) &
-	rm -f *.orig
-
 DISTCLEANFILES = *~
 

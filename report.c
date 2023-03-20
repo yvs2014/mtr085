@@ -21,10 +21,7 @@
 #include <string.h>
 #include <ctype.h>
 #include <assert.h>
-#include <netdb.h>
-#include <netinet/in.h>
 #include <sys/types.h>
-#include <sys/socket.h>
 #include <time.h>
 #include <arpa/nameser.h>
 
@@ -43,7 +40,7 @@
 
 static char *get_time_string(time_t now) {
   char *t = ctime(&now);
-  t[strlen(t) - 1] = 0; // remove the trailing newline
+  t[strnlen(t, 26) - 1] = 0; // remove the trailing newline
   return t;
 }
 

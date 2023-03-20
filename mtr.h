@@ -22,16 +22,13 @@
 
 #include <stdbool.h>
 #include <stdint.h>
+#include <unistd.h>
 #include "config.h"
 
 #ifdef ENABLE_IPV6
 typedef struct in6_addr ip_t;
 #else
 typedef struct in_addr ip_t;
-#endif
-
-#ifndef HAVE_SOCKLEN_T
-//typedef int socklen_t; 
 #endif
 
 #define LOG_PRIORITY LOG_INFO

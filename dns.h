@@ -19,6 +19,7 @@
 #ifndef DNS_H
 #define DNS_H
 
+#include <stdbool.h>
 #include <netinet/in.h>
 #include <resolv.h>
 
@@ -34,5 +35,7 @@ void dns_close(void);
 int dns_waitfd(int family);
 void dns_ack(int fd, int family);
 const char *dns_lookup(ip_t *address);
+int dns_query(int op, const char *dname, int class, int type, const unsigned char *data, int datalen,
+  const unsigned char *newrr, unsigned char *buf, int buflen);
 
 #endif

@@ -16,25 +16,12 @@
     Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 */
 
-#include <strings.h>
-#include <unistd.h>
-#include <ctype.h>
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
 #include <time.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
 
 #include "config.h"
-
-/* MacOSX may need this before scoket.h...*/
-#if defined(HAVE_SYS_TYPES_H)
-#include <sys/types.h>
-#else
-/* If a system doesn't have sys/types.h, lets hope that time_t is an int */
-#define time_t int
-#endif
 
 #if defined(UNICODE)
 #define _XOPEN_SOURCE_EXTENDED

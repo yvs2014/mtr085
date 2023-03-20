@@ -16,22 +16,16 @@
     Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 */
 
-#include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
 #include <errno.h>
 #include <search.h>
-#include <sys/types.h>
-#include <sys/time.h>
-#include <ctype.h>
 #include <fcntl.h>
-#include <netdb.h>
+#include <sys/select.h>
 #include <netinet/in.h>
-#include <resolv.h>
-#include <sys/socket.h>
 #include <arpa/nameser.h>
+#include <resolv.h>
 
 #include "config.h"
 #include "mtr.h"
@@ -621,9 +615,9 @@ static open_connection_f open_connection[] = { init_dns, open_tcp_connection, op
 
 static int send_dns_query(const char *request, uint32_t id) {
     unsigned char buff[RECV_BUFF_SZ];
-    int r = res_mkquery(QUERY, request, C_IN, T_TXT, NULL, 0, NULL, buff, RECV_BUFF_SZ);
+    int r = dns_query(QUERY, request, C_IN, T_TXT, NULL, 0, NULL, buff, RECV_BUFF_SZ);
     if (r < 0) {
-        IILOG_MSG("%s(): res_mkquery() failed: %s", __FUNCTION__, strerror(errno));
+        IILOG_MSG("%s(): dns_query() failed: %s", __FUNCTION__, strerror(errno));
         return r;
     }
     HEADER* h = (HEADER*)buff;
