@@ -78,15 +78,6 @@
 
 #endif // UNICODE endif
 
-#ifndef HAVE_ATTRON
-#define attron(x)
-#define attroff(x)
-#endif
-
-#ifndef getmaxyx
-#  define getmaxyx(win,y,x)	((y) = (win)->_maxy + 1, (x) = (win)->_maxx + 1)
-#endif
-
 #include "mtr.h"
 #include "display.h"
 #include "mtr-curses.h"
@@ -403,7 +394,7 @@ static void print_addr_extra(int at, int y, ip_t *addr) { // mpls + multipath
   }
 }
 
-static void mtr_curses_hosts(int startstat) {
+static void mtr_curses_hosts(int statx) {
   int max = net_max();
   for (int at = net_min() + display_offset; at < max; at++) {
     int y;
@@ -417,11 +408,11 @@ static void mtr_curses_hosts(int startstat) {
         break;
 //    continue;
       if (at < (max - 1))
-        if (print_stat(at, y, startstat, max) == ERR)
+        if (print_stat(at, y, statx, max) == ERR)
           break;
     } else {
       printw_addr(addr, host[at].up);
-      if (print_stat(at, y, startstat, max) == ERR)
+      if (print_stat(at, y, statx, max) == ERR)
         break;
       print_addr_extra(at, y, addr);
     }
@@ -566,7 +557,7 @@ static cchar_t* mtr_saved_cc(int saved_int) {
 }
 #endif
 
-static void mtr_curses_graph(int startstat, int cols) {
+static void mtr_curses_graph(int statx, int cols) {
 	int max = net_max();
 	for (int at = net_min() + display_offset; at < max; at++) {
 		int y;
@@ -595,7 +586,7 @@ static void mtr_curses_graph(int startstat, int cols) {
 			printw(UNKN_ITEM);
 		attroff(A_BOLD);
 
-		mvprintw(y, startstat, " ");
+		mvprintw(y, statx, " ");
 #ifdef UNICODE
 		if (curses_mode == 3)
 			for (int i = SAVED_PINGS - cols; i < SAVED_PINGS; i++)
@@ -692,16 +683,14 @@ static void print_scale(void) {
 #endif
 }
 
+
 void mtr_curses_redraw(void) {
-  int maxx, maxy;
-  int startstat;
-  int rowstat;
-  int  hd_len;
   static char redraw_buf[1024];
 
+  int maxx, maxy;
+  int statx, staty = 5;
   erase();
   getmaxyx(stdscr, maxy, maxx);
-  rowstat = 5;
 
   // title
   move(0, 0);
@@ -728,7 +717,7 @@ void mtr_curses_redraw(void) {
 
     snprintf(redraw_buf + l, sizeof(redraw_buf) - l, ")");
   }
-  printw("%*s", (int)(getmaxx(stdscr) + strlen(redraw_buf)) / 2, redraw_buf);
+  printw("%*s", (maxx + (int)strnlen(redraw_buf, sizeof(redraw_buf))) / 2, redraw_buf);
   attroff(A_BOLD);
 
   mvprintw(1, 0, "%s (%s)", srchost, localaddr);
@@ -743,45 +732,45 @@ void mtr_curses_redraw(void) {
   attron(A_BOLD); addch('q'); attroff(A_BOLD); printw("uit\n");
 
   if (curses_mode == 0) {
-    startstat = 4;	// `NN. '
-    hd_len = mtr_curses_data_fields(redraw_buf);
+    statx = 4;	// indent: "NN. "
+    int hd_len = mtr_curses_data_fields(redraw_buf);
     attron(A_BOLD);
 #ifdef IPINFO
     if (ii_ready()) {
         char *header = ii_getheader();
         if (header)
-            mvprintw(rowstat - 1, startstat, "%s", header);
-        startstat += ii_getwidth(); // `NN. ' + IPINFO
+            mvprintw(staty - 1, statx, "%s", header);
+        statx += ii_getwidth(); // indent: "NN. " + IPINFO
     }
 #endif
-    mvprintw(rowstat - 1, startstat, "Host");
+    mvprintw(staty - 1, statx, "Host");
     l = maxx - hd_len - 1;
-    mvprintw(rowstat - 1, l > 0 ? l : 0, "%s", redraw_buf);
+    mvprintw(staty - 1, l > 0 ? l : 0, "%s", redraw_buf);
     if (strncmp(FLD_ACTIVE_DEFAULT, (char*)fld_active, sizeof(FLD_ACTIVE_DEFAULT))
       && strncmp(FLD_ACTIVE_JITTER, (char*)fld_active, sizeof(FLD_ACTIVE_JITTER)))
       l = snprintf(redraw_buf, sizeof(redraw_buf), "CUSTOMIZED-OUTPUT: %s", fld_active);
     else
       l = snprintf(redraw_buf, sizeof(redraw_buf), "Packets      Pings");
     l = l >= hd_len ? maxx - l : maxx - hd_len + 1;
-    mvprintw(rowstat - 2, l > 0 ? l : 0, "%s", redraw_buf);
+    mvprintw(staty - 2, l > 0 ? l : 0, "%s", redraw_buf);
     attroff(A_BOLD);
 
-    if (move(rowstat, 0) != ERR)
+    if (move(staty, 0) != ERR)
       mtr_curses_hosts(maxx - hd_len - 1);
 
   } else {
-    startstat = STARTSTAT;
+    statx = STARTSTAT;
 #ifdef IPINFO
     if (ii_ready())
-      startstat += ii_getwidth();
+      statx += ii_getwidth();
 #endif
-    int max_cols = (maxx <= (SAVED_PINGS + startstat)) ? (maxx - startstat) : SAVED_PINGS;
-    startstat -= 2;
-    mvprintw(rowstat - 1, startstat, " Last %3d pings", max_cols);
-	if (move(rowstat, 0) != ERR) {
+    int max_cols = (maxx <= (SAVED_PINGS + statx)) ? (maxx - statx) : SAVED_PINGS;
+    statx -= 2;
+    mvprintw(staty - 1, statx, " Last %3d pings", max_cols);
+	if (move(staty, 0) != ERR) {
 		attroff(A_BOLD);
 		mtr_gen_scale_gc();
-		mtr_curses_graph(startstat, max_cols);
+		mtr_curses_graph(statx, max_cols);
 		int y;
 		getyx(stdscr, y, __unused_int);
 		int re = move(y + 1, 0);

@@ -17,6 +17,7 @@
 */
 
 #include <stdio.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -169,8 +170,9 @@ void set_fld_active(const char *s) {
   strncpy((char*)fld_active, (char*)s_copy, sizeof(fld_active));
 }
 
-word str2hash(const char* s) {
-  word h = 0;
+// type must correspond 'id' in resolve HEADER (unsigned id:16)
+uint16_t str2dnsid(const char* s) {
+  uint16_t h = 0;
   int c;
   while ((c = *s++))
     h = ((h << 5) + h) ^ c; // h * 33 ^ c
@@ -437,6 +439,9 @@ static void parse_arg(int argc, char **argv) {
       break;
 
     switch (opt) {
+    case '?':
+      usage(argv[0]);
+      exit(-1);
     case 'h':
       usage(argv[0]);
       exit(0);
@@ -796,18 +801,22 @@ int main(int argc, char **argv) {
 
 #ifdef UNICODE
   bool dm_histogram = false;
+#ifdef HAVE_LOCALE_H
   char *lc_ctype = setlocale(LC_CTYPE, NULL);
   setlocale(LC_CTYPE, "");
+#ifdef HAVE_LANGINFO_H
   if (strcasecmp("UTF-8", nl_langinfo(CODESET)) == 0) {
     if (iswprint(L'▁'))
       dm_histogram = true;
     else
       perror("Unicode block elements are not printable");
   }
+#endif
   if (dm_histogram)
     curses_mode_max++;
   else
     setlocale(LC_CTYPE, lc_ctype);
+#endif
 #endif
 
   set_fld_active(FLD_ACTIVE_DEFAULT);

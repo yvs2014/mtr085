@@ -1,4 +1,4 @@
-SUBDIRS = img
+# SUBDIRS = img
 
 sbin_PROGRAMS = mtr
 man_MANS = mtr.8
@@ -23,11 +23,6 @@ endif
 
 if SPLITMODE
 mtr_SOURCES += split.c split.h
-endif
-
-if LOCAL_GETOPT
-mtr_SOURCES += getopt/getopt.c getopt/getopt1.c getopt/getopt.h
-AM_CPPFLAGS += -Igetopt
 endif
 
 if IPINFO

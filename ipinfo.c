@@ -16,10 +16,11 @@
     Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 */
 
-#include <unistd.h>
 #include <stdio.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 #include <errno.h>
 #include <search.h>
 #include <sys/types.h>
@@ -30,17 +31,9 @@
 #include <netinet/in.h>
 #include <resolv.h>
 #include <sys/socket.h>
+#include <arpa/nameser.h>
 
 #include "config.h"
-
-#ifdef __APPLE__
-#define BIND_8_COMPAT
-#endif
-#include <arpa/nameser.h>
-#ifdef HAVE_ARPA_NAMESER_COMPAT_H
-#include <arpa/nameser_compat.h>
-#endif
-
 #include "mtr.h"
 #include "net.h"
 #include "dns.h"
@@ -251,8 +244,8 @@ static void add_rec(char *hkey) {
     IILOG_MSG("Key %s: add %s", hkey, buff);
 }
 
-static ENTRY* search_hashed_id(word id) {
-    word ids[2] = { id, 0 };
+static ENTRY* search_hashed_id(uint16_t id) {
+    uint16_t ids[2] = { id, 0 };
     ENTRY *hr, item = { (void*)ids };
     if (!(hr = hsearch(item, FIND))) {
         IILOG_MSG("hsearch(FIND): key=%d not found", id);
@@ -453,7 +446,7 @@ static void process_http_response(void *buff, int r) {
             if (origins[origin_no].type != 2)
                 if (origins[origin_no].ndx[0])
                     re_ndx = origins[origin_no].ndx[0] - 1;
-            if (!(hr = search_hashed_id(str2hash((*items)[re_ndx])))) {
+            if (!(hr = search_hashed_id(str2dnsid((*items)[re_ndx])))) {
                 IILOG_MSG("%s(): got unknown reply #%d: \"%s\"", __FUNCTION__, reply, (*items)[re_ndx]);
                 continue;
             }
@@ -520,7 +513,7 @@ static void process_whois_response(void *buff, int r) {
     }
 
     ENTRY *hr;
-    if (!(hr = search_hashed_id(str2hash(last_request))))
+    if (!(hr = search_hashed_id(str2dnsid(last_request))))
         IILOG_RET("%s(): got unknown reply: \"%s\"", __FUNCTION__, (char*)buff);
 
     for (int i = 0; (i < IPINFO_MAX_ITEMS) && origins[origin_no].name[i]; i++)
@@ -626,7 +619,7 @@ static int open_tcp_connection(void) {
 typedef int (*open_connection_f)(void);
 static open_connection_f open_connection[] = { init_dns, open_tcp_connection, open_tcp_connection, open_tcp_connection };
 
-static int send_dns_query(const char *request, word id) {
+static int send_dns_query(const char *request, uint32_t id) {
     unsigned char buff[RECV_BUFF_SZ];
     int r = res_mkquery(QUERY, request, C_IN, T_TXT, NULL, 0, NULL, buff, RECV_BUFF_SZ);
     if (r < 0) {
@@ -638,23 +631,23 @@ static int send_dns_query(const char *request, word id) {
     return sendto(origins[origin_no].fd, buff, r, 0, (struct sockaddr *)&myres.nsaddr_list[0], sizeof(struct sockaddr));
 }
 
-static int send_http_query(const char *request, word id) {
+static int send_http_query(const char *request, uint32_t id) {
     char buff[RECV_BUFF_SZ];
     snprintf(buff, sizeof(buff), "GET %s HTTP/1.1\r\nHost: %s\r\nUser-Agent: mtr/%s\r\nAccept: */*\r\n\r\n", request, origins[origin_no].host, MTR_VERSION);
     return send(origins[origin_no].fd, buff, strlen(buff), 0);
 }
 
-static int send_whois_query(const char *request, word id) {
+static int send_whois_query(const char *request, uint32_t id) {
     char buff[RECV_BUFF_SZ];
     snprintf(buff, sizeof(buff), "%s\r\n", request);
     return send(origins[origin_no].fd, buff, strlen(buff), 0);
 }
 
-typedef int (*send_query_f)(const char*, word);
+typedef int (*send_query_f)(const char*, uint32_t);
 static send_query_f send_query[] = { send_dns_query, send_http_query, send_http_query, send_whois_query };
 
 static int ii_send_query(const char *lkey, const char *hkey) {
-    word id[2] = { str2hash(hkey), 0 };
+    uint16_t id[2] = { str2dnsid(hkey), 0 };
     ENTRY item = { (void*)id };
     if (hsearch(item, FIND)) {
 //        IILOG_MSG("Query %s (id=%d) on the waitlist", lookup_key, id[0]);
@@ -788,8 +781,10 @@ char* ii_getheader(void) {
     int l = 0;
     for (int i = 0; i < IPINFO_MAX_ITEMS; i++) {
         int no = ipinfo_no[i];
+        if ((no < 0) || (no >= ipinfo_max) || (l >= NAMELEN))
+            break;
         char *name = origins[origin_no].name[no];
-        if ((no < 0) || (no >= ipinfo_max) || (l >= NAMELEN) || !name)
+        if (!name)
             break;
         snprintf(fmt, sizeof(fmt), FIELD_FMT, origins[origin_no].width[no]);
         char *sname = origins[origin_no].substitution[no];

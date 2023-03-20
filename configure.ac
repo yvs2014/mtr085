@@ -9,12 +9,14 @@ m4_version_prereq([2.70],, [AC_PROG_CC_C99])
 AM_PROG_CC_C_O
 AC_PROG_RANLIB
 
-AC_CHECK_SIZEOF(unsigned char, 1)
-AC_CHECK_SIZEOF(unsigned short, 2)
-AC_CHECK_SIZEOF(unsigned int, 4)
-AC_CHECK_SIZEOF(unsigned long, 4)
+AC_SEARCH_LIBS([pow], [m],, AC_MSG_ERROR(No math library found))
+AC_SEARCH_LIBS([socket], [socket],, AC_MSG_ERROR(No socket library found))
+AC_SEARCH_LIBS([gethostbyname], [nsl],, AC_MSG_ERROR(No nameservice library found))
 
-AC_CHECK_HEADERS(sys/types.h fcntl.h socket.h sys/socket.h sys/xti.h arpa/nameser_compat.h)
+AC_ARG_ENABLE(ipv6,
+	AS_HELP_STRING([--disable-ipv6], [do not enable IPv6]),
+	ipv6=$enableval, ipv6=yes)
+AS_IF([test "x$ipv6" = "xyes"], [AC_DEFINE([ENABLE_IPV6], [], [Define to enable IPv6])])
 
 AC_ARG_WITH(curses,
 	AS_HELP_STRING([--without-curses], [without Curses library]),
@@ -43,31 +45,21 @@ AS_IF([test "x$unicode" = "xyes"], [
 		AC_DEFINE([HAVE_USE_DEFAULT_COLORS], [1], [Define this if your curses library has the use_default_colors() command.]))
 	AC_DEFINE(CURSES, 1, Build with curses support)
 ], [
-
-AS_IF([test "x$curses" = "xyes"], [
-AC_CHECK_HEADERS(ncurses.h ncurses/curses.h curses.h cursesX.h, break)
-
-# We don't refer to any symbols in termcap, but -lcurses on SunOS does.
-# We have to trust the linker not to mess things up... (It should not
-# pull in anything if we don't refer to anything in the lib).
-AC_CHECK_LIB(termcap, tgetent)
-AC_CHECK_LIB(tinfo, tgetent)
-
-AC_CHECK_FUNC(initscr, ,
-  AC_CHECK_LIB(ncurses, initscr, ,
-    AC_CHECK_LIB(curses, initscr, ,
-      AC_CHECK_LIB(cursesX, initscr,
-	AC_DEFINE(CURSES, 1, Build with curses support),
-	AC_MSG_WARN(Building without curses display support)))))
-
-AC_SEARCH_LIBS([use_default_colors], [ncurses curses],
-  AC_DEFINE(HAVE_USE_DEFAULT_COLORS, 1, [Define this if your curses library has the use_default_colors() command.]))
+	AS_IF([test "x$curses" = "xyes"], [
+	AC_CHECK_HEADERS([ncurses.h ncurses/curses.h curses.h cursesX.h], break)
+	AC_SEARCH_LIBS([tgetent], [termcap tinfo])
+	AC_SEARCH_LIBS([initscr], [ncurses curses cursesX],
+		AC_DEFINE(CURSES, 1, Build with curses support),
+		AC_MSG_WARN(Building without curses display support))
+	AC_SEARCH_LIBS([use_default_colors], [ncurses curses],
+		AC_DEFINE([HAVE_USE_DEFAULT_COLORS], [1], [Define this if your curses library has the use_default_colors() command.]))
 ])
 ])
 
-AC_CHECK_FUNCS(attron fcntl)
-
-AC_CHECK_LIB(m, floor, , AC_MSG_ERROR(No math library found))
+AC_ARG_WITH([libidn],
+	AS_HELP_STRING([--with-libidn], [IDN support (libidn)]),
+	[libidn="${withval}"], [libidn=no])
+AM_CONDITIONAL([LIBIDN], [test "x$libidn" = "xyes"])
 
 AC_ARG_WITH([libasan],
 	AS_HELP_STRING([--with-libasan], [build with AddressSanitizer]),
@@ -85,43 +77,14 @@ AC_ARG_WITH([graphcairo_xcb],
 	[graphcairo_xcb="${withval}"], [graphcairo_xcb=no])
 AS_IF([test "x$curses" = "xno"], [graphcairo_xcb=no])
 AM_CONDITIONAL([GRAPHCAIRO_XCB], [test "x$graphcairo_xcb" = "xyes"])
-
+dnl
 AC_ARG_WITH([graphcairo_xlib],
 	AS_HELP_STRING([--with-graphcairo-xlib], [Cairo graph with Xlib backend]),
 	[graphcairo_xlib="${withval}"], [graphcairo_xlib=no])
 AS_IF([test "x$curses" = "xno"], [graphcairo_xlib=no])
 AM_CONDITIONAL([GRAPHCAIRO_XLIB], [test "x$graphcairo_xlib" = "xyes"])
-
-AM_CONDITIONAL([GRAPHCAIRO], [test "x$graphcairo_xcb" = "xyes" -o "x$graphcairo_xlib" = "xyes"])
-
-AC_ARG_WITH([libidn],
-	AS_HELP_STRING([--with-libidn], [IDN support (libidn)]),
-	[libidn="${withval}"], [libidn=no])
-AM_CONDITIONAL([LIBIDN], [test "x$libidn" = "xyes"])
-
-AC_ARG_WITH([sys_getopt],
-	    AS_HELP_STRING([--without-sys-getopt], [do not use your system getopt]),
-	[sys_getopt="${withval}"], [sys_getopt=yes])
-AM_CONDITIONAL([LOCAL_GETOPT], [test "x$sys_getopt" = "xno"])
-
-
 dnl
-dnl Add some syslog debug: net, dns, ipinfo
-
-AC_ARG_WITH([syslog_net],
-	AS_HELP_STRING([--with-syslog-net], [Enable debug: net syslog]),
-	[syslog_net="${withval}"], [syslog_net=no])
-AS_IF([test "x$syslog_net" != "xno"], [AC_DEFINE([LOG_NET], 1, [Enable debug: net syslog])])
-
-AC_ARG_WITH([syslog_dns],
-	AS_HELP_STRING([--with-syslog-dns], [Enable debug: dns syslog]),
-	[syslog_dns="${withval}"], [syslog_dns=no])
-AS_IF([test "x$syslog_dns" != "xno"], [AC_DEFINE([LOG_DNS], 1, [Enable debug: dns syslog])])
-
-AC_ARG_WITH([syslog_ipinfo],
-	AS_HELP_STRING([--with-syslog-ipinfo], [Enable debug: ipinfo syslog]),
-	[syslog_ipinfo="${withval}"], [syslog_ipinfo=no])
-AS_IF([test "x$syslog_ipinfo" != "xno"], [AC_DEFINE([LOG_IPINFO], 1, [Enable debug: ipinfo syslog])])
+AM_CONDITIONAL([GRAPHCAIRO], [test "x$graphcairo_xcb" = "xyes" -o "x$graphcairo_xlib" = "xyes"])
 
 
 dnl
@@ -153,12 +116,27 @@ AC_ARG_WITH([output_json],
 	[output_json="${withval}"], [output_json=yes])
 AS_IF([test "x$output_json" != "xno"], [AC_DEFINE([OUTPUT_FORMAT_JSON], 1, [Support JSON output format])])
 
-dnl IPv6 support
-AC_ARG_ENABLE(ipv6,
-	AS_HELP_STRING([--disable-ipv6], [do not enable IPv6]),
-	WANTS_IPV6=$enableval, WANTS_IPV6=yes)
 
 dnl
+dnl Add some syslog debug: net, dns, ipinfo
+
+AC_ARG_WITH([syslog_net],
+	AS_HELP_STRING([--with-syslog-net], [Enable debug: net syslog]),
+	[syslog_net="${withval}"], [syslog_net=no])
+AS_IF([test "x$syslog_net" != "xno"], [AC_DEFINE([LOG_NET], 1, [Enable debug: net syslog])])
+
+AC_ARG_WITH([syslog_dns],
+	AS_HELP_STRING([--with-syslog-dns], [Enable debug: dns syslog]),
+	[syslog_dns="${withval}"], [syslog_dns=no])
+AS_IF([test "x$syslog_dns" != "xno"], [AC_DEFINE([LOG_DNS], 1, [Enable debug: dns syslog])])
+
+AC_ARG_WITH([syslog_ipinfo],
+	AS_HELP_STRING([--with-syslog-ipinfo], [Enable debug: ipinfo syslog]),
+	[syslog_ipinfo="${withval}"], [syslog_ipinfo=no])
+AS_IF([test "x$syslog_ipinfo" != "xno"], [AC_DEFINE([LOG_IPINFO], 1, [Enable debug: ipinfo syslog])])
+
+
+dnl don't break anything if pkg-config is absent
 m4_ifndef([PKG_CHECK_MODULES], [m4_defun([PKG_CHECK_MODULES], [AC_MSG_ERROR([
   Could not locate the pkg-config automake macros, these are usually located in
     .../share/aclocal/pkg.m4
@@ -203,123 +181,14 @@ AS_IF([test "x$libidn" = "xyes"], [
 	])
 ])
 
-AS_IF([test "x$sys_getopt" = "xyes"], [
-	AC_CHECK_HEADERS([getopt.h])
-	AC_CHECK_FUNCS([getopt_long], AC_DEFINE([HAVE_GETOPT_LONG]), AC_MSG_ERROR([No system getopt_long found]))
-])
-
-AC_CHECK_FUNC(socket, ,
-  AC_CHECK_LIB(socket, socket, , AC_MSG_ERROR(No socket library found)))
-
-AC_CHECK_FUNC(gethostbyname, ,
-  AC_CHECK_LIB(nsl, gethostbyname, , AC_MSG_ERROR(No nameservice library found)))
-
-#AC_CHECK_FUNC(res_init, ,
-#  AC_CHECK_LIB(bind, res_init, ,
-#   AC_CHECK_LIB(resolv, res_init, , AC_MSG_ERROR(No resolver library found))))
-
-AC_CHECK_FUNCS(seteuid)
-#  AC_CHECK_FUNC(setuid, , AC_MSG_ERROR (I Need either seteuid or setuid))
-
-#AC_CHECK_FUNC(res_mkquery, ,
-#  AC_CHECK_LIB(bind, res_mkquery, ,
-#   AC_CHECK_LIB(resolv, res_mkquery, ,
-#     AC_CHECK_LIB(resolv, __res_mkquery, , AC_MSG_ERROR(No resolver library found)))))
-
-# See if a library is needed for res_mkquery and if so put it in RESOLV_LIBS
-RESOLV_LIBS=
-AC_SUBST(RESOLV_LIBS)
-AC_DEFUN([LIBRESOLVTEST_SRC], [
-AC_LANG_PROGRAM([[
-#include <netinet/in.h>
-#include <resolv.h>
-]], [[
-int (*res_mkquery_func)(int,...) = (int (*)(int,...))res_mkquery;
-(void)(*res_mkquery_func)(0);
-]])])
-AC_MSG_CHECKING([whether library required for res_mkquery])
-RESOLV_LIB_NONE=
-AC_LINK_IFELSE([LIBRESOLVTEST_SRC],
-	[AC_MSG_RESULT([no])
-	RESOLV_LIB_NONE=yes],
-	[AC_MSG_RESULT([yes])])
-if test "x$RESOLV_LIB_NONE" = "x"; then
-	AC_MSG_CHECKING([for res_mkquery in -lbind])
-	STASH_LIBS="$LIBS"
-	LIBS="$STASH_LIBS -lbind"
-	AC_LINK_IFELSE([LIBRESOLVTEST_SRC],
-		[AC_MSG_RESULT([yes])
-		RESOLV_LIBS=-lbind],
-		[AC_MSG_RESULT([no])])
-	if test "x$RESOLV_LIBS" = "x"; then
-		AC_MSG_CHECKING([for res_mkquery in -lresolv])
-		LIBS="$STASH_LIBS -lresolv"
-		AC_LINK_IFELSE([LIBRESOLVTEST_SRC],
-			[AC_MSG_RESULT([yes])
-			RESOLV_LIBS=-lresolv],
-			[AC_MSG_RESULT([no])
-                        AC_MSG_ERROR(No resolver library found)])
-	fi
-	LIBS="$STASH_LIBS"
-fi
-
-USES_IPV6=
-AC_CHECK_FUNC(getaddrinfo,
-[if test "$WANTS_IPV6" = "yes"; then
-	AC_DEFINE([ENABLE_IPV6], [], [Define to enable IPv6])
-	USES_IPV6=yes
-fi])
-
-AC_CHECK_TYPE(socklen_t, AC_DEFINE([HAVE_SOCKLEN_T], [], [Define if your system has socklen_t]) , , [[
-#include <netinet/in.h>
-#ifdef HAVE_SOCKET_H
-#include <socket.h>
-#endif
-#ifdef HAVE_SYS_SOCKET_H
-#include <sys/socket.h>
-#endif
-]])
-
-AC_CHECK_TYPE(struct in_addr, AC_DEFINE([HAVE_STRUCT_INADDR], [], [Define if you have struct in_addr]), , [[
-#include <netinet/in.h>
-]])
-
 dnl Add C flags to display more warnings
 AC_MSG_CHECKING(for C flags to get more warnings)
-ac_save_CFLAGS="$CFLAGS"
-if test "x$ac_cv_c_compiler_gnu" = "xyes" ; then
-  extra_CFLAGS="-Wall"
-else
-  dnl Vendor supplied C compilers are a bit tricky
-  case "$host_os" in
-    dnl SGI IRIX with the MipsPRO C compiler
-    irix*)
-      CFLAGS="$CFLAGS -fullwarn"
-      AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[#include <stdio.h>]], [[printf("test");]])],[extra_CFLAGS="-fullwarn"],[])
-      ;;
-
-    dnl SunOS 4.x with the SparcWorks(?) acc compiler
-    sunos*)
-        if "$CC" = "acc" ; then
-          CFLAGS="$CFLAGS -vc"
-          AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[#include <stdio.h>]], [[printf("test");]])],[extra_CFLAGS="-vc"],[])
-        fi
-      ;;
-
-    dnl Unknown, do nothing
-    *)
-      extra_CFLAGS="none"
-      ;;
-  esac
-fi
-CFLAGS="$ac_save_CFLAGS"
-if test "$extra_CFLAGS" = "none" ; then
-  AC_MSG_RESULT(none)
-else
-  CFLAGS="$CFLAGS $extra_CFLAGS"
-  AC_MSG_RESULT($extra_CFLAGS)
-fi
-
+AS_IF([test "x$ac_cv_c_compiler_gnu" = "xyes"], [
+	CFLAGS="$CFLAGS -Wall"
+	AC_MSG_RESULT([-Wall])
+], [
+	AC_MSG_RESULT([none provided])
+])
 
 AC_CONFIG_HEADERS([config.h])
 AH_TOP([
@@ -329,6 +198,9 @@ AH_TOP([
 AH_BOTTOM([
 #endif
 ])
-AC_CONFIG_FILES([Makefile img/Makefile])
+
+dnl AC_CONFIG_FILES([Makefile img/Makefile])
+AC_CONFIG_FILES([Makefile])
+
 AC_OUTPUT
 

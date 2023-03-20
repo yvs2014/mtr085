@@ -26,20 +26,17 @@
 #include <netinet/udp.h>
 #include <netinet/ip_icmp.h>
 #include <memory.h>
-#include <unistd.h>
 #include <stdio.h>
+#include <stdint.h>
 #include <stdlib.h>
-#include <math.h>
-#include <errno.h>
 #include <string.h>
+#include <unistd.h>
+#include <errno.h>
+#include <math.h>
 #include <time.h>
+#include <fcntl.h>
 
 #include "config.h"
-
-#ifdef HAVE_FCNTL_H
-#include <fcntl.h>
-#endif
-
 #include "mtr.h"
 #include "net.h"
 #include "select.h"
@@ -68,34 +65,34 @@
     the fields have different names between, for instance, Linux and
     Solaris  */
 struct ICMPHeader {
-  uint8 type;
-  uint8 code;
-  uint16 checksum;
-  uint16 id;
-  uint16 sequence;
+  uint8_t type;
+  uint8_t code;
+  uint16_t checksum;
+  uint16_t id;
+  uint16_t sequence;
 };
 
 /* Structure of an IPv4 UDP pseudoheader.  */
 struct UDPv4PHeader {
-  uint32 saddr;
-  uint32 daddr;
-  uint8 zero;
-  uint8 protocol;
-  uint16 len;
+  uint32_t saddr;
+  uint32_t daddr;
+  uint8_t zero;
+  uint8_t protocol;
+  uint16_t len;
 };
 
 /*  Structure of an IP header.  */
 struct IPHeader {
-  uint8 version;
-  uint8 tos;
-  uint16 len;
-  uint16 id;
-  uint16 frag;
-  uint8 ttl;
-  uint8 protocol;
-  uint16 check;
-  uint32 saddr;
-  uint32 daddr;
+  uint8_t version;
+  uint8_t tos;
+  uint16_t len;
+  uint16_t id;
+  uint16_t frag;
+  uint8_t ttl;
+  uint8_t protocol;
+  uint16_t check;
+  uint32_t saddr;
+  uint32_t daddr;
 };
 
 #ifndef SOL_IP
@@ -679,7 +676,7 @@ void net_process_return(void) {
   switch (mtrtype) {
   case IPPROTO_ICMP:
     if (header->type == echoreplytype) {
-      if (header->id != (uint16)mypid)
+      if (header->id != (uint16_t)mypid)
         return;
       sequence = header->sequence;
       reason = RE_PONG;
@@ -695,7 +692,7 @@ void net_process_return(void) {
       break;
 #endif
       }
-      if (header->id != (uint16)mypid)
+      if (header->id != (uint16_t)mypid)
         return;
       sequence = header->sequence;
       NETLOG_MSG("ICMP: net_process_return(): id=%u, seq=%d, type=%d, code=%d",
@@ -863,16 +860,15 @@ int net_send_batch(void) {
 
 
 static void set_fd_flags(int fd) {
-#if defined(HAVE_FCNTL) && defined(FD_CLOEXEC)
   int oldflags;
-
-  if (fd < 0) return;
-
+  if (fd < 0)
+    return;
   oldflags = fcntl(fd, F_GETFD);
   if (oldflags == -1) {
     perror("Couldn't get fd's flags");
     return;
   }
+#ifdef FD_CLOEXEC
   if (fcntl(fd, F_SETFD, oldflags | FD_CLOEXEC))
     perror("Couldn't set fd's flags");
 #endif
@@ -1091,27 +1087,27 @@ void sockaddrtop( struct sockaddr * saddr, char * strptr, size_t len ) {
 }
 
 // Decode MPLS
-void decodempls(int num, const uint8 *packet, mpls_data_t *mpls, int off) {
+void decodempls(int num, const uint8_t *packet, mpls_data_t *mpls, int off) {
   /* loosely derived from the traceroute-nanog.c
    * decoding by Jorge Boncompte */
-  uint32 ver = packet[off] >> 4;
-  uint32 res = packet[off++] & 15;   // +1
+  uint32_t ver = packet[off] >> 4;
+  uint32_t res = packet[off++] & 15;   // +1
   res += packet[off++];              // +2
-  uint32 chk = packet[off++] << 8;   // +3
+  uint32_t chk = packet[off++] << 8;   // +3
   chk += packet[off++];              // +4
   // Check for ICMP extension header
   if ((ver == 2) && (res == 0) && chk && (num >= (off + 2))) {
-    uint32 len = packet[off++] << 8; // +5
+    uint32_t len = packet[off++] << 8; // +5
     len += packet[off++];            // +6
-    uint8 class = packet[off++];     // +7
-    uint8 type  = packet[off++];     // +8
+    uint8_t class = packet[off++];     // +7
+    uint8_t type  = packet[off++];     // +8
     // make sure we have an MPLS extension
     if ((len >= 8) && (class == 1) && (type == 1)) {
-      uint8 n = (len - 4) / 4;
+      uint8_t n = (len - 4) / 4;
       mpls->n = (n > MAXLABELS) ? MAXLABELS : n;
       for (int i = 0; (i < mpls->n) && (num >= off); i++) {
         // piece together the 20 byte label value
-        uint32 l = packet[off++] << 12; // +1
+        uint32_t l = packet[off++] << 12; // +1
         l |= packet[off++] << 4;        // +2
         l |= packet[off] >> 4;
         mpls->label[i].lab = l;

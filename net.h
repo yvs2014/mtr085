@@ -19,11 +19,11 @@
 #ifndef NET_H
 #define NET_H
 
-/*  Prototypes for functions in net.c  */
 #include <netdb.h>
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
+#include <stdint.h>
 
 #include "config.h"
 #ifdef ENABLE_IPV6
@@ -130,7 +130,7 @@ int net_duplicate(int at, int seq);
 bool net_process_tcp_fds(void);
 
 void sockaddrtop(struct sockaddr *saddr, char *strptr, size_t len);
-void decodempls(int num, const uint8 *packet, mpls_data_t *mpls, int off);
+void decodempls(int num, const uint8_t *packet, mpls_data_t *mpls, int off);
 const char *strlongip(ip_t *ip);
 time_t wait_usec(float t);
 int addr4cmp(const void *a, const void *b);

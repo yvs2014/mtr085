@@ -37,17 +37,9 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <arpa/nameser.h>
 
 #include "config.h"
-
-#ifndef __APPLE__
-#define BIND_8_COMPAT
-#endif
-#include <arpa/nameser.h>
-#ifdef HAVE_ARPA_NAMESER_COMPAT_H
-#include <arpa/nameser_compat.h>
-#endif
-
 #include "mtr.h"
 #include "dns.h"
 #include "net.h"
@@ -229,13 +221,14 @@ char* set_lookup_key(ip_t *ip) {
     addr2ip6arpa(ip, lookup_key);
   else /* if (af == AF_INET) */
 #endif
-    sprintf(lookup_key, "%u.%u.%u.%u.in-addr.arpa", ((byte *)ip)[3], ((byte *)ip)[2], ((byte *)ip)[1], ((byte *)ip)[0]);
+    sprintf(lookup_key, "%u.%u.%u.%u.in-addr.arpa",
+      ((uint8_t*)ip)[3], ((uint8_t*)ip)[2], ((uint8_t*)ip)[1], ((uint8_t*)ip)[0]);
   return lookup_key;
 }
 
 static void sendrequest(struct resolve *rp) {
   set_lookup_key(&(rp->ip));
-  word id = str2hash(lookup_key);
+  uint16_t id = str2dnsid(lookup_key);
   DNSLOG_MSG("Send \"%s\" (id=%d)", lookup_key, id);
 
   unsigned char buf[PACKETSZ];
@@ -277,8 +270,8 @@ static void sendrequest(struct resolve *rp) {
   }
 }
 
-static struct resolve *hfind_res(word id) {
-  word ids[2] = { id, 0 };
+static struct resolve *hfind_res(uint32_t id) {
+  uint16_t ids[2] = { id, 0 };
   ENTRY item = { (void*)ids };
   ENTRY *hr = hsearch(item, FIND);
   return ((hr) ? hr->data : hr);
@@ -288,7 +281,7 @@ const char *dns_lookup(ip_t *ip) {
   if (!enable_dns)
     return NULL;
 
-  word id = str2hash(set_lookup_key(ip));
+  uint16_t id = str2dnsid(set_lookup_key(ip));
   struct resolve *rp = hfind_res(id);
   if (rp)
     return rp->hostname;
@@ -303,7 +296,7 @@ const char *dns_lookup(ip_t *ip) {
   rp->hostname = NULL;
 
   ENTRY item;
-  word ids[2] = { id, 0 };
+  uint16_t ids[2] = { id, 0 };
   if (!(item.key = malloc(sizeof(ids)))) {
     perror("dns_lookup(): malloc()");
     free(rp);
@@ -334,8 +327,6 @@ static void parserespacket(unsigned char *buf, int l) {
   HEADER *hp = (HEADER*)buf;
 
   DNSLOG_MSG("Got %d bytes, id=%d", l, hp->id);
-  /* Convert data to host byte order */
-  /* hp->id does not need to be redundantly byte-order flipped, it is only echoed by nameserver */
   struct resolve *rp = hfind_res(hp->id);
   if (!rp)
     DNSLOG_RET("Got unknown response (id=%d)", hp->id);

@@ -21,42 +21,8 @@
 #define MTR_H
 
 #include <stdbool.h>
+#include <stdint.h>
 #include "config.h"
-
-/* Typedefs */
-
-/*  Find the proper type for 8 bits  */
-#if SIZEOF_UNSIGNED_CHAR == 1
-typedef unsigned char uint8;
-#else
-#error No 8 bit type
-#endif
-
-/*  Find the proper type for 16 bits  */
-#if SIZEOF_UNSIGNED_SHORT == 2
-typedef unsigned short uint16;
-#elif SIZEOF_UNSIGNED_INT == 2
-typedef unsigned int uint16;
-#elif SIZEOF_UNSIGNED_LONG == 2
-typedef unsigned long uint16;
-#else
-#error No 16 bit type
-#endif
-
-/*  Find the proper type for 32 bits  */
-#if SIZEOF_UNSIGNED_SHORT == 4
-typedef unsigned short uint32;
-#elif SIZEOF_UNSIGNED_INT == 4
-typedef unsigned int uint32;
-#elif SIZEOF_UNSIGNED_LONG == 4
-typedef unsigned long uint32;
-#else
-#error No 32 bit type
-#endif
-
-typedef unsigned char byte;
-typedef unsigned short word;
-typedef unsigned long dword;
 
 #ifdef ENABLE_IPV6
 typedef struct in6_addr ip_t;
@@ -64,17 +30,11 @@ typedef struct in6_addr ip_t;
 typedef struct in_addr ip_t;
 #endif
 
-#ifdef __GNUC__
-#define UNUSED __attribute__((__unused__))
-#else
-#define UNUSED
+#ifndef HAVE_SOCKLEN_T
+//typedef int socklen_t; 
 #endif
 
 #define LOG_PRIORITY LOG_INFO
-
-#ifndef HAVE_SOCKLEN_T
-typedef int socklen_t; 
-#endif
 
 #define NAMELEN	256
 #define MAXLABELS 8
@@ -157,15 +117,15 @@ extern int max_ping;
 extern bool alter_ping;
 //
 // MPLS description
-typedef struct { uint32 lab:20, exp:3, s:1, ttl:8; } mpls_label_t;
+typedef struct { uint32_t lab:20, exp:3, s:1, ttl:8; } mpls_label_t;
 typedef struct mpls_data {
   mpls_label_t label[MAXLABELS];
-  uint8 n;
+  uint8_t n;
 } mpls_data_t;
 //
 
 char *trim(char *s);
-word str2hash(const char* s);
+uint16_t str2dnsid(const char* s);
 void set_fld_active(const char *s);
 const char *mpls2str(const mpls_label_t *label, int indent);
 

@@ -23,7 +23,6 @@
 #include <unistd.h>
 #include <time.h>
 #include <string.h>
-#include <math.h>
 #include <errno.h>
 
 #include "config.h"
