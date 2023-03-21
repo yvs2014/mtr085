@@ -9,10 +9,6 @@ m4_version_prereq([2.70],, [AC_PROG_CC_C99])
 AM_PROG_CC_C_O
 AC_PROG_RANLIB
 
-AC_SEARCH_LIBS([pow], [m],, AC_MSG_ERROR(No math library found))
-AC_SEARCH_LIBS([socket], [socket],, AC_MSG_ERROR(No socket library found))
-AC_SEARCH_LIBS([gethostbyname], [nsl],, AC_MSG_ERROR(No nameservice library found))
-
 AC_ARG_ENABLE(ipv6,
 	AS_HELP_STRING([--disable-ipv6], [do not enable IPv6]),
 	ipv6=$enableval, ipv6=yes)
@@ -55,6 +51,10 @@ AS_IF([test "x$unicode" = "xyes"], [
 		AC_DEFINE([HAVE_USE_DEFAULT_COLORS], [1], [Define this if your curses library has the use_default_colors() command.]))
 ])
 ])
+
+AC_SEARCH_LIBS([pow], [m],, AC_MSG_ERROR(No math library found))
+AC_SEARCH_LIBS([socket], [socket],, AC_MSG_ERROR(No socket library found))
+AC_SEARCH_LIBS([gethostbyname], [nsl],, AC_MSG_ERROR(No nameservice library found))
 
 AC_ARG_WITH([libidn],
 	AS_HELP_STRING([--with-libidn], [IDN support (libidn)]),
@@ -201,6 +201,17 @@ AH_BOTTOM([
 
 dnl AC_CONFIG_FILES([Makefile img/Makefile])
 AC_CONFIG_FILES([Makefile])
+
+dnl fix mandir
+AC_CANONICAL_HOST
+AS_CASE([$host_os], [freebsd*|openbsd*], [fixmandir=/usr/local], [netbsd*], [fixmandir=/usr/pkg])
+AS_IF([test "x$fixmandir" != "x"], [
+	AS_IF([test "x$prefix" = "xNONE"], [chkprefix=${ac_default_prefix}], [chkprefix=${prefix}])
+	AS_CASE([$chkprefix], [$fixmandir], [
+		AC_SUBST([mandir], [${chkprefix}/man])
+		AC_MSG_NOTICE([mandir fix: $mandir])
+	])
+])
 
 AC_OUTPUT
 

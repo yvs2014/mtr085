@@ -1,222 +1,136 @@
-.TH MTR 8 "March 4, 1999" "mtr" "mtr"
-
-
-.SH NAME
-mtr - a network diagnostic tool
-
-
-.SH SYNOPSIS
-.B mtr [-abBcdefFGilmnopPQrsTuvwxyzZ46] HOSTNAME ...
-
-.SH DESCRIPTION
-
-.B mtr
+.Dd $Mdocdate$
+.Dt MTR 8
+.Os
+.Sh NAME
+.Nm mtr
+.Nd a network diagnostic tool
+.Sh SYNOPSIS
+.Nm
+.Op Fl abBcdefFGilmnopPQrsTuvwxyzZ46
+HOSTNAME ...
+.Sh DESCRIPTION
+.Nm
 combines the functionality of the
-.B traceroute
+.Sy traceroute
 and
-.B ping
+.Sy ping
 programs in a single network diagnostic tool.
-
-.PP
+.Pp
 As
-.B mtr
+.Sy Nm
 starts, it investigates the network connection between the host
-.B mtr
+.Sy Nm
 runs on and
-.BR HOSTNAME
+.Sy Ns HOSTNAME
 by sending packets with purposely low TTLs.  It continues to send packets with low TTL, noting the response time of the intervening routers.  This allows
-.B mtr
+.Sy Nm
 to print the response percentage and response times of the internet route to
-.BR HOSTNAME.
+.Sy Ns HOSTNAME.
 A sudden increase in packet loss or response time is often an indication of a bad (or simply overloaded) link.
-
-.PP
+.Pp
 The results are usually reported as round-trip-response times in miliseconds and the percentage of packetloss.
+.Sh OPTIONS
 
-.SH OPTIONS
-
-.TP
-.B -a, --address IP.ADD.RE.SS
-Use this option to bind outgoing packets' socket to specific interface, so that any packet will be sent through this interface.  NOTE that this option doesn't apply to DNS requests (which could be and could not be what you want).
-
-.TP
-.B -b, --show-ips
+.Bl -tag -width Ds
+.It Fl a, Fl -address Ar IP.ADD.RE.SS
+Use this option to bind outgoing packets' socket to specific interface, so that any packet will be sent through this interface.
+.Sy Note
+that this option doesn't apply to DNS requests (which could be and could not be what you want).
+.It Fl b, Fl -show-ips
 Use this option to tell
-.B mtr
+.Sy Nm
 to display both the host names and numeric IP numbers.  In split mode this adds an extra field to the output.  In report mode, there is usually too little space to add the IPs, and they will be truncated.  Use the wide report mode
-.B -w
+.Fl w
 to see the IPs in report mode.
-
-.TP
-.B -B, --bitpattern NUM
-Specifies bit pattern to use in payload.  Should be within range 0 - 255.
-
-.TP
-.B -c, --report-cycles COUNT
+.It Fl B, Fl -bitpattern Ar NUM
+Specifies bit pattern to use in payload.
+.br
+Should be within range 0 - 255.
+.It Fl c, Fl -report-cycles Ar COUNT
 Use this option to set the number of pings sent to determine both the machines on the network and the reliability of those machines.  Each cycle lasts one second.
-
-.TP
-.B -d, --display MODE
-Use this option to select the initial display mode:
-.RS
-.RS
-.B 1st and 2nd bits
-.RS
-.B 0
+.It Fl d, Fl -display Ar MODE
+Use this option to select the initial display mode
+.Bl -tag -offset Ds
+.It Cm 1st and 2nd bits
+.br
+.Sy 0
 default
-.RE
-
-.RS
-.B 1
+.br
+.Sy 1
 without latency information
-.RE
-
-.RS
-.B 2
+.br
+.Sy 2
 with latency information
-.RE
-
-.RS
-.B 3
+.br
+.Sy 3
 unicode histogram
-.RE
-.RE
-
-.RS
-.B 3rd bit
+.El
+.Bl -tag -offset Ds
+.It Cm 3rd bit
 reserved
-.RE
-
-.RS
-.B 4th bit
+.It Cm 4th bit
 color/mono mode, on/off
-.RE
-
-.RS
-.B 5th bit
+.It Cm 5th bit
 audible bell (beep), on/off
-.RE
-
-.RS
-.B 6th bit
+.It Cm 6th bit
 visible bell (flash), on/off
-.RE
-
-.RS
-.B 7th bit
+.It Cm 7th bit
 bell for target host only, on/off
-.RE
-
-.TP
-.B -e, --mpls
+.El
+.It Fl e, Fl -mpls
 Use this option to tell
-.B mtr
-to display information from ICMP extensions for MPLS (RFC 4950) that are encoded in the response packets.
-
-.TP
-.B -f, --first-ttl NUM
+.Sy Nm
+to display information from ICMP extensions for MPLS (RFC 4950) that are encoded in the response packets
+.It Fl f, Fl -first-ttl Ar NUM
 Specifies with what TTL to start.  Default is 1, `a' means auto (corresponding to TTL of the destination host).
-.B mtr
-
-.TP
-.B -F, --filename FILE
-Reads the list of HOSTNAMEs from the FILE.
-
-.TP
-.B -G, --graphcairo ARGUMENTS
-Use this option to use the cairo based graph drawing (if available).
-
-.RS
+.Sy Nm
+.It Fl F, Fl -filename Ar FILE
+Reads the list of HOSTNAMEs from the FILE
+.It Fl G, Fl -graphcairo Ar ARGUMENTS
+Use this option to use the cairo based graph drawing (if available)
+.Pp
 Available arguments by order:
-
-.RS
-.B 1st arg: graph type
-.RS
+.Bl -tag -offset Ds
+.It Cm 1st arg: graph type
 1 - dot, 2 - line, 3 - curve (default)
-.RE
-.RE
-
-.RS
-.B 2nd arg: viewport period
-.RS
-in N ticks, one tick - 10sec (default - 6, i.e. 60sec)
-.RE
-.RE
-
-.RS
-.B 3rd arg: legend on/off
-.RS
+.It Cm 2nd arg: viewport period
+in 10sec ticks (default 6 ticks)
+.It Cm 3rd arg: legend on/off
 0 - none, 1 - enable (default)
-.RE
-.RE
-
-.RS
-.B 4th arg: multipath on/off
-.RS
+.It Cm 4th arg: multipath on/off
 0 - none (default), 1 - enable
-.RE
-.RE
-
-.RS
-.B 5th arg: latency or jitter graph
-.RS
+.It Cm 5th arg: latency or jitter graph
 0 - latency (default), 1 - jitter
-.RE
-.RE
+.El
 
 Use `,' (comma) as argument separator
 
 Examples:
-.RS
--G,         (default: 3,6,1,1,0  - curve, 1min, legend, multipath, latency)
+.Bl -tag -width indent-two -offset Ds -compact
+.It Cm -G,30,,0
+default, 5min, default, disable, default
+.It Cm -G2
+line, default, default, default, default
+.It Cm -G,
+default 3,6,1,1,0
 .br
--G2         (line, default, default, default, default)
-.br
--G,30,,0    (default, 5min, default, disable, default)
-.br
-.RE
-
-Keys:
-.RS
-`dejnpqrtuyYz+- '
-.RE
-.RE
-
-.TP
-.B -i, --interval SECONDS
+curve, 1min, legend, multipath, latency
+.El
+.It Fl i, Fl -interval Ar SECONDS
 Use this option to specify the positive number of seconds between ICMP ECHO requests.  The default value for this parameter is one second.  The root user may choose values between zero and one.
-
-.TP
-.B -l, --output csv,raw,txt,xml
+.It Fl l, Fl -output Ar raw,txt,csv,json,xml
 .RS
-Use this option to tell
-.B mtr
-to use the CSV|RAW|TXT|XML output format.
-.RS
-- RAW is suited for archival of the measurement results
-.RE
-.RS
-- CSV is suited for automated processing
-.RE
-.RS
-- XML is suited for automated processing of the measurement results
-.RE
-.RE
-
-.TP
-.B -m, --max-ttl NUM
+Use these suboptions for automated processing
+.It Fl m, Fl -max-ttl Ar NUM
 Specifies the maximum number of hops (max time-to-live value) traceroute will probe.  Default is 30.
-
-.TP
-.B -n, --no-dns
+.It Fl n, Fl -no-dns
 Use this option to force
-.B mtr
-to display numeric IP numbers and not try to resolve the host names.
-
-.TP
-.B -o, --order FIELD-ORDER
-Use this option to specify the fields and their order when loading mtr.
-.br
+.Sy Nm
+to display numeric IP numbers and not try to resolve the host names
+.It Fl o, Fl -order Ar FIELD-ORDER
+Use this option to specify the fields and their order when loading
+.Nm
+.Pp
 Available fields:
 .TS
 center allbox tab(%);
@@ -240,212 +154,126 @@ I%Interarrival Jitter
 
 Example:
 -o "LSD NBAW"
-
-.TP
-.B -p, --split
+.It Fl p, Fl -split
 Use this option to set
-.B mtr
-to spit out a format that is suitable for a split-user interface.
-
-.TP
-.B -P, --port PORT
-The target port number for TCP traces.
-
-.TP
-.B -Q, --tos NUM
-Specifies value for type of service field in IP header.  Should be within range 0 - 255.
-
-.TP
-.B -r, --report
+.Sy Nm
+to spit out a format that is suitable for a split-user interface
+.It Fl P, Fl -port Ar PORT
+The target port number for TCP traces
+.It Fl Q, Fl -tos Ar NUM
+Specifies value for type of service field in IP header.
+.br
+Should be within range 0 - 255.
+.It Fl r, Fl -report
 This option puts
-.B mtr
+.Sy Nm
 into report mode.  When in this mode,
-.B mtr
+.Sy Nm
 will run for the number of cycles specified by the
-.B -c
+.Fl c
 option, and then print statistics and exit.
 
 This mode is useful for generating statistics about network quality.
 
 Note that each running instance of
-.B mtr
+.Sy Nm
 generates a significant amount of network traffic.  Using
-.B mtr
+.Sy Nm
 to measure the quality of your network may result in decreased network performance.
-
-.TP
-.B -s, --psize BYTES
-This option sets the packet size used for probing.  It is in bytes inclusive IP and ICMP headers
+.It Fl s, Fl -psize Ar BYTES
+This option sets the packet size used for probing.  It is in bytes inclusive IP and ICMP headers.
 
 If set to a negative number, every iteration will use a different, random packet size upto that number.
-
-.TP
-.B -T, --tcp
-Use TCP SYN packets instead of ICMP ECHO.
-
-.TP
-.B -u, --udp
-Use UDP datagrams instead of ICMP ECHO.
-
-.TP
-.B -v, --version
+.It Fl T, Fl -tcp
+Use TCP SYN packets instead of ICMP ECHO
+.It Fl u, Fl -udp
+Use UDP datagrams instead of ICMP ECHO
+.It Fl v, Fl -version
 .br
-Print the installed version of mtr.
-
-.TP
-.B -w, --report-wide
+Print the installed version of
+.Nm
+.It Fl w, Fl -report-wide
 This option puts
-.B mtr
+.Sy Nm
 into wide report mode.  When in this mode,
-.B mtr
+.Sy Nm
 will not cut hostnames in the report.
-
-.TP
-.B -x, --cache SECONDS
+.It Fl x, Fl -cache Ar SECONDS
 Cache mode. Don't ping known hops during cache-timeout period (0 means default 60 seconds).
-
-.TP
-.B -y, --ipinfo ORIGIN,FIELDS
-Use this option to specify the IP info origin and its fields.
-
-.RS
+.It Fl y, Fl -ipinfo Ar ORIGIN,FIELDS
+Use this option to specify the IP info origin and its fields
+.Pp
 Available origins and their fields:
-
-.RS
-.B 1 - origin.asn.cymru.com (both IPv4 and IPv6)
-.RS
+.Bl -tag -width indent -offset Ds
+.It Cm 1 - origin.asn.cymru.com (both IPv4 and IPv6)
 ASN, Route, CC, Registry, Allocated
-.RE
-.RE
-
-.RS
-.B 2 - asn.routeviews.org
-.RS
+.It Cm 2 - asn.routeviews.org
 ASN
-.RE
-.RE
-
-.RS
-.B 3 - origin.asn.spameatingmonkey.net
-.RS
+.It Cm 3 - origin.asn.spameatingmonkey.net
 Route, ASN, Org, Allocated, CC
-.RE
-.RE
-
-.RS
-.B 4 - ip2asn.sasm4.net:
-.RS
+.It Cm 4 - ip2asn.sasm4.net
 ASN
-.RE
-.RE
-
-.RS
-.B 5 - peer.asn.shadowserver.org
-.RS
+.It Cm 5 - peer.asn.shadowserver.org
 Peers, ASN, Route, AS Name, CC, Org
-.RE
-.RE
-
-.RS
-.B 6 - freegeoip.net [discontinued on July 1st, 2018]
-.RS
+.It Cm 6 - freegeoip.net [discontinued on July 1st, 2018]
 CC, Country, RC, Region, City, Zip, TZ, Lat, Long, MC
-.RE
-.RE
-
-.RS
-.B 7 - ip-api.com
-.RS
+.It Cm 7 - ip-api.com
 Country, CC, RC, Region, City, Zip, Lat, Long, TZ, ISP, Org, AS Name
-.RE
-.RE
-
-.RS
-.B 8 - getcitydetails.geobytes.com
-.RS
+.It Cm 8 - getcitydetails.geobytes.com
 Certainty, CC, Country, RLC, Region, RC, LC, DMA, City, CityID, FQCN, Lat, Long, Capital, TZ, Nationality, Population, NationalityPlural, MapReference, Currency, CurrencyCode, Title
-.RE
-.RE
-
-.RS
-.B 9 - ipinfo.io
-.RS
+.It Cm 9 - ipinfo.io
 City, Region, CC, Location(Lat, Long), Postal, Org
-.RE
-.RE
-
-.RS
-.B 10 - riswhois.ripe.net (both IPv4 and IPv6)
-.RS
+.It Cm 10 - riswhois.ripe.net (both IPv4 and IPv6)
 Route, Origin, Descr, CC
-.RE
-.RE
-.RE
+.El
 
-.RS
 Abbreviations:
-.RS
-CC/RC/MC/LC - Country/Region/Metro/Local Code, Org - Organization, TZ - TimeZone, DMA - Designated Market Area
-.RE
-.RE
-
-.RS
+.Bl -tag -width indent-two -offset Ds -compact
+.It Cm TZ
+TimeZone
+.It Cm Org
+Organization
+.It Cm DMA
+Designated Market Area
+.It Cm CC/RC/MC/LC
+Country/Region/Metro/Local Code
+.El
 Examples:
-.RS
--y3,5,2,3  (origin.asn.spameatingmonkey.net: CC ASN ORG)
-.br
--y,        (origin.asn.cymru.com: ASN)
-.RE
-.RE
-
-.RS
-Keys:
-.RS
-`y' switching IP info
-.br
-`Y' show on Google Maps
-.RE
-.RE
-
-.TP
-.B -z, --aslookup
-Turn on ASN lookups. Use the `z' key to toggle ASN info on/off. The data source is
-.B riswhois.ripe.net
-
-.TP
-.B -Z, --timeout SECONDS
+.Bl -tag -width indent-two -offset Ds -compact
+.It Cm -y3,5,2,3
+origin.asn.spameatingmonkey.net: CC ASN ORG
+.It Cm -y,
+origin.asn.cymru.com: ASN
+.El
+.It Fl z, Fl -aslookup
+Turn on ASN lookups. The data source is
+.Lk riswhois.ripe.net
+.It Fl Z, Fl -timeout Ar SECONDS
 The number of seconds to keep the TCP socket open before giving up on the connection.  This will only affect the final hop.  Using large values for this, especially combined with a short interval, will use up a lot of file descriptors.
+.It Fl 4
+Use IPv4 only
+.It Fl 6
+Use IPv6 only
 
-.TP
-.B -4
-Use IPv4 only.
-
-.TP
-.B -6
-Use IPv6 only.
-
-.SH BUGS
-
+.Sh BUGS
 Some modern routers give a lower priority to ICMP ECHO packets than to other network traffic.  Consequently, the reliability of these routers reported by
-.B mtr
+.Sy Nm
 will be significantly lower than the actual reliability of these routers.
-
-
-.SH CONTACT INFORMATION
-
-.PP
-For the latest version, see the mtr web page at
-.BR http://www.bitwizard.nl/mtr/ .
-
-.PP
-The mtr mailinglist was little used and is no longer active.
-
-.PP
-For patches, bug reports, or feature requests, please open an issue on GitHub at:
-.BR https://github.com/traviscross/mtr .
-
-.SH "SEE ALSO"
-
+.Sh CONTACT INFORMATION
+.Pp
+.Pp
+For more information about
+.Sy Ns Nm
+diagnostic tool, see web page at
+.Lk http://www.bitwizard.nl/mtr
+.Pp
+Project's location is
+.Lk https://github.com/traviscross/mtr
+.Pp
+This version is built from
+.Lk https://github.com/yvs2014/mtr085
+fork
+.Sh "SEE ALSO"
 traceroute(8),
-ping(8)
-TCP/IP Illustrated (Stevens, ISBN 0201633469).
+ping(8),
+TCP/IP Illustrated (Stevens, ISBN 0201633469)
