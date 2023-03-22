@@ -82,22 +82,35 @@ static int get_longest_name(int min, int max) {
   int l = min;
   int m = net_max();
   for (int at = net_min(); at < m; at++) {
-    int n = snprint_addr(buf, max, &host[at].addr);
-    if (n > l)
-      l = n;
+    for (int i = 0; i < MAXPATH; i++) {
+      int n = snprint_addr(buf, max, &IP_AT_NDX(at, i));
+      if (n > l)
+        l = n;
+    }
   }
   free(buf);
   return l;
 }
 
-static int found_addr_in_addrs(int z, ip_t *addr, ip_t *addrs) {
-  for (int w = 0; w < z; w++) { // Ok... checking if there are ips repeated on same hop
-    if (!addrcmp(addr, &(addrs[w])))
-      return 1;
+static void report_addr_extra(int at, char *bufname, char *lbuf, const char *dfmt) {
+  for (int i = 0; i < MAXPATH; i++) {
+    if (i == host[at].current)
+      continue; // because already printed
+    ip_t *addr = &IP_AT_NDX(at, i);
+    if (!unaddrcmp(addr))
+      break; // done
+    snprint_addr(bufname, MAXDNAME, addr);
+#ifdef IPINFO
+    if (ii_ready())
+      snprintf(lbuf, MAXDNAME, dfmt, fmt_ipinfo(addr), bufname);
+    else
+#endif
+      snprintf(lbuf, MAXDNAME, dfmt, bufname);
+    printf("%s\n", lbuf);
+    if (enable_mpls)
+      print_mpls(&MPLS_AT_NDX(at, i));
   }
-  return 0;
 }
-
 
 #define REPORT_FACTOR(factor) snprintf(rbuf + r, MAXDNAME - r, data_fields[j].format, net_elem(at, data_fields[j].key) factor)
 
@@ -145,23 +158,22 @@ void report_close(bool wide) {
   // without space between because all the fields on the right side are supposed to be with some indent
   printf("%s%s\n", lbuf, rbuf);
 
-
   // body
-  char *name = calloc(1, MAXDNAME);
-  assert(name);
+  char *bufname = calloc(1, MAXDNAME);
+  assert(bufname);
   int max = net_max();
 
   for (int at = net_min(); at < max; at++) {
-    ip_t *addr = &host[at].addr;
-    snprint_addr(name, MAXDNAME, addr);
+    ip_t *addr = &CURRENT_IP(at);
+    snprint_addr(bufname, MAXDNAME, addr);
 
     // body: left
 #ifdef IPINFO
     if (ii_ready())
-      snprintf(lbuf, MAXDNAME, lfmt, at + 1, fmt_ipinfo(addr), name);
+      snprintf(lbuf, MAXDNAME, lfmt, at + 1, fmt_ipinfo(addr), bufname);
     else
 #endif
-      snprintf(lbuf, MAXDNAME, lfmt, at + 1, name);
+      snprintf(lbuf, MAXDNAME, lfmt, at + 1, bufname);
 
     // body: right
     for (int i = 0, r = 0; i < sizeof(fld_active); i++) {
@@ -177,36 +189,13 @@ void report_close(bool wide) {
     // without space between because all the fields on the right side are with space-indent
     printf("%s%s\n", lbuf, rbuf);
 
+    if (enable_mpls)
+      print_mpls(&CURRENT_MPLS(at));
 
     // body-extra-lines: multipath, mpls, etc.
-    mpls_data_t *mpls = &(host[at].mpls);
-    ip_t *addrs = host[at].addrs;
-    for (int i = 1; i < MAXPATH; i++) { // starting at 1 because addrs[0] is the same that addr
-      ip_t *addr2 = addrs + i;
-      mpls_data_t *mplss = &(host[at].mplss[i]);
-      if (!unaddrcmp(addr2)) { // break from loop at the first unassigned
-        if (enable_mpls && (i == 1))
-          print_mpls(mpls);
-        break;
-      }
-      if (!found_addr_in_addrs(i, addr2, addrs)) {
-        if (enable_mpls && (i == 1))
-          print_mpls(mpls);
-        snprint_addr(name, MAXDNAME, addr2);
-#ifdef IPINFO
-        if (ii_ready())
-          snprintf(lbuf, MAXDNAME, dfmt, fmt_ipinfo(addr2), name);
-        else
-#endif
-          snprintf(lbuf, MAXDNAME, dfmt, name);
-        printf("%s\n", lbuf);
-        if (enable_mpls)
-          print_mpls(mplss);
-      }
-    }
+    report_addr_extra(at, bufname, lbuf, dfmt);
   }
-
-  free(name);
+  free(bufname);
   free(rbuf);
   free(lbuf);
 }
@@ -243,7 +232,7 @@ void xml_close(void) {
   printf("%*s<DST HOST=\"%s\">\n", XML_MARGIN, " ", dsthost);
   int max = net_max();
   for (int at = net_min(); at < max; at++) {
-    snprint_addr(buf, MAXDNAME, &host[at].addr);
+    snprint_addr(buf, MAXDNAME, &CURRENT_IP(at));
     printf("%*s<HOP TTL=\"%d\" HOST=\"%s\">\n", XML_MARGIN * 2, " ", at + 1, buf);
 
     for (int i = 0; i < MAXFLD; i++) {
@@ -256,7 +245,7 @@ void xml_close(void) {
     }
 #ifdef IPINFO
     if (ii_ready())
-      printf("%*s<IpInfo>[%s]</IpInfo>\n", XML_MARGIN * 3, " ", sep_ipinfo(&host[at].addr, ','));
+      printf("%*s<IpInfo>[%s]</IpInfo>\n", XML_MARGIN * 3, " ", sep_ipinfo(&CURRENT_IP(at), ','));
 #endif
     printf("%*s</HOP>\n", XML_MARGIN * 2, " ");
   }
@@ -282,7 +271,7 @@ void json_close(bool notfirst) {
   printf("\n%*s{\"destination\":\"%s\",\"data\":[", JSON_MARGIN, " ", dsthost);
   int min = net_min(), max = net_max();
   for (int at = min; at < max; at++) {
-    ip_t *addr = &host[at].addr;
+    ip_t *addr = &CURRENT_IP(at);
     printf((at == min) ? "\n" : ",\n");
     snprint_addr(buf, MAXDNAME, addr);
     printf("%*s{\"host\":\"%s\",\"hop\":%d,\"up\":%d", JSON_MARGIN * 2, " ", buf, at + 1, host[at].up);
@@ -337,10 +326,9 @@ void csv_close(bool notfirst) {
     }
   }
   printf("\n");
-
   int max = net_max();
   for (int at = net_min(); at < max; at++) {
-    ip_t *addr = &host[at].addr;
+    ip_t *addr = &CURRENT_IP(at);
     snprint_addr(buf, MAXDNAME, addr);
 
     printf("%s", dsthost);
@@ -375,7 +363,7 @@ static int havename[MAXHOST];
 
 void raw_rawping(int at, int msec) {
   if (!havename[at]) {
-    const char *name = dns_lookup(&host[at].addr);
+    const char *name = dns_lookup(&CURRENT_IP(at));
     if (name) {
       havename[at]++;
       printf("d %d %s\n", at, name);

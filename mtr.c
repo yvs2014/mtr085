@@ -144,14 +144,6 @@ static names_t *names = NULL;
 #define OUTPUT_FORMAT
 #endif
 
-static const char mpls_fmt[] = "%*s[Lbl:%u Exp:%u S:%u TTL:%u]";
-
-const char *mpls2str(const mpls_label_t *label, int indent) {
-  static char m2s_buf[64];
-  snprintf(m2s_buf, sizeof(m2s_buf), mpls_fmt, indent, "", label->lab, label->exp, label->s, label->ttl);
-  return m2s_buf;
-}
-
 void set_fld_active(const char *s) {
   static FLD_BUF_T s_copy;
   strncpy((char*)s_copy, s, sizeof(s_copy) - 1);

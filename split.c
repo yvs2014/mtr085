@@ -52,7 +52,7 @@ static void split_ipinfo_print(ip_t *addr) {
 void split_redraw(void) {
   int max = net_max();
   for (int at = net_min() + display_offset; at < max; at++) {
-    ip_t *addr = &host[at].addr;
+    ip_t *addr = &CURRENT_IP(at);
     printf("%2d", at + 1);
     if (unaddrcmp(addr)) {
       const char *name = dns_lookup(addr);
@@ -72,19 +72,19 @@ void split_redraw(void) {
       printf("\n");
 
       for (int i = 0; i < MAXPATH; i++) {	// multipath
-        ip_t *addrs = &(host[at].addrs[i]);
-        if (!addrcmp(addrs, addr))
-          continue;
-        if (!unaddrcmp(addrs))
+        if (i == host[at].current)
+          continue; // because already printed
+        ip_t *ip = &IP_AT_NDX(at, i);
+        if (!unaddrcmp(ip))
           break;
-        name = dns_lookup(addrs);
+        name = dns_lookup(ip);
         printf("%2d:%d", at + 1, i);
-        printf(SPLIT_SEPARATOR "%s", name ? name : strlongip(addrs));
+        printf(SPLIT_SEPARATOR "%s", name ? name : strlongip(ip));
         if (show_ips)
-          printf(SPLIT_SEPARATOR "%s", strlongip(addrs));
+          printf(SPLIT_SEPARATOR "%s", strlongip(ip));
 #ifdef IPINFO
         if (ii_ready())
-          split_ipinfo_print(addrs);
+          split_ipinfo_print(ip);
 #endif
         printf("\n");
       }

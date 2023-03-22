@@ -113,17 +113,9 @@ extern bool interactive;
 extern int max_ping;
 extern bool alter_ping;
 //
-// MPLS description
-typedef struct { uint32_t lab:20, exp:3, s:1, ttl:8; } mpls_label_t;
-typedef struct mpls_data {
-  mpls_label_t label[MAXLABELS];
-  uint8_t n;
-} mpls_data_t;
-//
 
 char *trim(char *s);
 uint16_t str2dnsid(const char* s);
 void set_fld_active(const char *s);
-const char *mpls2str(const mpls_label_t *label, int indent);
 
 #endif

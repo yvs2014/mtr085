@@ -361,22 +361,20 @@ static int print_stat(int at, int y, int start, int max) { // statistics
   return move(y + 1, 0);
 }
 
-static void print_addr_extra(int at, int y, ip_t *addr) { // mpls + multipath
-  if (enable_mpls)
-    printw_mpls(&host[at].mpls);
+static void print_addr_extra(int at, int y) { // mpls + multipath
   for (int i = 0; i < MAXPATH; i++) {  // multipath
-    ip_t *addrs = &(host[at].addrs[i]);
-    if (!addrcmp(addrs, addr))
-      continue;
-    if (!unaddrcmp(addrs))
+    if (i == host[at].current)
+      continue; // because already printed
+    ip_t *addr = &IP_AT_NDX(at, i);
+    if (!unaddrcmp(addr))
       break;
     printw("    ");
-    printw_addr(addrs, host[at].up);
+    printw_addr(addr, host[at].up);
     getyx(stdscr, y, __unused_int);
     if (move(y + 1, 0) == ERR)
         break;
     if (enable_mpls)
-      if (printw_mpls(&(host[at].mplss[i])) == ERR)
+      if (printw_mpls(&MPLS_AT_NDX(at, i)) == ERR)
         break;
   }
 }
@@ -388,7 +386,7 @@ static void mtr_curses_hosts(int statx) {
     getyx(stdscr, y, __unused_int);
     move(y, 0);
     printw("%2d. ", at + 1);
-    ip_t *addr = &host[at].addr;
+    ip_t *addr = &CURRENT_IP(at);
     if (!unaddrcmp(addr)) {
       printw("%s", UNKN_ITEM);
       if (move(y + 1, 0) == ERR)
@@ -401,7 +399,9 @@ static void mtr_curses_hosts(int statx) {
       printw_addr(addr, host[at].up);
       if (print_stat(at, y, statx, max) == ERR)
         break;
-      print_addr_extra(at, y, addr);
+      if (enable_mpls)
+        printw_mpls(&CURRENT_MPLS(at));
+      print_addr_extra(at, y);
     }
   }
   move(2, 0);
@@ -552,7 +552,7 @@ static void mtr_curses_graph(int statx, int cols) {
 		move(y, 0);
 		printw("%2d. ", at + 1);
 
-		ip_t *addr = &host[at].addr;
+		ip_t *addr = &CURRENT_IP(at);
 		if (!unaddrcmp(addr)) {
 			printw("%s", UNKN_ITEM);
 			if (move(y + 1, 0) == ERR)

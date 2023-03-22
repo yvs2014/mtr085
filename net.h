@@ -83,9 +83,27 @@ extern int (*unaddrcmp)(const void *);
 extern int (*addrcmp)(const void *a, const void *b);
 extern void* (*addrcpy)(void *a, const void *b);
 
+// MPLS description
+typedef struct { uint32_t lab:20, exp:3, s:1, ttl:8; } mpls_label_t;
+typedef struct mpls_data {
+  mpls_label_t label[MAXLABELS]; // N x 32b labels
+  uint8_t n;
+} mpls_data_t;
+
+// Address(es) plus associated data
+typedef struct eaddr {
+  ip_t ip;
+  mpls_data_t mpls;
+  char *info[10]; // TODO: add ipinfo
+} eaddr_t;
+
+// Hop description
 struct nethost {
-  ip_t addr;
-  ip_t addrs[MAXPATH]; // for multi paths byMin
+  // addresses with all associated data (dns names, mpls labels, extended ip info)
+  eaddr_t eaddr[MAXPATH];
+  int current; // index of the last received address
+  //
+  // a lot of statistics
   int xmit;
   int returned;
   int sent;
@@ -103,11 +121,15 @@ struct nethost {
   int transit;
   int saved[SAVED_PINGS];
   int saved_seq_offset;
-  mpls_data_t mpls;
-  mpls_data_t mplss[MAXPATH];
   time_t seen;         // timestamp for caching, last seen
 };
 extern struct nethost host[];
+
+// helpful macros
+#define CURRENT_IP(at)   (host[at].eaddr[host[at].current].ip)
+#define CURRENT_MPLS(at) (host[at].eaddr[host[at].current].mpls)
+#define IP_AT_NDX(at, ndx) (host[at].eaddr[ndx].ip)
+#define MPLS_AT_NDX(at, ndx) (host[at].eaddr[ndx].mpls)
 
 extern char localaddr[];
 
@@ -137,5 +159,7 @@ int addr4cmp(const void *a, const void *b);
 int addr6cmp(const void *a, const void *b);
 void* addr4cpy(void *a, const void *b);
 void* addr6cpy(void *a, const void *b);
+
+const char *mpls2str(const mpls_label_t *label, int indent);
 
 #endif

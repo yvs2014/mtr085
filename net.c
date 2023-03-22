@@ -487,13 +487,64 @@ static void tcp_seq_close(unsigned at) {
   }
 }
 
-// We got a return on something we sent out. Record the address and time.
+
+static void fill_host_stat(int at, time_t curr, int saved_seq) {
+  host[at].jitter = ABS(curr - host[at].last);
+  host[at].last = curr;
+
+  if (host[at].returned < 1) {
+    host[at].best = host[at].worst = host[at].gmean = curr;
+    host[at].avg = host[at].var = host[at].jitter = host[at].jworst = host[at].jinta = 0;
+  }
+
+  if (curr < host[at].best)
+     host[at].best = curr;
+  if (curr > host[at].worst)
+     host[at].worst = curr;
+  if (host[at].jitter > host[at].jworst)
+     host[at].jworst = host[at].jitter;
+
+  host[at].returned++;
+  int oldavg = host[at].avg;
+  host[at].avg += ((double)(curr - oldavg)) / host[at].returned;
+  host[at].var += ((double)(curr - oldavg)) * (curr - host[at].avg) / 1000000;
+
+  int oldjavg = host[at].javg;
+  host[at].javg += (host[at].jitter - oldjavg) / host[at].returned;
+  /* below algorithm is from rfc1889, A.8 */
+  host[at].jinta += host[at].jitter - ((host[at].jinta + 8) >> 4);
+
+  if (host[at].returned > 1)
+    host[at].gmean =
+      pow((double)host[at].gmean, (host[at].returned - 1.0) / host[at].returned)
+      * pow((double)curr, 1.0 / host[at].returned);
+  host[at].sent = 0;
+  host[at].up = 1;
+  host[at].transit = 0;
+  if (cache_mode)
+    host[at].seen = time(NULL);
+
+  int ndx = saved_seq - host[at].saved_seq_offset;
+  if ((ndx >= 0) && (ndx <= SAVED_PINGS))
+    host[at].saved[ndx] = curr;
+}
+
+int addr2ndx(int hop, ip_t *addr) { // return index of 'addr' at 'hop', otherwise -1
+  for (int i = 0; i < MAXPATH; i++)
+    if (!addrcmp(&IP_AT_NDX(hop, i), addr))
+      return i;
+  return -1;
+}
+
+int at2next(int hop) { // return first free slot at 'hop', otherwise -1
+  for (int i = 0; i < MAXPATH; i++)
+    if (!unaddrcmp(&IP_AT_NDX(hop, i)))
+      return i;
+  return -1;
+}
+
+// We got a return on something
 static void net_process_ping(unsigned port, const mpls_data_t *mpls, const void *addr, struct timeval now, int reason) {
-  ip_t addrcopy;
-
-  /* Copy the from address ASAP because it can be overwritten */
-  addrcpy(&addrcopy, addr);
-
   unsigned seq = port % SEQ_MAX;
   if (!sequence[seq].transit)
     return;
@@ -503,90 +554,44 @@ static void net_process_ping(unsigned port, const mpls_data_t *mpls, const void 
   if (mtrtype == IPPROTO_TCP)
     tcp_seq_close(seq);
 
-  int index = sequence[seq].index;
+  int at = sequence[seq].index;
   if (reason == RE_UNREACH) {
-    if (index < stopper)
-      stopper = index; // set stopper
-  } else if (stopper == index)
+    if (at < stopper)
+      stopper = at;    // set stopper
+  } else if (stopper == at)
     stopper = MAXHOST; // clear stopper
 
-  if (index > stopper) // return unless reachable
+  if (at > stopper)    // return unless reachable
     return;
+
+  ip_t copy;
+  addrcpy(&copy, addr); // can it be overwritten?
+  int ndx = addr2ndx(at, &copy);
+  if (ndx < 0) {        // new one
+    ndx = at2next(at);
+    if (ndx < 0) {      // no free slots? warn in all ways, and change the last one
+      const char *warn = "MAXPATH=%d is exceeded at hop=%d";
+      fprintf(stderr, warn, MAXPATH, at);
+      NETLOG_MSG(warn, MAXPATH, at);
+      ndx = MAXPATH - 1;
+    }
+    addrcpy(&IP_AT_NDX(at, ndx), &copy);
+    if (mpls)
+      memcpy(&MPLS_AT_NDX(at, ndx), mpls, sizeof(mpls_data_t));
+#ifdef OUTPUT_FORMAT_RAW
+    if (enable_raw)
+      raw_rawhost(at, &IP_AT_NDX(at, ndx));
+#endif
+  }
 
   struct timeval _tv;
   timersub(&now, &(sequence[seq].time), &_tv);
-  time_t totusec = timer2usec(&_tv); // impossible? [if (totusec < 0) totusec = 0;]
-
-  if (!unaddrcmp(&(host[index].addr))) {
-    addrcpy(&(host[index].addr), &addrcopy);
-    if (mpls) {
-      memcpy(&(host[index].mpls), mpls, sizeof(mpls_data_t));
-      memcpy(&(host[index].mplss[0]), mpls, sizeof(mpls_data_t));
-    }
-#ifdef OUTPUT_FORMAT_RAW
-    if (enable_raw)
-      raw_rawhost(index, &(host[index].addr));
-#endif
-    addrcpy(&(host[index].addrs[0]), &addrcopy); // for multipath
-  } else {
-    int i = 0;
-    for (; i < MAXPATH; i++)
-      if (!addrcmp(&(host[index].addrs[i]), &addrcopy) || !unaddrcmp(&(host[index].addrs[i])))
-        break;
-    if (addrcmp(&(host[index].addrs[i]), &addrcopy) && (i < MAXPATH)) {
-      addrcpy(&(host[index].addrs[i]), &addrcopy);
-      if (mpls)
-        memcpy(&(host[index].mplss[i]), mpls, sizeof(mpls_data_t));
-#ifdef OUTPUT_FORMAT_RAW
-      if (enable_raw)
-        raw_rawhost(index, &(host[index].addrs[i]));
-#endif
-    }
-  }
-
-  host[index].jitter = ABS(totusec - host[index].last);
-  host[index].last = totusec;
-
-  if (host[index].returned < 1) {
-    host[index].best = host[index].worst = host[index].gmean = totusec;
-    host[index].avg = host[index].var = host[index].jitter = host[index].jworst = host[index].jinta = 0;
-  }
-
-  if (totusec < host[index].best)
-     host[index].best = totusec;
-  if (totusec > host[index].worst)
-     host[index].worst = totusec;
-  if (host[index].jitter > host[index].jworst)
-     host[index].jworst = host[index].jitter;
-
-  host[index].returned++;
-  int oldavg = host[index].avg;
-  host[index].avg += ((double)(totusec - oldavg)) / host[index].returned;
-  host[index].var += ((double)(totusec - oldavg)) * (totusec - host[index].avg) / 1000000;
-
-  int oldjavg = host[index].javg;
-  host[index].javg += (host[index].jitter - oldjavg) / host[index].returned;
-  /* below algorithm is from rfc1889, A.8 */
-  host[index].jinta += host[index].jitter - ((host[index].jinta + 8) >> 4);
-
-  if (host[index].returned > 1)
-    host[index].gmean =
-      pow((double)host[index].gmean, (host[index].returned - 1.0) / host[index].returned)
-      * pow((double)totusec, 1.0 / host[index].returned);
-  host[index].sent = 0;
-  host[index].up = 1;
-  host[index].transit = 0;
-  if (cache_mode)
-    host[index].seen = time(NULL);
-
-  int ndx = sequence[seq].saved_seq - host[index].saved_seq_offset;
-  if ((ndx >= 0) && (ndx <= SAVED_PINGS))
-    host[index].saved[ndx] = totusec;
-
+  time_t curr = timer2usec(&_tv); // is negative possible? [if (curr < 0) curr = 0;]
+  fill_host_stat(at, curr, sequence[seq].saved_seq);
 #ifdef OUTPUT_FORMAT_RAW
   if (enable_raw) {
-    NETLOG_MSG("raw_rawping(index=%d, totusec=" LLD ")", index, totusec);
-    raw_rawping(index, totusec);
+    NETLOG_MSG("raw_rawping(at=%d, curr[usec]=" LLD ")", at, curr);
+    raw_rawping(at, curr);
   }
 #endif
 }
@@ -780,12 +785,12 @@ int net_elem(int at, char c) {
 int net_max(void) {
   int max = 0;
   for (int at = 0; at < maxTTL; at++) {
-    if (!addrcmp(&(host[at].addr), remoteaddress)) {
+    if (!addrcmp(&CURRENT_IP(at), remoteaddress)) {
       max = at + 1;
       if (endpoint_mode)
         fstTTL = max;
       break;
-    } else if (unaddrcmp(&(host[at].addr))) {
+    } else if (unaddrcmp(&CURRENT_IP(at))) {
       max = at + 2;
       if (endpoint_mode)
         fstTTL = max - 1; // -1: show previous known hop
@@ -833,14 +838,14 @@ int net_send_batch(void) {
     (mtrtype == IPPROTO_TCP) ? net_send_tcp(batch_at) : net_send_query(batch_at);
 
   int n_unknown = 0;
-  for (int i = fstTTL - 1; i < batch_at; i++) {
-    if (!unaddrcmp(&(host[i].addr)))
+  for (int at = fstTTL - 1; at < batch_at; at++) {
+    if (!unaddrcmp(&CURRENT_IP(at)))
       n_unknown++;
-    if (!addrcmp(&(host[i].addr), remoteaddress))
+    if (!addrcmp(&CURRENT_IP(at), remoteaddress))
       n_unknown = MAXHOST; // Make sure we drop into "we should restart"
   }
 
-  if (!addrcmp(&(host[batch_at].addr), remoteaddress)	// success in reaching target
+  if (!addrcmp(&CURRENT_IP(batch_at), remoteaddress) // success in reaching target
      || (n_unknown > MAX_UNKNOWN_HOSTS) // fail in consecuitive MAX_UNKNOWN_HOSTS (firewall?)
      || (batch_at >= (maxTTL - 1))      // or reach limit
      || (batch_at >= stopper)) {        // or learnt unreachable
@@ -1082,17 +1087,16 @@ void sockaddrtop(struct sockaddr *saddr, char *strptr, size_t len) {
 
 // Decode MPLS
 void decodempls(int num, const uint8_t *packet, mpls_data_t *mpls, int off) {
-  /* loosely derived from the traceroute-nanog.c
-   * decoding by Jorge Boncompte */
+  /* loosely derived from the traceroute-nanog.c decoding by Jorge Boncompte */
   uint32_t ver = packet[off] >> 4;
   uint32_t res = packet[off++] & 15;   // +1
-  res += packet[off++];              // +2
+  res += packet[off++];                // +2
   uint32_t chk = packet[off++] << 8;   // +3
-  chk += packet[off++];              // +4
+  chk += packet[off++];                // +4
   // Check for ICMP extension header
   if ((ver == 2) && (res == 0) && chk && (num >= (off + 2))) {
     uint32_t len = packet[off++] << 8; // +5
-    len += packet[off++];            // +6
+    len += packet[off++];              // +6
     uint8_t class = packet[off++];     // +7
     uint8_t type  = packet[off++];     // +8
     // make sure we have an MPLS extension
@@ -1101,8 +1105,8 @@ void decodempls(int num, const uint8_t *packet, mpls_data_t *mpls, int off) {
       mpls->n = (n > MAXLABELS) ? MAXLABELS : n;
       for (int i = 0; (i < mpls->n) && (num >= off); i++) {
         // piece together the 20 byte label value
-        uint32_t l = packet[off++] << 12; // +1
-        l |= packet[off++] << 4;        // +2
+        uint32_t l = packet[off++] << 12;       // +1
+        l |= packet[off++] << 4;                // +2
         l |= packet[off] >> 4;
         mpls->label[i].lab = l;
         mpls->label[i].exp = (packet[off] >> 1) & 0x7;
@@ -1227,5 +1231,13 @@ void net_init(int ipv6_mode) {
 const char *strlongip(ip_t *ip) {
   static char addrstr[INET6_ADDRSTRLEN];
   return inet_ntop(af, ip, addrstr, sizeof(addrstr));
+}
+
+static const char mpls_fmt[] = "%*s[Lbl:%u Exp:%u S:%u TTL:%u]";
+
+const char *mpls2str(const mpls_label_t *label, int indent) {
+  static char m2s_buf[64];
+  snprintf(m2s_buf, sizeof(m2s_buf), mpls_fmt, indent, "", label->lab, label->exp, label->s, label->ttl);
+  return m2s_buf;
 }
 

@@ -352,7 +352,7 @@ void gc_redraw(void) {
 	}
 
 	for (i = 0, at = min; i < hops; i++, at++) {
-		ip_t *addr = &host[at].addr;
+		ip_t *addr = &CURRENT_IP(at);
 
 		if (unaddrcmp(addr)) {
 			int saved_ndx = SAVED_PINGS - 2;	// waittime ago
@@ -402,21 +402,20 @@ void gc_redraw(void) {
 
 				// mpls
 				if (enable_mpls)
-					gc_print_mpls(i, data[i], &(host[at].mpls));
+					gc_print_mpls(i, data[i], &CURRENT_MPLS(at));
 
 				// multipath
 				if (params.enable_multipath) {
-					int j;
-					for (j = 0; j < MAXPATH; j++) {
-						ip_t *addrs = &(host[at].addrs[j]);
-						if (!addrcmp(addrs, addr))
-							continue;
-						if (!unaddrcmp(addrs))
+					for (int j = 0; j < MAXPATH; j++) {
+						if (j == host[at].current)
+							continue; // because already printed
+						ip_t *ip = &IP_AT_NDX(at, j);
+						if (!unaddrcmp(ip))
 							break;
-						fill_hostinfo(at, addrs);
+						fill_hostinfo(at, ip);
 						cr_print_host(i, data[i], buf, NULL);
 						if (enable_mpls)	// multipath+mpls
-							gc_print_mpls(i, data[i], &(host[at].mplss[j]));
+							gc_print_mpls(i, data[i], &MPLS_AT_NDX(at, j));
 					}
 				}
 			}

@@ -976,7 +976,7 @@ static int ii_gen_n_open_html(int mode) {
 
     int max = net_max();
     for (int at = net_min(); at < max; at++) {
-        ip_t *addr = &host[at].addr;
+        ip_t *addr = &CURRENT_IP(at);
         if (unaddrcmp(addr)) {
 //{ lat: N.M, lng: K.L, title: 'ip (hostname)', delay: 'N msec', desc: 'City, Region, Country'},
             char *lat, *lng;
@@ -1065,13 +1065,15 @@ void query_ipinfo(void) {
       return;
   int max = net_max();
   for (int at = net_min(); at < max; at++) {
-    ip_t *addr = &host[at].addr;
+    ip_t *addr = &CURRENT_IP(at);
     if (unaddrcmp(addr)) {
       query_iiaddr(addr);
       for (int i = 0; i < MAXPATH; i++) {
-        ip_t *addrs = &(host[at].addrs[i]);
-        if (unaddrcmp(addrs))
-          query_iiaddr(addrs);
+        if (i == host[at].current)
+          continue; // because already queried
+        ip_t *ip = &IP_AT_NDX(at, i);
+        if (unaddrcmp(ip))
+          query_iiaddr(ip);
       }
     }
   }
