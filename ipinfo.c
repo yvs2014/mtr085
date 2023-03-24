@@ -79,7 +79,7 @@ typedef struct {
 #define TMPFILE	TMPFILE_BASE TMPFILE_SUFF
 
 static char tmpfn[] = TMPFILE;
-static int tmpfd;
+static int tmpfd = -1;
 typedef char* tcp_resp_t[II_RESP_LINES];
 static tcp_resp_t tcp_resp;
 static char *last_request;	// workaround to "no id" whois
@@ -90,9 +90,9 @@ static int remote_ports[] = { 53, 80, 80, 43 };	// [type]
 typedef struct {
     char* host;
     char* host6;
+    char* name[IPINFO_MAX_ITEMS];
     char* unkn;
     char sep;
-    char* name[IPINFO_MAX_ITEMS];
     char* prop_prfx;
     int type;	// 0 - dns:csv, 1 - http:csv, 2 - http:flat-json, 3 - whois
     int ndx[IPINFO_MAX_ITEMS]; // skip/mandatory indexes: query ip, ...
@@ -106,45 +106,60 @@ typedef struct {
 
 static origin_t origins[] = {
 // Abbreviations: CC - Country Code, RC - Region Code, MC - Metro Code, Org - Organization, TZ - TimeZone
-    { "origin.asn.cymru.com", "origin6.asn.cymru.com", NULL, VSLASH,
-        { "ASN", "Route", "CC", "Registry", "Allocated" } },
-
-    { "asn.routeviews.org", NULL, "4294967295", 0,
-        { "ASN" } },
-
-    { "origin.asn.spameatingmonkey.net", NULL, "Unknown", VSLASH,
-        { "Route", "ASN", "Org", "Allocated", "CC" } },
-
-    { "ip2asn.sasm4.net", NULL, "No Record", 0,
-        { "ASN" } },
-
-    { "peer.asn.shadowserver.org", NULL, NULL, VSLASH,
-        { "Peers", "ASN", "Route", "AS Name", "CC", /*"Website",*/ "Org" } },
-
-    { "freegeoip.net", NULL, NULL, COMMA,
-        { /* QueryIP, */ "CC", "Country", "RC", "Region", "City", "Zip", "TZ", "Lat", "Long", "MC" },
-        NULL, 1, {1}, "/csv/" },
-
-    { "ip-api.com", NULL, NULL, COMMA,
-        { /* Status, */ "Country", "CC", "RC", "Region", "City", "Zip", "Lat", "Long", "TZ", "ISP", "Org", "AS Name" /*, QueryIP */ },
-        NULL, 1, {14, 1}, "/csv/" },
-
-    { "getcitydetails.geobytes.com", NULL, NULL, COMMA,
-	    { /*forwarderfor, remoteip, ipaddress,*/ "certainty", "internet", "country", "regionlocationcode", "region", "code", "locationcode", "dma", "city", "cityid", "fqcn", "latitude", "longitude", "capital", "timezone", "nationalitysingular", "population", "nationalityplural", "mapreference", "currency", "currencycode", "title" },
-        "geobytes", 2, {3}, "/GetCityDetails?fqcn=", NULL,
-	    { "Certainty", "CC", "Country", "RLC", "Region", "RC", "LC", "DMA", "City", "CityID", "FQCN", "Lat", "Long", "Capital", "TZ", "Nationality", "Population", "NationalityPlural", "MapReference", "Currency", "CurrencyCode", "Title" },
-        { "forwarderfor", "remoteip", "queryip" },
-    },
-
-    { "ipinfo.io", NULL, NULL, COMMA,
-        { /* ip, hostname,*/ "city", "region", "country", "loc", "postal", "org" },
-        NULL, 2, {1}, "/", "/json", { "City", "Region", "CC", "Location", "Postal", "Org"},
-		{ "ip", "hostname" },
-    },
-
-    { "riswhois.ripe.net", "riswhois.ripe.net", NULL, 0,
-        {"Route", "Origin", "Descr", "CC"},
-        NULL, 3, {}, "-M " },
+// 0
+  { .host  = "origin.asn.cymru.com", .host6 = "origin6.asn.cymru.com",
+    .name  = { "ASN", "Route", "CC", "Registry", "Allocated" },
+    .sep   = VSLASH,
+    .fd    = -1 },
+// 1
+  { .host  = "asn.routeviews.org",
+    .name  = { "ASN" },
+    .unkn  = "4294967295",
+    .fd    = -1 },
+// 2
+  { .host  = "origin.asn.spameatingmonkey.net",
+    .name  = { "Route", "ASN", "Org", "Allocated", "CC" },
+    .unkn  = "Unknown", .sep = VSLASH,
+    .fd    = -1 },
+// 3
+  { .host  = "ip2asn.sasm4.net",
+    .name  = { "ASN" },
+    .unkn  = "No Record",
+    .fd    = -1 },
+// 4
+  { .host  = "peer.asn.shadowserver.org",
+    .name  = { "Peers", "ASN", "Route", "AS Name", "CC", /*"Website",*/ "Org" },
+    .sep   = VSLASH,
+    .fd    = -1 },
+// 5
+  { .host  = "freegeoip.net",
+    .name  = { /* QueryIP, */ "CC", "Country", "RC", "Region", "City", "Zip", "TZ", "Lat", "Long", "MC" },
+    .sep   = COMMA, .type = 1, .ndx = {1}, .prefix = "/csv/",
+    .fd    = -1 },
+// 6
+  { .host  = "ip-api.com",
+    .name  = { /* Status, */ "Country", "CC", "RC", "Region", "City", "Zip", "Lat", "Long", "TZ", "ISP", "Org", "AS Name" /*, QueryIP */ },
+    .sep   = COMMA, .type = 1, .ndx = {14, 1}, .prefix = "/csv/",
+    .fd = -1 },
+// 7
+    { .host  = "getcitydetails.geobytes.com",
+      .name  = { /*forwarderfor, remoteip, ipaddress,*/ "certainty", "internet", "country", "regionlocationcode", "region", "code", "locationcode", "dma", "city", "cityid", "fqcn", "latitude", "longitude", "capital", "timezone", "nationalitysingular", "population", "nationalityplural", "mapreference", "currency", "currencycode", "title" },
+      .sep   = COMMA, .prop_prfx = "geobytes", .type = 2, .ndx = {3}, .prefix = "/GetCityDetails?fqcn=",
+      .substitution = { "Certainty", "CC", "Country", "RLC", "Region", "RC", "LC", "DMA", "City", "CityID", "FQCN", "Lat", "Long", "Capital", "TZ", "Nationality", "Population", "NationalityPlural", "MapReference", "Currency", "CurrencyCode", "Title" },
+      .skip_prop = { "forwarderfor", "remoteip", "queryip" },
+      .fd = -1 },
+// 8
+    { .host  = "ipinfo.io",
+      .name  = { /* ip, hostname,*/ "city", "region", "country", "loc", "postal", "org" },
+      .sep   = COMMA, .type = 2, .ndx = {1}, .prefix = "/", .suffix = "/json",
+      .substitution = { "City", "Region", "CC", "Location", "Postal", "Org"},
+      .skip_prop = { "ip", "hostname" },
+      .fd = -1 },
+// 9
+    { .host  = "riswhois.ripe.net", .host6 = "riswhois.ripe.net",
+      .name  = {"Route", "Origin", "Descr", "CC"},
+      .sep   = 0, .type = 3, .ndx = {}, .prefix = "-M ",
+      .fd = -1 },
 };
 
 static int split_with_sep(char** args, int max, char sep, char quote) {
@@ -482,17 +497,16 @@ static void process_whois_response(void *buff, int r) {
         if (split_with_sep(ln, 2, ':', 0) == 2) {
             for (int j = 0; (j < IPINFO_MAX_ITEMS) && origins[origin_no].name[j]; j++) {
                 char* desc = origins[origin_no].name[j];
-                if (!desc)
+                if (!desc || !ln[0])
                     break;
                 if (strcasecmp(desc, ln[0]) == 0)
                     (*items)[j] = ln[1];
-				else
-                  if (af == AF_INET6) {	// check "*6" field names
+                else if (af == AF_INET6) {	// check "*6" field names
                     char desc6[NAMELEN];
-					snprintf(desc6, sizeof(desc6), "%s%s", desc, "6");
+                    snprintf(desc6, sizeof(desc6), "%s%s", desc, "6");
                     if (strcasecmp(desc6, ln[0]) == 0)
                       (*items)[j] = ln[1];
-                  }
+                }
 // riswhois: split the last item
 #define RISWHOIS_LAST_NDX	2
                 if (j == RISWHOIS_LAST_NDX) {	// "description, country"
@@ -528,8 +542,9 @@ void ii_ack(void) {
     else if (r < 0)
         IILOG_RET("%s(): recv() failed: %s", __FUNCTION__, strerror(errno))
     else { // Got 0 bytes
-        close(origins[origin_no].fd);
-        origins[origin_no].fd = 0;
+        if (origins[origin_no].fd >= 0)
+          close(origins[origin_no].fd);
+        origins[origin_no].fd = -1;
         last_request = NULL;
         IILOG_RET("Close connection to %s", origins[origin_no].host);
     }
@@ -563,7 +578,7 @@ static int open_tcp_connection(void) {
     re.sin_addr = *(struct in_addr*)h->h_addr;
     memset(&re.sin_zero, 0, sizeof(re.sin_zero));
 
-    int sock = 0;
+    int sock = -1;
     for (int i = 0; h->h_addr_list[i]; i++) {
         re.sin_addr = *(struct in_addr*)h->h_addr_list[i];
 
@@ -603,9 +618,9 @@ static int open_tcp_connection(void) {
 #endif
     }
     fprintf(stderr, "Cannot create ipinfo connection\n");
-    if (sock) {
+    if (sock >= 0) {
        close(sock);
-       origins[origin_no].fd = 0;
+       origins[origin_no].fd = -1;
     }
     return -1;
 }
@@ -649,7 +664,7 @@ static int ii_send_query(const char *lkey, const char *hkey) {
     }
 
     int r;
-    if (!origins[origin_no].fd)
+    if (origins[origin_no].fd < 0)
         if ((r = open_connection[origins[origin_no].type]()) < 0)
             return r;
 
@@ -828,7 +843,7 @@ inline char *fmt_ipinfo(ip_t *addr) { return fill_ipinfo(addr, 0); }
 inline char *sep_ipinfo(ip_t *addr, char sep) { return fill_ipinfo(addr, sep); }
 
 int ii_waitfd(void) {
-    return (enable_ipinfo && hinit && ii_initiated) ? origins[origin_no].fd : 0;
+    return (enable_ipinfo && hinit && ii_initiated) ? origins[origin_no].fd : -1;
 }
 
 bool ii_ready(void) {
@@ -867,9 +882,9 @@ void ii_close(void) {
    if (!enable_ipinfo)
        return;
     if (ii_initiated) {
-        if (origins[origin_no].fd)
+        if (origins[origin_no].fd >= 0)
             close(origins[origin_no].fd);
-        if (tmpfd) {
+        if (tmpfd >= 0) {
             close(tmpfd);
 #ifndef LOG_IPINFO
             unlink(tmpfn);
@@ -956,14 +971,14 @@ static int ii_gen_n_open_html(int mode) {
     };
 
     char filename[] = TMPFILE;
-    if (tmpfd) {
+    if (tmpfd >= 0) {
         close(tmpfd);
 #ifndef LOG_IPINFO
         if (unlink(tmpfn) < 0)
             return -1;
 #endif
     }
-    if ((tmpfd = mkstemps(filename, strlen(TMPFILE_SUFF))) < -1) {
+    if ((tmpfd = mkstemps(filename, strlen(TMPFILE_SUFF))) < 0) {
         IILOG_MSG("mkstemp() failed: %s", strerror(errno));
         return -1;
     }
@@ -997,7 +1012,7 @@ static int ii_gen_n_open_html(int mode) {
                 continue;
             int l = 0;
             l += snprintf(buf + l, sizeof(buf) - l, "{ lat: %s, lng: %s, title: '%s", lat, lng, strlongip(addr));
-            const char *hostname = dns_lookup(addr);
+            const char *hostname = dns_lookup(at, host[at].current);
             if (hostname)
                 l += snprintf(buf + l, sizeof(buf) - l, " (%s)", hostname);
             l += snprintf(buf + l, sizeof(buf) - l, "', delay: '%.1f msec', desc: \"", host[at].avg / 1000.);

@@ -154,9 +154,19 @@ void set_fld_active(const char *s) {
 }
 
 // type must correspond 'id' in resolve HEADER (unsigned id:16)
+// it's used as a hint for fast search, 16bits as [hash:7 at:6 ndx:3]
+uint16_t str2hint(const char* s, int16_t at, uint16_t ndx) {
+  uint16_t h = 0, c;
+  while ((c = *s++))
+    h = ((h << 5) + h) ^ c; // h * 33 ^ c
+  h &= IDMASK;
+  h |= AT2ID(at);
+  h |= ID2NDX(ndx);
+  return h;
+}
+
 uint16_t str2dnsid(const char* s) {
-  uint16_t h = 0;
-  int c;
+  uint16_t h = 0, c;
   while ((c = *s++))
     h = ((h << 5) + h) ^ c; // h * 33 ^ c
   return h;
@@ -659,7 +669,7 @@ static void parse_mtr_options(char *string) {
   char *p = string;
   while (*p) {
     if (argc == sizeof(argv) / sizeof(argv[0]) - 1) {
-      fprintf(stderr, "Warning: extra arguments ignored: %s", p);
+      fprintf(stderr, "WARN: extra arguments ignored: %s\n", p);
       break;
     }
     while (*p && isspace((int)*p))

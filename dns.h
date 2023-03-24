@@ -34,7 +34,7 @@ void dns_open(void);
 void dns_close(void);
 int dns_waitfd(int family);
 void dns_ack(int fd, int family);
-const char *dns_lookup(ip_t *address);
+const char *dns_lookup(int at, int ndx);
 int dns_query(int op, const char *dname, int class, int type, const unsigned char *data, int datalen,
   const unsigned char *newrr, unsigned char *buf, int buflen);
 

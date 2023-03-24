@@ -55,7 +55,7 @@ void split_redraw(void) {
     ip_t *addr = &CURRENT_IP(at);
     printf("%2d", at + 1);
     if (unaddrcmp(addr)) {
-      const char *name = dns_lookup(addr);
+      const char *name = dns_lookup(at, host[at].current);
       printf(SPLIT_SEPARATOR "%s", name ? name : strlongip(addr));
       if (show_ips)
         printf(SPLIT_SEPARATOR "%s", strlongip(addr));
@@ -71,14 +71,14 @@ void split_redraw(void) {
 #endif
       printf("\n");
 
-      for (int i = 0; i < MAXPATH; i++) {	// multipath
-        if (i == host[at].current)
+      for (int ndx = 0; ndx < MAXPATH; ndx++) { // multipath
+        if (ndx == host[at].current)
           continue; // because already printed
-        ip_t *ip = &IP_AT_NDX(at, i);
+        ip_t *ip = &IP_AT_NDX(at, ndx);
         if (!unaddrcmp(ip))
           break;
-        name = dns_lookup(ip);
-        printf("%2d:%d", at + 1, i);
+        name = dns_lookup(at, ndx);
+        printf("%2d:%d", at + 1, ndx);
         printf(SPLIT_SEPARATOR "%s", name ? name : strlongip(ip));
         if (show_ips)
           printf(SPLIT_SEPARATOR "%s", strlongip(ip));

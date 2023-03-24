@@ -322,14 +322,15 @@ static int printw_mpls(const mpls_data_t *m) {
   return OK;
 }
 
-static void printw_addr(ip_t *addr, int up) {
+static void printw_addr(int at, int ndx, int up) {
+  ip_t *addr = &IP_AT_NDX(at, ndx);
 #ifdef IPINFO
   if (ii_ready())
     printw("%s", fmt_ipinfo(addr));
 #endif
   if (!up)
     attron(A_BOLD);
-  const char *name = dns_lookup(addr);
+  const char *name = dns_lookup(at, ndx);
   if (name) {
     printw("%s", name);
     if (show_ips)
@@ -362,19 +363,19 @@ static int print_stat(int at, int y, int start, int max) { // statistics
 }
 
 static void print_addr_extra(int at, int y) { // mpls + multipath
-  for (int i = 0; i < MAXPATH; i++) {  // multipath
-    if (i == host[at].current)
+  for (int ndx = 0; ndx < MAXPATH; ndx++) {  // multipath
+    if (ndx == host[at].current)
       continue; // because already printed
-    ip_t *addr = &IP_AT_NDX(at, i);
-    if (!unaddrcmp(addr))
+    ip_t *addr = &IP_AT_NDX(at, ndx);
+    if (!addr_spec(addr))
       break;
     printw("    ");
-    printw_addr(addr, host[at].up);
+    printw_addr(at, ndx, host[at].up);
     getyx(stdscr, y, __unused_int);
     if (move(y + 1, 0) == ERR)
         break;
     if (enable_mpls)
-      if (printw_mpls(&MPLS_AT_NDX(at, i)) == ERR)
+      if (printw_mpls(&MPLS_AT_NDX(at, ndx)) == ERR)
         break;
   }
 }
@@ -396,7 +397,7 @@ static void mtr_curses_hosts(int statx) {
         if (print_stat(at, y, statx, max) == ERR)
           break;
     } else {
-      printw_addr(addr, host[at].up);
+      printw_addr(at, host[at].current, host[at].up);
       if (print_stat(at, y, statx, max) == ERR)
         break;
       if (enable_mpls)
@@ -567,8 +568,8 @@ static void mtr_curses_graph(int statx, int cols) {
 		if (ii_ready())
 			printw("%s", fmt_ipinfo(addr));
 #endif
-			const char *name = dns_lookup(addr);
-			printw("%s", name?name:strlongip(addr));
+			const char *name = dns_lookup(at, host[at].current);
+			printw("%s", name ? name : strlongip(addr));
 		} else
 			printw(UNKN_ITEM);
 		attroff(A_BOLD);

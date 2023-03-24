@@ -68,8 +68,13 @@
 #define INET6_ADDRSTRLEN	46
 #endif
 
-#define MAXPATH 8
-#define MAXHOST 256
+#define MAXHOST 64          // if you choose 256, then adjust IDMASK ID2AT AT2ID ID2NDX
+#define MAXPATH 8           // if you change it, then adjust macros
+// 16bits as [hash:7 at:6 ndx:3]
+#define IDMASK    (0xFE00)
+#define AT2ID(n)  ((n & 0x003F) << 3)
+#define ID2AT(n)  ((n >> 3) & 0x003F)
+#define ID2NDX(n) (n & 0x7)
 
 #define MAXPACKET 4470		// largest test packet size
 #define MINPACKET 28		// 20 bytes IP and 8 bytes ICMP or UDP
@@ -79,6 +84,8 @@
 extern int af;
 extern int packetsize;
 extern ip_t unspec_addr;	// zero by definition
+extern bool (*addr_spec)(const void *); // true if address is specified
+extern bool (*addr_equal)(const void *, const void *); // true if it's the same address
 extern int (*unaddrcmp)(const void *);
 extern int (*addrcmp)(const void *a, const void *b);
 extern void* (*addrcpy)(void *a, const void *b);
@@ -94,6 +101,7 @@ typedef struct mpls_data {
 typedef struct eaddr {
   ip_t ip;
   mpls_data_t mpls;
+  char *q, *r; // dns query, reply
   char *info[10]; // TODO: add ipinfo
 } eaddr_t;
 
@@ -101,13 +109,10 @@ typedef struct eaddr {
 struct nethost {
   // addresses with all associated data (dns names, mpls labels, extended ip info)
   eaddr_t eaddr[MAXPATH];
-  int current; // index of the last received address
+  uint8_t current; // index of the last received address
   //
   // a lot of statistics
-  int xmit;
-  int returned;
-  int sent;
-  int up;
+  int xmit, returned, sent, up;
   long long var;       // variance, could be overflowed
   time_t last;
   int best;
@@ -130,6 +135,8 @@ extern struct nethost host[];
 #define CURRENT_MPLS(at) (host[at].eaddr[host[at].current].mpls)
 #define IP_AT_NDX(at, ndx) (host[at].eaddr[ndx].ip)
 #define MPLS_AT_NDX(at, ndx) (host[at].eaddr[ndx].mpls)
+#define Q_AT_NDX(at, ndx) (host[at].eaddr[ndx].q)
+#define R_AT_NDX(at, ndx) (host[at].eaddr[ndx].r)
 
 extern char localaddr[];
 
@@ -159,6 +166,7 @@ int addr4cmp(const void *a, const void *b);
 int addr6cmp(const void *a, const void *b);
 void* addr4cpy(void *a, const void *b);
 void* addr6cpy(void *a, const void *b);
+void set_new_addr(int at, int ndx, const ip_t *ip, const mpls_data_t *mpls);
 
 const char *mpls2str(const mpls_label_t *label, int indent);
 

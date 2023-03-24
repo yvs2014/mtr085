@@ -110,9 +110,11 @@ struct sequence {
 
 // global vars
 ip_t unspec_addr;	// zero by definition
+bool (*addr_spec)(const void *); // true if address is specified
+bool (*addr_equal)(const void *, const void *); // true if it's the same address
 int (*unaddrcmp)(const void *);
-int (*addrcmp)(const void *a, const void *b);
-void* (*addrcpy)(void *a, const void *b);
+int (*addrcmp)(const void *, const void *);
+void* (*addrcpy)(void *, const void *);
 int af;	// address family
 int packetsize;	// packet size used by ping
 struct nethost host[MAXHOST];
@@ -130,16 +132,16 @@ static unsigned *tcp_sockets;
 static struct sequence sequence[SEQ_MAX];
 static struct timeval reset;
 
-static int sendsock4;
-static int sendsock4_icmp;
-static int sendsock4_udp;
-static int recvsock4;
-static int sendsock6;
-static int sendsock6_icmp;
-static int sendsock6_udp;
-static int recvsock6;
-static int sendsock;
-static int recvsock;
+static int sendsock4 = -1;
+static int sendsock4_icmp = -1;
+static int sendsock4_udp = -1;
+static int recvsock4 = -1;
+static int sendsock6 = -1;
+static int sendsock6_icmp = -1;
+static int sendsock6_udp = -1;
+static int recvsock6 = -1;
+static int sendsock = -1;
+static int recvsock = -1;
 
 #ifdef ENABLE_IPV6
 static struct sockaddr_storage sourcesockaddr_struct;
@@ -543,6 +545,21 @@ int at2next(int hop) { // return first free slot at 'hop', otherwise -1
   return -1;
 }
 
+// set new ip-addr and clear associated data
+void set_new_addr(int at, int ndx, const ip_t *ip, const mpls_data_t *mpls) {
+  addrcpy(&IP_AT_NDX(at, ndx), ip);
+  mpls ? memcpy(&MPLS_AT_NDX(at, ndx), mpls, sizeof(mpls_data_t))
+    : memset(&MPLS_AT_NDX(at, ndx), 0, sizeof(mpls_data_t));
+  if (Q_AT_NDX(at, ndx)) {
+    free(Q_AT_NDX(at, ndx));
+    Q_AT_NDX(at, ndx) = NULL;
+  }
+  if (R_AT_NDX(at, ndx)) {
+    free(R_AT_NDX(at, ndx));
+    R_AT_NDX(at, ndx) = NULL;
+  }
+}
+
 // We got a return on something
 static void net_process_ping(unsigned port, const mpls_data_t *mpls, const void *addr, struct timeval now, int reason) {
   unsigned seq = port % SEQ_MAX;
@@ -569,15 +586,11 @@ static void net_process_ping(unsigned port, const mpls_data_t *mpls, const void 
   int ndx = addr2ndx(at, &copy);
   if (ndx < 0) {        // new one
     ndx = at2next(at);
-    if (ndx < 0) {      // no free slots? warn in all ways, and change the last one
-      const char *warn = "MAXPATH=%d is exceeded at hop=%d";
-      fprintf(stderr, warn, MAXPATH, at);
-      NETLOG_MSG(warn, MAXPATH, at);
+    if (ndx < 0) {      // no free slots? warn about it, and change the last one
+      fprintf(stderr, "MAXPATH=%d is exceeded at hop=%d\n", MAXPATH, at);
       ndx = MAXPATH - 1;
     }
-    addrcpy(&IP_AT_NDX(at, ndx), &copy);
-    if (mpls)
-      memcpy(&MPLS_AT_NDX(at, ndx), mpls, sizeof(mpls_data_t));
+    set_new_addr(at, ndx, &copy, mpls);
 #ifdef OUTPUT_FORMAT_RAW
     if (enable_raw)
       raw_rawhost(at, &IP_AT_NDX(at, ndx));
@@ -949,11 +962,8 @@ int net_open(struct hostent *entry) {
   struct sockaddr_in name_struct;
 #endif
   struct sockaddr * name = (struct sockaddr *) &name_struct;
-  socklen_t len;
 
-  memset(host, 0, sizeof(host));
   net_reset();
-
   remotesockaddr->sa_family = entry->h_addrtype;
 
   switch (entry->h_addrtype) {
@@ -982,18 +992,17 @@ int net_open(struct hostent *entry) {
     exit(EXIT_FAILURE);
   }
 
-  len = sizeof name_struct;
+  socklen_t len = sizeof(name_struct);
   getsockname(recvsock, name, &len);
   sockaddrtop(name, localaddr, sizeof(localaddr));
-
   portpid = IPPORT_RESERVED + mypid % (65535 - IPPORT_RESERVED);
   return 0;
 }
 
 void net_reset(void) {
-  batch_at = fstTTL - 1;	/* above replacedByMin */
-  numhosts = 10;
-  stopper = MAXHOST;
+  for (int at = 0; at < MAXHOST; at++)
+    for (int ndx = 0; ndx < MAXPATH; ndx++)
+      set_new_addr(at, ndx, &unspec_addr, NULL); // clear all query/response cache
   memset(host, 0, sizeof(host));
   for (int at = 0; at < MAXHOST; at++) {
     for (int i = 0; i < SAVED_PINGS; i++)
@@ -1006,6 +1015,9 @@ void net_reset(void) {
       tcp_seq_close(at);
   }
   gettimeofday(&reset, NULL);
+  batch_at = fstTTL - 1;
+  stopper = MAXHOST;
+  numhosts = 10;
 }
 
 
@@ -1036,7 +1048,7 @@ int net_set_interfaceaddress(char *InterfaceAddress) {
 #endif
   }
 
-  if (bind(sendsock, sourcesockaddr, len) == -1) {
+  if (bind(sendsock, sourcesockaddr, len) < 0) {
     perror("failed to bind to interface");
     return 1;
   }
@@ -1189,6 +1201,12 @@ bool net_process_tcp_fds(void) {
   return ret;
 }
 
+bool addr4spec(const void *a) { // comparison to unspecified IPv4 address
+  return memcmp(a, &unspec_addr, sizeof(struct in_addr)) ? true : false;
+}
+bool addr4equal(const void *a, const void *b) { // IPv4 address comparison
+  return memcmp(a, b, sizeof(struct in_addr)) ? false : true;
+}
 int unaddr4cmp(const void *a) { // comparison to unspecified IPv4 address
   return memcmp(a, &unspec_addr, sizeof(struct in_addr));
 }
@@ -1200,6 +1218,12 @@ void* addr4cpy(void *a, const void *b) { // IPv4 address copy
 }
 
 #ifdef ENABLE_IPV6
+bool addr6spec(const void *a) { // comparison to unspecified IPv6 address
+  return memcmp(a, &unspec_addr, sizeof(struct in6_addr)) ? true : false;
+}
+bool addr6equal(const void *a, const void *b) { // IPv6 address comparison
+  return memcmp(a, b, sizeof(struct in6_addr)) ? false : true;
+}
 int unaddr6cmp(const void *a) { // comparison to unspecified IPv6 address
   return memcmp(a, &unspec_addr, sizeof(struct in6_addr));
 }
@@ -1215,6 +1239,8 @@ void net_init(int ipv6_mode) {
 #ifdef ENABLE_IPV6
   if (ipv6_mode) {
     af = AF_INET6;
+    addr_spec = addr6spec;
+    addr_equal = addr6equal;
     unaddrcmp = unaddr6cmp;
     addrcmp = addr6cmp;
     addrcpy = addr6cpy;
@@ -1222,6 +1248,8 @@ void net_init(int ipv6_mode) {
 #endif
   { // IPv4 by default
     af = AF_INET;
+    addr_spec = addr4spec;
+    addr_equal = addr4equal;
     unaddrcmp = unaddr4cmp;
     addrcmp = addr4cmp;
     addrcpy = addr4cpy;

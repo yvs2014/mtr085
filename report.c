@@ -363,7 +363,7 @@ static int havename[MAXHOST];
 
 void raw_rawping(int at, int msec) {
   if (!havename[at]) {
-    const char *name = dns_lookup(&CURRENT_IP(at));
+    const char *name = dns_lookup(at, host[at].current);
     if (name) {
       havename[at]++;
       printf("d %d %s\n", at, name);

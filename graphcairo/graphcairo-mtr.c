@@ -127,26 +127,23 @@ void gc_parsearg(char* arg) {
 		args[j] = -1;
 }
 
-static void fill_hostinfo(int at, ip_t *addr) {
-	int l, len = 0;
+static void fill_hostinfo(int at, int ndx) {
+	int len = 0;
 	char *p = buf;
-	int sz;
+	ip_t *addr = &IP_AT_NDX(at, ndx);
 #ifdef IPINFO
 	if (ii_ready()) {
-		sz = 2 * STARTSTAT;
-		l = snprintf(p, sz, "%s", fmt_ipinfo(addr));
-		if (l < 0)
-			sz = 0;
-		else if (l < sz)
-			sz = l;
-		else
-			sz -= 1;
+		int sz = 2 * STARTSTAT;
+		int l = snprintf(p, sz, "%s", fmt_ipinfo(addr));
+		if (l < 0) sz = 0;
+		else if (l < sz) sz = l;
+		else sz -= 1;
 		len += sz;
 		p += sz;
 	}
 #endif
-	sz = STARTSTAT;
-	const char *name = dns_lookup(addr);
+	int l, sz = STARTSTAT;
+	const char *name = dns_lookup(at, ndx);
 	if (name) {
 		l = snprintf(p, sz, "%s", name);
 		if (show_ips)
@@ -154,12 +151,9 @@ static void fill_hostinfo(int at, ip_t *addr) {
 	} else
 		l = snprintf(p, sz, "%s", strlongip(addr));
 
-	if (l < 0)
-		sz = 0;
-	else if (l < sz)
-		sz = l;
-	else
-		sz -= 1;
+	if (l < 0) sz = 0;
+	else if (l < sz) sz = l;
+	else sz -= 1;
 	len += sz;
 
 	if ((at + 1) >= display_offset)
@@ -372,7 +366,7 @@ void gc_redraw(void) {
 				cr_print_hop(i);
 
 				// hostinfo
-				fill_hostinfo(at, addr);
+				fill_hostinfo(at, host[at].current);
 
 				int stat_pos = strlen(buf) + 1;
 				char *stat = buf + stat_pos;
@@ -412,7 +406,7 @@ void gc_redraw(void) {
 						ip_t *ip = &IP_AT_NDX(at, j);
 						if (!unaddrcmp(ip))
 							break;
-						fill_hostinfo(at, ip);
+						fill_hostinfo(at, j);
 						cr_print_host(i, data[i], buf, NULL);
 						if (enable_mpls)	// multipath+mpls
 							gc_print_mpls(i, data[i], &MPLS_AT_NDX(at, j));

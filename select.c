@@ -56,18 +56,15 @@ void set_fds(fd_set *rset, fd_set *wset, mtrfd_t *fd) {
     SET_MTRFD(0);
   if (enable_dns) {
     fd->dns = dns_waitfd(AF_INET);
-    if (fd->dns > 0)
-      SET_MTRFD(fd->dns);
+    SET_MTRFD(fd->dns);
 #ifdef ENABLE_IPV6
     fd->dns6 = dns_waitfd(AF_INET6);
-    if (fd->dns6 > 0)
-      SET_MTRFD(fd->dns6);
+    SET_MTRFD(fd->dns6);
 #endif
   }
 #ifdef IPINFO
   fd->ii = ii_waitfd();
-  if (fd->ii > 0)
-    SET_MTRFD(fd->ii);
+  SET_MTRFD(fd->ii);
 #endif
   fd->net = net_waitfd();
   SET_MTRFD(fd->net);
@@ -205,12 +202,12 @@ void display_ipinfo() {
 
 bool something_new(mtrfd_t *fd, fd_set *rset) {
   bool re = false;
-  if ((fd->net > 0) && FD_ISSET(fd->net, rset)) { // net packets ready
+  if ((fd->net > 0) && FD_ISSET(fd->net, rset)) { // net packet
     net_process_return();
     re = true;
   }
   if (enable_dns) {
-    if ((fd->dns > 0) && FD_ISSET(fd->dns, rset)) { // dns lookup ready
+    if ((fd->dns > 0) && FD_ISSET(fd->dns, rset)) { // dns lookup
       dns_ack(fd->dns, AF_INET);
       re = true;
     }
@@ -223,7 +220,7 @@ bool something_new(mtrfd_t *fd, fd_set *rset) {
   }
 #ifdef IPINFO
   if (ii_ready()) {
-    if ((fd->ii > 0) && FD_ISSET(fd->ii, rset)) { // ipinfo lookup ready
+    if ((fd->ii > 0) && FD_ISSET(fd->ii, rset)) { // ipinfo lookup
       ii_ack();
       re = true;
     }

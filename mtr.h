@@ -116,6 +116,7 @@ extern bool alter_ping;
 
 char *trim(char *s);
 uint16_t str2dnsid(const char* s);
+uint16_t str2hint(const char* s, int16_t at, uint16_t ndx);
 void set_fld_active(const char *s);
 
 #endif
