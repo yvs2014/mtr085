@@ -80,10 +80,7 @@ struct __res_state_ext {
 #define DNSLOG_RET(format, ...)  { return; }
 #endif
 
-struct resolve {
-  ip_t ip;
-  int at, ndx;
-};
+struct atndx { int at, ndx; };
 
 // global
 bool enable_dns = true;	// use DNS by default
@@ -263,11 +260,10 @@ const char *dns_lookup(int at, int ndx) {
   return NULL;
 }
 
-struct resolve *chk_qatn(const char* q, int at, int ndx) {
+struct atndx *chk_qatn(const char* q, int at, int ndx) {
   if (Q_AT_NDX(at, ndx))
     if (!strncasecmp(Q_AT_NDX(at, ndx), q, MAXDNAME)) {
-      static struct resolve qatn;
-      qatn.ip = IP_AT_NDX(at, ndx);
+      static struct atndx qatn;
       qatn.at = at;
       qatn.ndx = ndx;
       return &qatn;
@@ -275,8 +271,8 @@ struct resolve *chk_qatn(const char* q, int at, int ndx) {
   return NULL;
 }
 
-struct resolve *find_query(const char* q, uint16_t hint) {
-  struct resolve *re = chk_qatn(q, ID2AT(hint), ID2NDX(hint)); // correspond to [hash:7 at:6 ndx:3]
+struct atndx *find_query(const char* q, uint16_t hint) {
+  struct atndx *re = chk_qatn(q, ID2AT(hint), ID2NDX(hint)); // correspond to [hash:7 at:6 ndx:3]
   if (re)
     return re;     // found by hint
   int max = net_max();
@@ -289,16 +285,16 @@ struct resolve *find_query(const char* q, uint16_t hint) {
   return NULL;     // not found
 }
 
-struct resolve *expand_query(const u_char *packet, int psize, const u_char *dn, char *answer, int asize, uint16_t id, int *r) {
+struct atndx *expand_query(const u_char *packet, int psize, const u_char *dn, char *answer, int asize, uint16_t id, int *r) {
   *r = dn_expand(packet, packet + psize, dn, answer, asize);
   if (*r < 0) {
     DNSLOG_MSG("%s", "dn_expand() failed while expanding query domain");
     return NULL;
   }
-  struct resolve *rp = find_query(answer, id); // id as a hint
-  if (!rp)
+  struct atndx *an = find_query(answer, id); // id as a hint
+  if (!an)
     DNSLOG_MSG("Unknown response with id=%u q=%s", id, answer);
-  return rp;
+  return an;
 }
 
 void save_answer(int at, int ndx, const char* answer) {
@@ -313,6 +309,8 @@ void save_answer(int at, int ndx, const char* answer) {
 }
 
 static void parserespacket(unsigned char *buf, int l) {
+  static char answer[MAXDNAME];
+
   if (l < (int) sizeof(HEADER))
     DNSLOG_RET("%s", "Packet smaller than standard header size");
   if (l == (int) sizeof(HEADER))
@@ -325,6 +323,7 @@ static void parserespacket(unsigned char *buf, int l) {
   hp->ancount = ntohs(hp->ancount);
   hp->nscount = ntohs(hp->nscount);
   hp->arcount = ntohs(hp->arcount);
+  DNSLOG_MSG("Received nameserver reply (qd:%u an:%u ns:%u ar:%u)", hp->qdcount, hp->ancount, hp->nscount, hp->arcount);
   if (hp->tc)     // truncated packet
     DNSLOG_RET("%s", "Nameserver packet truncated");
   if (!hp->qr)    // not a reply
@@ -333,31 +332,34 @@ static void parserespacket(unsigned char *buf, int l) {
     DNSLOG_RET("%s", "Invalid opcode in response packet");
   unsigned char *eob = buf + l;
   unsigned char *c = buf + sizeof(HEADER);
+  int r;
+  struct atndx *an;
 
   if (hp->rcode != NOERROR) {
-#ifdef LOG_DNS
-    if (hp->rcode == NXDOMAIN)
-      DNSLOG_MSG("%s", "Host not found")
-	else
-      DNSLOG_MSG("Received error response %u", hp->rcode);
-#endif
-	return;
+    if (hp->rcode == NXDOMAIN) {
+      DNSLOG_MSG("%s", "No such name")
+      if ((an = expand_query(buf, l, c, answer, sizeof(answer) - 1, hp->id, &r))) {
+        // save as it is, i.e. in dotted-decimal notation
+        strncpy(answer, strlongip(&IP_AT_NDX(an->at, an->ndx)), sizeof(answer) - 1);
+        save_answer(an->at, an->ndx, answer);
+      }
+    } else
+      DNSLOG_RET("Received error response %u", hp->rcode);
+    return;
   }
+
   if (!(hp->ancount))
     DNSLOG_RET("%s", "No error returned but no answers given");
-
-  DNSLOG_MSG("Received nameserver reply (qd:%u an:%u ns:%u ar:%u)", hp->qdcount, hp->ancount, hp->nscount, hp->arcount);
   if (hp->qdcount != 1)
     DNSLOG_RET("%s", "Reply does not contain one query");
   if (c > eob)
     DNSLOG_RET("%s", "Reply too short");
 
-  static char answer[MAXDNAME];
   memset(answer, 0, sizeof(answer));
-  int r;
   if (!expand_query(buf, l, c, answer, sizeof(answer) - 1, hp->id, &r))
     return;
   DNSLOG_MSG("Response for %s", answer);
+
   c += r;
   if (c + 4 > eob)
     DNSLOG_RET("%s", "Query resource record truncated");
@@ -368,8 +370,7 @@ static void parserespacket(unsigned char *buf, int l) {
     if (c > eob)
       DNSLOG_RET("%s", "Packet does not contain all specified resouce records");
     memset(answer, 0, sizeof(answer));
-    int r;
-    struct resolve *rp = expand_query(buf, l, c, answer, sizeof(answer) - 1, hp->id, &r);
+    an = expand_query(buf, l, c, answer, sizeof(answer) - 1, hp->id, &r);
     c += r;
     if (c + 10 > eob)
       DNSLOG_RET("%s", "Resource record truncated");
@@ -384,14 +385,14 @@ static void parserespacket(unsigned char *buf, int l) {
     if (c + size > eob)
       DNSLOG_RET("%s", "Specified rdata length exceeds packet size");
 
-    if (rp && (type == T_PTR)) { // answer to us
+    if (an && (type == T_PTR)) { // answer to us
       memset(answer, 0, sizeof(answer));
       r = dn_expand(buf, buf + l, c, answer, sizeof(answer) - 1);
       if (r < 0)
         DNSLOG_RET("%s", "dn_expand() failed while expanding domain in rdata");
       int l = strnlen(answer, sizeof(answer));
       DNSLOG_MSG("Answer[%d]: \"%s\"[%d]", r, answer, l);
-      save_answer(rp->at, rp->ndx, answer);
+      save_answer(an->at, an->ndx, answer);
       return; // let's take first answer
     }
     c += size;
