@@ -19,6 +19,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
+#include <err.h>
 #include <limits.h>
 #include <math.h>
 #include <time.h>
@@ -110,15 +111,15 @@ struct sequence {
 
 // global vars
 ip_t unspec_addr;	// zero by definition
-bool (*addr_spec)(const void *); // true if address is specified
-bool (*addr_equal)(const void *, const void *); // true if it's the same address
-int (*unaddrcmp)(const void *);
-int (*addrcmp)(const void *, const void *);
-void* (*addrcpy)(void *, const void *);
+bool (*addr_exist)(const void *); // true if address is specified
+bool (*addr_equal)(const void *, const void *); // equal
+void* (*addr_copy)(void *, const void *);
 int af;	// address family
 int packetsize;	// packet size used by ping
 struct nethost host[MAXHOST];
 char localaddr[INET6_ADDRSTRLEN];
+unsigned long net_queries[4]; // number of queries (sum, icmp, udp, tcp)
+unsigned long net_replies[4]; // number of replies (sum, icmp, udp, tcp)
 //
 
 static unsigned *tcp_sockets;
@@ -146,26 +147,36 @@ static int recvsock = -1;
 #ifdef ENABLE_IPV6
 static struct sockaddr_storage sourcesockaddr_struct;
 static struct sockaddr_storage remotesockaddr_struct;
-static struct sockaddr_in6 * ssa6 = (struct sockaddr_in6 *) &sourcesockaddr_struct;
-static struct sockaddr_in6 * rsa6 = (struct sockaddr_in6 *) &remotesockaddr_struct;
+static struct sockaddr_in6 *ssa6 = (struct sockaddr_in6 *) &sourcesockaddr_struct;
+static struct sockaddr_in6 *rsa6 = (struct sockaddr_in6 *) &remotesockaddr_struct;
 #else
 static struct sockaddr_in sourcesockaddr_struct;
 static struct sockaddr_in remotesockaddr_struct;
 #endif
 
-static struct sockaddr * sourcesockaddr = (struct sockaddr *) &sourcesockaddr_struct;
-static struct sockaddr * remotesockaddr = (struct sockaddr *) &remotesockaddr_struct;
-static struct sockaddr_in * ssa4 = (struct sockaddr_in *) &sourcesockaddr_struct;
-static struct sockaddr_in * rsa4 = (struct sockaddr_in *) &remotesockaddr_struct;
+static struct sockaddr *sourcesockaddr = (struct sockaddr *) &sourcesockaddr_struct;
+static struct sockaddr *remotesockaddr = (struct sockaddr *) &remotesockaddr_struct;
+static struct sockaddr_in *ssa4 = (struct sockaddr_in *) &sourcesockaddr_struct;
+static struct sockaddr_in *rsa4 = (struct sockaddr_in *) &remotesockaddr_struct;
 
-static ip_t * sourceaddress;
-static ip_t * remoteaddress;
+static ip_t *sourceaddress;
+static ip_t *remoteaddress;
 
 static int batch_at;
 static int numhosts = 10;
 static int portpid;
 static int stopper = MAXHOST;
 enum RE_REASONS { RE_PONG, RE_EXCEED, RE_UNREACH };
+
+
+bool addr4exist(const void *a) { return memcmp(a, &unspec_addr, sizeof(struct in_addr)) ? true : false; }
+bool addr4equal(const void *a, const void *b) { return memcmp(a, b, sizeof(struct in_addr)) ? false : true; }
+void* addr4copy(void *a, const void *b) { return memcpy(a, b, sizeof(struct in_addr)); }
+#ifdef ENABLE_IPV6
+bool addr6exist(const void *a) { return memcmp(a, &unspec_addr, sizeof(struct in6_addr)) ? true : false; }
+bool addr6equal(const void *a, const void *b) { return memcmp(a, b, sizeof(struct in6_addr)) ? false : true; }
+void* addr6copy(void *a, const void *b) { return memcpy(a, b, sizeof(struct in6_addr)); }
+#endif
 
 // return the number of microseconds to wait before sending the next ping
 time_t wait_usec(float t) {
@@ -247,7 +258,7 @@ static int new_sequence(int index) {
 int net_tcp_init(void) {
   if (!tcp_sockets)
     if (!(tcp_sockets = calloc(SEQ_MAX, sizeof(int)))) {
-      perror("net_tcp_init()");
+      warn("net.tcp.init: calloc(%d, %zd)", SEQ_MAX, sizeof(int));
       return 0;
     }
   return 1;
@@ -256,13 +267,12 @@ int net_tcp_init(void) {
 #define ERR_N_EXIT(s) { \
   int e = errno; \
   display_clear(); \
-  fprintf(stderr, "%s: %s\n", s, strerror(e)); \
-  exit(e); \
+  errx(e, "%s: %s", s, strerror(e)); \
 }
 
 #define NST_ADRR_FILL(lo_addr, ssa_addr, re_addr, re_port, loc) { \
-  addrcpy(&lo_addr, &ssa_addr); \
-  addrcpy(&re_addr, remoteaddress); \
+  addr_copy(&lo_addr, &ssa_addr); \
+  addr_copy(&re_addr, remoteaddress); \
   re_port = htons((remoteport > 0) ? remoteport : TCP_DEFAULT_PORT); \
   namelen = sizeof(*loc); \
 }
@@ -350,10 +360,11 @@ static void net_send_tcp(int index) {
     tcp_sockets[pseq] = s;
 
   connect(s, (struct sockaddr *) &remote, namelen);
+  /*stat*/ net_queries[0]++; net_queries[2]++;
   FD_SET(s, &wset);
   if (s >= maxfd)
     maxfd = s + 1;
-  NETLOG_MSG("net_send_tcp(index=%d): sequence=%d, socket=%d", index, pseq, s);
+  NETLOG_MSG("net.send.tcp: ndx=%d seq=%d sock=%d", index, pseq, s);
 }
 
 #define SET_UDP_UH_PORTS(sport, dport) { \
@@ -372,14 +383,14 @@ static void net_send_tcp(int index) {
 #endif
 
 // Attempt to find the host at a particular number of hops away
-static void net_send_query(int index) {
+static void net_send_query(int at) {
   char packet[MAXPACKET];
   struct IPHeader *ip = (struct IPHeader *)packet;
   struct ICMPHeader*icmp = NULL;
   struct udphdr *udp = NULL;
   struct UDPv4PHeader *udpp = NULL;
   int iphsize = 0, echotype = 0, salen = 0;
-  int ttl = index + 1;
+  int ttl = at + 1;
 
 #ifdef ENABLE_IPV6
   /* offset for ipv6 checksum calculation */
@@ -410,8 +421,8 @@ static void net_send_query(int index) {
     ip->check = 0;
 
   /* BSD needs the source address here, Linux & others do not... */
-    addrcpy(&(ip->saddr), &(ssa4->sin_addr));
-    addrcpy(&(ip->daddr), remoteaddress);
+    addr_copy(&(ip->saddr), &(ssa4->sin_addr));
+    addr_copy(&(ip->daddr), remoteaddress);
 #endif
     echotype = ICMP_ECHO;
     salen = sizeof (struct sockaddr_in);
@@ -433,15 +444,15 @@ static void net_send_query(int index) {
     icmp->code     = 0;
     icmp->checksum = 0;
     icmp->id       = mypid;
-    icmp->sequence = new_sequence(index);
+    icmp->sequence = new_sequence(at);
     icmp->checksum = checksum(icmp, packetsize - iphsize);
     gettimeofday(&sequence[icmp->sequence].time, NULL);
-    NETLOG_MSG("net_send_icmp(index=%d): sequence=%d", index, icmp->sequence);
+    NETLOG_MSG("net.send.icmp: ndx=%d seq=%d id=%u", at, icmp->sequence, icmp->id);
   } else if (mtrtype == IPPROTO_UDP) {
     udp = (struct udphdr *)(packet + iphsize);
     udp->uh_sum  = 0;
     udp->uh_ulen = htons(packetsize - iphsize);
-    int useq = new_sequence(index);
+    int useq = new_sequence(at);
     if (remoteport < 0) {
       SET_UDP_UH_PORTS(portpid, (LO_UDPPORT + useq));
 	} else {
@@ -449,7 +460,7 @@ static void net_send_query(int index) {
     };
 
     gettimeofday(&sequence[useq].time, NULL);
-    NETLOG_MSG("net_send_udp(index=%d): sequence=%d, port=%d", index, useq, ntohs(udp->uh_dport));
+    NETLOG_MSG("net.send.udp: ndx=%d seq=%d port=%u", at, useq, ntohs(udp->uh_dport));
     if (af == AF_INET) {
       /* checksum is not mandatory. only calculate if we know ip->saddr */
       if (ip->saddr) {
@@ -474,6 +485,7 @@ static void net_send_query(int index) {
 
   if (sendto(sendsock, packet, packetsize, 0, remotesockaddr, salen) < 0)
     ERR_N_EXIT("sendto()");
+  /*stat*/ net_queries[0]++; (mtrtype == IPPROTO_ICMP) ? net_queries[1]++ : net_queries[2];
 }
 
 static void tcp_seq_close(unsigned at) {
@@ -533,31 +545,43 @@ static void fill_host_stat(int at, time_t curr, int saved_seq) {
 
 int addr2ndx(int hop, ip_t *addr) { // return index of 'addr' at 'hop', otherwise -1
   for (int i = 0; i < MAXPATH; i++)
-    if (!addrcmp(&IP_AT_NDX(hop, i), addr))
+    if (addr_equal(&IP_AT_NDX(hop, i), addr))
       return i;
   return -1;
 }
 
 int at2next(int hop) { // return first free slot at 'hop', otherwise -1
   for (int i = 0; i < MAXPATH; i++)
-    if (!unaddrcmp(&IP_AT_NDX(hop, i)))
+    if (!addr_exist(&IP_AT_NDX(hop, i)))
       return i;
   return -1;
 }
 
 // set new ip-addr and clear associated data
 void set_new_addr(int at, int ndx, const ip_t *ip, const mpls_data_t *mpls) {
-  addrcpy(&IP_AT_NDX(at, ndx), ip);
+  addr_copy(&IP_AT_NDX(at, ndx), ip);
   mpls ? memcpy(&MPLS_AT_NDX(at, ndx), mpls, sizeof(mpls_data_t))
     : memset(&MPLS_AT_NDX(at, ndx), 0, sizeof(mpls_data_t));
-  if (Q_AT_NDX(at, ndx)) {
-    free(Q_AT_NDX(at, ndx));
-    Q_AT_NDX(at, ndx) = NULL;
+  if (QPTR_AT_NDX(at, ndx)) {
+    free(QPTR_AT_NDX(at, ndx));
+    QPTR_AT_NDX(at, ndx) = NULL;
   }
-  if (R_AT_NDX(at, ndx)) {
-    free(R_AT_NDX(at, ndx));
-    R_AT_NDX(at, ndx) = NULL;
+  if (RPTR_AT_NDX(at, ndx)) {
+    free(RPTR_AT_NDX(at, ndx));
+    RPTR_AT_NDX(at, ndx) = NULL;
   }
+#ifdef IPINFO
+  if (QTXT_AT_NDX(at, ndx)) {
+    free(QTXT_AT_NDX(at, ndx));
+    QTXT_AT_NDX(at, ndx) = NULL;
+  }
+  for (int i = 0; i < MAX_TXT_ITEMS; i++) {
+    if (RTXT_AT_NDX(at, ndx, i)) {
+      free(RTXT_AT_NDX(at, ndx, i));
+      RTXT_AT_NDX(at, ndx, i) = NULL;
+    }
+  }
+#endif
 }
 
 // We got a return on something
@@ -566,7 +590,7 @@ static void net_process_ping(unsigned port, const mpls_data_t *mpls, const void 
   if (!sequence[seq].transit)
     return;
 
-  NETLOG_MSG("net_process_ping(port=%d, seq=%d)", port, seq);
+  NETLOG_MSG("net.stat: seq=%d", seq);
   sequence[seq].transit = 0;
   if (mtrtype == IPPROTO_TCP)
     tcp_seq_close(seq);
@@ -582,12 +606,14 @@ static void net_process_ping(unsigned port, const mpls_data_t *mpls, const void 
     return;
 
   ip_t copy;
-  addrcpy(&copy, addr); // can it be overwritten?
+  addr_copy(&copy, addr); // can it be overwritten?
   int ndx = addr2ndx(at, &copy);
   if (ndx < 0) {        // new one
     ndx = at2next(at);
     if (ndx < 0) {      // no free slots? warn about it, and change the last one
-      fprintf(stderr, "MAXPATH=%d is exceeded at hop=%d\n", MAXPATH, at);
+      const char *fmt = "MAXPATH=%d is exceeded at hop=%d";
+      warnx(fmt, MAXPATH, at);
+      NETLOG_MSG(fmt, MAXPATH, at);
       ndx = MAXPATH - 1;
     }
     set_new_addr(at, ndx, &copy, mpls);
@@ -602,10 +628,8 @@ static void net_process_ping(unsigned port, const mpls_data_t *mpls, const void 
   time_t curr = timer2usec(&_tv); // is negative possible? [if (curr < 0) curr = 0;]
   fill_host_stat(at, curr, sequence[seq].saved_seq);
 #ifdef OUTPUT_FORMAT_RAW
-  if (enable_raw) {
-    NETLOG_MSG("raw_rawping(at=%d, curr[usec]=" LLD ")", at, curr);
+  if (enable_raw)
     raw_rawping(at, curr);
-  }
 #endif
 }
 
@@ -668,7 +692,7 @@ void net_process_return(void) {
   }
 
   num = recvfrom(recvsock, packet, MAXPACKET, 0, fromsockaddr, &fromsockaddrsize);
-  NETLOG_MSG("net_process_return(): got %d bytes", num);
+  NETLOG_MSG("net.process: got %d bytes", num);
   switch (af) {
   case AF_INET:
     if (num < (sizeof(struct IPHeader) + sizeof(struct ICMPHeader)))
@@ -708,14 +732,14 @@ void net_process_return(void) {
       if (header->id != (uint16_t)mypid)
         return;
       sequence = header->sequence;
-      NETLOG_MSG("ICMP: net_process_return(): id=%u, seq=%d, type=%d, code=%d",
-        header->id, sequence, header->type, header->code);
+      NETLOG_MSG("net.icmp.recv: id=%u seq=%d type=%d code=%d", header->id, sequence, header->type, header->code);
     }
+    /*stat*/ net_replies[0]++; net_replies[1]++;
     break;
 
   case IPPROTO_UDP: {
       struct udphdr *uh = NULL;
-      switch ( af ) {
+      switch (af) {
       case AF_INET:
         USER_DATA(uh, FDATA_OFF, struct udphdr, 160);
       break;
@@ -735,13 +759,14 @@ void net_process_return(void) {
         sequence = ntohs(uh->uh_sport);
       }
       sequence -= LO_UDPPORT;
-      NETLOG_MSG("UDP: net_process_return: portpid=%d, seq=%d", portpid, sequence);
+      NETLOG_MSG("net.udp.recv: id=%d seq=%d", portpid, sequence);
     }
+    /*stat*/ net_replies[0]++; net_replies[2]++;
     break;
 
   case IPPROTO_TCP: {
       struct tcphdr *th = NULL;
-      switch ( af ) {
+      switch (af) {
       case AF_INET:
         USER_DATA(th, FDATA_OFF, struct tcphdr, 160);
       break;
@@ -752,8 +777,9 @@ void net_process_return(void) {
 #endif
       }
       sequence = ntohs(th->th_sport);
-      NETLOG_MSG("TCP: net_process_return(): sequence=%d", sequence);
+      NETLOG_MSG("net.tcp.recv: seq=%d", sequence);
     }
+    /*stat*/ net_replies[0]++; net_replies[3]++;
     break;
   }
 
@@ -798,12 +824,12 @@ int net_elem(int at, char c) {
 int net_max(void) {
   int max = 0;
   for (int at = 0; at < maxTTL; at++) {
-    if (!addrcmp(&CURRENT_IP(at), remoteaddress)) {
+    if (addr_equal(&CURRENT_IP(at), remoteaddress)) {
       max = at + 1;
       if (endpoint_mode)
         fstTTL = max;
       break;
-    } else if (unaddrcmp(&CURRENT_IP(at))) {
+    } else if (addr_exist(&CURRENT_IP(at))) {
       max = at + 2;
       if (endpoint_mode)
         fstTTL = max - 1; // -1: show previous known hop
@@ -852,13 +878,13 @@ int net_send_batch(void) {
 
   int n_unknown = 0;
   for (int at = fstTTL - 1; at < batch_at; at++) {
-    if (!unaddrcmp(&CURRENT_IP(at)))
+    if (!addr_exist(&CURRENT_IP(at)))
       n_unknown++;
-    if (!addrcmp(&CURRENT_IP(at), remoteaddress))
+    if (addr_equal(&CURRENT_IP(at), remoteaddress))
       n_unknown = MAXHOST; // Make sure we drop into "we should restart"
   }
 
-  if (!addrcmp(&CURRENT_IP(batch_at), remoteaddress) // success in reaching target
+  if (addr_equal(&CURRENT_IP(batch_at), remoteaddress) // success in reaching target
      || (n_unknown > MAX_UNKNOWN_HOSTS) // fail in consecuitive MAX_UNKNOWN_HOSTS (firewall?)
      || (batch_at >= (maxTTL - 1))      // or reach limit
      || (batch_at >= stopper)) {        // or learnt unreachable
@@ -871,21 +897,6 @@ int net_send_batch(void) {
   return 0;
 }
 
-
-static void set_fd_flags(int fd) {
-  int oldflags;
-  if (fd < 0)
-    return;
-  oldflags = fcntl(fd, F_GETFD);
-  if (oldflags == -1) {
-    perror("Couldn't get fd's flags");
-    return;
-  }
-#ifdef FD_CLOEXEC
-  if (fcntl(fd, F_SETFD, oldflags | FD_CLOEXEC))
-    perror("Couldn't set fd's flags");
-#endif
-}
 
 int net_preopen(void) {
   int trueopt = 1;
@@ -907,21 +918,17 @@ int net_preopen(void) {
   /*  FreeBSD wants this to avoid sending out packets with protocol type RAW
       to the network.  */
   if (setsockopt(sendsock4, SOL_IP, IP_HDRINCL, &trueopt, sizeof(trueopt))) {
-    perror("setsockopt(IP_HDRINCL,1)");
+    warn("net.preopen: %s", "setsockopt(IP_HDRINCL,1)");
     return -1;
   }
-#endif /* IP_HDRINCL */
+#endif
 
   recvsock4 = socket(AF_INET, SOCK_RAW, IPPROTO_ICMP);
   if (recvsock4 < 0)
     return -1;
-  set_fd_flags(recvsock4);
 #ifdef ENABLE_IPV6
   recvsock6 = socket(AF_INET6, SOCK_RAW, IPPROTO_ICMPV6);
-  if (recvsock6 >= 0)
-     set_fd_flags(recvsock6);
 #endif
-
   return 0;
 }
 
@@ -970,26 +977,23 @@ int net_open(struct hostent *entry) {
   case AF_INET:
     sendsock = sendsock4;
     recvsock = recvsock4;
-    addr4cpy(&(rsa4->sin_addr), entry->h_addr);
+    addr_copy(&(rsa4->sin_addr), entry->h_addr);
     sourceaddress = (ip_t *) &(ssa4->sin_addr);
     remoteaddress = (ip_t *) &(rsa4->sin_addr);
     break;
 #ifdef ENABLE_IPV6
   case AF_INET6:
-    if (sendsock6 < 0 || recvsock6 < 0) {
-      fprintf(stderr, "Could not open IPv6 socket\n");
-      exit(EXIT_FAILURE);
-    }
+    if ((sendsock6 < 0) || (recvsock6 < 0))
+      errx(EXIT_FAILURE, "net.open: %s", "could not open IPv6 socket");
     sendsock = sendsock6;
     recvsock = recvsock6;
-    addr6cpy(&(rsa6->sin6_addr), entry->h_addr);
+    addr_copy(&(rsa6->sin6_addr), entry->h_addr);
     sourceaddress = (ip_t *) &(ssa6->sin6_addr);
     remoteaddress = (ip_t *) &(rsa6->sin6_addr);
     break;
 #endif
   default:
-    fprintf(stderr, "net_open bad address type\n");
-    exit(EXIT_FAILURE);
+    errx(EXIT_FAILURE, "net.open: unknown address type %d", entry->h_addrtype);
   }
 
   socklen_t len = sizeof(name_struct);
@@ -1021,17 +1025,17 @@ void net_reset(void) {
 }
 
 
-int net_set_interfaceaddress(char *InterfaceAddress) {
+int net_set_ifaddr(char *ifaddr) {
   int len = 0;
-  if (!InterfaceAddress)
+  if (!ifaddr)
     return 0;
 
   sourcesockaddr->sa_family = af;
   switch (af) {
     case AF_INET:
       ssa4->sin_port = 0;
-      if (inet_aton(InterfaceAddress, &(ssa4->sin_addr)) < 1) {
-        fprintf(stderr, "bad interface address: %s\n", InterfaceAddress);
+      if (inet_aton(ifaddr, &(ssa4->sin_addr)) < 1) {
+        warnx("net.set.ifaddr: bad address: %s", ifaddr);
         return 1;
       }
       len = sizeof(struct sockaddr);
@@ -1039,8 +1043,8 @@ int net_set_interfaceaddress(char *InterfaceAddress) {
 #ifdef ENABLE_IPV6
     case AF_INET6:
       ssa6->sin6_port = 0;
-      if (inet_pton(af, InterfaceAddress, &(ssa6->sin6_addr)) < 1) {
-        fprintf(stderr, "bad interface address: %s\n", InterfaceAddress);
+      if (inet_pton(af, ifaddr, &(ssa6->sin6_addr)) < 1) {
+        warnx("net.set.ifaddr: bad address %s", ifaddr);
         return 1;
       }
       len = sizeof(struct sockaddr_in6);
@@ -1049,7 +1053,7 @@ int net_set_interfaceaddress(char *InterfaceAddress) {
   }
 
   if (bind(sendsock, sourcesockaddr, len) < 0) {
-    perror("failed to bind to interface");
+    warn("net.set.ifaddr: bind(%d)", sendsock);
     return 1;
   }
   return 0;
@@ -1066,6 +1070,10 @@ void net_close(void) {
     close(sendsock6_udp);
   }
   if (recvsock6 >= 0) close(recvsock6);
+  // clear memory allocated for query/response cache
+  for (int at = 0; at < MAXHOST; at++)
+    for (int ndx = 0; ndx < MAXPATH; ndx++)
+      set_new_addr(at, ndx, &unspec_addr, NULL);
 }
 
 int net_waitfd(void) {
@@ -1091,7 +1099,7 @@ void sockaddrtop(struct sockaddr *saddr, char *strptr, size_t len) {
     return;
 #endif
   default:
-    fprintf(stderr, "sockaddrtop unknown address type\n");
+    warnx("net.sockaddrtop: unknown address type %d", saddr->sa_family);
     strptr[0] = '\0';
     return;
   }
@@ -1201,58 +1209,34 @@ bool net_process_tcp_fds(void) {
   return ret;
 }
 
-bool addr4spec(const void *a) { // comparison to unspecified IPv4 address
-  return memcmp(a, &unspec_addr, sizeof(struct in_addr)) ? true : false;
+static void save_ptr_answer(int at, int ndx, const char* answer) {
+  if (RPTR_AT_NDX(at, ndx)) {
+    NETLOG_MSG("T_PTR dup or update at=%d ndx=%d for %s", at, ndx, strlongip(&IP_AT_NDX(at, ndx)));
+    free(RPTR_AT_NDX(at, ndx));
+    RPTR_AT_NDX(at, ndx) = NULL;
+  }
+  RPTR_AT_NDX(at, ndx) = strnlen(answer, NAMELEN) ? strndup(answer, NAMELEN) :
+    // if no answer, save ip-address in text representation
+    strndup(strlongip(&IP_AT_NDX(at, ndx)), NAMELEN);
+  if (!RPTR_AT_NDX(at, ndx))
+    warn("net.save.ptr.answer[%d.%d]: strndup()", at, ndx);
 }
-bool addr4equal(const void *a, const void *b) { // IPv4 address comparison
-  return memcmp(a, b, sizeof(struct in_addr)) ? false : true;
-}
-int unaddr4cmp(const void *a) { // comparison to unspecified IPv4 address
-  return memcmp(a, &unspec_addr, sizeof(struct in_addr));
-}
-int addr4cmp(const void *a, const void *b) { // IPv4 address comparison
-  return memcmp(a, b, sizeof(struct in_addr));
-}
-void* addr4cpy(void *a, const void *b) { // IPv4 address copy
-  return memcpy(a, b, sizeof(struct in_addr));
-}
-
-#ifdef ENABLE_IPV6
-bool addr6spec(const void *a) { // comparison to unspecified IPv6 address
-  return memcmp(a, &unspec_addr, sizeof(struct in6_addr)) ? true : false;
-}
-bool addr6equal(const void *a, const void *b) { // IPv6 address comparison
-  return memcmp(a, b, sizeof(struct in6_addr)) ? false : true;
-}
-int unaddr6cmp(const void *a) { // comparison to unspecified IPv6 address
-  return memcmp(a, &unspec_addr, sizeof(struct in6_addr));
-}
-int addr6cmp(const void *a, const void *b) { // IPv6 address comparison
-  return memcmp(a, b, sizeof(struct in6_addr));
-}
-void* addr6cpy(void *a, const void *b) { // IPv6 address copy
-  return memcpy(a, b, sizeof(struct in6_addr));
-}
-#endif
 
 void net_init(int ipv6_mode) {
+  dns_ptr_handler = save_ptr_answer; // no checks, handler for net-module only
 #ifdef ENABLE_IPV6
   if (ipv6_mode) {
     af = AF_INET6;
-    addr_spec = addr6spec;
+    addr_exist = addr6exist;
     addr_equal = addr6equal;
-    unaddrcmp = unaddr6cmp;
-    addrcmp = addr6cmp;
-    addrcpy = addr6cpy;
+    addr_copy  = addr6copy;
   } else
 #endif
   { // IPv4 by default
     af = AF_INET;
-    addr_spec = addr4spec;
+    addr_exist = addr4exist;
     addr_equal = addr4equal;
-    unaddrcmp = unaddr4cmp;
-    addrcmp = addr4cmp;
-    addrcpy = addr4cpy;
+    addr_copy  = addr4copy;
   }
 }
 
@@ -1261,11 +1245,22 @@ const char *strlongip(ip_t *ip) {
   return inet_ntop(af, ip, addrstr, sizeof(addrstr));
 }
 
-static const char mpls_fmt[] = "%*s[Lbl:%u Exp:%u S:%u TTL:%u]";
-
 const char *mpls2str(const mpls_label_t *label, int indent) {
+  static const char mpls_fmt[] = "%*s[Lbl:%u Exp:%u S:%u TTL:%u]";
   static char m2s_buf[64];
   snprintf(m2s_buf, sizeof(m2s_buf), mpls_fmt, indent, "", label->lab, label->exp, label->s, label->ttl);
   return m2s_buf;
+}
+
+// type must correspond 'id' in resolve HEADER (unsigned id:16)
+// it's used as a hint for fast search, 16bits as [hash:7 at:6 ndx:3]
+uint16_t str2hint(const char* s, uint16_t at, uint16_t ndx) {
+  uint16_t h = 0, c;
+  while ((c = *s++))
+    h = ((h << 5) + h) ^ c; // h * 33 ^ c
+  h &= IDMASK;
+  h |= AT2ID(at);
+  h |= ID2NDX(ndx);
+  return h;
 }
 

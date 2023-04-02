@@ -44,15 +44,14 @@ void display_detect(int *argc, char ***argv) {
 #endif
 }
 
-void display_open(void) {
+bool display_open(void) {
   switch (display_mode) {
   case DisplayReport:
     report_open();
     break;
 #ifdef CURSES
   case DisplayCurses:
-    mtr_curses_open();  
-    break;
+    return mtr_curses_open();
 #endif
 #ifdef SPLITMODE
   case DisplaySplit:
@@ -61,11 +60,10 @@ void display_open(void) {
 #endif
 #ifdef GRAPHCAIRO
   case DisplayGraphCairo:
-    if (!gc_open())
-      exit(1);
-    break;
+    return gc_open();
 #endif
   }
+  return true;
 }
 
 void display_close(bool notfirst) {

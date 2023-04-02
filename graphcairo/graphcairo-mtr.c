@@ -1,7 +1,9 @@
 
+#include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
+#include <err.h>
 #include <sys/time.h>
 
 #include "config.h"
@@ -70,12 +72,12 @@ enum {
 #define LEGEND_HD_NO    3
 static char legend_hd[LEGEND_HD_NO][HOSTSTAT_LEN];
 
-int gc_open(void) {
+bool gc_open(void) {
 	if ((data = malloc(maxTTL * sizeof(int))))
 		memset(data, -1, maxTTL * sizeof(int));
 	else {
-		fprintf(stderr, "gc_open: malloc() failed\n");
-		return 0;
+		warn("gc.open: malloc(%zd)", maxTTL * sizeof(int));
+		return false;
 	}
 
 	timeout = POS_ROUND(wait_time * USECONDS);
@@ -91,7 +93,7 @@ int gc_open(void) {
 	params.label_max = MAXLABELS;
 
 	if (!cr_open(&params))
-		return 0;
+		return false;
 
 	if (params.enable_legend) {
 		if (params.jitter_graph)
@@ -101,11 +103,12 @@ int gc_open(void) {
 		mtr_curses_init();
 	}
 
-	return 1;
+	return true;
 }
 
 void gc_close(void) {
-	free(data);
+	if (data)
+		free(data);
 	cr_close();
 }
 
@@ -134,7 +137,7 @@ static void fill_hostinfo(int at, int ndx) {
 #ifdef IPINFO
 	if (ii_ready()) {
 		int sz = 2 * STARTSTAT;
-		int l = snprintf(p, sz, "%s", fmt_ipinfo(addr));
+		int l = snprintf(p, sz, "%s", fmt_ipinfo(at, ndx));
 		if (l < 0) sz = 0;
 		else if (l < sz) sz = l;
 		else sz -= 1;
@@ -143,7 +146,7 @@ static void fill_hostinfo(int at, int ndx) {
 	}
 #endif
 	int l, sz = STARTSTAT;
-	const char *name = dns_lookup(at, ndx);
+	const char *name = dns_ptr_lookup(at, ndx);
 	if (name) {
 		l = snprintf(p, sz, "%s", name);
 		if (show_ips)
@@ -186,7 +189,7 @@ static void gc_keyaction(int c) {
 				if (display_offset >= hops)
 					display_offset = hops - 1;
 				hostinfo_max = 0;
-				GCDEBUG_MSG(("display_offset=%d\n", display_offset));
+				GCDEBUG_MSG("display_offset=%d\n", display_offset);
 			} break;
 			case '-': {	// ScrollUp
 				int rest = display_offset % 5;
@@ -197,21 +200,20 @@ static void gc_keyaction(int c) {
 				if (display_offset < 0)
 					display_offset = 0;
 				hostinfo_max = 0;
-				GCDEBUG_MSG(("display_offset=%d\n", display_offset));
+				GCDEBUG_MSG("display_offset=%d\n", display_offset);
 			} break;
 #ifdef IPINFO
 			case 'y':	// IP Info
 				ii_action(ActionII);
 				hostinfo_max = 0;
-				GCDEBUG_MSG(("switching ip info\n"));
+				GCDEBUG_MSG("%s", "switching ip info\n");
 				break;
-			case 'Y':	// on Google Maps
-				ii_action(ActionII_Map);
+			case 'z':	// ASN
+				ii_action(ActionAS);
 				hostinfo_max = 0;
-				GCDEBUG_MSG(("show on google maps\n"));
+				GCDEBUG_MSG("%s", "toggle asn info\n");
 				break;
 #endif
-
 		}
 		switch (tolower(c)) {
 			case 'd':	// Display
@@ -219,11 +221,11 @@ static void gc_keyaction(int c) {
 				if (curses_mode)
 					curses_cols = cr_recalc(hostinfo_max);
 				pr_lastd();
-				GCDEBUG_MSG(("curses_mode=%d\n", curses_mode));
+				GCDEBUG_MSG("curses_mode=%d\n", curses_mode);
 				break;
 			case 'e':	// MPLS
 				enable_mpls = !enable_mpls;
-				GCDEBUG_MSG(("enable_mpls=%d\n", enable_mpls));
+				GCDEBUG_MSG("enable_mpls=%d\n", enable_mpls);
 				break;
 			case 'j':
 				if (index((char*)fld_active, 'N'))
@@ -231,62 +233,54 @@ static void gc_keyaction(int c) {
 				else
 					strcpy((char*)fld_active, FLD_ACTIVE_DEFAULT);
 				mtr_curses_data_fields(legend_hd[LEGEND_HEADER_STATIC]);
-				GCDEBUG_MSG(("toggle latency(default)/jitter stats\n"));
+				GCDEBUG_MSG("%s", "toggle latency(default)/jitter stats\n");
 				break;
 			case 'n':	// DNS
 				enable_dns = !enable_dns;
 				hostinfo_max = 0;
-				GCDEBUG_MSG(("enable_dns=%d\n", enable_dns));
+				GCDEBUG_MSG("enable_dns=%d\n", enable_dns);
 				break;
-#ifdef IPINFO
-			case 'z':	// ASN
-				ii_action(ActionAS);
-				hostinfo_max = 0;
-				GCDEBUG_MSG(("toggle asn info\n"));
-				break;
-#endif
 		}
 	}
 
 	switch (c) {
 		case 'q':	// Quit
 			gc_close();
-			GCDEBUG_MSG(("bye-bye\n"));
-			exit(0);
-			break;
+			GCDEBUG_MSG("%s", "close\n");
+			exit(EXIT_SUCCESS);
 		case ' ':	// Resume
 			paused = false;
 			cr_net_reset(1);
-			GCDEBUG_MSG(("...resume\n"));
+			GCDEBUG_MSG("%s", "...resume\n");
 			break;
 	}
 	switch (tolower(c)) {
 		case 'p':	// Pause
 			paused = true;
-			GCDEBUG_MSG(("pause...\n"));
+			GCDEBUG_MSG("%s", "pause...\n");
 			break;
 		case 'r':	// Reset
 			net_reset();
 			cr_net_reset(0);
 			num_pings = 0;
-			GCDEBUG_MSG(("net reset\n"));
+			GCDEBUG_MSG("%s", "net reset\n");
 			break;
 		case 't':	// TCP on/off
 			if (mtrtype == IPPROTO_TCP) {
 				mtrtype = IPPROTO_ICMP;
-				GCDEBUG_MSG(("icmp_echo packets\n"));
+				GCDEBUG_MSG("%s", "icmp_echo packets\n");
 			} else if (net_tcp_init()) {
 				mtrtype = IPPROTO_TCP;
-				GCDEBUG_MSG(("tcp_syn packets\n"));
+				GCDEBUG_MSG("%s", "tcp_syn packets\n");
 			}
 			break;
 		case 'u':	// UDP on/off
 			if (mtrtype == IPPROTO_UDP) {
 				mtrtype = IPPROTO_ICMP;
-				GCDEBUG_MSG(("icmp_echo packets\n"));
+				GCDEBUG_MSG("%s", "icmp_echo packets\n");
 			} else {
 				mtrtype = IPPROTO_UDP;
-				GCDEBUG_MSG(("udp datagrams\n"));
+				GCDEBUG_MSG("%s", "udp datagrams\n");
 			}
 			break;
 	}
@@ -306,7 +300,6 @@ void gc_redraw(void) {
 	if (paused)
 		return;
 
-	int i, at;
 	int min = net_min();
 	int max = net_max();
 	int hops = max - min /* + 1 */;
@@ -323,7 +316,7 @@ void gc_redraw(void) {
 
 	if (dt < timeout) {
 		int pings = host[min].xmit;
-		for (at = min + 1; at < (max - 1); at++)
+		for (int at = min + 1; at < (max - 1); at++)
 			if (host[at].xmit != pings)
 				return;
 		if (pings > num_pings)
@@ -345,10 +338,10 @@ void gc_redraw(void) {
 		cr_print_legend_header(curses_mode ? legend_hd[LEGEND_HEADER] : legend_hd[LEGEND_HEADER_STATIC]);
 	}
 
-	for (i = 0, at = min; i < hops; i++, at++) {
+	for (int i = 0, at = min; i < hops; i++, at++) {
 		ip_t *addr = &CURRENT_IP(at);
 
-		if (unaddrcmp(addr)) {
+		if (addr_exist(addr)) {
 			int saved_ndx = SAVED_PINGS - 2;	// waittime ago
 			if (params.jitter_graph) {
 				// jitter, defined as "tN - tN-1" (net.c)
@@ -404,7 +397,7 @@ void gc_redraw(void) {
 						if (j == host[at].current)
 							continue; // because already printed
 						ip_t *ip = &IP_AT_NDX(at, j);
-						if (!unaddrcmp(ip))
+						if (!addr_exist(ip))
 							break;
 						fill_hostinfo(at, j);
 						cr_print_host(i, data[i], buf, NULL);

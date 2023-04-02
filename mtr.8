@@ -6,7 +6,7 @@
 .Nd a network diagnostic tool
 .Sh SYNOPSIS
 .Nm
-.Op Fl abBcdefFGilmnopPQrsTuvwxyzZ46
+.Op Fl abBcdefFGilmnopPQrsSTuvwxyzZ46
 HOSTNAME ...
 .Sh DESCRIPTION
 .Nm
@@ -184,6 +184,8 @@ to measure the quality of your network may result in decreased network performan
 This option sets the packet size used for probing.  It is in bytes inclusive IP and ICMP headers.
 
 If set to a negative number, every iteration will use a different, random packet size upto that number.
+.It Fl S, Fl -summary
+Print send/receive summary at exit
 .It Fl T, Fl -tcp
 Use TCP SYN packets instead of ICMP ECHO
 .It Fl u, Fl -udp
@@ -207,24 +209,16 @@ Available origins and their fields:
 .Bl -tag -width indent -offset Ds
 .It Cm 1 - origin.asn.cymru.com (both IPv4 and IPv6)
 ASN, Route, CC, Registry, Allocated
-.It Cm 2 - asn.routeviews.org
-ASN
-.It Cm 3 - origin.asn.spameatingmonkey.net
-Route, ASN, Org, Allocated, CC
-.It Cm 4 - ip2asn.sasm4.net
-ASN
-.It Cm 5 - peer.asn.shadowserver.org
-Peers, ASN, Route, AS Name, CC, Org
-.It Cm 6 - freegeoip.net [discontinued on July 1st, 2018]
-CC, Country, RC, Region, City, Zip, TZ, Lat, Long, MC
-.It Cm 7 - ip-api.com
-Country, CC, RC, Region, City, Zip, Lat, Long, TZ, ISP, Org, AS Name
-.It Cm 8 - getcitydetails.geobytes.com
-Certainty, CC, Country, RLC, Region, RC, LC, DMA, City, CityID, FQCN, Lat, Long, Capital, TZ, Nationality, Population, NationalityPlural, MapReference, Currency, CurrencyCode, Title
-.It Cm 9 - ipinfo.io
-City, Region, CC, Location(Lat, Long), Postal, Org
-.It Cm 10 - riswhois.ripe.net (both IPv4 and IPv6)
+.It Cm 2 - riswhois.ripe.net (both IPv4 and IPv6)
 Route, Origin, Descr, CC
+.It Cm 3 - peer.asn.shadowserver.org
+Peers, ASN, Route, AS Name, CC, Org
+.It Cm 4 - origin.asn.spameatingmonkey.net
+Route, ASN, Org, Allocated, CC
+.It Cm 5 - ip-api.com
+Country, CC, RC, Region, City, Zip, Lat, Long, TZ, ISP, Org, AS Name
+.It Cm 6 - asn.routeviews.org
+ASN
 .El
 
 Abbreviations:
@@ -240,8 +234,10 @@ Country/Region/Metro/Local Code
 .El
 Examples:
 .Bl -tag -width indent-two -offset Ds -compact
-.It Cm -y3,5,2,3
-origin.asn.spameatingmonkey.net: CC ASN ORG
+.It Cm -y5,2,5,7,8
+ip-api.com: CC City Lat Long
+.It Cm -y2,4,2
+riswhois.ripe.net: CC Origin
 .It Cm -y,
 origin.asn.cymru.com: ASN
 .El

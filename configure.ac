@@ -55,6 +55,7 @@ AS_IF([test "x$unicode" = "xyes"], [
 AC_SEARCH_LIBS([pow], [m],, AC_MSG_ERROR(No math library found))
 AC_SEARCH_LIBS([socket], [socket],, AC_MSG_ERROR(No socket library found))
 AC_SEARCH_LIBS([gethostbyname], [nsl],, AC_MSG_ERROR(No nameservice library found))
+AC_SEARCH_LIBS([dn_expand], [resolv],, AC_SEARCH_LIBS([__dn_expand], [resolv],, AC_MSG_ERROR(No resolv found)))
 
 AC_ARG_WITH([libidn],
 	AS_HELP_STRING([--with-libidn], [IDN support (libidn)]),
@@ -85,7 +86,9 @@ AS_IF([test "x$curses" = "xno"], [graphcairo_xlib=no])
 AM_CONDITIONAL([GRAPHCAIRO_XLIB], [test "x$graphcairo_xlib" = "xyes"])
 dnl
 AM_CONDITIONAL([GRAPHCAIRO], [test "x$graphcairo_xcb" = "xyes" -o "x$graphcairo_xlib" = "xyes"])
-
+AS_IF([test "x$graphcairo_xcb" = "xyes" -o "x$graphcairo_xlib" = "xyes"], [
+	AC_SEARCH_LIBS([FcFini], [fontconfig], AC_DEFINE([FC_FINI], 1, [finalize fontconfig library]))
+])
 
 dnl
 dnl Extra output formats: csv, raw, txt, xml, json

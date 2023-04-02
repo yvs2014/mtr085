@@ -24,13 +24,13 @@
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
-#include <search.h>
+#include <err.h>
+#include <time.h>
 #include <arpa/nameser.h>
 
-#include "config.h"
 #include "mtr.h"
-#include "dns.h"
 #include "net.h"
+#include "dns.h"
 
 #ifdef ENABLE_IPV6
 #ifdef __GLIBC__
@@ -75,17 +75,31 @@ struct __res_state_ext {
 #include <syslog.h>
 #define DNSLOG_MSG(format, ...) { syslog(LOG_PRIORITY, format, __VA_ARGS__); }
 #define DNSLOG_RET(format, ...) { syslog(LOG_PRIORITY, format, __VA_ARGS__); return; }
+#define DNSLOG_RETN(re, format, ...) { syslog(LOG_PRIORITY, format, __VA_ARGS__); return (re); }
 #else
 #define DNSLOG_MSG(format, ...)  {}
 #define DNSLOG_RET(format, ...)  { return; }
+#define DNSLOG_RETN(re, format, ...)  { return re; }
 #endif
 
-struct atndx { int at, ndx; };
+#define ARPA4_SUFFIX "in-addr.arpa"
+#define ARPA6_SUFFIX "ip6.arpa"
 
 // global
-bool enable_dns = true;	// use DNS by default
+bool enable_dns = true;  // use DNS by default
+unsigned dns_queries[3]; // number of queries (sum, ptr, txt)
+unsigned dns_replies[3]; // number of replies (sum, ptr, txt)
 #ifndef __OpenBSD__
 struct __res_state myres;
+#endif
+//
+
+// external callbacks for T_PTR and T_TXT replies
+//   first one is used by net-module
+//   and second one - by ipinfo-module
+void (*dns_ptr_handler)(int at, int ndx, const char* answer);
+#ifdef IPINFO
+void (*dns_txt_handler)(int at, int ndx, const char* answer);
 #endif
 //
 
@@ -112,268 +126,263 @@ int dns_waitfd(int family) {
   resfd) : -1;
 }
 
-inline int dns_query(int op, const char *dname, int class, int type, const unsigned char *data, int datalen,
+static int dns_mkquery(int op, const char *dname, int class, int type, const unsigned char *data, int datalen,
   const unsigned char *newrr, unsigned char *buf, int buflen) {
   return MYRES_QUERY(myres, op, dname, class, type, data, datalen, newrr, buf, buflen);
 }
 
 bool dns_init(void) {
-  if (dns_initiated)
-    return true;
-  if (MYRES_INIT(myres) < 0) {
-    perror("dns_init()");
-    return false;
+  if (!dns_initiated) {
+    if (MYRES_INIT(myres) >= 0) {
+      if (myres.nscount) {
+        myres.options |= RES_DEFAULT;
+        myres.options &= ~(RES_DNSRCH | RES_DEFNAMES);
+        dns_initiated = true;
+      } else
+        warnx("dns.init: %s", "no defined nameservers");
+    } else
+      warn("dns.init: res_init()");
   }
-  if (!myres.nscount) {
-    perror("dns_init(): no defined nameservers");
-    return false;
-  }
-  myres.options |= RES_DEFAULT;
-  myres.options &= ~(RES_DNSRCH | RES_DEFNAMES);
-  dns_initiated = true;
-  return true;
+  return dns_initiated;
 }
 
 void dns_socket(void) {
   int option = 1;
   if ((resfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
-    perror("dns_socket(): socket()");
-  else
-    if (setsockopt(resfd, SOL_SOCKET, SO_BROADCAST, (char *)&option, sizeof(option)) < 0)
-      perror("dns_socket(): setsockopt()");
+    warn("dns: %s", "socket()");
+  else if (setsockopt(resfd, SOL_SOCKET, SO_BROADCAST, (char*)&option, sizeof(option)) < 0)
+    warn("dns.socket: setsockopt()");
 #ifdef ENABLE_IPV6
   if ((resfd6 = socket(AF_INET6, SOCK_DGRAM, 0)) < 0)
-//    perror("dns_open(): socket6()");
-  {}
-  else
-    if (setsockopt(resfd6, SOL_SOCKET, SO_BROADCAST, (char *)&option, sizeof(option)) < 0)
-      perror("dns_socket(): setsockopt6()");
+;//    warn("dns: %s", "socket6()");
+  else if (setsockopt(resfd6, SOL_SOCKET, SO_BROADCAST, (char*)&option, sizeof(option)) < 0)
+;//    warn("dns.socket: setsockopt6()");
 #endif
-  if ((resfd < 0)
-#ifdef ENABLE_IPV6
-   || (resfd6 < 0)
-#endif
-     )
-    fprintf(stderr, "dns_socket() failed\n");
 }
 
 void dns_open(void) {
   if (!enable_dns)
     return;
-  DNSLOG_MSG("%s", "dns open");
+  DNSLOG_MSG("%s", "dns.open");
   if (!dns_initiated)
     dns_init();
   dns_socket();
 }
 
 void dns_close(void) {
-  // anyway clear allocated memory for query/response cache
-  for (int at = 0; at < MAXHOST; at++)
-    for (int ndx = 0; ndx < MAXPATH; ndx++)
-      set_new_addr(at, ndx, &unspec_addr, NULL);
+  // close sockets
+  if (resfd >= 0) {
+    close(resfd);
+    resfd = -1;
+  }
+#ifdef ENABLE_IPV6
+  if (resfd6 >= 0) {
+    close(resfd6);
+    resfd6 = -1;
+  }
+#endif
   // res_nclose()
   if (dns_initiated) {
     MYRES_CLOSE(myres);
     dns_initiated = false;
   }
-  // close sockets
-  if (resfd >= 0)
-    close(resfd);
-#ifdef ENABLE_IPV6
-  if (resfd6 >= 0)
-    close(resfd6);
-#endif
 }
 
 #ifdef ENABLE_IPV6
 /* Returns an ip6.arpa character string. */
-static void addr2ip6arpa(ip_t *ip, char *buf) {
-  unsigned char *p = (unsigned char *)ip;
-  char *b = buf;
-  for (int i = sizeof(struct in6_addr) - 1; i >= 0; i--, b += 4)
-    sprintf(b, "%x.%x.", p[i] % 16, p[i] >> 4);
-  sprintf(b, "ip6.arpa");
-  return;
+static void ip2arpa6(const unsigned char *p, char *buf, int sz, const char *suff) {
+  int l = 0;
+  for (int i = 0xf; i >= 0; i--) {
+    l += snprintf(buf + l, sz - l, "%x.%x.", p[i] & 0xf, p[i] >> 4);
+    if (l >= sz) return;
+  }
+  snprintf(buf + l, sz - l, "%s", suff);
 }
 #endif
 
-char* lookup_query(ip_t *ip) {
-  static char lookup_query_buf[MAXDNAME];
+char* ip2arpa(ip_t *ip, const char *suff4, const char *suff6) {
+  static char lqbuf[NAMELEN];
+  unsigned char *p = (unsigned char*)ip;
 #ifdef ENABLE_IPV6
-  if (af == AF_INET6)
-    addr2ip6arpa(ip, lookup_query_buf);
-  else /* if (af == AF_INET) */
+  if (af == AF_INET6) ip2arpa6(p, lqbuf, sizeof(lqbuf), suff6 ? suff6 : ARPA6_SUFFIX); else
 #endif
-    snprintf(lookup_query_buf, sizeof(lookup_query_buf), "%u.%u.%u.%u.in-addr.arpa",
-      ((uint8_t*)ip)[3], ((uint8_t*)ip)[2], ((uint8_t*)ip)[1], ((uint8_t*)ip)[0]);
-  return lookup_query_buf;
+  snprintf(lqbuf, sizeof(lqbuf), "%d.%d.%d.%d.%s", p[3], p[2], p[1], p[0], suff4 ? suff4 : ARPA4_SUFFIX);
+  return lqbuf;
 }
 
-static void sendrequest(int at, int ndx) {
-  unsigned char buf[PACKETSZ];
-  const char *qstr = Q_AT_NDX(at, ndx);
-  int r = dns_query(QUERY, qstr, C_IN, T_PTR, NULL, 0, NULL, buf, sizeof(buf));
-  if (r < 0) {
-    const char *e = strerror(errno);
-    perror("dns_query()");
-    DNSLOG_RET("dns_query(%*s): %s", (int)sizeof(buf), buf, e);
+
+int dns_send_query(int at, int ndx, const char *qstr, int type) {
+  static unsigned char req_buf[PACKETSZ];
+  int len = dns_mkquery(QUERY, qstr, C_IN, type, NULL, 0, NULL, req_buf, sizeof(req_buf));
+  if (len < 0) {
+    warn("dns.mkquery[%d:%d type=%d]", at, ndx, type);
+    DNSLOG_RETN(-1, "dns.mkquery[%d:%d type=%d] failed", at, ndx, type);
   }
 
-  HEADER *hp = (HEADER*)buf;
+  HEADER *hp = (HEADER*)req_buf;
   hp->id = str2hint(qstr, at, ndx);
-  DNSLOG_MSG("Send[%u, %u] \"%s\" (id=%u)", at, ndx, qstr, hp->id);
+  DNSLOG_MSG("dns.send[%d:%d type=%d id=%d]: %s", at, ndx, type, hp->id, qstr);
 
-  int re = 0;
   for (int i = 0; i < myres.nscount; i++) {
-    if (myres.nsaddr_list[i].sin_family == AF_INET)
-      re = sendto(resfd, buf, r, 0, (struct sockaddr *)&myres.nsaddr_list[i], sizeof(struct sockaddr));
+    int re;
 #ifdef ENABLE_IPV6
-    else if (myres.nsaddr_list[i].sin_family == AF_INET6)
-      re = sendto(resfd6, buf, r, 0, (struct sockaddr *)NSSOCKADDR6(i), sizeof(struct sockaddr_in6));
+    if (myres.nsaddr_list[i].sin_family == AF_INET6)
+      re = sendto(resfd6, req_buf, len, 0, (struct sockaddr *)NSSOCKADDR6(i), sizeof(struct sockaddr_in6));
+    else
 #endif
-    if (re < 0) {
-      const char *e = strerror(errno);
-#ifdef LOG_DNS
-      DNSLOG_MSG("sendto#%d failed: %s", i, e);
-#endif
-    } else
-      break; // one successful request is enough
+      re = sendto(resfd, req_buf, len, 0, (struct sockaddr *)&myres.nsaddr_list[i], sizeof(struct sockaddr));
+    /*stat*/ { dns_queries[0]++; if (type == T_PTR) dns_queries[1]++; else if (type == T_TXT) dns_queries[2]++; }
+    if (re >= 0) // one successful request is enough
+      return re;
+    DNSLOG_MSG("dns.sendto[%d:%d type=%d id=%d] #%d: %s", at, ndx, type, hp->id, i, strerror(errno));
   }
+  return -1;
 }
 
-const char *dns_lookup(int at, int ndx) {
-  if (!enable_dns) // check if it needs
+const char *dns_ptr_lookup(int at, int ndx) {
+  if (!enable_dns) // not enabled
     return NULL;
-  if (R_AT_NDX(at, ndx)) // already known?
-    return R_AT_NDX(at, ndx);
-  ip_t *ip = &IP_AT_NDX(at, ndx);
-  if (addr_spec(ip)) { // on the off chance
-    if (!Q_AT_NDX(at, ndx)) { // set dns query string if not set yet
-      Q_AT_NDX(at, ndx) = strndup(lookup_query(ip), MAXDNAME);
-      if (!Q_AT_NDX(at, ndx)) {
-        perror("dns_lookup(): strndup()");
-        return NULL;
-      }
-    }
-    sendrequest(at, ndx);
+  if (!addr_exist(&IP_AT_NDX(at, ndx))) // on the off chance
+    return NULL;
+  if (RPTR_AT_NDX(at, ndx)) // already known
+    return RPTR_AT_NDX(at, ndx);
+
+  // set query string if not yet (setting a new ip, free this query)
+  if (!QPTR_AT_NDX(at, ndx)) {
+    QPTR_AT_NDX(at, ndx) = strndup(ip2arpa(&IP_AT_NDX(at, ndx), NULL, NULL), NAMELEN);
+    if (!QPTR_AT_NDX(at, ndx)) {
+      warn("dns.lookup[%d:%d]: strndup()", at, ndx);
+      return NULL;
+  }}
+
+  if ((time(NULL) - QPTR_TS_AT_NDX(at, ndx)) > PAUSE_BETWEEN_QUERIES) { // if less, wait a little
+    QPTR_TS_AT_NDX(at, ndx) = time(NULL); // save time of trying to send
+    dns_send_query(at, ndx, QPTR_AT_NDX(at, ndx), T_PTR);
   }
   return NULL;
 }
 
-struct atndx *chk_qatn(const char* q, int at, int ndx) {
-  if (Q_AT_NDX(at, ndx))
-    if (!strncasecmp(Q_AT_NDX(at, ndx), q, MAXDNAME)) {
-      static struct atndx qatn;
-      qatn.at = at;
-      qatn.ndx = ndx;
-      return &qatn;
-    }
+
+static atndx_t *get_qatn(const char* q, int at, int ndx) {
+  const char *query[] = { QPTR_AT_NDX(at, ndx)
+#ifdef IPINFO
+   , QTXT_AT_NDX(at, ndx)
+#endif
+  };
+  for (int t = 0; t < sizeof(query) / sizeof(query[0]); t++)
+    if (query[t])
+      if (!strncasecmp(query[t], q, MAXDNAME)) {
+        static atndx_t qatn;
+        qatn = (atndx_t){.at = at, .ndx = ndx, .type = t}; // type: 0 - t_ptr, 1 - t_txt
+        return &qatn;
+      }
   return NULL;
 }
 
-struct atndx *find_query(const char* q, uint16_t hint) {
-  struct atndx *re = chk_qatn(q, ID2AT(hint), ID2NDX(hint)); // correspond to [hash:7 at:6 ndx:3]
+static atndx_t *find_query(const char* q, uint16_t hint) {
+  atndx_t *re = get_qatn(q, ID2AT(hint), ID2NDX(hint)); // correspond to [hash:7 at:6 ndx:3]
   if (re)
     return re;     // found by hint
   int max = net_max();
   for (int at = net_min(); at < max; at++)
     for (int ndx = 0; ndx < MAXPATH; ndx++) {
-      re = chk_qatn(q, at, ndx);
+      re = get_qatn(q, at, ndx);
       if (re)
         return re; // found
     }
   return NULL;     // not found
 }
 
-struct atndx *expand_query(const u_char *packet, int psize, const u_char *dn, char *answer, int asize, uint16_t id, int *r) {
+static atndx_t *expand_query(const u_char *packet, int psize, const u_char *dn, char *answer, int asize, uint16_t id, int *r) {
   *r = dn_expand(packet, packet + psize, dn, answer, asize);
   if (*r < 0) {
     DNSLOG_MSG("%s", "dn_expand() failed while expanding query domain");
     return NULL;
   }
-  struct atndx *an = find_query(answer, id); // id as a hint
+  atndx_t *an = find_query(answer, id); // id as a hint
   if (!an)
-    DNSLOG_MSG("Unknown response with id=%u q=%s", id, answer);
+    DNSLOG_MSG("unknown response with id=%u q=%s", id, answer);
   return an;
 }
 
-void save_answer(int at, int ndx, const char* answer) {
-  if (R_AT_NDX(at, ndx)) {
-    DNSLOG_MSG("Duplicate or update at=%d ndx=%d for %s", at, ndx, strlongip(&IP_AT_NDX(at, ndx)));
-    free(R_AT_NDX(at, ndx));
-    R_AT_NDX(at, ndx) = NULL;
-  }
-  R_AT_NDX(at, ndx) = strndup(answer, MAXDNAME);
-  if (!R_AT_NDX(at, ndx))
-    fprintf(stderr, "save_answer(at=%d, ndx=%d): strndup(): %s\n", at, ndx, strerror(errno));
-}
 
-static void parserespacket(unsigned char *buf, int l) {
+static void dns_parse_reply(unsigned char *buf, ssize_t len) {
   static char answer[MAXDNAME];
 
-  if (l < (int) sizeof(HEADER))
-    DNSLOG_RET("%s", "Packet smaller than standard header size");
-  if (l == (int) sizeof(HEADER))
-    DNSLOG_RET("%s", "Packet has empty body");
+  if (len < (int)sizeof(HEADER))
+    DNSLOG_RET("%s", "packet smaller than standard header size");
+  if (len == (int)sizeof(HEADER))
+    DNSLOG_RET("%s", "packet has empty body");
   HEADER *hp = (HEADER*)buf;
 
-  DNSLOG_MSG("Got %d bytes, id=%u [at=%u ndx=%u]", l, hp->id, ID2AT(hp->id), ID2NDX(hp->id));
+  DNSLOG_MSG("dns.recv: got %zd bytes, id=%u at=%u ndx=%u", len, hp->id, ID2AT(hp->id), ID2NDX(hp->id));
+  dns_replies[0]++; /*stat*/
 
   hp->qdcount = ntohs(hp->qdcount);
   hp->ancount = ntohs(hp->ancount);
   hp->nscount = ntohs(hp->nscount);
   hp->arcount = ntohs(hp->arcount);
-  DNSLOG_MSG("Received nameserver reply (qd:%u an:%u ns:%u ar:%u)", hp->qdcount, hp->ancount, hp->nscount, hp->arcount);
+//  DNSLOG_MSG("received nameserver reply (qd:%u an:%u ns:%u ar:%u)", hp->qdcount, hp->ancount, hp->nscount, hp->arcount);
   if (hp->tc)     // truncated packet
-    DNSLOG_RET("%s", "Nameserver packet truncated");
+    DNSLOG_RET("dns.recv: %s", "nameserver packet truncated");
   if (!hp->qr)    // not a reply
-    DNSLOG_RET("%s", "Query packet received on nameserver communication socket");
+    DNSLOG_RET("dns.recv: %s", "query packet received on nameserver communication socket");
   if (hp->opcode) // non-standard query
-    DNSLOG_RET("%s", "Invalid opcode in response packet");
-  unsigned char *eob = buf + l;
+    DNSLOG_RET("dns.recv: %s", "invalid opcode in response packet");
+  unsigned char *eob = buf + len;
   unsigned char *c = buf + sizeof(HEADER);
-  int r;
-  struct atndx *an;
+  int l;
+  atndx_t *an;
 
   if (hp->rcode != NOERROR) {
     if (hp->rcode == NXDOMAIN) {
-      DNSLOG_MSG("%s", "No such name")
-      if ((an = expand_query(buf, l, c, answer, sizeof(answer) - 1, hp->id, &r))) {
-        // save as it is, i.e. in dotted-decimal notation
-        strncpy(answer, strlongip(&IP_AT_NDX(an->at, an->ndx)), sizeof(answer) - 1);
-        save_answer(an->at, an->ndx, answer);
+      DNSLOG_MSG("dns.recv: 'no such name' with id=%d", hp->id);
+      if ((an = expand_query(buf, len, c, answer, sizeof(answer) - 1, hp->id, &l))) {
+        answer[0] = 0;
+        if      ((an->type == 0) && dns_ptr_handler)
+          dns_ptr_handler(an->at, an->ndx, answer);
+#ifdef IPINFO
+        else if ((an->type == 1) && dns_txt_handler)
+          dns_txt_handler(an->at, an->ndx, answer);
+#endif
+		/*stat*/ { if (an->type == 0) dns_replies[1]++; else if (an->type == 1) dns_replies[2]++; }
       }
     } else
-      DNSLOG_RET("Received error response %u", hp->rcode);
+      DNSLOG_RET("dns.recv: response error %d", hp->rcode);
     return;
   }
 
   if (!(hp->ancount))
-    DNSLOG_RET("%s", "No error returned but no answers given");
+    DNSLOG_RET("dns.recv: %s", "no error returned but no answers given");
   if (hp->qdcount != 1)
-    DNSLOG_RET("%s", "Reply does not contain one query");
+    DNSLOG_RET("dns.recv: %s", "reply does not contain one query");
   if (c > eob)
-    DNSLOG_RET("%s", "Reply too short");
+    DNSLOG_RET("dns.recv: %s", "reply too short");
 
   memset(answer, 0, sizeof(answer));
-  if (!expand_query(buf, l, c, answer, sizeof(answer) - 1, hp->id, &r))
+  if (!(an = expand_query(buf, len, c, answer, sizeof(answer) - 1, hp->id, &l)))
     return;
-  DNSLOG_MSG("Response for %s", answer);
+  DNSLOG_MSG("dns.recv: response for %s", answer);
 
-  c += r;
+  c += l;
   if (c + 4 > eob)
-    DNSLOG_RET("%s", "Query resource record truncated");
-  { int type; GETSHORT(type, c); if (type != T_PTR) DNSLOG_RET("Not PTR query type %u", type); }
+    DNSLOG_RET("dns.recv: %s", "query resource record truncated");
+  { int type; GETSHORT(type, c); if (type == T_PTR) dns_replies[1]++; /*stat*/
+#ifdef IPINFO
+    else if (type == T_TXT) dns_replies[2]++;
+#endif
+    else DNSLOG_RET("dns.recv: unknown query type %u in reply", type); }
+
   c += INT16SZ;	// skip class
 
   for (int i = hp->ancount + hp->nscount + hp->arcount; i; i--) {
     if (c > eob)
-      DNSLOG_RET("%s", "Packet does not contain all specified resouce records");
+      DNSLOG_RET("dns.recv: %s", "packet does not contain all specified resouce records");
     memset(answer, 0, sizeof(answer));
-    an = expand_query(buf, l, c, answer, sizeof(answer) - 1, hp->id, &r);
-    c += r;
+    an = expand_query(buf, len, c, answer, sizeof(answer) - 1, hp->id, &l);
+    c += l;
     if (c + 10 > eob)
-      DNSLOG_RET("%s", "Resource record truncated");
+      DNSLOG_RET("dns.recv: %s", "resource record truncated");
     int type;
     GETSHORT(type, c);
     c += INT16SZ;	// skip class
@@ -381,69 +390,72 @@ static void parserespacket(unsigned char *buf, int l) {
     int size;
     GETSHORT(size, c);
     if (!size)
-      DNSLOG_RET("%s", "Zero size rdata");
+      DNSLOG_RET("dns.recv: %s", "zero size rdata");
     if (c + size > eob)
-      DNSLOG_RET("%s", "Specified rdata length exceeds packet size");
+      DNSLOG_RET("dns.recv: %s", "specified rdata length exceeds packet size");
 
-    if (an && (type == T_PTR)) { // answer to us
+    if (an && ((type == T_PTR) || (type == T_TXT))) { // answer to us
       memset(answer, 0, sizeof(answer));
-      r = dn_expand(buf, buf + l, c, answer, sizeof(answer) - 1);
-      if (r < 0)
-        DNSLOG_RET("%s", "dn_expand() failed while expanding domain in rdata");
-      int l = strnlen(answer, sizeof(answer));
-      DNSLOG_MSG("Answer[%d]: \"%s\"[%d]", r, answer, l);
-      save_answer(an->at, an->ndx, answer);
-      return; // let's take first answer
+      if (type == T_TXT) {
+        l = *c;
+        if ((l >= size) || !l)
+          DNSLOG_RET("dns.recv: broken TXT record (len=%d, size=%d)", l, size);
+        int max = (l < sizeof(answer)) ? l : (sizeof(answer) - 1);
+        strncpy(answer, (char*)(c + 1), max);
+        answer[l] = 0;
+	  } else if ((l = dn_expand(buf, buf + len, c, answer, sizeof(answer) - 1)) < 0)
+        DNSLOG_RET("dns.recv.expand: %s", "failed while expanding domain");
+      DNSLOG_MSG("dns.recv: answer %.*s", l, answer);
+      if      ((an->type == 0) && dns_ptr_handler)
+        dns_ptr_handler(an->at, an->ndx, answer);
+#ifdef IPINFO
+      else if ((an->type == 1) && dns_txt_handler)
+        dns_txt_handler(an->at, an->ndx, answer);
+#endif
+      return; // let's take the first answer
     }
     c += size;
   }
 }
 
 
-void dns_ack(int fd, int family) {
-  static struct in_addr localhost4 = { INADDR_LOOPBACK };
-#ifdef ENABLE_IPV6
-  static struct in6_addr localhost6 = IN6ADDR_LOOPBACK_INIT;
-#endif
-  static socklen_t fromlen = sizeof(from_sastruct);
-  static unsigned char buf[PACKETSZ];
-
-  int r = recvfrom(fd, buf, sizeof(buf), 0, from, &fromlen);
-  if (r <= 0) {
-    perror("dns_ack(): recvfrom()");
-    return;
-  }
-
-  /* Check to see if this server is actually one we sent to */
-  int i;
+// Check to see if this server is actually one we sent to
+static bool validate_ns(int family) {
 #ifdef ENABLE_IPV6
   if (family == AF_INET6) {
-    int lh = addr6cmp(&(from6->sin6_addr), &localhost6);
-    for (i = 0; i < myres.nscount; i++) {
-      if (!addr6cmp(&(NSSOCKADDR6(i)->sin6_addr), &(from6->sin6_addr)))
-        break;
-      if (!lh)
-        if (!addr6cmp(&(NSSOCKADDR6(i)->sin6_addr), &unspec_addr))
-          break;
+    static struct in6_addr localhost6 = IN6ADDR_LOOPBACK_INIT;
+    bool local = addr6equal(&(from6->sin6_addr), &localhost6);
+    for (int i = 0; i < myres.nscount; i++) {
+      if (addr6equal(&(NSSOCKADDR6(i)->sin6_addr), &(from6->sin6_addr)))
+        return true;
+      if (local && addr6equal(&(NSSOCKADDR6(i)->sin6_addr), &unspec_addr))
+        return true;
     }
   } else /* if (family == AF_INET) */
 #endif
   {
-    int lh = addr4cmp(&(from4->sin_addr), &localhost4);
-    for (i = 0; i < myres.nscount; i++) {
-      if (!addr4cmp(&(myres.nsaddr_list[i].sin_addr), &(from4->sin_addr)))
-        break;
-      if (!lh)
-        if (!addr4cmp(&(myres.nsaddr_list[i].sin_addr), &unspec_addr))
-          break;
+    static struct in_addr localhost4 = { INADDR_LOOPBACK };
+    bool local = addr4equal(&(from4->sin_addr), &localhost4);
+    for (int i = 0; i < myres.nscount; i++) {
+      if (addr4equal(&(myres.nsaddr_list[i].sin_addr), &(from4->sin_addr)))
+        return true;
+      if (local && addr4equal(&(myres.nsaddr_list[i].sin_addr), &unspec_addr))
+        return true;
     }
   }
+  return false;
+}
 
-  if (i != myres.nscount)
-    parserespacket(buf, r);
-#ifdef LOG_DNS
-  else
-    DNSLOG_MSG("%s", "Received reply from unknown source");
-#endif
+void dns_ack(int fd, int family) {
+  static unsigned char buf[PACKETSZ];
+  static socklen_t fromlen = sizeof(from_sastruct);
+  ssize_t r = recvfrom(fd, buf, sizeof(buf), 0, from, &fromlen);
+  if (r > 0) {
+    if (validate_ns(family))
+      dns_parse_reply(buf, r);
+    else
+      DNSLOG_RET("dns.ack: %s", "received reply from unknown source");
+  } else
+    warn("dns.ack: recvfrom(fd=%d)", fd);
 }
 

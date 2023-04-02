@@ -84,11 +84,11 @@
 extern int af;
 extern int packetsize;
 extern ip_t unspec_addr;	// zero by definition
-extern bool (*addr_spec)(const void *); // true if address is specified
-extern bool (*addr_equal)(const void *, const void *); // true if it's the same address
-extern int (*unaddrcmp)(const void *);
-extern int (*addrcmp)(const void *a, const void *b);
-extern void* (*addrcpy)(void *a, const void *b);
+extern bool (*addr_exist)(const void *); // true if specified
+extern bool (*addr_equal)(const void *, const void *); // equal
+extern void* (*addr_copy)(void *a, const void *b);
+extern unsigned long net_queries[];
+extern unsigned long net_replies[];
 
 // MPLS description
 typedef struct { uint32_t lab:20, exp:3, s:1, ttl:8; } mpls_label_t;
@@ -97,33 +97,33 @@ typedef struct mpls_data {
   uint8_t n;
 } mpls_data_t;
 
+#ifdef IPINFO
+#define MAX_TXT_ITEMS 25
+#endif
+
+#define PAUSE_BETWEEN_QUERIES 10 // pause between dns queries, in seconds
+
 // Address(es) plus associated data
 typedef struct eaddr {
   ip_t ip;
   mpls_data_t mpls;
-  char *q, *r; // dns query, reply
-  char *info[10]; // TODO: add ipinfo
+  char *q_ptr, *r_ptr; // t_ptr query, reply
+  time_t q_ptr_ts;     // timestamp when 'q_ptr' is sent
+#ifdef IPINFO
+  char *q_txt;                // t_txt query
+  char *r_txt[MAX_TXT_ITEMS]; // t_txt parsed reply
+  time_t q_txt_ts;            // timestamp when 'q_txt' is sent
+#endif
 } eaddr_t;
 
 // Hop description
 struct nethost {
   // addresses with all associated data (dns names, mpls labels, extended ip info)
   eaddr_t eaddr[MAXPATH];
-  uint8_t current; // index of the last received address
-  //
+  int current;     // index of the last received address
   // a lot of statistics
-  int xmit, returned, sent, up;
+  int xmit, returned, sent, up, last, best, worst, avg, gmean, jitter, javg, jworst, jinta, transit;
   long long var;       // variance, could be overflowed
-  time_t last;
-  int best;
-  int worst;
-  int avg;             // average, addByMin
-  int gmean;           // geometirc mean, addByMin
-  time_t jitter;       // current jitter, defined as t1-t0, addByMin
-  int javg;            // avg jitter
-  int jworst;          // max jitter
-  int jinta;           // estimated variance,? rfc1889's "Interarrival Jitter"
-  int transit;
   int saved[SAVED_PINGS];
   int saved_seq_offset;
   time_t seen;         // timestamp for caching, last seen
@@ -133,10 +133,16 @@ extern struct nethost host[];
 // helpful macros
 #define CURRENT_IP(at)   (host[at].eaddr[host[at].current].ip)
 #define CURRENT_MPLS(at) (host[at].eaddr[host[at].current].mpls)
-#define IP_AT_NDX(at, ndx) (host[at].eaddr[ndx].ip)
+#define IP_AT_NDX(at, ndx)   (host[at].eaddr[ndx].ip)
 #define MPLS_AT_NDX(at, ndx) (host[at].eaddr[ndx].mpls)
-#define Q_AT_NDX(at, ndx) (host[at].eaddr[ndx].q)
-#define R_AT_NDX(at, ndx) (host[at].eaddr[ndx].r)
+#define QPTR_AT_NDX(at, ndx) (host[at].eaddr[ndx].q_ptr)
+#define RPTR_AT_NDX(at, ndx) (host[at].eaddr[ndx].r_ptr)
+#define QPTR_TS_AT_NDX(at, ndx) (host[at].eaddr[ndx].q_ptr_ts)
+#ifdef IPINFO
+#define QTXT_AT_NDX(at, ndx) (host[at].eaddr[ndx].q_txt)
+#define RTXT_AT_NDX(at, ndx, num) (host[at].eaddr[ndx].r_txt[num])
+#define QTXT_TS_AT_NDX(at, ndx) (host[at].eaddr[ndx].q_txt_ts)
+#endif
 
 extern char localaddr[];
 
@@ -145,7 +151,7 @@ int net_tcp_init(void);
 int net_preopen(void);
 int net_open(struct hostent *host);
 int net_selectsocket(void);
-int net_set_interfaceaddress(char *InterfaceAddress);
+int net_set_ifaddr(char *ifaddr);
 void net_reset(void);
 void net_close(void);
 int net_waitfd(void);
@@ -162,12 +168,13 @@ void sockaddrtop(struct sockaddr *saddr, char *strptr, size_t len);
 void decodempls(int num, const uint8_t *packet, mpls_data_t *mpls, int off);
 const char *strlongip(ip_t *ip);
 time_t wait_usec(float t);
-int addr4cmp(const void *a, const void *b);
-int addr6cmp(const void *a, const void *b);
-void* addr4cpy(void *a, const void *b);
-void* addr6cpy(void *a, const void *b);
-void set_new_addr(int at, int ndx, const ip_t *ip, const mpls_data_t *mpls);
-
+bool addr4equal(const void *a, const void *b);
+void* addr4copy(void *a, const void *b);
+#ifdef ENABLE_IPV6
+bool addr6equal(const void *a, const void *b);
+void* addr6copy(void *a, const void *b);
+#endif
 const char *mpls2str(const mpls_label_t *label, int indent);
+uint16_t str2hint(const char* s, uint16_t at, uint16_t ndx);
 
 #endif

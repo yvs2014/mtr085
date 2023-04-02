@@ -29,7 +29,7 @@
 enum { ActionNone,  ActionQuit,  ActionReset,  ActionDisplay, 
        ActionClear, ActionPauseResume, ActionMPLS, ActionDNS, ActionTCP, ActionCache,
 #ifdef IPINFO
-       ActionAS, ActionII, ActionII_Map,
+       ActionAS, ActionII,
 #endif
        ActionScrollDown, ActionScrollUp  };
 enum { DisplayReport, DisplayCurses,
@@ -56,7 +56,7 @@ enum { DisplayReport, DisplayCurses,
 
 /*  Prototypes for display.c  */
 void display_detect(int *argc, char ***argv);
-void display_open(void);
+bool display_open(void);
 void display_close(bool notfirst);
 void display_redraw(void);
 int display_keyaction(void);

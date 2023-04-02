@@ -18,6 +18,7 @@
 
 #include <stdlib.h>
 #include <errno.h>
+#include <err.h>
 #include <sys/time.h>
 
 #include "config.h"
@@ -38,7 +39,7 @@ int maxfd;
 //
 #define WRITEFD_P ((mtrtype == IPPROTO_TCP) ? &wset : NULL)
 
-const struct timeval GRACETIME = { 5, 0 }; // 5 seconds
+const struct timeval GRACETIME = { 5, 0 };
 static int numpings;
 
 #define SET_MTRFD(fd) { \
@@ -149,10 +150,6 @@ int chk_kbd_click(bool* paused) { // Has a key been pressed?
         SETBIT(iargs, (action == ActionAS) ? 3 : 4);
       ii_open();
       break;
-    case ActionII_Map:
-      ii_action(action);
-      ii_open();
-      break;
 #endif
     case ActionScrollDown:
       display_offset += 5;
@@ -170,7 +167,7 @@ int chk_kbd_click(bool* paused) { // Has a key been pressed?
         mtrtype = IPPROTO_TCP;
         SETBIT(iargs, 1);
       } else {
-        fprintf(stderr, "\rPress any key to continue..\r\n");
+        warnx("Press any key to continue..");
         getchar();
         display_clear();
       }
@@ -271,10 +268,8 @@ void select_loop(void) {
       rv = select(maxfd, &rset, WRITEFD_P, NULL, &timeout);
     } while ((rv < 0) && (errno == EINTR));
 
-    if (rv < 0) {
-      perror("Select failed");
-      exit(1);
-    }
+    if (rv < 0)
+      err(errno, "select.loop: select()");
 
     anyset = something_new(&mtrfd, &rset);
     if (FD_ISSET(0, &rset)) { // check keyboard events too

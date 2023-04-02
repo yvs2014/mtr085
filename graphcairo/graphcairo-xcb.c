@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <ctype.h>
+#include <err.h>
 #include <xcb/xcb.h>
 #include <xcb/xcb_keysyms.h>
 
@@ -39,14 +40,44 @@ cairo_surface_t* backend_create_surface(int width, int height) {
 	return cairo_xcb_surface_create(connection, window, visual_type, width, height);
 }
 
-int backend_create_window(cairo_rectangle_int_t *rectangle, frontend_resize_t frontend_resize_func) {
+static void set_delete_window_atom() {
+	xcb_generic_error_t *error;
+	xcb_intern_atom_cookie_t cookie = xcb_intern_atom(connection, 1, 12, "WM_PROTOCOLS");
+	xcb_intern_atom_reply_t* reply = xcb_intern_atom_reply(connection, cookie, &error);
+	if (!reply) {
+		warnx("xcb.set.del.atom: WM_PROTOCOLS error %d", error->error_code);
+		free(error);
+		return;
+	}
+	xcb_intern_atom_cookie_t cookie2 = xcb_intern_atom(connection, 0, 16, "WM_DELETE_WINDOW");
+	xcb_intern_atom_reply_t* reply2 = xcb_intern_atom_reply(connection, cookie2, &error);
+	if (reply2) {
+		xcb_change_property(connection, XCB_PROP_MODE_REPLACE, window, (*reply).atom, 4, 32, 1, &(*reply2).atom);
+		delete_window_atom = (*reply2).atom;
+		free(reply2);
+	} else {
+		warnx("xcb.set.del.atom: WM_DELETE_WINDOW error %d", error->error_code);
+		free(error);
+	}
+	free(reply);
+}
+
+#define DISCONN_AND_RETURN(msg) { \
+	warnx("%s: error code %d", msg, error->error_code); \
+	free(error); \
+	xcb_destroy_window(connection, window); \
+	xcb_disconnect(connection); \
+	return false; \
+}
+
+bool backend_create_window(cairo_rectangle_int_t *rectangle, frontend_resize_t frontend_resize_func) {
 	frontend_resize = frontend_resize_func;
 
 	int screen_no;
 	connection = xcb_connect(NULL, &screen_no);
 	if (xcb_connection_has_error(connection)) {
-		fprintf(stderr, "xcb backend_create_window(): can't connect to an X server\n");
-		return 0;
+		warnx("xcb.backend.create.window: %s", "can't connect to an X server");
+		return false;
 	}
 
 	const xcb_setup_t *setup = xcb_get_setup(connection);
@@ -64,57 +95,44 @@ int backend_create_window(cairo_rectangle_int_t *rectangle, frontend_resize_t fr
 	uint32_t values[2];
 	values[0] = screen->white_pixel;
 	values[1] = XCB_EVENT_MASK_EXPOSURE | XCB_EVENT_MASK_STRUCTURE_NOTIFY | XCB_EVENT_MASK_KEY_PRESS | XCB_EVENT_MASK_KEY_RELEASE;
+	xcb_void_cookie_t cookie;
+	xcb_generic_error_t *error;
 
-	xcb_void_cookie_t cookie_window = xcb_create_window_checked(connection, XCB_COPY_FROM_PARENT,
+	cookie = xcb_create_window_checked(connection, XCB_COPY_FROM_PARENT,
 		window, screen->root, rectangle->x, rectangle->y, rectangle->width, rectangle->height, 0,
 		XCB_WINDOW_CLASS_INPUT_OUTPUT, screen->root_visual, mask, values);
-	xcb_void_cookie_t cookie_map = xcb_map_window_checked(connection, window);
+	error = xcb_request_check(connection, cookie);
+	if (error)
+		DISCONN_AND_RETURN("xcb.backend.create.window: can't create window");
 
-	xcb_generic_error_t *error = xcb_request_check(connection, cookie_window);
-	if (error) {
-		fprintf(stderr, "xcb backend_create_window(): can't create window : %d\n", error->error_code);
-		free(error);
-		xcb_destroy_window(connection, window);
-		xcb_disconnect(connection);
-		return 0;
-	}
-	error = xcb_request_check(connection, cookie_map);
-	if (error) {
-		fprintf(stderr, "xcb backend_create_window(): can't map window : %d\n", error->error_code);
-		free(error);
-		xcb_destroy_window(connection, window);
-		xcb_disconnect(connection);
-		return 0;
-	}
+	cookie = xcb_map_window_checked(connection, window);
+	error = xcb_request_check(connection, cookie);
+	if (error)
+		DISCONN_AND_RETURN("xcb.backend.create.window: can't map window");
 
-	xcb_intern_atom_cookie_t cookie = xcb_intern_atom(connection, 1, 12, "WM_PROTOCOLS");
-	xcb_intern_atom_reply_t* reply = xcb_intern_atom_reply(connection, cookie, 0);
-	if (reply) {
-		xcb_intern_atom_cookie_t cookie2 = xcb_intern_atom(connection, 0, 16, "WM_DELETE_WINDOW");
-		xcb_intern_atom_reply_t* reply2 = xcb_intern_atom_reply(connection, cookie2, 0);
-		if (reply2) {
-			xcb_change_property(connection, XCB_PROP_MODE_REPLACE, window, (*reply).atom, 4, 32, 1, &(*reply2).atom);
-			delete_window_atom = (*reply2).atom;
-			free(reply2);
-		}
-		free(reply);
-	}
+	set_delete_window_atom();
 
 	xcb_flush(connection);
 	if (xcb_connection_has_error(connection)) {
-		fprintf(stderr, "xcb backend_create_window() failed: xcb_connection_has_error()\n");
-		return 0;
+		warnx("xcb.backend.create.window failed: %s", "connection has errors");
+		return false;
 	}
 
 	while (1) {
 		xcb_generic_event_t *ev = xcb_wait_for_event(connection);
-		if ((ev->response_type & ~0x80) == XCB_EXPOSE) {
+		if (!ev) {
+			warnx("xcb.backend.create.window failed: %s", "xcb_wait_for_event()");
+			return false;
+		}
+		uint8_t type = ev->response_type;
+		free(ev);
+		if ((type & ~0x80) == XCB_EXPOSE) {
 			root_visual_type();
 			break;
 		}
 	}
 
-	return 1;
+	return true;
 }
 
 void backend_destroy_window(void) {
@@ -147,9 +165,9 @@ static int keysym_to_char(xcb_keysym_t keysym) {
 }
 
 static int keycode_to_char(xcb_key_release_event_t *ev) {
-	static xcb_key_symbols_t *key_symbols;
+	xcb_key_symbols_t *key_symbols = xcb_key_symbols_alloc(connection);
 	if (!key_symbols)
-		key_symbols = xcb_key_symbols_alloc(connection);
+		return 0;
 
 	xcb_keysym_t keysym = xcb_key_symbols_get_keysym(key_symbols, ev->detail, 0);
 	xcb_keysym_t keymod = xcb_key_symbols_get_keysym(key_symbols, ev->detail, ev->state & XCB_MOD_MASK_SHIFT);
@@ -167,6 +185,7 @@ static int keycode_to_char(xcb_key_release_event_t *ev) {
 	if (typ == XCB_KEY_RELEASE)
 		if (!(c = keysym_to_char(keysym)))
 			c = keysym_to_char(keymod);
+	xcb_key_symbols_free(key_symbols);
 	return c;
 }
 

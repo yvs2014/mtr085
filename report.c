@@ -50,7 +50,7 @@ void report_open(void) {
 }
 
 static size_t snprint_addr(char *dst, size_t len, ip_t *addr) {
-  if (unaddrcmp(addr)) {
+  if (addr_exist(addr)) {
     struct hostent *host = NULL;
     if (enable_dns) {
 #ifdef ENABLE_IPV6
@@ -97,12 +97,12 @@ static void report_addr_extra(int at, char *bufname, char *lbuf, const char *dfm
     if (i == host[at].current)
       continue; // because already printed
     ip_t *addr = &IP_AT_NDX(at, i);
-    if (!unaddrcmp(addr))
+    if (!addr_exist(addr))
       break; // done
     snprint_addr(bufname, MAXDNAME, addr);
 #ifdef IPINFO
     if (ii_ready())
-      snprintf(lbuf, MAXDNAME, dfmt, fmt_ipinfo(addr), bufname);
+      snprintf(lbuf, MAXDNAME, dfmt, fmt_ipinfo(at, i), bufname);
     else
 #endif
       snprintf(lbuf, MAXDNAME, dfmt, bufname);
@@ -170,7 +170,7 @@ void report_close(bool wide) {
     // body: left
 #ifdef IPINFO
     if (ii_ready())
-      snprintf(lbuf, MAXDNAME, lfmt, at + 1, fmt_ipinfo(addr), bufname);
+      snprintf(lbuf, MAXDNAME, lfmt, at + 1, fmt_ipinfo(at, host[at].current), bufname);
     else
 #endif
       snprintf(lbuf, MAXDNAME, lfmt, at + 1, bufname);
@@ -229,27 +229,27 @@ void xml_tail(void) { printf("</MTR>\n"); }
 void xml_close(void) {
   char *buf = calloc(1, MAXDNAME);
   assert(buf);
-  printf("%*s<DST HOST=\"%s\">\n", XML_MARGIN, " ", dsthost);
+  printf("%*s<DST HOST=\"%s\">\n", XML_MARGIN, "", dsthost);
   int max = net_max();
   for (int at = net_min(); at < max; at++) {
     snprint_addr(buf, MAXDNAME, &CURRENT_IP(at));
-    printf("%*s<HOP TTL=\"%d\" HOST=\"%s\">\n", XML_MARGIN * 2, " ", at + 1, buf);
+    printf("%*s<HOP TTL=\"%d\" HOST=\"%s\">\n", XML_MARGIN * 2, "", at + 1, buf);
 
     for (int i = 0; i < MAXFLD; i++) {
       int j = fld_index[fld_active[i]];
       if (j > 0) {
         // 1000.0 is a temporary hack for stats usec to ms, impacted net_loss
         (index(data_fields[j].format, 'f')) ?  XML_FACTOR(/1000.) : XML_FACTOR();
-        printf("%*s<%s>%s</%s>\n", XML_MARGIN * 3, " ", data_fields[j].title, trim(buf), data_fields[j].title);
+        printf("%*s<%s>%s</%s>\n", XML_MARGIN * 3, "", data_fields[j].title, trim(buf), data_fields[j].title);
       }
     }
 #ifdef IPINFO
     if (ii_ready())
-      printf("%*s<IpInfo>[%s]</IpInfo>\n", XML_MARGIN * 3, " ", sep_ipinfo(&CURRENT_IP(at), ','));
+      printf("%*s<IpInfo>[%s]</IpInfo>\n", XML_MARGIN * 3, "", sep_ipinfo(at, host[at].current, ','));
 #endif
-    printf("%*s</HOP>\n", XML_MARGIN * 2, " ");
+    printf("%*s</HOP>\n", XML_MARGIN * 2, "");
   }
-  printf("%*s</DST>\n", XML_MARGIN, " ");
+  printf("%*s</DST>\n", XML_MARGIN, "");
   free(buf);
 }
 #endif
@@ -268,13 +268,13 @@ void json_close(bool notfirst) {
   assert(buf);
   if (notfirst)
     printf(",");
-  printf("\n%*s{\"destination\":\"%s\",\"data\":[", JSON_MARGIN, " ", dsthost);
+  printf("\n%*s{\"destination\":\"%s\",\"data\":[", JSON_MARGIN, "", dsthost);
   int min = net_min(), max = net_max();
   for (int at = min; at < max; at++) {
     ip_t *addr = &CURRENT_IP(at);
     printf((at == min) ? "\n" : ",\n");
     snprint_addr(buf, MAXDNAME, addr);
-    printf("%*s{\"host\":\"%s\",\"hop\":%d,\"up\":%d", JSON_MARGIN * 2, " ", buf, at + 1, host[at].up);
+    printf("%*s{\"host\":\"%s\",\"hop\":%d,\"up\":%d", JSON_MARGIN * 2, "", buf, at + 1, host[at].up);
     for (int i = 0; i < MAXFLD; i++) {
       int j = fld_index[fld_active[i]];
       if (j > 0) {
@@ -286,11 +286,11 @@ void json_close(bool notfirst) {
     }
 #ifdef IPINFO
     if (ii_ready())
-      printf(",\"ipinfo\":[%s]", sep_ipinfo(addr, ','));
+      printf(",\"ipinfo\":[%s]", sep_ipinfo(at, host[at].current, ','));
 #endif
     printf("}");
   }
-  printf("\n%*s]}", JSON_MARGIN, " ");
+  printf("\n%*s]}", JSON_MARGIN, "");
   free(buf);
 }
 #endif
@@ -337,7 +337,7 @@ void csv_close(bool notfirst) {
     printf(CSV_DELIMITER "%s", buf);
 #ifdef IPINFO
     if (ii_ready())
-      printf(CSV_DELIMITER "%s", sep_ipinfo(addr, COMA));
+      printf(CSV_DELIMITER "%s", sep_ipinfo(at, host[at].current, COMA));
 #endif
 
     for (int i = 0; i < MAXFLD; i++) {
@@ -363,7 +363,7 @@ static int havename[MAXHOST];
 
 void raw_rawping(int at, int msec) {
   if (!havename[at]) {
-    const char *name = dns_lookup(at, host[at].current);
+    const char *name = dns_ptr_lookup(at, host[at].current);
     if (name) {
       havename[at]++;
       printf("d %d %s\n", at, name);

@@ -20,7 +20,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
-#include <search.h>
+#include <err.h>
+#include <time.h>
 #include <fcntl.h>
 #include <sys/select.h>
 #include <netinet/in.h>
@@ -39,280 +40,206 @@
 #include <syslog.h>
 #define IILOG_MSG(format, ...) { syslog(LOG_PRIORITY, format, __VA_ARGS__); }
 #define IILOG_RET(format, ...) { syslog(LOG_PRIORITY, format, __VA_ARGS__); return; }
+#define IILOG_RETN(re, format, ...) { syslog(LOG_PRIORITY, format, __VA_ARGS__); return re; }
 #else
 #define IILOG_MSG(format, ...)  {}
 #define IILOG_RET(format, ...)  { return; }
+#define IILOG_RETN(re, format, ...)  { return re; }
 #endif
 
-#define COMMA	','
-#define VSLASH	'|'
-#define II_RESP_LINES	100
-#define UNKN	"?"
-#define RECV_BUFF_SZ	3000
-#define TCP_CONN_TIMEOUT	3
-#define CHAR_QOUTES	"\"'"
-#define CHAR_BRACKETS	"{}"
+#define COMMA  ','
+#define VSLASH '|'
+#define UNKN   "?"
+#define CHAR_QOUTES	  "\"'"
+#define CHAR_BRACKETS "{}"
+#define NETDATA_MAXSIZE   3000
+#define TCP_RESP_LINES    100
+#define TCP_CONN_TIMEOUT  3
+#define WHOIS_COMMENT    '%'
+#define WHOIS_LAST_NDX 2
+#define HTTP_GET "GET %s HTTP/1.1\r\nHost: %s\r\nUser-Agent: mtr/%s\r\nAccept: */*\r\n\r\n"
 
 // global
-int ipinfo_max;
-int ipinfo_no[] = {-1};
 bool enable_ipinfo;  // disabled by default
+unsigned ipinfo_queries[3];  // number of queries (sum, http, whois)
+unsigned ipinfo_replies[3];  // number of replies (sum, http, whois)
 //
 
 static bool ii_initiated;
+static int origin_no;     // set once at start
+static int itemname_max;  // set once at start
 
-static int origin_no;
-static int skipped_items;
-static int skipped_props;
+static atndx_t lastid = { .at = -1, .ndx = -1 }; // keep a query id of a tcp request
+static char exchbuf[NETDATA_MAXSIZE]; // send-receive buffer
 
-typedef char* items_t[IPINFO_MAX_ITEMS];
-static items_t* items;
-static int got_items;
-
-typedef struct {
-    int status;
-    char *key;
-} ii_q_t;
-
-#define TMPFILE_BASE	"/tmp/mtr-map-XXXXXX"
-#define TMPFILE_SUFF	".html"
-#define TMPFILE	TMPFILE_BASE TMPFILE_SUFF
-
-static char tmpfn[] = TMPFILE;
-static int tmpfd = -1;
-typedef char* tcp_resp_t[II_RESP_LINES];
-static tcp_resp_t tcp_resp;
-static char *last_request;	// workaround to "no id" whois
-
-typedef void (*process_response_f)(void*, int);
-static int remote_ports[] = { 53, 80, 80, 43 };	// [type]
+enum origin_type { dns_txt = 0 /*sure*/, http_csv, whois_pairs };
 
 typedef struct {
-    char* host;
-    char* host6;
-    char* name[IPINFO_MAX_ITEMS];
-    char* unkn;
-    char sep;
-    char* prop_prfx;
-    int type;	// 0 - dns:csv, 1 - http:csv, 2 - http:flat-json, 3 - whois
-    int ndx[IPINFO_MAX_ITEMS]; // skip/mandatory indexes: query ip, ...
-    char* prefix;
-    char* suffix;
-    char* substitution[IPINFO_MAX_ITEMS];
-    char* skip_prop[IPINFO_MAX_ITEMS]; // skip by string: query ip, ...
-    int width[IPINFO_MAX_ITEMS];
-    int fd;
+  char* host;
+  char* host6;
+  char* name[MAX_TXT_ITEMS];
+  char* unkn;
+  char sep;
+  int type; // 0 - dns, 1 - http, 2 - whois
+  int   skip_ndx[MAX_TXT_ITEMS]; // skip by index: 1, ...
+  char* skip_str[MAX_TXT_ITEMS]; // skip by string: "query ip", ...
+  char* prefix;
+  int width[MAX_TXT_ITEMS];
+  int fd;
 } origin_t;
+
+#define ORIG_FD   (origins[origin_no].fd)
+#define ORIG_TYPE (origins[origin_no].type)
+#define ORIG_HOST (origins[origin_no].host)
+#define ORIG_UNKN (origins[origin_no].unkn)
+#define ORIG_SKIP_NDX   (origins[origin_no].skip_ndx)
+#define ORIG_SKIP_STR   (origins[origin_no].skip_str)
+#define ORIG_NAME(num)  (origins[origin_no].name[num])
+#define ORIG_WIDTH(num) (origins[origin_no].width[num])
+
+static int ipinfo_no[MAX_TXT_ITEMS] = {-1}; // max is #8 getcitydetails.geobytes.com
 
 static origin_t origins[] = {
 // Abbreviations: CC - Country Code, RC - Region Code, MC - Metro Code, Org - Organization, TZ - TimeZone
-// 0
+// 1
   { .host  = "origin.asn.cymru.com", .host6 = "origin6.asn.cymru.com",
     .name  = { "ASN", "Route", "CC", "Registry", "Allocated" },
     .sep   = VSLASH,
     .fd    = -1 },
-// 1
-  { .host  = "asn.routeviews.org",
-    .name  = { "ASN" },
-    .unkn  = "4294967295",
-    .fd    = -1 },
 // 2
+  { .host  = "riswhois.ripe.net", .host6 = "riswhois.ripe.net",
+    .name  = {"Route", "Origin", "Descr", "CC"},
+    .sep   = 0, .type = whois_pairs, .prefix = "-m ",
+    .fd = -1 },
+// 3
+  { .host  = "peer.asn.shadowserver.org",
+    .name  = { "AS Path", "ASN", "Route", /*"AS Name",*/ "CC", "Org" },
+    .sep   = VSLASH, .skip_ndx = {4},
+    .fd    = -1 },
+// 4
   { .host  = "origin.asn.spameatingmonkey.net",
     .name  = { "Route", "ASN", "Org", "Allocated", "CC" },
     .unkn  = "Unknown", .sep = VSLASH,
     .fd    = -1 },
-// 3
-  { .host  = "ip2asn.sasm4.net",
-    .name  = { "ASN" },
-    .unkn  = "No Record",
-    .fd    = -1 },
-// 4
-  { .host  = "peer.asn.shadowserver.org",
-    .name  = { "Peers", "ASN", "Route", "AS Name", "CC", /*"Website",*/ "Org" },
-    .sep   = VSLASH,
-    .fd    = -1 },
 // 5
-  { .host  = "freegeoip.net",
-    .name  = { /* QueryIP, */ "CC", "Country", "RC", "Region", "City", "Zip", "TZ", "Lat", "Long", "MC" },
-    .sep   = COMMA, .type = 1, .ndx = {1}, .prefix = "/csv/",
-    .fd    = -1 },
-// 6
   { .host  = "ip-api.com",
     .name  = { /* Status, */ "Country", "CC", "RC", "Region", "City", "Zip", "Lat", "Long", "TZ", "ISP", "Org", "AS Name" /*, QueryIP */ },
-    .sep   = COMMA, .type = 1, .ndx = {14, 1}, .prefix = "/csv/",
+    .sep   = COMMA, .type = http_csv, .skip_ndx = {1, 14}, .prefix = "/csv/",
     .fd = -1 },
-// 7
-    { .host  = "getcitydetails.geobytes.com",
-      .name  = { /*forwarderfor, remoteip, ipaddress,*/ "certainty", "internet", "country", "regionlocationcode", "region", "code", "locationcode", "dma", "city", "cityid", "fqcn", "latitude", "longitude", "capital", "timezone", "nationalitysingular", "population", "nationalityplural", "mapreference", "currency", "currencycode", "title" },
-      .sep   = COMMA, .prop_prfx = "geobytes", .type = 2, .ndx = {3}, .prefix = "/GetCityDetails?fqcn=",
-      .substitution = { "Certainty", "CC", "Country", "RLC", "Region", "RC", "LC", "DMA", "City", "CityID", "FQCN", "Lat", "Long", "Capital", "TZ", "Nationality", "Population", "NationalityPlural", "MapReference", "Currency", "CurrencyCode", "Title" },
-      .skip_prop = { "forwarderfor", "remoteip", "queryip" },
-      .fd = -1 },
-// 8
-    { .host  = "ipinfo.io",
-      .name  = { /* ip, hostname,*/ "city", "region", "country", "loc", "postal", "org" },
-      .sep   = COMMA, .type = 2, .ndx = {1}, .prefix = "/", .suffix = "/json",
-      .substitution = { "City", "Region", "CC", "Location", "Postal", "Org"},
-      .skip_prop = { "ip", "hostname" },
-      .fd = -1 },
-// 9
-    { .host  = "riswhois.ripe.net", .host6 = "riswhois.ripe.net",
-      .name  = {"Route", "Origin", "Descr", "CC"},
-      .sep   = 0, .type = 3, .ndx = {}, .prefix = "-M ",
-      .fd = -1 },
+// 6
+  { .host  = "asn.routeviews.org",
+    .name  = { "ASN" },
+    .unkn  = "4294967295",
+    .fd    = -1 },
 };
 
+
+static int skip_whois_comments(char** lines, int max) {
+  for (int i = 0; i < max; i++)
+    if (lines[i] && lines[i][0] && (lines[i][0] != WHOIS_COMMENT))
+      return i;
+  return -1;
+}
+
+static int str_in_skip_list(const char *str, char* const* list) {
+    for (int i = 0; (i < MAX_TXT_ITEMS) && list[i]; i++)
+        if (strncmp(str, list[i], NAMELEN) == 0)
+            return i;
+    return -1;
+}
+
+static int ndx_in_skip_list(const int ndx, const int* list) {
+    for (int i = 0; (i < MAX_TXT_ITEMS) && list[i]; i++)
+        if ((ndx + 1) == list[i])
+            return ndx;
+    return -1;
+}
+
 static int split_with_sep(char** args, int max, char sep, char quote) {
-    if (!*args)
-        return 0;
-
-    int i, inside = 0;
-    char *p, **a = args + 1;
-    for (i = 0, p = *args; *p; p++)
-        if ((*p == sep) && !inside) {
-            i++;
-            if (i >= max)
-                break;
-            *p = 0;
-            *a++ = p + 1;
-        } else
-            if (*p == quote)
-                inside = !inside;
-
-    for (int j = 0; j < max; j++) {
-        if (args[j])
-            args[j] = trim(args[j]);
-    }
-    got_items = (i < max) ? (i + 1) : max;
-    return got_items;
+  if (!args || !*args)
+    return 0;
+  int i, inside = 0;
+  char *p, **a = args + 1;
+  for (i = 0, p = *args; *p; p++)
+    if ((*p == sep) && !inside) {
+      i++;
+      if (i >= max) break;
+      *p = 0;
+      *a++ = p + 1;
+    } else if (*p == quote) inside = !inside;
+  for (int j = 0; (j < max) && args[j]; j++)
+    args[j] = trim(args[j]);
+  return (i < max) ? (i + 1) : max;
 }
 
-static char* split_rec(char *rec) {
-    IILOG_MSG("%s(%s)", __FUNCTION__, rec);
-    if (!(items = malloc(sizeof(*items)))) {
-        free(rec);
-        IILOG_MSG("%s(): malloc() failed", __FUNCTION__);
-        return NULL;
-    }
-
-    memset(items, 0, sizeof(*items));
-    (*items)[0] = rec;
-    int n = split_with_sep(*items, IPINFO_MAX_ITEMS, origins[origin_no].sep, '"');
-
-    if (n > (ipinfo_max + skipped_items))
-        ipinfo_max = n - ((skipped_items > skipped_props) ? skipped_items : skipped_props);
-
-    char *unkn = origins[origin_no].unkn;
-    if (unkn) {
-        int len = strlen(unkn);
-        for (int i = 0; (i < n) && (*items)[i]; i++)
-            if (!strncmp((*items)[i], unkn, len))
-                (*items)[i] = UNKN;
-    }
-
-    return (ipinfo_no[0] < n) ? (*items)[ipinfo_no[0]] : (*items)[0];
+static void unkn2norm(char **record) {
+  if (ORIG_UNKN) { // change to std UNKN
+    int len = strnlen(ORIG_UNKN, NAMELEN);
+    for (int i = 0; (i < MAX_TXT_ITEMS) && record[i]; i++)
+      if (!strncmp(record[i], ORIG_UNKN, len))
+        record[i] = UNKN;
+  }
 }
 
-static void add_rec(char *hkey) {
-    if (origins[origin_no].ndx[0]) {
-        items_t it;
-        memcpy(&it, items, sizeof(it));
-        memset(items, 0, sizeof(items_t));
-        for (int i = 0, j = 0; i < IPINFO_MAX_ITEMS; i++) {
-            bool skip = false;
-            if (origins[origin_no].type == 2) {	// http:flat-json 1st-slot
-                if (!i && origins[origin_no].ndx[0])
-                    continue;
-            } else
-                for (int k = 0; (k < IPINFO_MAX_ITEMS) && origins[origin_no].ndx[k]; k++)
-                    if ((skip = ((i + 1) == origins[origin_no].ndx[k])))
-                        break;
-            if (!skip)
-                (*items)[j++] = it[i];
-        }
-    }
-
-    ENTRY *hr, item = { hkey, items};
-    if (!(hr = hsearch(item, ENTER)))
-        IILOG_RET("hsearch(ENTER, key=%s) failed: %s", hkey, strerror(errno));
-
-#ifdef LOG_IPINFO
-    static char buff[IPINFO_MAX_ITEMS * (NAMELEN + 1)];
-    memset(buff, 0, sizeof(buff));
-    int l = 0;
-#endif
-    for (int i = 0; (i < IPINFO_MAX_ITEMS) && (*items)[i]; i++) {
-        int ilen = strnlen((*items)[i], NAMELEN);
-//        int ilen = mbstowcs(NULL, (*items)[i], 0);	// utf8
-        if (origins[origin_no].width[i] < ilen)
-            origins[origin_no].width[i] = ilen;
-#ifdef LOG_IPINFO
-        l += snprintf(buff + l, sizeof(buff) - l, "\"%s\" ", (*items)[i]);
-#endif
-    }
-    IILOG_MSG("Key %s: add %s", hkey, buff);
+static char** split_record(char *r) {
+  static char* recbuf[MAX_TXT_ITEMS];
+  memset(recbuf, 0, sizeof(recbuf));
+  recbuf[0] = r;
+  split_with_sep(recbuf, MAX_TXT_ITEMS, origins[origin_no].sep, '"');
+  unkn2norm(recbuf);
+  return recbuf;
 }
 
-static ENTRY* search_hashed_id(uint16_t id) {
-    uint16_t ids[2] = { id, 0 };
-    ENTRY *hr, item = { (void*)ids };
-    if (!(hr = hsearch(item, FIND))) {
-        IILOG_MSG("hsearch(FIND): key=%d not found", id);
-        return NULL;
-    }
-
-    IILOG_MSG("Process ipinfo response id=%d", id);
-    ((ii_q_t*)hr->data)->status = 1; // status: 1 (found)
-    return hr;
+static void adjust_width(char** record) {
+  for (int i = 0; (i < MAX_TXT_ITEMS) && record[i]; i++) {
+    int len = strnlen(record[i], NAMELEN); // utf8 ? strnlen() : mbstowcs(NULL, records[i], 0);
+    if (ORIG_WIDTH(i) < len)
+      ORIG_WIDTH(i) = len;
+  }
 }
 
-static void process_dns_response(void *buff, int r) {
-    HEADER* header = (HEADER*)buff;
-    ENTRY *hr;
-    if (!(hr = search_hashed_id(header->id)))
-        return;
+static void save_fields(int at, int ndx, char **record) {
+  unkn2norm(record);
+  for (int i = 0; i < itemname_max; i++)
+    if (!record[i])
+      record[i] = UNKN;
+  for (int i = 0, j = 0; (i < MAX_TXT_ITEMS) && record[i]; i++) {
+    if (ndx_in_skip_list(i, ORIG_SKIP_NDX) >= 0) // skip it
+      continue;
+    char *s = trim(record[i]);
+    if (str_in_skip_list(s, ORIG_SKIP_STR) >= 0) // skip it
+      continue;
+    if (RTXT_AT_NDX(at, ndx, j))
+      free(RTXT_AT_NDX(at, ndx, j));
+    RTXT_AT_NDX(at, ndx, j) = strndup(s, NAMELEN);
+    if (!RTXT_AT_NDX(at, ndx, j)) {
+      warn("ipinfo.save.fields[%d:%d:%d]: strndup()", at, ndx, j);
+      break;
+    }
+    j++;
+  }
+}
 
-    char hostname[NAMELEN], *txt;
-    u_char *pt;
-    int exp, size, txtlen, type;
-
-    pt = buff + sizeof(HEADER);
-    if ((exp = dn_expand(buff, buff + r, pt, hostname, sizeof(hostname))) < 0)
-        IILOG_RET("%s(): dn_expand() failed: %s", __FUNCTION__, strerror(errno));
-
-    pt += exp;
-    GETSHORT(type, pt);
-    if (type != T_TXT)
-        IILOG_RET("%s(): broken DNS reply", __FUNCTION__);
-
-    pt += INT16SZ; /* class */
-    if ((exp = dn_expand(buff, buff + r, pt, hostname, sizeof(hostname))) < 0)
-        IILOG_RET("%s(): second dn_expand() failed: %s", __FUNCTION__, strerror(errno));
-
-    pt += exp;
-    GETSHORT(type, pt);
-    if (type != T_TXT)
-        IILOG_RET("%s(): not a TXT record", __FUNCTION__);
-
-    pt += INT16SZ; /* class */
-    pt += INT32SZ; /* ttl */
-    GETSHORT(size, pt);
-    txtlen = *pt;
-    if (txtlen >= size || !txtlen)
-        IILOG_RET("%s(): broken TXT record (txtlen = %d, size = %d)", __FUNCTION__, txtlen, size);
-    if (txtlen > NAMELEN)
-        txtlen = NAMELEN;
-
-    if (!(txt = malloc(txtlen + 1)))
-        IILOG_RET("%s(): malloc() failed", __FUNCTION__);
-
-    pt++;
-    strncpy(txt, (char*) pt, txtlen);
-    txt[txtlen] = 0;
-
-    if (!split_rec(txt))
-        return;
-    add_rec(((ii_q_t*)hr->data)->key);
+void save_txt_answer(int at, int ndx, const char *answer) {
+  char *copy = NULL, **data = NULL;
+  if (answer && strnlen(answer, NAMELEN)) {
+    copy = strndup(answer, NAMELEN);
+    if (!copy) {
+      warn("ipinfo.save.txt[%d:%d]: strndup()", at, ndx);
+      return;
+    }
+    data = split_record(copy);
+  }
+  if (data)
+    save_fields(at, ndx, data);
+  else {
+    char* empty[MAX_TXT_ITEMS];
+    memset(empty, 0, sizeof(empty));
+    save_fields(at, ndx, empty); // it sets as unknown
+  }
+  if (copy)
+    free(copy);
+  adjust_width(&(RTXT_AT_NDX(at, ndx, 0)));
 }
 
 static char trim_c(char *s, char *sc) {
@@ -331,748 +258,452 @@ static char* trim_str(char *s, char *sc) {
     return p;
 }
 
-static int in_str_list(const char *str, char* const* list) {
-    for (int i = 0; (i < IPINFO_MAX_ITEMS) && list[i]; i++)
-        if (strncmp(str, list[i], NAMELEN) == 0)
-            return i;
-    return -1;
+static void save_records(char **record) {
+  if ((lastid.at < 0) || (lastid.ndx < 0)) // on the off chance
+    return;
+  // save results of parsing
+  save_fields(lastid.at, lastid.ndx, record);
+  adjust_width(&(RTXT_AT_NDX(lastid.at, lastid.ndx, 0)));
+  lastid = (atndx_t){.at = -1, .ndx = -1};
 }
 
-static int in_ndx_list(const int ndx, const int* list) {
-    for (int i = 0; (i < IPINFO_MAX_ITEMS) && list[i]; i++)
-        if ((ndx + 1) == list[i])
-            return ndx;
-    return -1;
+static int count_records(char **r) {
+  int n = 0;
+  for (int i = 0; (i < MAX_TXT_ITEMS) && r[i]; i++) {
+    if (ndx_in_skip_list(i, ORIG_SKIP_NDX) >= 0) // skip it
+      continue;
+    r[i] = trim(r[i]);
+    if (str_in_skip_list(r[i], ORIG_SKIP_STR) >= 0) // skip it
+      continue;
+    n++;
+  }
+  return n;
 }
 
-static void split_pairs(char sep) {
-    items_t it;
-    memcpy(&it, items, sizeof(it));
-    memset(items, 0, sizeof(*items));
-    for (int i = 0; (i < IPINFO_MAX_ITEMS) && it[i]; i++) {
-        char* ln[2] = { it[i] };
-        if (split_with_sep(ln, 2, sep, 0) != 2)
-            continue;
-        char *prop = trim_str(ln[0], CHAR_QOUTES);
-        if (origins[origin_no].prop_prfx)
-            if (strstr(prop, origins[origin_no].prop_prfx))
-                prop += strlen(origins[origin_no].prop_prfx);
-        char *val = trim_str(ln[1], CHAR_QOUTES);
-        int ndx = in_ndx_list(i, origins[origin_no].ndx);
-        if (ndx >= 0) {
-            // type=2: http:flat-json: always add in 1st slot, it's query ip
-            (*items)[(origins[origin_no].type == 2) ? 0 : ndx] = strdup(val);
-            continue;
-        }
-        ndx = in_str_list(prop, origins[origin_no].name);
-        if (ndx >= 0) {
-            (*items)[ndx + skipped_items] = strdup(val);
-            continue;
-        }
+
+static void process_http_response(void *buf, int r) {
+  static char h11[] = "HTTP/1.1";
+  static int h11_ln = sizeof(h11) - 1;
+  static char h11ok[] = "HTTP/1.1 200 OK";
+  static int h11ok_ln = sizeof(h11ok) - 1;
+
+  IILOG_MSG("ipinfo.http: got %d bytes: \"%s\"", r, (char*)buf);
+  /*stat*/ ipinfo_replies[0]++; ipinfo_replies[1]++;
+  if (lastid.at < 0)
+    IILOG_RET("ipinfo.http: %s", "not recognizable reply");
+
+
+  for (char *p = buf; (p = strstr(p, h11)) && ((p - (char*)buf) < r); p += h11_ln) {
+    if (strncmp(p, h11ok, h11ok_ln)) { // not HTTP OK
+      IILOG_MSG("ipinfo.http: not OK: %.*s", h11ok_ln, p);
+      break; // i.e. set as unknown
+    }
+    char* lines[TCP_RESP_LINES];
+    memset(lines, 0, sizeof(lines));
+    lines[0] = buf;
+    int rn = split_with_sep(lines, TCP_RESP_LINES, '\n', 0);
+    if (rn < 4) { // HEADER + NL + NL + DATA
+      IILOG_MSG("ipinfo.http: no data after header (got %d lines only)", rn);
+      continue;
     }
 
-    for (int i = 0; (i < IPINFO_MAX_ITEMS) && origins[origin_no].name[i]; i++) {
-        if (!origins[origin_no].name[i])
-            break;
-        if (!(*items)[i])
-            (*items)[i] = strdup("");
-    }
-}
-
-static void process_http_response(void *buff, int r) {
-    static char h11[] = "HTTP/1.1";
-    static int h11_ln = sizeof(h11) - 1;
-    static char h11ok[] = "HTTP/1.1 200 OK";
-    static int h11ok_ln = sizeof(h11ok) - 1;
-
-    IILOG_MSG("Got[%d]: \"%s\"", r, (char*)buff);
-#ifdef LOG_IPINFO
-    int reply = 0;
-#endif
-    for (char *p = buff; (p = strstr(p, h11)); p += h11_ln) {	// parse pipelining chunks
-#ifdef LOG_IPINFO
-        reply++;
-#endif
-        if (!strncmp(p, h11ok, h11ok_ln)) {
-            memset(tcp_resp, 0, sizeof(tcp_resp));
-            static char copy[RECV_BUFF_SZ];
-            memset(copy, 0, sizeof(copy));
-            memcpy(copy, p, sizeof(copy));
-            tcp_resp[0] = copy;
-
-            int rn = split_with_sep(tcp_resp, II_RESP_LINES, '\n', 0);
-            if (rn < 4) { // HEADER + NL + NL + DATA
-                IILOG_MSG("%s(): empty response #%d", __FUNCTION__, reply);
-                continue;
-            }
-
-            int content = 0, cnt_len = 0;
-            for (int i = 0; i < rn; i++) {
-                char* ln[2] = { tcp_resp[i] };
-                if (split_with_sep(ln, 2, ' ', 0) == 2)
-                    if (strcmp("Content-Length:", ln[0]) == 0)
-                        cnt_len = atoi(ln[1]);
-                if (tcp_resp[i][0])	// skip header lines
-                    continue;
-                if ((i + 1) < rn)
-                    content = i + 1;
-                break;
-            }
-            if (content && (cnt_len > 0) && (cnt_len < r))
-                *(tcp_resp[content] + cnt_len) = 0;
-            else
-                cnt_len = strlen(tcp_resp[content]);
-
-            char *txt;
-            if (!(txt = malloc(cnt_len + 1))) {
-                IILOG_MSG("%s(): reply #%d: malloc() failed", __FUNCTION__, reply);
-                continue;
-            }
-            memset(txt, 0, cnt_len);
-            for (int i = content; (i < rn) && (strlen(txt) < cnt_len); i++) { // combine into one line
-                if (((tcp_resp[i] - tcp_resp[content]) + strlen(tcp_resp[i])) > cnt_len)
-                    break;
-                strcat(txt, tcp_resp[i]);
-            }
-
-            IILOG_MSG("http response#%d [%d]: \"%s\"", reply, rn, txt);
-            if (!split_rec(trim_str(trim_str(txt, CHAR_QOUTES), CHAR_BRACKETS)))
-                continue;
-            else if (got_items < origins[origin_no].ndx[0]) {
-                IILOG_MSG("%s(): got #%d, expected at least #%d", __FUNCTION__, got_items, origins[origin_no].ndx[0]);
-                continue;
-            }
-
-            if (origins[origin_no].type == 2)
-                split_pairs(':');
-
-            for (int j = 0; (j < IPINFO_MAX_ITEMS) && (*items)[j]; j++) // disclose items
-                (*items)[j] = trim_str((*items)[j], CHAR_QOUTES);
-
-            ENTRY *hr;
-            // first entry is either our request or a return code
-            int re_ndx = 0;
-            if (origins[origin_no].type != 2)
-                if (origins[origin_no].ndx[0])
-                    re_ndx = origins[origin_no].ndx[0] - 1;
-            if (!(hr = search_hashed_id(str2dnsid((*items)[re_ndx])))) {
-                IILOG_MSG("%s(): got unknown reply #%d: \"%s\"", __FUNCTION__, reply, (*items)[re_ndx]);
-                continue;
-            }
-            add_rec(((ii_q_t*)hr->data)->key);
-        } else
-            IILOG_MSG("%s(): reply#%d is not OK: got \"%s\"", __FUNCTION__, reply, p);
-    }
-
-#ifdef LOG_IPINFO
-    if (!reply)
-        IILOG_MSG("%s(): What is that? got[%d] \"%s\"", __FUNCTION__, r, (char*)buff);
-#endif
-}
-
-static void process_whois_response(void *buff, int r) {
-    IILOG_MSG("Got[%d]: \"%s\"", r, (char*)buff);
-
-    char *txt;
-    if (!(txt = malloc(RECV_BUFF_SZ)))
-        IILOG_RET("%s(): malloc() failed", __FUNCTION__);
-    memcpy(txt, buff, RECV_BUFF_SZ);
-    txt[r] = 0;
-
-    if (!items) {
-        if (!(items = malloc(sizeof(*items)))) {
-            free(txt);
-            IILOG_RET("%s(): malloc() failed", __FUNCTION__);
-        }
-        memset(items, 0, sizeof(*items));
-    }
-
-    memset(tcp_resp, 0, sizeof(tcp_resp));
-    tcp_resp[0] = txt;
-
-    int rn = split_with_sep(tcp_resp, II_RESP_LINES, '\n', 0);
+    int cndx = 0, clen = 0; // content index in tcpresp and its length
     for (int i = 0; i < rn; i++) {
-        char* ln[2] = { tcp_resp[i] };
-//        IILOG_MSG("%s(): got#%d \"%s\"", __FUNCTION__, i, ln[0]);
-        if (split_with_sep(ln, 2, ':', 0) == 2) {
-            for (int j = 0; (j < IPINFO_MAX_ITEMS) && origins[origin_no].name[j]; j++) {
-                char* desc = origins[origin_no].name[j];
-                if (!desc || !ln[0])
-                    break;
-                if (strcasecmp(desc, ln[0]) == 0)
-                    (*items)[j] = ln[1];
-                else if (af == AF_INET6) {	// check "*6" field names
-                    char desc6[NAMELEN];
-                    snprintf(desc6, sizeof(desc6), "%s%s", desc, "6");
-                    if (strcasecmp(desc6, ln[0]) == 0)
-                      (*items)[j] = ln[1];
-                }
-// riswhois: split the last item
-#define RISWHOIS_LAST_NDX	2
-                if (j == RISWHOIS_LAST_NDX) {	// "description, country"
-                    char* dc[2] = { (*items)[j] };
-                    if (split_with_sep(dc, 2, COMMA, 0) == 2)
-                        (*items)[RISWHOIS_LAST_NDX + 1] = dc[1];
-                }
-                if (ipinfo_max < (j + 1))
-                    ipinfo_max = j + 1;
-            }
+      char* ln[2] = { lines[i] };
+      if (split_with_sep(ln, 2, ' ', 0) == 2)
+        if (strcmp("Content-Length:", ln[0]) == 0)
+          clen = atoi(ln[1]);
+      if (lines[i][0]) // skip header lines
+        continue;
+      if ((i + 1) < rn)
+        cndx = i + 1;
+      break;
+    }
+    if (cndx && (clen > 0) && (clen < r))
+      *(lines[cndx] + clen) = 0;
+    else
+      clen = strnlen(lines[cndx], NAMELEN);
+
+    char *txt = calloc(1, clen + 1);
+    if (!txt)
+      IILOG_RET("ipinfo.http: %s", "calloc() failed");
+    for (int i = cndx, l = 0; (i < rn) && (l < clen); i++) // combine into one line
+      l += snprintf(txt + l, clen - l, "%s", lines[i]);
+
+    IILOG_MSG("ipinfo.http: got line: %s", txt);
+    char **re = split_record(trim_str(trim_str(txt, CHAR_QOUTES), CHAR_BRACKETS));
+    if (re) {
+      int got = count_records(re);
+      if (got == itemname_max) { // save results and return
+        save_records(re);
+        free(txt);
+        return;
+      } else
+        IILOG_MSG("ipinfo.http: expected %d records, got %d", itemname_max, got);
+    }
+    free(txt);
+  }
+
+  // not found
+  char* empty[MAX_TXT_ITEMS];
+  memset(empty, 0, sizeof(empty));
+  save_records(empty); // it sets as unknown
+}
+
+
+static void process_whois_response(void *txt, int r) {
+  IILOG_MSG("ipinfo.whois got[%d]: \"%.*s\"", r, r, (char*)txt);
+  /*stat*/ ipinfo_replies[0]++; ipinfo_replies[2]++;
+  if (lastid.at < 0)
+    IILOG_RET("ipinfo.whois: %s", "not recognizable reply");
+
+  static char* record[MAX_TXT_ITEMS];
+  memset(record, 0, sizeof(record));
+  char* lines[TCP_RESP_LINES];
+  memset(lines, 0, sizeof(lines));
+  lines[0] = txt;
+
+  int rn = split_with_sep(lines, TCP_RESP_LINES, '\n', 0);
+  int sn = skip_whois_comments(lines, rn);
+  if (sn < 0) // segment with comments only
+    IILOG_RET("ipinfo.whois[%d:%d]: skip empty segment", lastid.at, lastid.ndx);
+
+  for (int i = sn; (i < rn) && (i < TCP_RESP_LINES) && lines[i]; i++) {
+    if (!lines[i][0] || (lines[i][0] == WHOIS_COMMENT))
+      continue; // skip empty lines and comments
+    char* ln[2] = { lines[i] };
+    if (split_with_sep(ln, 2, ':', 0) == 2) {
+      for (int j = 0; (j < MAX_TXT_ITEMS) && ORIG_NAME(j); j++) {
+        if (!ln[0])
+          break;
+        if (af == AF_INET6) { // check "*6" fields too
+          int lc = strnlen(ln[0], NAMELEN) - 1;
+          if ((lc > 0) && (ln[0][lc] == '6'))
+            ln[0][lc] = 0;
         }
+        if (strcasecmp(ORIG_NAME(j), ln[0]) == 0)
+          record[j] = ln[1];
+        if (j == WHOIS_LAST_NDX) { // split the last item (description, country)
+          char* dc[2] = { record[j] };
+          if (split_with_sep(dc, 2, COMMA, 0) == 2)
+            record[WHOIS_LAST_NDX + 1] = dc[1];
+        }
+      }
     }
+  }
 
-    ENTRY *hr;
-    if (!(hr = search_hashed_id(str2dnsid(last_request))))
-        IILOG_RET("%s(): got unknown reply: \"%s\"", __FUNCTION__, (char*)buff);
-
-    for (int i = 0; (i < IPINFO_MAX_ITEMS) && origins[origin_no].name[i]; i++)
-        if (! ((*items)[i]))
-            return;
-
-    add_rec(((ii_q_t*)hr->data)->key);
-    items = NULL;
+  // save results of parsing
+  save_records(record);
 }
 
-static process_response_f process_response[] = { process_dns_response, process_http_response, process_http_response, process_whois_response };
 
-void ii_ack(void) {
-    static char buff[RECV_BUFF_SZ];
-    int r = recv(origins[origin_no].fd, buff, sizeof(buff), 0);
-    if (r > 0)
-        process_response[origins[origin_no].type](buff, r);
-    else if (r < 0)
-        IILOG_RET("%s(): recv() failed: %s", __FUNCTION__, strerror(errno))
-    else { // Got 0 bytes
-        if (origins[origin_no].fd >= 0)
-          close(origins[origin_no].fd);
-        origins[origin_no].fd = -1;
-        last_request = NULL;
-        IILOG_RET("Close connection to %s", origins[origin_no].host);
+void ii_ack(void) { // except dns, dns.ack in dns.c
+  memset(exchbuf, 0, sizeof(exchbuf));
+  int r = recv(ORIG_FD, exchbuf, NETDATA_MAXSIZE, 0);
+  if (r > 0) {
+    switch ORIG_TYPE {
+      case http_csv: process_http_response(exchbuf, r); break;
+      case whois_pairs: process_whois_response(exchbuf, r);
     }
+  } else if (r < 0)
+    warn("ipinfo.ack: recv(sock=%d)", ORIG_FD);
+  else { // got 0 bytes
+    if (ORIG_FD >= 0)
+      close(ORIG_FD);
+    ORIG_FD = -1;
+    lastid = (atndx_t){.at = -1, .ndx = -1};
+    IILOG_MSG("close connection to %s", ORIG_HOST);
+  }
 }
 
-static int init_dns(void) {
-    IILOG_MSG("%s", "Create DNS socket");
-    if (res_init() < 0) {
-        perror("res_init()");
-        return -1;
-    }
-    if ((origins[origin_no].fd = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
-        perror("socket()");
-        return -1;
-    }
-//    IILOG_MSG("DNS socket[origin=%d]: %d", origin_no, origins[origin_no].fd);
-    return 0;
-}
 
 static int open_tcp_connection(void) {
-    IILOG_MSG("Open connection to %s", origins[origin_no].host);
-    struct hostent* h;
-    if (!(h = gethostbyname(origins[origin_no].host))) {
-        perror(origins[origin_no].host);
-        return -1;
-    }
-
-    struct sockaddr_in re;
-    re.sin_family = AF_INET;
-    re.sin_port = htons(remote_ports[origins[origin_no].type]);
-    re.sin_addr = *(struct in_addr*)h->h_addr;
-    memset(&re.sin_zero, 0, sizeof(re.sin_zero));
-
-    int sock = -1;
-    for (int i = 0; h->h_addr_list[i]; i++) {
-        re.sin_addr = *(struct in_addr*)h->h_addr_list[i];
-
-        if (sock)
-            close(sock);
-        if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
-            perror("socket()");
-            break;
-        }
-        if (fcntl(sock, F_SETFL, O_NONBLOCK) < 0) {
-            perror("fcntl()");
-            break;
-        }
-
-        int rv = connect(sock, (struct sockaddr*) &re, sizeof(struct sockaddr));
-        if ((rv < 0) && (errno != EINPROGRESS)) {
-            perror("connect()");
-            continue;
-        }
-        fd_set fds;
-        FD_ZERO(&fds);
-        FD_SET(sock, &fds);
-        struct timeval tv = { TCP_CONN_TIMEOUT, 0 };
-        if ((rv = select(sock + 1, NULL, &fds, NULL, &tv)) > 0) {
-            int so_error;
-            socklen_t len = sizeof(so_error);
-            getsockopt(sock, SOL_SOCKET, SO_ERROR, &so_error, &len);
-            if (!so_error) {
-                origins[origin_no].fd = sock;
-                return 0;
-            }
-        } else if (rv < 0)
-            perror("select()");
-#ifdef LOG_IPINFO
-        else
-            IILOG_MSG("#%d: connection timed out", i);
-#endif
-    }
-    fprintf(stderr, "Cannot create ipinfo connection\n");
-    if (sock >= 0) {
-       close(sock);
-       origins[origin_no].fd = -1;
-    }
+  IILOG_MSG("ipinfo.open connection to %s", ORIG_HOST);
+  struct hostent* h = gethostbyname(ORIG_HOST);
+  if (!h) {
+    warn("ipinfo.open.tcp: gethostbyname(%s)", ORIG_HOST);
     return -1;
-}
+  }
 
-typedef int (*open_connection_f)(void);
-static open_connection_f open_connection[] = { init_dns, open_tcp_connection, open_tcp_connection, open_tcp_connection };
+  struct sockaddr_in re;
+  re.sin_family = AF_INET;
+  re.sin_port = htons((ORIG_TYPE == whois_pairs) ? 43 : 80);
+  re.sin_addr = *(struct in_addr*)h->h_addr;
+  memset(&re.sin_zero, 0, sizeof(re.sin_zero));
 
-static int send_dns_query(const char *request, uint32_t id) {
-    unsigned char buff[RECV_BUFF_SZ];
-    int r = dns_query(QUERY, request, C_IN, T_TXT, NULL, 0, NULL, buff, RECV_BUFF_SZ);
-    if (r < 0) {
-        IILOG_MSG("%s(): dns_query() failed: %s", __FUNCTION__, strerror(errno));
-        return r;
+  int sock = -1;
+  for (int i = 0; h->h_addr_list[i]; i++) {
+    re.sin_addr = *(struct in_addr*)h->h_addr_list[i];
+
+    if (sock)
+      close(sock);
+    if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
+      warn("ipinfo.open.tcp: socket(%d, %d, 0)", AF_INET, SOCK_STREAM);
+      break;
     }
-    HEADER* h = (HEADER*)buff;
-    h->id = id;
-    return sendto(origins[origin_no].fd, buff, r, 0, (struct sockaddr *)&myres.nsaddr_list[0], sizeof(struct sockaddr));
-}
+    if (fcntl(sock, F_SETFL, O_NONBLOCK) < 0) {
+      warn("ipinfo.open.tcp: fcntl(%d, %d)", F_SETFL, O_NONBLOCK);
+      break;
+    }
 
-static int send_http_query(const char *request, uint32_t id) {
-    char buff[RECV_BUFF_SZ];
-    snprintf(buff, sizeof(buff), "GET %s HTTP/1.1\r\nHost: %s\r\nUser-Agent: mtr/%s\r\nAccept: */*\r\n\r\n", request, origins[origin_no].host, MTR_VERSION);
-    return send(origins[origin_no].fd, buff, strlen(buff), 0);
-}
-
-static int send_whois_query(const char *request, uint32_t id) {
-    char buff[RECV_BUFF_SZ];
-    snprintf(buff, sizeof(buff), "%s\r\n", request);
-    return send(origins[origin_no].fd, buff, strlen(buff), 0);
-}
-
-typedef int (*send_query_f)(const char*, uint32_t);
-static send_query_f send_query[] = { send_dns_query, send_http_query, send_http_query, send_whois_query };
-
-static int ii_send_query(const char *lkey, const char *hkey) {
-    uint16_t id[2] = { str2dnsid(hkey), 0 };
-    ENTRY item = { (void*)id };
-    if (hsearch(item, FIND)) {
-//        IILOG_MSG("Query %s (id=%d) on the waitlist", lookup_key, id[0]);
+    int rc = connect(sock, (struct sockaddr*) &re, sizeof(struct sockaddr));
+    if ((rc < 0) && (errno != EINPROGRESS)) {
+      warn("ipinfo.open.tcp: connect(%d)", sock);
+      continue;
+    }
+    fd_set fds;
+    FD_ZERO(&fds);
+    FD_SET(sock, &fds);
+    struct timeval tv = { TCP_CONN_TIMEOUT, 0 };
+    rc = select(sock + 1, NULL, &fds, NULL, &tv);
+    if (rc > 0) {
+      int so_error;
+      socklen_t len = sizeof(so_error);
+      getsockopt(sock, SOL_SOCKET, SO_ERROR, &so_error, &len);
+      if (!so_error) {
+        if (ORIG_FD >= 0)
+          close(ORIG_FD);
+        ORIG_FD = sock;
         return 0;
-    }
+      }
+    } else if (rc < 0)
+      warn("ipinfo.open.tcp: select(sock=%d)", sock);
+    else
+      IILOG_MSG("ipinfo.open.tcp: timeout expires: %s", inet_ntoa(re.sin_addr));
+  }
 
-    int r;
-    if (origins[origin_no].fd < 0)
-        if ((r = open_connection[origins[origin_no].type]()) < 0)
-            return r;
+  if (sock >= 0) {
+    close(sock);
+    ORIG_FD = -1;
+  }
+  IILOG_RETN(-1, "ipinfo.open.tcp: cannot create connection to %s", ORIG_HOST);
+}
 
-    IILOG_MSG("Send %s query (id=%d)", lkey, id[0]);
-    if ((r = send_query[origins[origin_no].type](lkey, id[0])) <= 0)
-        return r;
+static int send_tcp_query(int at, int ndx, const char *q) {
+  if (lastid.at >= 0) // wait response
+    IILOG_RETN(-1, "ipinfo.tcp: previous request[%d:%d] is not finished yet", lastid.at, lastid.ndx);
 
-    if (!(item.key = malloc(sizeof(id))))
-        return -1;
-    memcpy(item.key, id, sizeof(id));
-    if (!(item.data = malloc(sizeof(ii_q_t))))
-        return -1;
-    if (!(((ii_q_t*)item.data)->key = malloc(sizeof(hkey))))
-        return -1;
-    ((ii_q_t*)item.data)->status = 0; // status: 0 (query for)
-    last_request = strdup(hkey);
-    ((ii_q_t*)item.data)->key = last_request;
+  (ORIG_TYPE == whois_pairs) ?
+    snprintf(exchbuf, NETDATA_MAXSIZE, "%s\r\n", q) :
+    snprintf(exchbuf, NETDATA_MAXSIZE, HTTP_GET, q, ORIG_HOST, MTR_VERSION);
+  int len = strnlen(exchbuf, NETDATA_MAXSIZE);
 
-    IILOG_MSG("Add ipinfo query (id=%d, data=%s)", id[0], hkey);
-    if (!hsearch(item, ENTER)) {
-        IILOG_MSG("hsearch(ENTER, key=%d, data=%s) failed: %s", id[0], hkey, strerror(errno));
-        return -1;
-    }
-
-    return 0;
+  IILOG_MSG("ipinfo.tcp.send[%u:%u orig=%d]: %s", at, ndx, origin_no, q);
+  int re = send(ORIG_FD, exchbuf, len, 0);
+  if (re >= 0) {
+    /*stat*/ ipinfo_queries[0]++; (ORIG_TYPE == http_csv) ? ipinfo_queries[1]++ : ipinfo_queries[2]++;
+    lastid = (atndx_t){ .at = at, .ndx = ndx };
+  }
+  return re;
 }
 
 
+static int ipinfo_lookup(int at, int ndx, const char *qstr) {
+  if (!enable_ipinfo) // not enabled
+    return -1;
+  if (!addr_exist(&IP_AT_NDX(at, ndx))) // on the off chance
+    return -1;
+  if (RTXT_AT_NDX(at, ndx, 0)) // already known
+    return -1;
+
+  // set query string if not yet (setting a new ip, free this query)
+  if (!QTXT_AT_NDX(at, ndx)) {
+    QTXT_AT_NDX(at, ndx) = strndup(qstr, NAMELEN);
+    if (!QTXT_AT_NDX(at, ndx)) {
+      warn("ipinfo.lookup[%d:%d]: strndup()", at, ndx);
+      return -1;
+  }}
+
+  if ((time(NULL) - QTXT_TS_AT_NDX(at, ndx)) <= PAUSE_BETWEEN_QUERIES) // too often, wait a little
+    return -1;
+  if ((ORIG_FD < 0) && (ORIG_TYPE != dns_txt)) // in case of tcp
+    if (open_tcp_connection() < 0)
+      return -1;
+
+  QTXT_TS_AT_NDX(at, ndx) = time(NULL); // save time of trying to send
+  return (ORIG_TYPE == dns_txt) ? dns_send_query(at, ndx, qstr, T_TXT) : send_tcp_query(at, ndx, qstr);
+}
+
+
+static char *get_ipinfo(int at, int ndx, int nd) {
+  if (RTXT_AT_NDX(at, ndx, nd)) // already known
+    return RTXT_AT_NDX(at, ndx, nd);
 #ifdef ENABLE_IPV6
-#define BYTES_TO_PROCESS	8
-static void al_reves_chars(int al_reves, const unsigned char *s6a, int i, char *b0) {
-    static char hex4bits[] = "0123456789abcdef";
-    if (al_reves) {
-        char c = s6a[BYTES_TO_PROCESS - 1 - i];
-        *b0 = hex4bits[c & 0xf];
-        *(b0 + 2) = hex4bits[(c >> 4) & 0xf];
-    } else {
-        char c = s6a[i];
-        *b0 = hex4bits[(c >> 4) & 0xf];
-        *(b0 + 2) = hex4bits[c & 0xf];
-    }
-    *(b0 + 1) = '.';
-    *(b0 + 3) = '.';
-}
-
-static char *al_reves_host6(struct in6_addr *addr, char *buff, int len, int dir) {	// 0: frontward, 1: backward
-    if (len < (4 * BYTES_TO_PROCESS))
-        return NULL;
-    for (int i = 0; i < BYTES_TO_PROCESS; i++)
-        al_reves_chars(dir, addr->s6_addr, i, buff + i * 4);
-    buff[4 * BYTES_TO_PROCESS - 1] = 0;
-    return buff;
-}
+  if ((af == AF_INET6) && !origins[origin_no].host6) return NULL; else
 #endif
-
-
-static void set_tcp_lkey(char *lkey, const char *hkey) {
-  sprintf(lkey, "%s%s", origins[origin_no].prefix, hkey);
-  if (origins[origin_no].suffix)
-    sprintf(lkey + strlen(lkey), "%s", origins[origin_no].suffix);
-}
-
-
-char *get_ipinfo(ip_t *addr, int nd) {
-    if (!addr)
-        return NULL;
-    static char hkey[NAMELEN];
-    static char lkey[NAMELEN];
-
-#ifdef ENABLE_IPV6
-    if (af == AF_INET6) {
-        if (!origins[origin_no].host6)
-            return NULL;
-        switch (origins[origin_no].type) {
-            case 1: // http:csv
-            case 2: // http:flat-json
-            case 3: // whois
-                set_tcp_lkey(lkey, strlongip(addr));
-                break;
-            default: { // dns
-                char *al = al_reves_host6(addr, hkey, sizeof(hkey), 1);
-                if (!al)
-                    return NULL;
-		if (snprintf(lkey, sizeof(lkey), "%s.%s", al, origins[origin_no].host6) < 0)
-                    return NULL;
-                }
-        }
-	if (!al_reves_host6(addr, hkey, sizeof(hkey), 0))
-            return NULL;
-    } else /* if (af == AF_INET) */
-#endif
-    {   if (!origins[origin_no].host)
-            return NULL;
-        snprintf(hkey, sizeof(hkey), "%d.%d.%d.%d", ((unsigned char*)addr)[0], ((unsigned char*)addr)[1], ((unsigned char*)addr)[2], ((unsigned char*)addr)[3]);
-        switch (origins[origin_no].type) {
-            case 1: // http:csv
-            case 2: // http:flat-json
-            case 3: // whois
-                set_tcp_lkey(lkey, hkey);
-                break;
-            default: // dns
-                snprintf(lkey, sizeof(lkey), "%d.%d.%d.%d.%s", ((unsigned char*)addr)[3], ((unsigned char*)addr)[2], ((unsigned char*)addr)[1], ((unsigned char*)addr)[0], origins[origin_no].host);
-        }
-    }
-
-    ENTRY *hr, item = { hkey };
-    if ((hr = hsearch(item, FIND)))
-        return (*((items_t*)hr->data))[nd];
-    else {
-        if (origins[origin_no].type != 3)
-            ii_send_query(lkey, hkey);
-        else if (!last_request) // 4whois
-            ii_send_query(lkey, hkey);
-    }
-    return NULL;
+  if (!ORIG_HOST) return NULL;
+  ip_t *ip = &IP_AT_NDX(at, ndx);
+  switch (ORIG_TYPE) {
+    case http_csv:
+    case whois_pairs:
+      if (lastid.at < 0) {  // if previous tcp-request is finished
+        char q[NAMELEN];
+        snprintf(q, sizeof(q), "%s%s", origins[origin_no].prefix, strlongip(ip));
+        ipinfo_lookup(at, ndx, q);
+	  } break;
+    default:                // dns
+      ipinfo_lookup(at, ndx, ip2arpa(ip, ORIG_HOST, origins[origin_no].host6));
+  }
+  return NULL;
 }
 
 
 #define FIELD_FMT	"%%-%ds "
 char* ii_getheader(void) {
-    static char header[NAMELEN];
-    char fmt[16];
-    int l = 0;
-    for (int i = 0; i < IPINFO_MAX_ITEMS; i++) {
-        int no = ipinfo_no[i];
-        if ((no < 0) || (no >= ipinfo_max) || (l >= NAMELEN))
-            break;
-        char *name = origins[origin_no].name[no];
-        if (!name)
-            break;
-        snprintf(fmt, sizeof(fmt), FIELD_FMT, origins[origin_no].width[no]);
-        char *sname = origins[origin_no].substitution[no];
-        l += snprintf(header + l, sizeof(header) - l, fmt, sname ? sname : name);
-    }
-    return l ? header : NULL;
+  static char iiheader[NAMELEN];
+  iiheader[0] = 0;
+  char fmt[16];
+  for (int i = 0, l = 0; (i < MAX_TXT_ITEMS)
+      && (ipinfo_no[i] >= 0) && (ipinfo_no[i] < itemname_max)
+      && ORIG_NAME(ipinfo_no[i]) && (l < sizeof(iiheader)); i++) {
+    snprintf(fmt, sizeof(fmt), FIELD_FMT, ORIG_WIDTH(ipinfo_no[i]));
+    l += snprintf(iiheader + l, sizeof(iiheader) - l, fmt, ORIG_NAME(ipinfo_no[i]));
+  }
+  return iiheader;
 }
 
 int ii_getwidth(void) {
-    int l = 0;
-    for (int i = 0; (i < IPINFO_MAX_ITEMS) && (ipinfo_no[i] >= 0) && (ipinfo_no[i] < ipinfo_max); i++)
-        l += origins[origin_no].width[ipinfo_no[i]] + 1;
-    return l;
+  int l = 0;
+  for (int i = 0; (i < MAX_TXT_ITEMS)
+      && (ipinfo_no[i] >= 0) && (ipinfo_no[i] < itemname_max)
+      && (l < NAMELEN); i++)
+    l += 1 + ORIG_WIDTH(ipinfo_no[i]);
+  return l;
 }
 
 typedef int (*filler_fn)(char *buf, int sz, const char *data, int num, char ch);
 
 int fmt_filler(char *buf, int sz, const char *data, int width, char ignore) {
+  if (width) {
     char fmt[16];
     snprintf(fmt, sizeof(fmt), FIELD_FMT, width);
     return snprintf(buf, sz, fmt, data);
+  }
+  return snprintf(buf, sz, "%s ", data);
 }
 
 int sep_filler(char *buf, int sz, const char *data, int seq, char sep) {
-    return seq ? snprintf(buf, sz, "%c\"%s\"", sep, data) : snprintf(buf, sz, "\"%s\"", data);
+  return seq ? snprintf(buf, sz, "%c\"%s\"", sep, data) : snprintf(buf, sz, "\"%s\"", data);
 }
 
-char *fill_ipinfo(ip_t *addr, char sep) {
-    static char fmtinfo[NAMELEN];
-    for (int i = 0, l = 0; (i < IPINFO_MAX_ITEMS) && (ipinfo_no[i] >= 0); i++) {
-        char *ipinfo = unaddrcmp(addr) ? get_ipinfo(addr, ipinfo_no[i]) : NULL;
-        int width = origins[origin_no].width[ipinfo_no[i]];
-        if (!width)
-            continue;
-        if (!ipinfo) {
-            if (ipinfo_no[i] >= ipinfo_max)
-                continue;
-            ipinfo = UNKN;
-        }
-		filler_fn fn = sep ? sep_filler : fmt_filler;
-		l += fn(fmtinfo + l, sizeof(fmtinfo) - l, ipinfo, sep ? i : width, sep);
-    }
-    return fmtinfo;
+static char *fill_ipinfo(int at, int ndx, char sep) {
+  static char fmtinfo[NAMELEN];
+  fmtinfo[0] = 0;
+  for (int i = 0, l = 0; (i < MAX_TXT_ITEMS)
+      && (ipinfo_no[i] >= 0) && (ipinfo_no[i] < itemname_max)
+      && (l < sizeof(fmtinfo)); i++) {
+    const char *rec = addr_exist(&IP_AT_NDX(at, ndx)) ? get_ipinfo(at, ndx, ipinfo_no[i]) : NULL;
+    filler_fn fn = sep ? sep_filler : fmt_filler;
+    l += fn(fmtinfo + l, sizeof(fmtinfo) - l, rec ? rec : UNKN, sep ? i : ORIG_WIDTH(ipinfo_no[i]), sep);
+  }
+  return fmtinfo;
 }
 
-inline char *fmt_ipinfo(ip_t *addr) { return fill_ipinfo(addr, 0); }
-inline char *sep_ipinfo(ip_t *addr, char sep) { return fill_ipinfo(addr, sep); }
-
-int ii_waitfd(void) {
-    return (enable_ipinfo && hinit && ii_initiated) ? origins[origin_no].fd : -1;
-}
-
-bool ii_ready(void) {
-    return (enable_ipinfo && hinit && ii_initiated);
-}
+inline char *fmt_ipinfo(int at, int ndx) { return fill_ipinfo(at, ndx, 0); }
+inline char *sep_ipinfo(int at, int ndx, char sep) { return fill_ipinfo(at, ndx, sep); }
+int ii_waitfd(void) { return (enable_ipinfo && ii_initiated) ? ORIG_FD : -1; }
+bool ii_ready(void) { return (enable_ipinfo && ii_initiated); }
 
 void ii_open(void) {
-   if (!enable_ipinfo)
+ if (!enable_ipinfo)
+   return;
+ if (!ii_initiated) {
+   IILOG_MSG("%s", "ipinfo.open");
+   if (ORIG_TYPE != dns_txt) { // i.e. tcp (http or whois)
+     if (open_tcp_connection() < 0)
        return;
-   IILOG_MSG("%s", "ipinfo open");
-   if (!hinit) {
-       if (!hcreate(maxTTL * 4)) {
-           perror("hcreate()");
-           return;
-       }
-       hinit = true;
+   } else if (!dns_init())
+     return;
+   itemname_max = 0;
+   for (int i = 0; i < MAX_TXT_ITEMS; i++, itemname_max++) {
+     if (!ORIG_NAME(i))
+       break;
+     ORIG_WIDTH(i) = strnlen(ORIG_NAME(i), NAMELEN);
    }
-   if (!ii_initiated) {
-       if (open_connection[origins[origin_no].type]() < 0)
-           return;
-       while ((skipped_items < IPINFO_MAX_ITEMS) && origins[origin_no].ndx[skipped_items])
-           skipped_items++;
-       while ((skipped_props < IPINFO_MAX_ITEMS) && origins[origin_no].skip_prop[skipped_props])
-           skipped_props++;
-       for (int i = 0; i < IPINFO_MAX_ITEMS; i++) {
-           if (!origins[origin_no].name[i])
-               break;
-           origins[origin_no].width[i] = strnlen(origins[origin_no].name[i], NAMELEN);
-       }
-       ii_initiated = true;
-   }
-   dns_init();  // just in case if enable_dns=false
+   dns_txt_handler = save_txt_answer; // no checks, handler for ipinfo only
+   ii_initiated = true;
+ }
 }
 
 void ii_close(void) {
-   if (!enable_ipinfo)
-       return;
-    if (ii_initiated) {
-        if (origins[origin_no].fd >= 0)
-            close(origins[origin_no].fd);
-        if (tmpfd >= 0) {
-            close(tmpfd);
-#ifndef LOG_IPINFO
-            unlink(tmpfn);
-#endif
-        }
-       ii_initiated = false;
+  if (!enable_ipinfo)
+    return;
+  if (ii_initiated) {
+    if (ORIG_FD >= 0) {
+      close(ORIG_FD);
+      ORIG_FD = -1;
     }
-    if (hinit) {
-        hdestroy();
-        hinit = false;
-    }
+    ii_initiated = false;
+  }
+  if (ORIG_TYPE == dns_txt)
+    dns_close();
 }
 
-void ii_parsearg(char *arg) {
-    char* args[IPINFO_MAX_ITEMS + 1];
-    memset(args, 0, sizeof(args));
-    if (arg) {
-        args[0] = strdup(arg);
-        split_with_sep(args, IPINFO_MAX_ITEMS + 1, COMMA, 0);
-        int no = atoi(args[0]);
-        if ((no > 0) && (no <= (sizeof(origins)/sizeof(origins[0]))))
-            origin_no = no - 1;
+int ii_parsearg(char *arg) {
+  char* args[MAX_TXT_ITEMS + 1];
+  memset(args, 0, sizeof(args));
+  if (arg) {
+    args[0] = strdup(arg);
+    if (!args[0]) {
+      warn("ipinfo.parse: strdup(%s)", arg);
+      return -1;
     }
+    split_with_sep(args, MAX_TXT_ITEMS + 1, COMMA, 0);
+    int no = atoi(args[0]), max = sizeof(origins) / sizeof(origins[0]);
+    if ((no > 0) && (no <= max))
+      origin_no = no - 1;
+    else {
+      free(args[0]);
+      warnx("ipinfo.args: out of source range[1..%d]: %d", max, no);
+      return -1;
+    }
+  }
 
-    int j = 0;
-    for (int i = 1; (j < IPINFO_MAX_ITEMS) && (i <= IPINFO_MAX_ITEMS); i++)
-        if (args[i]) {
-            int no = atoi(args[i]);
-            if (no > 0)
-                ipinfo_no[j++] = no - 1;
-        }
-    for (int i = j; i < IPINFO_MAX_ITEMS; i++)
-        ipinfo_no[i] = -1;
-    if (ipinfo_no[0] < 0)
-        ipinfo_no[0] = 0;
+  int j = 0;
+  for (int i = 1; (j < MAX_TXT_ITEMS) && (i <= MAX_TXT_ITEMS); i++)
+    if (args[i]) {
+      int no = atoi(args[i]);
+      if (no > 0)
+        ipinfo_no[j++] = no - 1;
+    }
+  for (int i = j; i < MAX_TXT_ITEMS; i++)
+    ipinfo_no[i] = -1;
+  if (ipinfo_no[0] < 0)
+    ipinfo_no[0] = 0;
 
-    if (args[0])
-        free(args[0]);
-    IILOG_MSG("Data source: %s/%s", origins[origin_no].host, origins[origin_no].host6?origins[origin_no].host6:"-");
+  if (args[0])
+    free(args[0]);
+  IILOG_MSG("ipinfo.source: %s%s%s", ORIG_HOST, origins[origin_no].host6 ? ", " : "",
+    origins[origin_no].host6 ? origins[origin_no].host6 : "");
 
-    enable_ipinfo = true;
+  enable_ipinfo = true;
+  return 0;
 }
 
-static char hhead_script[] = "<script src=\"https://unpkg.com/leaflet@1.4.0/dist/leaflet.js\"></script>";
-static char hhead_link[] = "<link rel=\"stylesheet\" href=\"https://unpkg.com/leaflet@1.4.0/dist/leaflet.css\">";
-static char hbody_begin[] =
-"<body>"
-"	<div id=\"mtr_div\" style=\"width:100%; height:100%;\"></div>"
-"	<script>"
-"		var hopes = [";
-static char hbody_end[] =
-"		];"
-"		var map = L.map('mtr_div');"
-"		L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {"
-"			attribution: '<a href=\"https://www.openstreetmap.org/\">OpenStreetMap</a>'"
-"		}).addTo(map);"
-"		hopes.forEach(function(e){"
-"			m = L.marker(e).addTo(map);"
-"			m.bindTooltip(e.delay + '<br>' + e.title + '<br>' + e.desc);"
-"		});"
-"		var polyline = L.polyline(hopes, {opacity:0.7,weight:5}).addTo(map);"
-"		map.fitBounds(polyline.getBounds());"
-"    </script>"
-"</body>"
-"</html>";
-
-#ifdef LOG_IPINFO
-#define TMP_WRITE(x) \
-    if (write(tmpfd, x, strlen(x)) < -1) {\
-		IILOG_MSG("%s(): write() failed: %s", __FUNCTION__, strerror(errno));\
-        return -1;\
-    }
-#else
-#define TMP_WRITE(x) if (write(tmpfd, x, strlen(x)) < -1) return -1;
-#endif
-
-static int ii_gen_n_open_html(int mode) {
-    static int geo_ndx[][5] = {
-        // lat, lng, city, region, country
-        { 7, 8, 4, 3, 1 },	// y6
-        { 6, 7, 4, 3, 0 },	// y7
-        { 11, 12, 8, 4, 2 },	// y8
-        { 3, 3, 0, 1, 2 },	// y9
-    };
-
-    char filename[] = TMPFILE;
-    if (tmpfd >= 0) {
-        close(tmpfd);
-#ifndef LOG_IPINFO
-        if (unlink(tmpfn) < 0)
-            return -1;
-#endif
-    }
-    if ((tmpfd = mkstemps(filename, strlen(TMPFILE_SUFF))) < 0) {
-        IILOG_MSG("mkstemp() failed: %s", strerror(errno));
-        return -1;
-    }
-    strncpy(tmpfn, filename, sizeof(tmpfn));
-
-    static char buf[1024];
-    snprintf(buf, sizeof(buf), "<html><head><title>mtr%s</title>%s%s</head>", mtr_args, hhead_script, hhead_link);
-    TMP_WRITE(buf);
-    TMP_WRITE(hbody_begin);
-
-    int max = net_max();
-    for (int at = net_min(); at < max; at++) {
-        ip_t *addr = &CURRENT_IP(at);
-        if (unaddrcmp(addr)) {
-//{ lat: N.M, lng: K.L, title: 'ip (hostname)', delay: 'N msec', desc: 'City, Region, Country'},
-            char *lat, *lng;
-            if (geo_ndx[mode][0] != geo_ndx[mode][1]) {
-                lat = get_ipinfo(addr, geo_ndx[mode][0]);
-                lng = get_ipinfo(addr, geo_ndx[mode][1]);
-            } else {
-                char* ln[2] = { get_ipinfo(addr, geo_ndx[mode][0]) };
-                if (split_with_sep(ln, 2, COMMA, 0) != 2)
-                    continue;
-                lat = ln[0];
-                lng = ln[1];
-            }
-            char *city = get_ipinfo(addr, geo_ndx[mode][2]);
-            char *region = get_ipinfo(addr, geo_ndx[mode][3]);
-            char *country = get_ipinfo(addr, geo_ndx[mode][4]);
-            if (!lat || !lng)
-                continue;
-            int l = 0;
-            l += snprintf(buf + l, sizeof(buf) - l, "{ lat: %s, lng: %s, title: '%s", lat, lng, strlongip(addr));
-            const char *hostname = dns_lookup(at, host[at].current);
-            if (hostname)
-                l += snprintf(buf + l, sizeof(buf) - l, " (%s)", hostname);
-            l += snprintf(buf + l, sizeof(buf) - l, "', delay: '%.1f msec', desc: \"", host[at].avg / 1000.);
-
-            if (city)
-                if (*city)
-                    l += snprintf(buf + l, sizeof(buf) - l, "%s, ", city);
-            if (region)
-                if (*region)
-                    l += snprintf(buf + l, sizeof(buf) - l, "%s, ", region);
-            l += snprintf(buf + l, sizeof(buf) - l, "%s\"},", country);
-            IILOG_MSG("map hope: %s", buf);
-            TMP_WRITE(buf);
-        }
-    }
-
-    TMP_WRITE(hbody_end);
-    snprintf(buf, sizeof(buf), "xdg-open %s", filename); // "x-www-browser %s"
-    return system(buf);
-}
 
 void ii_action(int action_asn) {
-    if (ipinfo_no[0] >= 0) {
-        switch (action_asn) {
-            case ActionAS:	// `z' `Z'
-                enable_ipinfo = !enable_ipinfo;
-                break;
-            case ActionII: {	// `y'
-                enable_ipinfo = true;
-                for (int i = 0; (i < IPINFO_MAX_ITEMS) && (ipinfo_no[i] >= 0); i++) {
-                    ipinfo_no[i]++;
-                    if (ipinfo_no[i] > ipinfo_max)
-                        ipinfo_no[i] = 0;
-                    if (ipinfo_no[i] == ipinfo_max)
-                        enable_ipinfo = false;
-                }
-               break;
-               }
-            case ActionII_Map:	// `Y'
-               switch (origin_no) {
-                   case 5:
-                   case 6:
-                   case 7:
-                   case 8:
-                       ii_gen_n_open_html(origin_no - 5);
-		       break;
-		   default:
-                       fprintf(stderr, "This experimental feature works in -y[6-9] modes only.\n");
-	       }
-               return;
-        }
-    } else // init
-        ii_parsearg(ASLOOKUP_DEFAULT);
-
-    ii_open();  // just in case
+  if (ipinfo_no[0] < 0) // init
+    ii_parsearg(ASLOOKUP_DEFAULT);
+  else switch (action_asn) {
+    case ActionAS: // `z'
+      enable_ipinfo = !enable_ipinfo;
+      break;
+    case ActionII: // `y'
+      enable_ipinfo = true;
+      for (int i = 0; (i < MAX_TXT_ITEMS) && (ipinfo_no[i] >= 0); i++) {
+        ipinfo_no[i]++;
+        if (ipinfo_no[i] > itemname_max)
+          ipinfo_no[i] = 0;
+        if (ipinfo_no[i] == itemname_max)
+          enable_ipinfo = false;
+      }
+  }
+  ii_open();  // just in case
 }
 
-static void query_iiaddr(ip_t *addr) {
-  for (int i = 0; (i < IPINFO_MAX_ITEMS) && (ipinfo_no[i] >= 0); i++)
-    get_ipinfo(addr, ipinfo_no[i]);
+static void query_iiaddr(int at, int ndx) {
+  for (int i = 0; (i < MAX_TXT_ITEMS) && (ipinfo_no[i] >= 0); i++)
+    get_ipinfo(at, ndx, ipinfo_no[i]);
 }
 
 void query_ipinfo(void) {
@@ -1081,14 +712,14 @@ void query_ipinfo(void) {
   int max = net_max();
   for (int at = net_min(); at < max; at++) {
     ip_t *addr = &CURRENT_IP(at);
-    if (unaddrcmp(addr)) {
-      query_iiaddr(addr);
+    if (addr_exist(addr)) {
+      query_iiaddr(at, host[at].current);
       for (int i = 0; i < MAXPATH; i++) {
         if (i == host[at].current)
           continue; // because already queried
         ip_t *ip = &IP_AT_NDX(at, i);
-        if (unaddrcmp(ip))
-          query_iiaddr(ip);
+        if (addr_exist(ip))
+          query_iiaddr(at, i);
       }
     }
   }

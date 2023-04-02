@@ -1,6 +1,7 @@
 #ifndef GRAPHCAIRO_BACKEND_H
 #define GRAPHCAIRO_BACKEND_H
 
+#include <stdbool.h>
 #include <cairo.h>
 
 #if CAIRO_VERSION < CAIRO_VERSION_ENCODE(1, 10, 0)
@@ -11,7 +12,7 @@ typedef struct {
 #endif
 
 typedef void (*frontend_resize_t)(int, int, int);
-int backend_create_window(cairo_rectangle_int_t *rectangle, frontend_resize_t frontend_resize_func);
+bool backend_create_window(cairo_rectangle_int_t *rectangle, frontend_resize_t frontend_resize_func);
 void backend_destroy_window(void);
 cairo_surface_t* backend_create_surface(int width, int height);
 int backend_dispatch_event(void);

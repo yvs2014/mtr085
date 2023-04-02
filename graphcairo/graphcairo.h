@@ -10,9 +10,9 @@
 /**/
 
 #ifdef GCDEBUG
-#define GCDEBUG_MSG(x)	printf x
+#define GCDEBUG_MSG(format, ...) { printf(format, __VA_ARGS__); }
 #else
-#define GCDEBUG_MSG(x)	
+#define GCDEBUG_MSG(format, ...) {}
 #endif
 
 //#define ROUND(x)	((x)>=0?(int)((x)+0.5):(int)((x)-0.5))
@@ -31,7 +31,7 @@ typedef struct {
 	int label_max;
 } cr_params_t;
 
-int cr_open(cr_params_t *cr_params);
+bool cr_open(cr_params_t *cr_params);
 void cr_close(void);
 int cr_dispatch_event(void);
 void cr_redraw(int *data);

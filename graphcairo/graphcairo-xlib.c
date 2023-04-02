@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <ctype.h>
+#include <err.h>
 #include <X11/Xlib.h>
 
 #define XK_LATIN1
@@ -22,12 +23,12 @@ cairo_surface_t* backend_create_surface(int width, int height) {
 	return cairo_xlib_surface_create(display, window, DefaultVisual(display, screen), width, height);
 }
 
-int backend_create_window(cairo_rectangle_int_t *rectangle, frontend_resize_t frontend_resize_func) {
+bool backend_create_window(cairo_rectangle_int_t *rectangle, frontend_resize_t frontend_resize_func) {
 	frontend_resize = frontend_resize_func;
 	display = XOpenDisplay(NULL);
 	if (!display) {
-		fprintf(stderr, "xlib backend_create_window(): can't open display\n");
-		return 0;
+		warnx("xlib.backend.create.window: %s", "can't open display");
+		return false;
 	}
 	screen = DefaultScreen(display);
 	window = XCreateSimpleWindow(display, RootWindow(display, screen),
@@ -45,7 +46,7 @@ int backend_create_window(cairo_rectangle_int_t *rectangle, frontend_resize_t fr
 		if (ev.type == Expose)
 			break;
 	}
-	return 1;
+	return true;
 }
 
 void backend_destroy_window(void) {

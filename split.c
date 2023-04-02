@@ -20,6 +20,7 @@
     Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 */
 
+#include <err.h>
 #include <ctype.h>
 #include <termios.h>
 
@@ -33,41 +34,27 @@
 #include "ipinfo.h"
 #endif
 
-#define SPLIT_SEPARATOR	"\t"
-
-#ifdef IPINFO
-static void split_ipinfo_print(ip_t *addr) {
-  for (int i = 0; (i < IPINFO_MAX_ITEMS) && (ipinfo_no[i] >= 0); i++) {
-    char *ipinfo = unaddrcmp(addr) ? get_ipinfo(addr, ipinfo_no[i]) : NULL;
-    if (!ipinfo) {
-      if (ipinfo_no[i] >= ipinfo_max)
-        continue;
-      ipinfo = UNKN_ITEM;
-    }
-    printf(SPLIT_SEPARATOR "%s", ipinfo);
-  }
-}
-#endif
+#define SPLIT_SEP	'\t'
 
 void split_redraw(void) {
   int max = net_max();
   for (int at = net_min() + display_offset; at < max; at++) {
     ip_t *addr = &CURRENT_IP(at);
     printf("%2d", at + 1);
-    if (unaddrcmp(addr)) {
-      const char *name = dns_lookup(at, host[at].current);
-      printf(SPLIT_SEPARATOR "%s", name ? name : strlongip(addr));
+    if (addr_exist(addr)) {
+      const char *name = dns_ptr_lookup(at, host[at].current);
+      printf("%c%s", SPLIT_SEP, name ? name : strlongip(addr));
       if (show_ips)
-        printf(SPLIT_SEPARATOR "%s", strlongip(addr));
-      printf(SPLIT_SEPARATOR "%.1f", net_elem(at, 'L') / 1000.);
-      printf(SPLIT_SEPARATOR "%d", host[at].returned);
-      printf(SPLIT_SEPARATOR "%d", host[at].xmit);
-      printf(SPLIT_SEPARATOR "%.1f", host[at].best / 1000.);
-      printf(SPLIT_SEPARATOR "%.1f", host[at].avg / 1000.);
-      printf(SPLIT_SEPARATOR "%.1f", host[at].worst / 1000.);
+        printf("%c%s", SPLIT_SEP, strlongip(addr));
+      printf("%c%.1f", SPLIT_SEP, net_elem(at, 'L') / 1000.);
+      printf("%c%d", SPLIT_SEP, host[at].returned);
+      printf("%c%d", SPLIT_SEP, host[at].xmit);
+      printf("%c%.1f", SPLIT_SEP, host[at].best / 1000.);
+      printf("%c%.1f", SPLIT_SEP, host[at].avg / 1000.);
+      printf("%c%.1f", SPLIT_SEP, host[at].worst / 1000.);
 #ifdef IPINFO
       if (ii_ready())
-        split_ipinfo_print(addr);
+        printf("%c%s", SPLIT_SEP, sep_ipinfo(at, host[at].current, SPLIT_SEP));
 #endif
       printf("\n");
 
@@ -75,29 +62,29 @@ void split_redraw(void) {
         if (ndx == host[at].current)
           continue; // because already printed
         ip_t *ip = &IP_AT_NDX(at, ndx);
-        if (!unaddrcmp(ip))
+        if (!addr_exist(ip))
           break;
-        name = dns_lookup(at, ndx);
+        name = dns_ptr_lookup(at, ndx);
         printf("%2d:%d", at + 1, ndx);
-        printf(SPLIT_SEPARATOR "%s", name ? name : strlongip(ip));
+        printf("%c%s", SPLIT_SEP, name ? name : strlongip(ip));
         if (show_ips)
-          printf(SPLIT_SEPARATOR "%s", strlongip(ip));
+          printf("%c%s", SPLIT_SEP, strlongip(ip));
 #ifdef IPINFO
         if (ii_ready())
-          split_ipinfo_print(ip);
+          printf("%c%s", SPLIT_SEP, sep_ipinfo(at, ndx, SPLIT_SEP));
 #endif
         printf("\n");
       }
     } else
-      printf(SPLIT_SEPARATOR "%s\n", UNKN_ITEM);
+      printf("%c%s\n", SPLIT_SEP, UNKN_ITEM);
   }
 }
 
 void split_open(void) {
   struct termios t;
   if (tcgetattr(0, &t) < 0) {
-    perror("split_open(): tcgetattr()");
-    fprintf(stderr, "non-interactive mode is ON\n");
+    warn("split.open: %s", "tcgetattr()");
+    warnx("non-interactive mode is ON");
     interactive = false;
     return;
   }
@@ -106,7 +93,7 @@ void split_open(void) {
   t.c_cc[VMIN] = 1;
   t.c_cc[VTIME] = 0;
   if (tcsetattr(0, TCSANOW, &t) < 0) {
-    perror("split_open(): tcsetattr()");
+    warn("split.open: %s", "tcsetattr()");
     interactive = false;
   }
 }
@@ -116,13 +103,13 @@ void split_close(void) {
   if (!interactive)
     return;
   if (tcgetattr(0, &t) < 0) {
-    perror("split_close()");
+    warn("split.close: %s", "tcgetattr()");
     return;
   }
   t.c_lflag |= ICANON;
   t.c_lflag |= ECHO;
   if (tcsetattr(0, TCSADRAIN, &t))
-    perror("split_close()");
+    warn("split.close: %s", "tcsetattr()");
 }
 
 #define SPLIT_HELP_MESSAGE	\
@@ -138,7 +125,7 @@ void split_close(void) {
 int split_keyaction(void) {
   char c;
   if (read(0, &c, 1) < 0) {
-    perror("split_keyaction()");
+    warn("split.keyaction: %s", "read()");
     return 0;
   }
 

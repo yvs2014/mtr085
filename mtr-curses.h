@@ -19,6 +19,7 @@
 #ifndef MTR_CURSES_H
 #define MTR_CURSES_H
 
+#include <stdbool.h>
 #include "config.h"
 
 #ifdef UNICODE
@@ -27,7 +28,7 @@
 #endif
 #endif
 
-void mtr_curses_open(void);
+bool mtr_curses_open(void);
 void mtr_curses_close(void);
 void mtr_curses_redraw(void);
 int mtr_curses_keyaction(void);

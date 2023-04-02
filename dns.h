@@ -23,7 +23,11 @@
 #include <netinet/in.h>
 #include <resolv.h>
 
+#include "config.h"
+
 extern bool enable_dns;
+extern unsigned dns_queries[];
+extern unsigned dns_replies[];
 extern struct __res_state myres;
 #ifdef __OpenBSD__
 #define myres _res
@@ -34,8 +38,15 @@ void dns_open(void);
 void dns_close(void);
 int dns_waitfd(int family);
 void dns_ack(int fd, int family);
-const char *dns_lookup(int at, int ndx);
-int dns_query(int op, const char *dname, int class, int type, const unsigned char *data, int datalen,
-  const unsigned char *newrr, unsigned char *buf, int buflen);
+const char *dns_ptr_lookup(int at, int ndx);
+int dns_send_query(int at, int ndx, const char *qstr, int type);
+char* ip2arpa(ip_t *ip, const char *suff4, const char *suff6);
+
+extern void (*dns_ptr_handler)(int at, int ndx, const char* answer);
+#ifdef IPINFO
+extern void (*dns_txt_handler)(int at, int ndx, const char* answer);
+#endif
+
+typedef struct atndx { int at, ndx, type; } atndx_t;
 
 #endif

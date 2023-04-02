@@ -21,6 +21,7 @@
 #include <string.h>
 #include <ctype.h>
 #include <assert.h>
+#include <err.h>
 #include <fcntl.h>
 #include <limits.h>
 #include <sys/stat.h>
@@ -84,7 +85,7 @@ bool report_wide = false;
 bool endpoint_mode = false; // -fa option, i.e. auto, corresponding to TTL of the destination host
 bool cache_mode = false;            // don't ping known hops
 int cache_timeout = CACHE_TIMEOUT;  // cache timeout in seconds
-bool hinit = false;	// make sure that a hashtable already exists or not
+bool enable_stat_at_exit = false;
 int fstTTL = 1;		// default start at first hop
 int maxTTL = 30;	// enough?
 int bitpattern;	// packet bit pattern used by ping
@@ -153,29 +154,10 @@ void set_fld_active(const char *s) {
   strncpy((char*)fld_active, (char*)s_copy, sizeof(fld_active));
 }
 
-// type must correspond 'id' in resolve HEADER (unsigned id:16)
-// it's used as a hint for fast search, 16bits as [hash:7 at:6 ndx:3]
-uint16_t str2hint(const char* s, int16_t at, uint16_t ndx) {
-  uint16_t h = 0, c;
-  while ((c = *s++))
-    h = ((h << 5) + h) ^ c; // h * 33 ^ c
-  h &= IDMASK;
-  h |= AT2ID(at);
-  h |= ID2NDX(ndx);
-  return h;
-}
-
-uint16_t str2dnsid(const char* s) {
-  uint16_t h = 0, c;
-  while ((c = *s++))
-    h = ((h << 5) + h) ^ c; // h * 33 ^ c
-  return h;
-}
-
 char* trim(char *s) {
   char *p = s;
   int l = strlen(p);
-  while (isspace((int)p[l-1]) && l)
+  while (l && isspace((int)p[l-1])) // order matters
     p[--l] = 0;
   while (isspace((int)*p))
     p++;
@@ -191,11 +173,11 @@ static void append_to_names(const char* item) {
       name->next = names;
       names = name;
     } else {
-      perror(item);
+      warnx("names: strdup(%s)", item);
       free(name);
     }
   } else
-    perror(item);
+    warnx("names: malloc(%zd)", sizeof(names_t));
 }
 
 static void read_from_file(const char *filename) {
@@ -206,14 +188,14 @@ static void read_from_file(const char *filename) {
   } else {
     in = fopen(filename, "r");
     if (!in) {
-      perror(filename);
+      warn("file: fopen(%s)", filename);
       return;
     }
   }
 
   char *line = malloc(PATH_MAX);
   if (!line) {
-    perror(filename);
+    warn("file: malloc(%d)", PATH_MAX);
     if (in != stdin)
       fclose(in);
     return;
@@ -222,7 +204,7 @@ static void read_from_file(const char *filename) {
   while (fgets(line, sizeof(line), in))
     append_to_names(trim(line));
   if (ferror(in))
-    perror(filename);
+    warn("file: fgets(%s)", filename);
   if (in != stdin)
     fclose(in);
   free(line);
@@ -234,48 +216,38 @@ static void read_from_file(const char *filename) {
  * instances. This is useful if, for example, multiple mtr instances
  * try to append results to a common file.
  */
-
 static void lock(FILE *f) {
-    int fd;
+    assert(f);
     struct stat buf;
     static struct flock lock;
-
-    assert(f);
-
     lock.l_type = F_WRLCK;
     lock.l_start = 0;
     lock.l_whence = SEEK_END;
     lock.l_len = 0;
     lock.l_pid = mypid;
-
-    fd = fileno(f);
+    int fd = fileno(f);
     if (!fstat(fd, &buf) && S_ISREG(buf.st_mode))
       if (fcntl(fd, F_SETLKW, &lock) == -1)
-        perror("fcntl()");
+        warn("lock: fcntl(%d)", fd);
 }
 
 /*
  * If the file stream is associated with a regular file, unlock the
  * file (which presumably has previously been locked).
  */
-
 static void unlock(FILE *f) {
-    int fd;
+    assert(f);
     struct stat buf;
     static struct flock lock;
-
-    assert(f);
-
     lock.l_type = F_UNLCK;
     lock.l_start = 0;
     lock.l_whence = SEEK_END;
     lock.l_len = 0;
     lock.l_pid = mypid;
-
-    fd = fileno(f);
+    int fd = fileno(f);
     if (!fstat(fd, &buf) && S_ISREG(buf.st_mode))
       if (fcntl(fd, F_SETLKW, &lock) == -1)
-        perror("fcntl()");
+        warn("unlock: fcntl(%d)", fd);
 }
 
 static struct option long_options[] = {
@@ -307,6 +279,7 @@ static struct option long_options[] = {
   { "tos",        1, 0, 'Q' },  // typeof service (0,255)
   { "report",     0, 0, 'r' },
   { "psize",      1, 0, 's' },  // changed 'p' to 's' to match ping option, overload psize<0, ->rand(min,max)
+  { "summary",    0, 0, 'S' },  // print send/recv summary at exit
   { "tcp",        0, 0, 'T' },  // TCP (default is ICMP)
   { "udp",        0, 0, 'u' },  // UDP (default is ICMP)
   { "version",    0, 0, 'v' },
@@ -409,17 +382,14 @@ static void usage(char *name) {
   }
 }
 
-static void say_limit(const int v0, const int v1, int v, const char *it, const int res) {
-  fprintf(stderr, "WARN: '%s' is out of range %d..%d: %d -> %d\n", it, v0, v1, v, res);
-}
-
 static int limit_int(const int v0, const int v1, const int v, const char *it) {
+  const char LIMIT_MSG_FMT[] = "WARN: '%s' is out of range %d..%d: %d -> %d";
   if (v < v0) {
-    say_limit(v0, v1, v, it, v0);
+    warnx(LIMIT_MSG_FMT, it, v0, v1, v, v0);
     return v0;
   }
   if (v > v1) {
-    say_limit(v0, v1, v, it, v1);
+    warnx(LIMIT_MSG_FMT, it, v0, v1, v, v1);
     return v1;
   }
   return v;
@@ -434,13 +404,13 @@ static void parse_arg(int argc, char **argv) {
     switch (opt) {
     case '?':
       usage(argv[0]);
-      exit(-1);
+      exit(EXIT_FAILURE);
     case 'h':
       usage(argv[0]);
-      exit(0);
+      exit(EXIT_SUCCESS);
     case 'v':
-      printf ("%s-%s\n", argv[0], MTR_VERSION);
-      exit(0);
+      printf("%s-%s\n", argv[0], MTR_VERSION);
+      exit(EXIT_SUCCESS);
     case 'r':
       display_mode = DisplayReport;
       break;
@@ -484,7 +454,7 @@ static void parse_arg(int argc, char **argv) {
 #endif
         default:
           usage(argv[0]);
-          exit(-1);
+          exit(EXIT_FAILURE);
       }
       break;
 #endif
@@ -504,6 +474,9 @@ static void parse_arg(int argc, char **argv) {
     case 's':
       cpacketsize = atoi(optarg);
       break;
+    case 'S':
+      enable_stat_at_exit = true;
+      break;
     case 'a':
       iface_addr = optarg;
       break;
@@ -521,14 +494,10 @@ static void parse_arg(int argc, char **argv) {
       break;
     case 'i':
       wait_time = atof(optarg);
-      if (wait_time <= 0) {
-        fprintf(stderr, "Wait time must be positive\n");
-        exit(1);
-      }
-      if (getuid() && (wait_time < 1)) {
-        fprintf(stderr, "Non-root users cannot request an interval < 1.0 seconds\n");
-        exit(1);
-      }
+      if (wait_time <= 0)
+        errx(EXIT_FAILURE, "option -i: Wait time must be positive");
+      if (getuid() && (wait_time < 1))
+        errx(EXIT_FAILURE, "option -i: Non-root users cannot request an interval < 1.0 seconds");
       break;
     case 'f':
       if (optarg[0] == 'a') {
@@ -545,16 +514,11 @@ static void parse_arg(int argc, char **argv) {
       break;
     case 'o':
       /* Check option before passing it on to fld_active. */
-      if (strlen(optarg) >= sizeof(fld_active)) {
-        fprintf(stderr, "Too many fields (max=%zd): %s\n", sizeof(fld_active) - 1, optarg);
-        exit(1);
-      }
-      for (int i = 0; optarg[i]; i++) {
-        if(!strchr(fld_avail, optarg[i])) {
-          fprintf(stderr, "Unknown field identifier: %c\n", optarg[i]);
-          exit(1);
-        }
-      }
+      if (strlen(optarg) >= sizeof(fld_active))
+        errx(EXIT_FAILURE, "option -o: Too many fields (max=%zd): %s", sizeof(fld_active) - 1, optarg);
+      for (int i = 0; optarg[i]; i++)
+        if(!strchr(fld_avail, optarg[i]))
+          errx(EXIT_FAILURE, "option -o: Unknown field identifier %c", optarg[i]);
       set_fld_active(optarg);
       break;
     case 'B':
@@ -568,46 +532,38 @@ static void parse_arg(int argc, char **argv) {
         tos = 0;
       break;
     case 'u':
-      if (mtrtype != IPPROTO_ICMP) {
-        fprintf(stderr, "-u and -T are mutually exclusive.\n");
-        exit(EXIT_FAILURE);
-      }
+      if (mtrtype != IPPROTO_ICMP)
+        errx(EXIT_FAILURE, "options -u and -T are mutually exclusive");
       mtrtype = IPPROTO_UDP;
       break;
     case 'T':
-      if (mtrtype != IPPROTO_ICMP) {
-        fprintf(stderr, "-u and -T are mutually exclusive.\n");
-        exit(EXIT_FAILURE);
-      }
+      if (mtrtype != IPPROTO_ICMP)
+        errx(EXIT_FAILURE, "options -T and -u are mutually exclusive");
       if (net_tcp_init())
         mtrtype = IPPROTO_TCP;
-      else {
-        fprintf(stderr, "Switch to TCP mode failed.\n");
-        exit(EXIT_FAILURE);
-      }
+      else
+        errx(EXIT_FAILURE, "option -T: Switch to TCP mode failed");
       break;
     case 'b':
       show_ips = true;
       break;
     case 'P':
       remoteport = atoi(optarg);
-      if (remoteport > 65535 || remoteport < 1) {
-        fprintf(stderr, "Illegal port number: %d\n", remoteport);
-        exit(EXIT_FAILURE);
-      }
+      if (remoteport > 65535 || remoteport < 1)
+        errx(EXIT_FAILURE, "option -P: Illegal port number %d", remoteport);
       break;
     case 'x':
       cache_mode = true;
       cache_timeout = atoi(optarg);
-	  if (cache_timeout < 0) {
-        fprintf(stderr, "Cache timeout must be positive: %d\n", cache_timeout);
-        exit(EXIT_FAILURE);
-      } else if (cache_timeout == 0)
+	  if (cache_timeout < 0)
+        errx(EXIT_FAILURE, "option -x: Cache timeout %d must be positive", cache_timeout);
+      else if (cache_timeout == 0)
         cache_timeout = CACHE_TIMEOUT;  // default 60 seconds
       break;
 #ifdef IPINFO
     case 'y':
-      ii_parsearg(optarg);
+      if (ii_parsearg(optarg) < 0)
+        exit(EXIT_FAILURE);
       break;
     case 'z':
       ii_parsearg(ASLOOKUP_DEFAULT);
@@ -669,7 +625,7 @@ static void parse_mtr_options(char *string) {
   char *p = string;
   while (*p) {
     if (argc == sizeof(argv) / sizeof(argv[0]) - 1) {
-      fprintf(stderr, "WARN: extra arguments ignored: %s\n", p);
+      warnx("options: extra arguments ignored: %s", p);
       break;
     }
     while (*p && isspace((int)*p))
@@ -679,7 +635,7 @@ static void parse_mtr_options(char *string) {
       int delim = *p++;
       char *q = strdup(p);
       argv[argc++] = q;
-      while (*p && *p != delim) {
+      while (*p && (*p != delim)) {
         if (*p == '\\')
           p++;
         *q++ = *p++;
@@ -702,54 +658,54 @@ static void parse_mtr_options(char *string) {
 }
 
 #define IDNA_RESOLV(func) { \
-  rc = func(dsthost, &z_hostname, 0); \
+  rc = func(dsthost, &hostname, 0); \
   if (rc == IDNA_SUCCESS) \
-    rc = getaddrinfo(z_hostname, NULL, &hints, &res); \
+    rc = getaddrinfo(hostname, NULL, &hints, &res); \
   else \
     rc_msg = idna_strerror(rc); \
-  if (z_hostname) \
-    free(z_hostname); \
+  if (hostname) \
+    free(hostname); \
 }
 
-static int set_hostent(struct addrinfo *res) {
-    struct addrinfo *ai;
-    for (ai = res; ai; ai = ai->ai_next)
-      if (af == ai->ai_family)	// use only the desired AF
-        break;
-    if (af != ai->ai_family) {	// not found
-      fprintf(stderr, "Desired address family not found: %d\n", af);
-      return 0;	// unsuccess
-    }
+static bool set_hostent(struct addrinfo *res) {
+  struct addrinfo *ai;
+  for (ai = res; ai; ai = ai->ai_next)
+    if (af == ai->ai_family)  // use only the desired AF
+      break;
+  if (af != ai->ai_family) {  // not found
+    warnx("hostent: Desired address family %d not found", af);
+    return false;
+  }
 
-    char* alptr[2] = { NULL, NULL };
-    if (af == AF_INET)
-      alptr[0] = (void*) &(((struct sockaddr_in *)ai->ai_addr)->sin_addr);
+  char* alptr[2] = { NULL, NULL };
+  if (af == AF_INET)
+    alptr[0] = (void*) &(((struct sockaddr_in *)ai->ai_addr)->sin_addr);
 #ifdef ENABLE_IPV6
-    else if (af == AF_INET6)
-      alptr[0] = (void*) &(((struct sockaddr_in6 *)ai->ai_addr)->sin6_addr);
+  else if (af == AF_INET6)
+    alptr[0] = (void*) &(((struct sockaddr_in6 *)ai->ai_addr)->sin6_addr);
 #endif
-    else {
-      fprintf(stderr, "Desired address family not found: %d\n", af);
-      return 0;	// unsuccess
-    }
+  else {
+    warnx("hostent: Unknown address family %d", af);
+    return false;
+  }
 
-    static struct hostent entry;
-    memset(&entry, 0, sizeof(entry));
-    entry.h_name = ai->ai_canonname;
-    entry.h_aliases = NULL;
-    entry.h_addrtype = ai->ai_family;
-    entry.h_length = ai->ai_addrlen;
-    entry.h_addr_list = alptr;
+  static struct hostent entry;
+  memset(&entry, 0, sizeof(entry));
+  entry.h_name = ai->ai_canonname;
+  entry.h_aliases = NULL;
+  entry.h_addrtype = ai->ai_family;
+  entry.h_length = ai->ai_addrlen;
+  entry.h_addr_list = alptr;
 
-    if (net_open(&entry)) {
-      perror("Unable to start net module");
-      return 0;	// unsuccess
-    }
-    if (net_set_interfaceaddress(iface_addr)) {
-      perror("Couldn't set interface address");
-      return 0;	// unsuccess
-    }
-    return 1;	// success
+  if (net_open(&entry)) {
+    warnx("hostent: %s", "Unable to start net module");
+    return false;
+  }
+  if (net_set_ifaddr(iface_addr)) {
+    warnx("hostent: %s", "Couldn't set interface address");
+    return false;
+  }
+  return true;
 }
 
 
@@ -757,22 +713,15 @@ int main(int argc, char **argv) {
   net_init(0);		// Use IPv4 by default
 
   /*  Get the raw sockets first thing, so we can drop to user euid immediately  */
-  if (net_preopen()) {
-    perror("Unable to get raw sockets");
-    exit(EXIT_FAILURE);
-  }
+  if (net_preopen() < 0)
+    errx(EXIT_FAILURE, "Unable to get raw sockets");
 
   /*  Now drop to user permissions  */
-  if (setgid(getgid()) || setuid(getuid())) {
-    perror("Unable to drop permissions");
-    exit(1);
-  }
-
+  if (setgid(getgid()) || setuid(getuid()))
+    err(EXIT_FAILURE, "Unable to drop permissions");
   /*  Double check, just in case  */
-  if ((geteuid() != getuid()) || (getegid() != getgid())) {
-    perror("Unable to drop permissions");
-    exit(1);
-  }
+  if ((geteuid() != getuid()) || (getegid() != getgid()))
+    errx(EXIT_FAILURE, "Unable to drop permissions");
 
   mypid = getpid();
 
@@ -802,7 +751,7 @@ int main(int argc, char **argv) {
     if (iswprint(L'▁'))
       dm_histogram = true;
     else
-      perror("Unicode block elements are not printable");
+      warnx("Unicode block elements are not printable");
   }
 #endif
   if (dm_histogram)
@@ -823,14 +772,12 @@ int main(int argc, char **argv) {
 
   if (!names) {
     usage(argv[0]);
-    exit(0);
+    exit(EXIT_SUCCESS);
   }
 
   /* Now that we know mtrtype we can select which socket to use */
-  if (net_selectsocket() != 0) {
-    perror("Couldn't determine raw socket type");
-    exit(EXIT_FAILURE);
-  }
+  if (net_selectsocket() < 0)
+    errx(EXIT_FAILURE, "Couldn't determine raw socket type");
 
   dns_open();
 #ifdef IPINFO
@@ -852,7 +799,7 @@ int main(int argc, char **argv) {
     const char *rc_msg = NULL;
 #if defined(HAVE_LIBIDN) || defined(HAVE_LIBIDN2)
     if (rc) {
-      char *z_hostname = NULL;
+      char *hostname = NULL;
       IDNA_RESOLV(IDN_TO_ASCII_LZ);
       if (rc)
         IDNA_RESOLV(IDN_TO_ASCII_8Z);
@@ -860,14 +807,16 @@ int main(int argc, char **argv) {
 #endif
     if (rc) {
       if (rc == EAI_SYSTEM)
-        perror(dsthost);
+        warn("getaddrinfo(%s)", dsthost);
       else
-        fprintf(stderr, "Failed to resolve \"%s\": %s\n", dsthost, rc_msg ? rc_msg : gai_strerror(rc));
+        warnx("Failed to resolve \"%s\": %s", dsthost, rc_msg ? rc_msg : gai_strerror(rc));
     } else {
       if (set_hostent(res)) {
         lock(stdout);
-        display_open();
-        display_loop();
+        if (display_open())
+          display_loop();
+        else
+          warnx("display.open() failed");
         net_end_transit();
         display_close(notfirst);
         unlock(stdout);
@@ -883,6 +832,19 @@ int main(int argc, char **argv) {
 #endif
   dns_close();
   net_close();
+  if (enable_stat_at_exit) {
+    printf("NET: %lu queries (%lu icmp, %lu udp, %lu tcp), %lu replies (%lu icmp, %lu udp, %lu tcp)\n",
+      net_queries[0], net_queries[1], net_queries[2], net_queries[3],
+      net_replies[0], net_replies[1], net_replies[2], net_replies[3]);
+    printf("DNS: %u queries (%u ptr, %u txt), %u replies (%u ptr, %u txt)\n",
+      dns_queries[0], dns_queries[1], dns_queries[2],
+      dns_replies[0], dns_replies[1], dns_replies[2]);
+#ifdef IPINFO
+    printf("EXTRA: %u queries (%u http, %u whois), %u replies (%u http, %u whois)\n",
+      ipinfo_queries[0], ipinfo_queries[1], ipinfo_queries[2],
+      ipinfo_replies[0], ipinfo_replies[1], ipinfo_replies[2]);
+#endif
+  }
   return 0;
 }
 

@@ -19,6 +19,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
+#include <err.h>
 #include <time.h>
 
 #include "config.h"
@@ -260,8 +261,6 @@ int mtr_curses_keyaction(void) {
 #ifdef IPINFO
     case 'y':
       return ActionII;
-    case 'Y':
-      return ActionII_Map;
     case 'z':
       return ActionAS;
 #endif
@@ -326,11 +325,11 @@ static void printw_addr(int at, int ndx, int up) {
   ip_t *addr = &IP_AT_NDX(at, ndx);
 #ifdef IPINFO
   if (ii_ready())
-    printw("%s", fmt_ipinfo(addr));
+    printw("%s", fmt_ipinfo(at, ndx));
 #endif
   if (!up)
     attron(A_BOLD);
-  const char *name = dns_lookup(at, ndx);
+  const char *name = dns_ptr_lookup(at, ndx);
   if (name) {
     printw("%s", name);
     if (show_ips)
@@ -367,7 +366,7 @@ static void print_addr_extra(int at, int y) { // mpls + multipath
     if (ndx == host[at].current)
       continue; // because already printed
     ip_t *addr = &IP_AT_NDX(at, ndx);
-    if (!addr_spec(addr))
+    if (!addr_exist(addr))
       break;
     printw("    ");
     printw_addr(at, ndx, host[at].up);
@@ -388,7 +387,7 @@ static void mtr_curses_hosts(int statx) {
     move(y, 0);
     printw("%2d. ", at + 1);
     ip_t *addr = &CURRENT_IP(at);
-    if (!unaddrcmp(addr)) {
+    if (!addr_exist(addr)) {
       printw("%s", UNKN_ITEM);
       if (move(y + 1, 0) == ERR)
         break;
@@ -554,37 +553,30 @@ static void mtr_curses_graph(int statx, int cols) {
 		printw("%2d. ", at + 1);
 
 		ip_t *addr = &CURRENT_IP(at);
-		if (!unaddrcmp(addr)) {
-			printw("%s", UNKN_ITEM);
-			if (move(y + 1, 0) == ERR)
-				break;
-			continue;
-		}
-
-		if (!host[at].up)
-			attron(A_BOLD);
-		if (unaddrcmp(addr)) {
+		if (addr_exist(addr)) {
+			if (!host[at].up)
+				attron(A_BOLD);
 #ifdef IPINFO
-		if (ii_ready())
-			printw("%s", fmt_ipinfo(addr));
+			if (ii_ready())
+				printw("%s", fmt_ipinfo(at, host[at].current));
 #endif
-			const char *name = dns_lookup(at, host[at].current);
+			const char *name = dns_ptr_lookup(at, host[at].current);
 			printw("%s", name ? name : strlongip(addr));
-		} else
-			printw(UNKN_ITEM);
-		attroff(A_BOLD);
-
-		mvprintw(y, statx, " ");
+			if (!host[at].up)
+				attroff(A_BOLD);
+			mvprintw(y, statx, " ");
 #ifdef UNICODE
-		if (curses_mode == 3)
-			for (int i = SAVED_PINGS - cols; i < SAVED_PINGS; i++)
-				add_wch(mtr_saved_cc(host[at].saved[i]));
-		else
+			if (curses_mode == 3)
+				for (int i = SAVED_PINGS - cols; i < SAVED_PINGS; i++)
+					add_wch(mtr_saved_cc(host[at].saved[i]));
+			else
 #endif
-			for (int i = SAVED_PINGS - cols; i < SAVED_PINGS; i++)
-				addch(mtr_saved_ch(host[at].saved[i]));
-		if (audible_bell || visible_bell)
-			mtr_curses_seal(at, max);
+				for (int i = SAVED_PINGS - cols; i < SAVED_PINGS; i++)
+					addch(mtr_saved_ch(host[at].saved[i]));
+			if (audible_bell || visible_bell)
+				mtr_curses_seal(at, max);
+		} else
+			printw("%s", UNKN_ITEM);
 		if (move(y + 1, 0) == ERR)
 			break;
 	}
@@ -725,10 +717,10 @@ void mtr_curses_redraw(void) {
     attron(A_BOLD);
 #ifdef IPINFO
     if (ii_ready()) {
-        char *header = ii_getheader();
-        if (header)
-            mvprintw(staty - 1, statx, "%s", header);
-        statx += ii_getwidth(); // indent: "NN. " + IPINFO
+      char *header = ii_getheader();
+      if (header)
+        mvprintw(staty - 1, statx, "%s", header);
+      statx += ii_getwidth(); // indent: "NN. " + IPINFO
     }
 #endif
     mvprintw(staty - 1, statx, "Host");
@@ -772,8 +764,11 @@ void mtr_curses_redraw(void) {
 }
 
 
-void mtr_curses_open(void) {
-  initscr();
+bool mtr_curses_open(void) {
+  if (!initscr()) {
+    warnx("curses.open: initscr() failed");
+    return false;
+  }
   raw();
   noecho();
 
@@ -815,6 +810,7 @@ void mtr_curses_open(void) {
   mtr_curses_init();
   mtr_curses_redraw();
   curs_set(0);
+  return true;
 }
 
 
