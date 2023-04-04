@@ -19,42 +19,12 @@
 #ifndef DISPLAY_H
 #define DISPLAY_H
 
-#include <stdbool.h>
-#include "config.h"
-
-#define UNKN_ITEM	"???"
-
-/* Don't put a trailing comma in enumeration lists. Some compilers 
-   (notably the one on Irix 5.2) do not like that. */ 
 enum { ActionNone,  ActionQuit,  ActionReset,  ActionDisplay, 
-       ActionClear, ActionPauseResume, ActionMPLS, ActionDNS, ActionTCP, ActionCache,
-#ifdef IPINFO
-       ActionAS, ActionII,
-#endif
-       ActionScrollDown, ActionScrollUp  };
-enum { DisplayReport, DisplayCurses,
-#ifdef OUTPUT_FORMAT_RAW
-       DisplayRaw,
-#endif
-#ifdef OUTPUT_FORMAT_TXT
-       DisplayTXT,
-#endif
-#ifdef OUTPUT_FORMAT_CSV
-       DisplayCSV,
-#endif
-#ifdef OUTPUT_FORMAT_JSON
-       DisplayJSON,
-#endif
-#ifdef OUTPUT_FORMAT_XML
-       DisplayXML,
-#endif
-#ifdef GRAPHCAIRO
-       DisplayGraphCairo,
-#endif
-       DisplaySplit
-};
+  ActionClear, ActionPauseResume, ActionScrollDown, ActionScrollUp,
+  ActionDNS, ActionTCP, ActionMPLS, ActionCache, ActionAS, ActionII };
+enum { DisplayReport, DisplayCurses, DisplayRaw, DisplaySplit,
+  DisplayTXT, DisplayCSV, DisplayJSON, DisplayXML, DisplayGraphCairo };
 
-/*  Prototypes for display.c  */
 void display_detect(int *argc, char ***argv);
 bool display_open(void);
 void display_close(bool notfirst);

@@ -6,7 +6,7 @@
 .Nd a network diagnostic tool
 .Sh SYNOPSIS
 .Nm
-.Op Fl abBcdefFGilmnopPQrsSTuvwxyzZ46
+.Op Fl abBcdefFgimnopPqrsStuvwxyzZ46
 HOSTNAME ...
 .Sh DESCRIPTION
 .Nm
@@ -46,7 +46,7 @@ to see the IPs in report mode.
 Specifies bit pattern to use in payload.
 .br
 Should be within range 0 - 255.
-.It Fl c, Fl -report-cycles Ar COUNT
+.It Fl c, Fl -cycles Ar COUNT
 Use this option to set the number of pings sent to determine both the machines on the network and the reliability of those machines.  Each cycle lasts one second.
 .It Fl d, Fl -display Ar MODE
 Use this option to select the initial display mode
@@ -83,57 +83,12 @@ Use this option to tell
 to display information from ICMP extensions for MPLS (RFC 4950) that are encoded in the response packets
 .It Fl f, Fl -first-ttl Ar NUM
 Specifies with what TTL to start.  Default is 1, `a' means auto (corresponding to TTL of the destination host).
-.Sy Nm
-.It Fl F, Fl -filename Ar FILE
-Reads the list of HOSTNAMEs from the FILE
-.It Fl G, Fl -graphcairo Ar ARGUMENTS
-Use this option to use the cairo based graph drawing (if available)
-.Pp
-Available arguments by order:
-.Bl -tag -offset Ds
-.It Cm 1st arg: graph type
-1 - dot, 2 - line, 3 - curve (default)
-.It Cm 2nd arg: viewport period
-in 10sec ticks (default 6 ticks)
-.It Cm 3rd arg: legend on/off
-0 - none, 1 - enable (default)
-.It Cm 4th arg: multipath on/off
-0 - none (default), 1 - enable
-.It Cm 5th arg: latency or jitter graph
-0 - latency (default), 1 - jitter
-.El
-
-Use `,' (comma) as argument separator
-
-Examples:
-.Bl -tag -width indent-two -offset Ds -compact
-.It Cm -G,30,,0
-default, 5min, default, disable, default
-.It Cm -G2
-line, default, default, default, default
-.It Cm -G,
-default 3,6,1,1,0
-.br
-curve, 1min, legend, multipath, latency
-.El
-.It Fl i, Fl -interval Ar SECONDS
-Use this option to specify the positive number of seconds between ICMP ECHO requests.  The default value for this parameter is one second.  The root user may choose values between zero and one.
-.It Fl l, Fl -output Ar raw,txt,csv,json,xml
-.RS
-Use these suboptions for automated processing
-.It Fl m, Fl -max-ttl Ar NUM
-Specifies the maximum number of hops (max time-to-live value) traceroute will probe.  Default is 30.
-.It Fl n, Fl -no-dns
-Use this option to force
-.Sy Nm
-to display numeric IP numbers and not try to resolve the host names
-.It Fl o, Fl -order Ar FIELD-ORDER
-Use this option to specify the fields and their order when loading
-.Nm
+.It Fl F, Fl -fields Ar DISPLAY-FIELDS
+Use this option to specify the fields to display and their order
 .Pp
 Available fields:
 .TS
-center allbox tab(%);
+allbox tab(%);
 ll.
 L%Loss ratio
 D%Dropped packets
@@ -150,10 +105,51 @@ M%Jitter Mean/Avg.
 X%Worst Jitter
 I%Interarrival Jitter
 .TE
-.br
 
-Example:
--o "LSD NBAW"
+Examples:
+.br
+.Cm -F 'LSD NBAW'
+.br
+.Cm -F 'DR AGJMXI'
+.It Fl g, Fl -graph Ar ARGUMENTS
+Use this option to use the cairo based graph drawing (if available)
+.Pp
+Available arguments by order:
+.Bl -tag -offset Ds
+.It Cm 1st arg: graph type
+1=dot 2=line 3=curve (default 3, curve)
+.It Cm 2nd arg: viewport period
+in 10sec ticks (default 6, i.e. 60sec)
+.It Cm 3rd arg: legend on/off
+0=disable 1=enable (default 1)
+.It Cm 4th arg: multipath on/off
+0=disable 1=enable (default 1)
+.It Cm 5th arg: latency or jitter graph
+0=latency 1=jitter (default 0, latency)
+.El
+
+Use `,' (comma) as argument separator
+
+Examples:
+.Bl -tag -width indent-two -offset Ds -compact
+.It Cm -g,
+all args in default (curve, 1min, legend, multipath, latency)
+.It Cm -g2
+line, default, default, default, default
+.It Cm -g,30,,0
+default, 5min, default, disable, default
+.El
+.It Fl i, Fl -interval Ar SECONDS
+Use this option to specify the positive number of seconds between ICMP ECHO requests.  The default value for this parameter is one second.  The root user may choose values between zero and one.
+.It Fl m, Fl -max-ttl Ar NUM
+Specifies the maximum number of hops (max time-to-live value) traceroute will probe.  Default is 30.
+.It Fl n, Fl -no-dns
+Use this option to force
+.Sy Nm
+to display numeric IP numbers and not try to resolve the host names
+.It Fl o, Fl -output Ar raw,txt,csv,json,xml
+.RS
+Use these suboptions for automated processing
 .It Fl p, Fl -split
 Use this option to set
 .Sy Nm
@@ -186,7 +182,7 @@ This option sets the packet size used for probing.  It is in bytes inclusive IP 
 If set to a negative number, every iteration will use a different, random packet size upto that number.
 .It Fl S, Fl -summary
 Print send/receive summary at exit
-.It Fl T, Fl -tcp
+.It Fl t, Fl -tcp
 Use TCP SYN packets instead of ICMP ECHO
 .It Fl u, Fl -udp
 Use UDP datagrams instead of ICMP ECHO
@@ -194,7 +190,7 @@ Use UDP datagrams instead of ICMP ECHO
 .br
 Print the installed version of
 .Nm
-.It Fl w, Fl -report-wide
+.It Fl w, Fl -wide
 This option puts
 .Sy Nm
 into wide report mode.  When in this mode,

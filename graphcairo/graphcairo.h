@@ -1,34 +1,28 @@
 #ifndef GRAPHCAIRO_H
 #define GRAPHCAIRO_H
 
-#include <stdbool.h>
-
-/**/
-#ifndef GCDEBUG
-#define GCDEBUG
-#endif
-/**/
-
+// two sets to not detect ##/VA_OPT
 #ifdef GCDEBUG
-#define GCDEBUG_MSG(format, ...) { printf(format, __VA_ARGS__); }
+#define GCMSG(lit)       printf(lit)
+#define GCMSG_(fmt, ...) printf(fmt, __VA_ARGS__)
 #else
-#define GCDEBUG_MSG(format, ...) {}
+#define GCMSG(lit)       {}
+#define GCMSG_(fmt, ...) {}
 #endif
 
-//#define ROUND(x)	((x)>=0?(int)((x)+0.5):(int)((x)-0.5))
-#define POS_ROUND(x)	((int)((x)+0.5))
+#define POS_ROUND(x)	((int)((x) + 0.5))
 #define USECONDS	1000000
 #define ACTION_RESIZE	-1
 
 typedef struct {
-	int graph_type;
-	int period;
-	bool enable_legend;
-	bool enable_multipath;
-	bool jitter_graph;
-	int cols_max;
-	int path_max;
-	int label_max;
+  int graph_type;
+  int period;
+  bool enable_legend;
+  bool enable_multipath;
+  bool jitter_graph;
+  int cols_max;
+  int path_max;
+  int label_max;
 } cr_params_t;
 
 bool cr_open(cr_params_t *cr_params);

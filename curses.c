@@ -16,26 +16,25 @@
     Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 */
 
-#include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
-#include <err.h>
 #include <time.h>
 
 #include "config.h"
 
-#if defined(UNICODE)
+#ifdef UNICODE
+
 #define _XOPEN_SOURCE_EXTENDED
-#if defined (HAVE_NCURSESW_NCURSES_H)
+#ifdef HAVE_NCURSESW_NCURSES_H
 #  include <ncursesw/ncurses.h>
-#elif defined (HAVE_NCURSESW_CURSES_H)
+#elif defined HAVE_NCURSESW_CURSES_H
 #  include <ncursesw/curses.h>
-#elif defined (HAVE_CURSES_H)
+#elif defined HAVE_CURSES_H
 #  include <curses.h>
 #else
 #  error No ncursesw header file available
 #endif
-#if defined(HAVE_WCHAR_H)
+#ifdef HAVE_WCHAR_H
 #  include <wchar.h>
 #endif
 #ifdef __NetBSD__
@@ -52,13 +51,13 @@
 #endif
 #else
 
-#if defined(HAVE_NCURSES_H)
+#ifdef HAVE_NCURSES_H
 #  include <ncurses.h>
-#elif defined(HAVE_NCURSES_CURSES_H)
+#elif defined HAVE_NCURSES_CURSES_H
 #  include <ncurses/curses.h>
-#elif defined(HAVE_CURSES_H)
+#elif defined HAVE_CURSES_H
 #  include <curses.h>
-#elif defined(HAVE_CURSESX_H)
+#elif defined HAVE_CURSESX_H
 #  include <cursesX.h>
 #else
 #  error No curses header file available
@@ -74,7 +73,34 @@
 #ifdef IPINFO
 #include "ipinfo.h"
 #endif
-#include "version.h"
+#include "macros.h"
+
+const char CMODE_HINTS[] =
+"Commands:\n"
+"  h        this help\n"
+"  b <int>  set ping bit pattern [0..255], or random (if < 0)\n"
+"  c <int>  number of cycles to run (default infinite)\n"
+"  d        switch display mode\n"
+"  o <str>  set fields to display (default 'LRS N BAWV')\n"
+"  i <int>  set interval in seconds (default 1)\n"
+"  j        toggle lattency/jitter stats (default latency)\n"
+"  f <int>  set min TTL (default 1)\n"
+"  m <int>  set max TTL (default 30)\n"
+"  n        toggle DNS (default on)\n"
+"  p        pause/resume\n"
+"  q <int>  set ToS (default 0)\n"
+"  r        reset all counters\n"
+"  s <int>  set packet size (default 64), or random (if < 0)\n"
+"  t        switch between ICMP ECHO and TCP SYN\n"
+"  u        switch between ICMP ECHO and UDP datagrams\n"
+"  x        toggle cache mode (default off)\n"
+"  e        toggle MPLS info (default off)\n"
+#ifdef IPINFO
+"  y        switching IP info\n"
+"  z        toggle ASN Lookup (default off)\n"
+#endif
+"\n"
+"Press any key to resume ...";
 
 static int __unused_int;
 static FLD_BUF_T fields_buf;
@@ -111,33 +137,6 @@ static void mtr_curses_get_float(int y, float* res) {
 	}
 }
 
-#define CURSES_HELP_MESSAGE \
-  "Command:\n" \
-  "  ?|h     help\n" \
-  "  b <c>   set ping bit pattern to c(0..255) or random(c<0)\n" \
-  "  c <n>   report cycle n, default n=infinite\n" \
-  "  d       switching display mode\n" \
-  "  e       toggle MPLS information on/off\n" \
-  "  f <n>   set the initial time-to-live(ttl), default n=1\n" \
-  "  i <n>   set the ping interval to n seconds, default n=1\n" \
-  "  j       toggle default(LS NABWV)/jitter(DR AGJMXI) stats\n" \
-  "  m <n>   set the max time-to-live, default n= # of hops\n" \
-  "  n       toggle DNS on/off\n" \
-  "  o str   set the columns to display, default str='LRS N BAWV'\n" \
-  "  p|SPACE pause/resume)\n" \
-  "  Q <t>   set ping packet's TOS to t\n" \
-  "  r       reset all counters\n" \
-  "  s <n>   set the packet size to n or random(n<0)\n" \
-  "  t       switch between ICMP ECHO and TCP SYN\n" \
-  "  u       switch between ICMP ECHO and UDP datagrams\n" \
-  "  x       toggle cache mode on/off\n"
-#ifdef IPINFO
-#define CURSES_HELP_IPINFO \
-  "  y       switching IP Info\n" \
-  "  Y       show hops on GoogleMaps (in -y[6-9] modes)\n" \
-  "  z       toggle ASN Lookup on/off\n"
-#endif
-
 int mtr_curses_keyaction(void) {
   int c = getch();
 
@@ -145,10 +144,7 @@ int mtr_curses_keyaction(void) {
     case '?':
     case 'h':
       erase();
-      mvprintw(2, 0, CURSES_HELP_MESSAGE);
-      printw(CURSES_HELP_IPINFO);
-      addch('\n');
-      printw(" press any key to go back...");
+      mvprintw(2, 0, CMODE_HINTS);
       getch();
       return ActionNone;
     case 'b':
@@ -324,7 +320,7 @@ static int printw_mpls(const mpls_data_t *m) {
 static void printw_addr(int at, int ndx, int up) {
   ip_t *addr = &IP_AT_NDX(at, ndx);
 #ifdef IPINFO
-  if (ii_ready())
+  if (ipinfo_ready())
     printw("%s", fmt_ipinfo(at, ndx));
 #endif
   if (!up)
@@ -557,7 +553,7 @@ static void mtr_curses_graph(int statx, int cols) {
 			if (!host[at].up)
 				attron(A_BOLD);
 #ifdef IPINFO
-			if (ii_ready())
+			if (ipinfo_ready())
 				printw("%s", fmt_ipinfo(at, host[at].current));
 #endif
 			const char *name = dns_ptr_lookup(at, host[at].current);
@@ -707,8 +703,8 @@ void mtr_curses_redraw(void) {
   printw("Keys:  ");
   attron(A_BOLD); addch('H'); attroff(A_BOLD); printw("elp   ");
   attron(A_BOLD); addch('D'); attroff(A_BOLD); printw("isplay mode   ");
-  attron(A_BOLD); addch('R'); attroff(A_BOLD); printw("estart statistics   ");
-  attron(A_BOLD); addch('O'); attroff(A_BOLD); printw("rder of fields   ");
+  attron(A_BOLD); addch('O'); attroff(A_BOLD); printw("rder fields   ");
+  attron(A_BOLD); addch('R'); attroff(A_BOLD); printw("estart   ");
   attron(A_BOLD); addch('q'); attroff(A_BOLD); printw("uit\n");
 
   if (curses_mode == 0) {
@@ -716,11 +712,11 @@ void mtr_curses_redraw(void) {
     int hd_len = mtr_curses_data_fields(redraw_buf);
     attron(A_BOLD);
 #ifdef IPINFO
-    if (ii_ready()) {
-      char *header = ii_getheader();
+    if (ipinfo_ready()) {
+      char *header = ipinfo_header();
       if (header)
         mvprintw(staty - 1, statx, "%s", header);
-      statx += ii_getwidth(); // indent: "NN. " + IPINFO
+      statx += ipinfo_width(); // indent: "NN. " + IPINFO
     }
 #endif
     mvprintw(staty - 1, statx, "Host");
@@ -741,8 +737,8 @@ void mtr_curses_redraw(void) {
   } else {
     statx = STARTSTAT;
 #ifdef IPINFO
-    if (ii_ready())
-      statx += ii_getwidth();
+    if (ipinfo_ready())
+      statx += ipinfo_width();
 #endif
     int max_cols = (maxx <= (SAVED_PINGS + statx)) ? (maxx - statx) : SAVED_PINGS;
     statx -= 2;
@@ -766,7 +762,7 @@ void mtr_curses_redraw(void) {
 
 bool mtr_curses_open(void) {
   if (!initscr()) {
-    warnx("curses.open: initscr() failed");
+    WARNX("initscr() failed");
     return false;
   }
   raw();

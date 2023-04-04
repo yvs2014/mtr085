@@ -19,19 +19,18 @@
 #ifndef IPINFO_H
 #define IPINFO_H
 
-#include <stdbool.h>
+void  ipinfo_open(void);
+void  ipinfo_close(void);
+int   ipinfo_args(char *arg);
+void  ipinfo_action(int action);
+void  ipinfo_parse(void);
+int   ipinfo_wait(void);
+bool  ipinfo_ready(void);
+int   ipinfo_width(void);
+char* ipinfo_header(void);
 
-void ii_open(void);
-void ii_close(void);
-int ii_parsearg(char *arg);
-void ii_action(int action_asn);
-void ii_ack(void);
-int ii_waitfd(void);
-bool ii_ready(void);
-int ii_getwidth(void);
-char* ii_getheader(void);
-char *fmt_ipinfo(int at, int ndx);
-char *sep_ipinfo(int at, int ndx, char sep);
+char  *fmt_ipinfo(int at, int ndx);
+char  *sep_ipinfo(int at, int ndx, char sep);
 void query_ipinfo(void);
 
 #define ASLOOKUP_DEFAULT	NULL	// cymru

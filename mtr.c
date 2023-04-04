@@ -16,12 +16,12 @@
     Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 */
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
 #include <ctype.h>
 #include <assert.h>
-#include <err.h>
 #include <fcntl.h>
 #include <limits.h>
 #include <sys/stat.h>
@@ -51,7 +51,6 @@
 #endif
 
 #include "mtr.h"
-
 #ifdef CURSES
 #include "mtr-curses.h"
 #endif
@@ -66,14 +65,11 @@
 #ifdef GRAPHCAIRO
 #include "graphcairo-mtr.h"
 #endif
-#include "version.h"
+#include "macros.h"
 
-typedef struct names {
-	char*		name;
-	struct names*	next;
-} names_t;
+#define CACHE_TIMEOUT 60
 
-#define CACHE_TIMEOUT	60
+typedef struct names { char *name; struct names *next; } names_t;
 
 // global vars
 pid_t mypid;
@@ -128,7 +124,59 @@ const struct fields data_fields[AVLFLD + 1] = {
 	{'I', "I: Interarrival Jitter", "Jint",   " %4.1f",   5},
 	{'\0', NULL, NULL, NULL, 0}
 };
-	//
+
+#if defined(OUTPUT_FORMAT_RAW) || defined(OUTPUT_FORMAT_TXT) || defined(OUTPUT_FORMAT_CSV) || defined(OUTPUT_FORMAT_JSON) || defined(OUTPUT_FORMAT_XML)
+#define OUTPUT_FORMAT
+#endif
+
+static struct option long_options[] = {
+  // Long, HasArgs, Flag, Short
+  { "inet",       0, 0, '4' },  // use IPv4
+#ifdef ENABLE_IPV6
+  { "inet6",      0, 0, '6' },  // use IPv6
+#endif
+  { "address",    1, 0, 'a' },
+  { "show-ips",   0, 0, 'b' },
+  { "bitpattern", 1, 0, 'B' },   // overload b>255, ->rand(0,255)
+  { "cycles",     1, 0, 'c' },
+#if defined(CURSES) || defined(GRAPHCAIRO)
+  { "display",    1, 0, 'd' },
+#endif
+  { "mpls",       0, 0, 'e' },
+  { "first-ttl",  1, 0, 'f' },   // -f and -m are borrowed from traceroute
+  { "fields",     1, 0, 'F' },   // fields to display and their order
+#ifdef GRAPHCAIRO
+  { "graph",      1, 0, 'g' },
+#endif
+  { "help",       0, 0, 'h' },
+  { "interval",   1, 0, 'i' },
+  { "max-ttl",    1, 0, 'm' },
+  { "no-dns",     0, 0, 'n' },
+#ifdef OUTPUT_FORMAT
+  { "output",     1, 0, 'o' },  // output format: raw, txt, csv, json, xml
+#endif
+#ifdef SPLITMODE
+  { "split",      0, 0, 'p' },
+#endif
+  { "port",       1, 0, 'P' },  // target port number for TCP
+  { "tos",        1, 0, 'q' },  // typeof service (0..255)
+  { "report",     0, 0, 'r' },
+  { "psize",      1, 0, 's' },  // packet size
+  { "summary",    0, 0, 'S' },  // print send/recv summary at exit
+  { "tcp",        0, 0, 't' },  // TCP (default is ICMP)
+  { "udp",        0, 0, 'u' },  // UDP (default is ICMP)
+  { "version",    0, 0, 'v' },
+  { "wide",       0, 0, 'w' },  // wide report (-r)
+  { "cache",      1, 0, 'x' },  // enable cache with timeout in seconds (0 means default 60sec)
+#ifdef IPINFO
+  { "ipinfo",     1, 0, 'y' },
+  { "aslookup",   0, 0, 'z' },
+#endif
+  { "timeout",    1, 0, 'Z' },  // timeout for TCP sockets
+  { 0, 0, 0, 0 }
+};
+static char *short_options;
+
 char srchost[NAMELEN];
 char *dsthost = NULL;
 int display_mode;
@@ -140,10 +188,6 @@ bool alter_ping = false;
 
 static char *iface_addr = NULL;
 static names_t *names = NULL;
-
-#if defined(OUTPUT_FORMAT_RAW) || defined(OUTPUT_FORMAT_TXT) || defined(OUTPUT_FORMAT_CSV) || defined(OUTPUT_FORMAT_JSON) || defined(OUTPUT_FORMAT_XML)
-#define OUTPUT_FORMAT
-#endif
 
 void set_fld_active(const char *s) {
   static FLD_BUF_T s_copy;
@@ -173,131 +217,36 @@ static void append_to_names(const char* item) {
       name->next = names;
       names = name;
     } else {
-      warnx("names: strdup(%s)", item);
+      WARN_("strdup(%s)", item);
       free(name);
     }
   } else
-    warnx("names: malloc(%zd)", sizeof(names_t));
-}
-
-static void read_from_file(const char *filename) {
-  FILE *in;
-  if (!filename || !strcmp(filename, "-")) {
-    clearerr(stdin);
-    in = stdin;
-  } else {
-    in = fopen(filename, "r");
-    if (!in) {
-      warn("file: fopen(%s)", filename);
-      return;
-    }
-  }
-
-  char *line = malloc(PATH_MAX);
-  if (!line) {
-    warn("file: malloc(%d)", PATH_MAX);
-    if (in != stdin)
-      fclose(in);
-    return;
-  }
-
-  while (fgets(line, sizeof(line), in))
-    append_to_names(trim(line));
-  if (ferror(in))
-    warn("file: fgets(%s)", filename);
-  if (in != stdin)
-    fclose(in);
-  free(line);
+    WARN_("malloc(%zd)", sizeof(names_t));
 }
 
 /*
- * If the file stream is associated with a regular file, lock the file
+ * If the file stream is associated with a regular file, lock/unlock the file
  * in order coordinate writes to a common file from multiple mtr
  * instances. This is useful if, for example, multiple mtr instances
  * try to append results to a common file.
  */
-static void lock(FILE *f) {
-    assert(f);
-    struct stat buf;
-    static struct flock lock;
-    lock.l_type = F_WRLCK;
-    lock.l_start = 0;
-    lock.l_whence = SEEK_END;
-    lock.l_len = 0;
-    lock.l_pid = mypid;
-    int fd = fileno(f);
-    if (!fstat(fd, &buf) && S_ISREG(buf.st_mode))
-      if (fcntl(fd, F_SETLKW, &lock) == -1)
-        warn("lock: fcntl(%d)", fd);
+static void locker(FILE *file, short type) {
+  if (!file)
+    return;
+  int fd = fileno(file);
+  struct stat buf;
+  if (fstat(fd, &buf) < 0) {
+    WARN_("fstat(%d)", fd);
+    return;
+  }
+  if (!S_ISREG(buf.st_mode))
+    return;
+  static struct flock l = { .l_whence = SEEK_END };
+  l.l_type = type;
+  l.l_pid = mypid;
+  if (fcntl(fd, F_SETLKW, &l) < 0)
+    WARN_("fcntl(fd=%d, type=%d)", fd, type);
 }
-
-/*
- * If the file stream is associated with a regular file, unlock the
- * file (which presumably has previously been locked).
- */
-static void unlock(FILE *f) {
-    assert(f);
-    struct stat buf;
-    static struct flock lock;
-    lock.l_type = F_UNLCK;
-    lock.l_start = 0;
-    lock.l_whence = SEEK_END;
-    lock.l_len = 0;
-    lock.l_pid = mypid;
-    int fd = fileno(f);
-    if (!fstat(fd, &buf) && S_ISREG(buf.st_mode))
-      if (fcntl(fd, F_SETLKW, &lock) == -1)
-        warn("unlock: fcntl(%d)", fd);
-}
-
-static struct option long_options[] = {
-  { "address",    1, 0, 'a' },
-  { "show-ips",   0, 0, 'b' },
-  { "bitpattern", 1, 0, 'B' },   // overload b>255, ->rand(0,255)
-  { "report-cycles", 1, 0, 'c' },
-#if defined(CURSES) || defined(GRAPHCAIRO)
-  { "display",    1, 0, 'd' },
-#endif
-  { "mpls",       0, 0, 'e' },
-  { "help",       0, 0, 'h' },
-  { "first-ttl",  1, 0, 'f' },   // -f and -m are borrowed from traceroute
-  { "filename",   1, 0, 'F' },
-#ifdef GRAPHCAIRO
-  { "graphcairo", 1, 0, 'G' },
-#endif
-  { "interval",   1, 0, 'i' },
-#ifdef OUTPUT_FORMAT
-  { "output",     1, 0, 'l' },
-#endif
-  { "max-ttl",    1, 0, 'm' },
-  { "no-dns",     0, 0, 'n' },
-  { "order",      1, 0, 'o' },   // fields to display and their order
-#ifdef SPLITMODE
-  { "split",      0, 0, 'p' },
-#endif
-  { "port",       1, 0, 'P' },  // target port number for TCP
-  { "tos",        1, 0, 'Q' },  // typeof service (0,255)
-  { "report",     0, 0, 'r' },
-  { "psize",      1, 0, 's' },  // changed 'p' to 's' to match ping option, overload psize<0, ->rand(min,max)
-  { "summary",    0, 0, 'S' },  // print send/recv summary at exit
-  { "tcp",        0, 0, 'T' },  // TCP (default is ICMP)
-  { "udp",        0, 0, 'u' },  // UDP (default is ICMP)
-  { "version",    0, 0, 'v' },
-  { "report-wide", 0, 0, 'w' },
-  { "cache",      1, 0, 'x' },  // enable cache with timeout in seconds (0 means default 60sec)
-#ifdef IPINFO
-  { "ipinfo",     1, 0, 'y' },
-  { "aslookup",   0, 0, 'z' },
-#endif
-  { "timeout",    1, 0, 'Z' },  // timeout for TCP sockets
-  { "inet",       0, 0, '4' },  // use IPv4
-#ifdef ENABLE_IPV6
-  { "inet6",      0, 0, '6' },  // use IPv6
-#endif
-  { 0, 0, 0, 0 }
-};
-
-static char *short_options;
 
 static int my_getopt_long(int argc, char *argv[], int *opt_ndx) {
   if (!short_options) {
@@ -319,7 +268,7 @@ static char *get_opt_desc(char opt) {
     case 'm':
     case 'f':
     case 'B':
-    case 'Q':
+    case 'q':
     case 'P': return "NUMBER";
     case 'i':
     case 'x':
@@ -328,10 +277,9 @@ static char *get_opt_desc(char opt) {
     case 'c': return "COUNT";
     case 'd': return "MODE";
     case 's': return "BYTES";
-    case 'o': return "FIELDS";
-    case 'F': return "FILE";
+    case 'F': return "FIELDS";
 #ifdef OUTPUT_FORMAT
-    case 'l': return trim(""
+    case 'o': return trim(""
 #ifdef OUTPUT_FORMAT_RAW
 " RAW"
 #endif
@@ -353,7 +301,7 @@ static char *get_opt_desc(char opt) {
     case 'y': return "ORIGIN,FIELDS";
 #endif
 #ifdef GRAPHCAIRO
-    case 'G': return "type,period,enable_legend,enable_multipath,enable_jitter";
+    case 'g': return "type,period,legend,multipath,jitter";
 #endif
   }
   return NULL;
@@ -383,48 +331,101 @@ static void usage(char *name) {
 }
 
 static int limit_int(const int v0, const int v1, const int v, const char *it) {
-  const char LIMIT_MSG_FMT[] = "WARN: '%s' is out of range %d..%d: %d -> %d";
   if (v < v0) {
-    warnx(LIMIT_MSG_FMT, it, v0, v1, v, v0);
+    WARNX_("'%s' is out of range %d..%d: %d -> %d", it, v0, v1, v, v0);
     return v0;
   }
   if (v > v1) {
-    warnx(LIMIT_MSG_FMT, it, v0, v1, v, v1);
+    WARNX_("'%s' is out of range %d..%d: %d -> %d", it, v0, v1, v, v1);
     return v1;
   }
   return v;
 }
  
-static void parse_arg(int argc, char **argv) {
+static void parse_options(int argc, char **argv) {
   while (1) {
     int opt = my_getopt_long(argc, argv, NULL);
     if (opt == -1)
       break;
 
     switch (opt) {
+    case '4':
+      net_init(0);
+      break;
+#ifdef ENABLE_IPV6
+    case '6':
+      net_init(1);
+      break;
+#endif
     case '?':
       usage(argv[0]);
       exit(EXIT_FAILURE);
+    case 'a':
+      iface_addr = optarg;
+      break;
+    case 'b':
+      show_ips = true;
+      break;
+    case 'B':
+      bitpattern = atoi(optarg);
+      if (bitpattern > 255)
+        bitpattern = -1;
+      break;
+    case 'c':
+      max_ping = atoi(optarg);
+      alter_ping = true;
+      break;
+#if defined(CURSES) || defined(GRAPHCAIRO)
+    case 'd':
+      curses_mode = ((atoi(optarg)) & ~8) % curses_mode_max;
+      color_mode = ((atoi(optarg)) & 8) ? 1 : 0;
+      audible_bell = ((atoi(optarg)) & 16) ? 1 : 0;
+      visible_bell = ((atoi(optarg)) & 32) ? 1 : 0;
+      target_bell_only = ((atoi(optarg)) & 64) ? 1 : 0;
+      break;
+#endif
+    case 'e':
+      enable_mpls = true;
+      break;
+    case 'f':
+      if (optarg[0] == 'a') {
+        endpoint_mode = true;
+        break;
+      }
+      fstTTL = limit_int(1, maxTTL, atoi(optarg), "first ttl");
+      break;
+    case 'F':
+      if (strlen(optarg) >= sizeof(fld_active))
+        FAIL_("-F: Too many fields (max=%zd): %s", sizeof(fld_active) - 1, optarg);
+      for (int i = 0; optarg[i]; i++)
+        if(!strchr(fld_avail, optarg[i]))
+          FAIL_("-F: Unknown field identifier %c", optarg[i]);
+      set_fld_active(optarg);
+      break;
+#ifdef GRAPHCAIRO
+    case 'g':
+      gc_parsearg(optarg);
+      display_mode = DisplayGraphCairo;
+      break;
+#endif
     case 'h':
       usage(argv[0]);
       exit(EXIT_SUCCESS);
-    case 'v':
-      printf("%s-%s\n", argv[0], MTR_VERSION);
-      exit(EXIT_SUCCESS);
-    case 'r':
-      display_mode = DisplayReport;
+    case 'i':
+      wait_time = atof(optarg);
+      if (wait_time <= 0)
+        FAIL("-i: Wait time must be positive");
+      if (getuid() && (wait_time < 1))
+        FAIL("-i: Non-root users cannot set an interval less than one second");
       break;
-    case 'w':
-      report_wide = true;
-      display_mode = DisplayReport;
+    case 'm':
+      maxTTL = limit_int(1, ((MAXHOST - 1) > maxTTL) ? maxTTL : (MAXHOST - 1), atoi(optarg), "maximum ttl");
       break;
-#ifdef SPLITMODE
-    case 'p':
-      display_mode = DisplaySplit;
+    case 'n':
+      enable_dns = false;
       break;
-#endif
 #ifdef OUTPUT_FORMAT
-    case 'l':
+    case 'o':
       switch (tolower((int)optarg[0])) {
 #ifdef OUTPUT_FORMAT_RAW
         case 'r':
@@ -458,18 +459,23 @@ static void parse_arg(int argc, char **argv) {
       }
       break;
 #endif
-#if defined(CURSES) || defined(GRAPHCAIRO)
-    case 'd':
-      curses_mode = ((atoi(optarg)) & ~8) % curses_mode_max;
-      color_mode = ((atoi(optarg)) & 8) ? 1 : 0;
-      audible_bell = ((atoi(optarg)) & 16) ? 1 : 0;
-      visible_bell = ((atoi(optarg)) & 32) ? 1 : 0;
-      target_bell_only = ((atoi(optarg)) & 64) ? 1 : 0;
+#ifdef SPLITMODE
+    case 'p':
+      display_mode = DisplaySplit;
       break;
 #endif
-    case 'c':
-      max_ping = atoi(optarg);
-      alter_ping = true;
+    case 'P':
+      remoteport = atoi(optarg);
+      if (remoteport > 65535 || remoteport < 1)
+        FAIL_("-P: Illegal port number %d", remoteport);
+      break;
+    case 'q':
+      tos = atoi(optarg);
+      if (tos > 255 || tos < 0)	// error message, should do more checking for valid values
+        tos = 0;
+      break;
+    case 'r':
+      display_mode = DisplayReport;
       break;
     case 's':
       cpacketsize = atoi(optarg);
@@ -477,110 +483,50 @@ static void parse_arg(int argc, char **argv) {
     case 'S':
       enable_stat_at_exit = true;
       break;
-    case 'a':
-      iface_addr = optarg;
-      break;
-    case 'e':
-      enable_mpls = true;
-      break;
-#ifdef GRAPHCAIRO
-    case 'G':
-      gc_parsearg(optarg);
-      display_mode = DisplayGraphCairo;
-      break;
-#endif
-    case 'n':
-      enable_dns = false;
-      break;
-    case 'i':
-      wait_time = atof(optarg);
-      if (wait_time <= 0)
-        errx(EXIT_FAILURE, "option -i: Wait time must be positive");
-      if (getuid() && (wait_time < 1))
-        errx(EXIT_FAILURE, "option -i: Non-root users cannot request an interval < 1.0 seconds");
-      break;
-    case 'f':
-      if (optarg[0] == 'a') {
-        endpoint_mode = true;
-        break;
-      }
-      fstTTL = limit_int(1, maxTTL, atoi(optarg), "first ttl");
-      break;
-    case 'F':
-      read_from_file(optarg);
-      break;
-    case 'm':
-      maxTTL = limit_int(1, ((MAXHOST - 1) > maxTTL) ? maxTTL : (MAXHOST - 1), atoi(optarg), "maximum ttl");
-      break;
-    case 'o':
-      /* Check option before passing it on to fld_active. */
-      if (strlen(optarg) >= sizeof(fld_active))
-        errx(EXIT_FAILURE, "option -o: Too many fields (max=%zd): %s", sizeof(fld_active) - 1, optarg);
-      for (int i = 0; optarg[i]; i++)
-        if(!strchr(fld_avail, optarg[i]))
-          errx(EXIT_FAILURE, "option -o: Unknown field identifier %c", optarg[i]);
-      set_fld_active(optarg);
-      break;
-    case 'B':
-      bitpattern = atoi(optarg);
-      if (bitpattern > 255)
-        bitpattern = -1;
-      break;
-    case 'Q':
-      tos = atoi(optarg);
-      if (tos > 255 || tos < 0)	// error message, should do more checking for valid values
-        tos = 0;
-      break;
-    case 'u':
+    case 't':
       if (mtrtype != IPPROTO_ICMP)
-        errx(EXIT_FAILURE, "options -u and -T are mutually exclusive");
-      mtrtype = IPPROTO_UDP;
-      break;
-    case 'T':
-      if (mtrtype != IPPROTO_ICMP)
-        errx(EXIT_FAILURE, "options -T and -u are mutually exclusive");
+        FAIL("-t and -u are mutually exclusive");
       if (net_tcp_init())
         mtrtype = IPPROTO_TCP;
       else
-        errx(EXIT_FAILURE, "option -T: Switch to TCP mode failed");
+        FAIL("-t: Switch to TCP mode failed");
       break;
-    case 'b':
-      show_ips = true;
+    case 'u':
+      if (mtrtype != IPPROTO_ICMP)
+        FAIL("-u and -t are mutually exclusive");
+      mtrtype = IPPROTO_UDP;
       break;
-    case 'P':
-      remoteport = atoi(optarg);
-      if (remoteport > 65535 || remoteport < 1)
-        errx(EXIT_FAILURE, "option -P: Illegal port number %d", remoteport);
+    case 'v':
+      printf("%s-%s\n", argv[0], MTR_VERSION);
+      exit(EXIT_SUCCESS);
+    case 'w':
+      report_wide = true;
+      display_mode = DisplayReport;
       break;
     case 'x':
       cache_mode = true;
       cache_timeout = atoi(optarg);
 	  if (cache_timeout < 0)
-        errx(EXIT_FAILURE, "option -x: Cache timeout %d must be positive", cache_timeout);
+        FAIL_("-x: Cache timeout %d must be positive", cache_timeout);
       else if (cache_timeout == 0)
         cache_timeout = CACHE_TIMEOUT;  // default 60 seconds
       break;
 #ifdef IPINFO
     case 'y':
-      if (ii_parsearg(optarg) < 0)
+      if (ipinfo_args(optarg) < 0)
         exit(EXIT_FAILURE);
       break;
     case 'z':
-      ii_parsearg(ASLOOKUP_DEFAULT);
+      ipinfo_args(ASLOOKUP_DEFAULT);
       break;
 #endif
     case 'Z':
       tcp_timeout = atoi(optarg);
       tcp_timeout *= 1000000;
       break;
-    case '4':
-      net_init(0);
-      break;
-#ifdef ENABLE_IPV6
-    case '6':
-      net_init(1);
-      break;
-#endif
+    default:
+      usage(argv[0]);
+      exit(EXIT_FAILURE);
     }
   }
 
@@ -613,67 +559,21 @@ static void parse_arg(int argc, char **argv) {
 }
 
 
-static void parse_mtr_options(char *string) {
-  int argc;
-  char *argv[128];
-
-  if (!string)
-    return;
-
-  argv[0] = PACKAGE_NAME;
-  argc = 1;
-  char *p = string;
-  while (*p) {
-    if (argc == sizeof(argv) / sizeof(argv[0]) - 1) {
-      warnx("options: extra arguments ignored: %s", p);
-      break;
-    }
-    while (*p && isspace((int)*p))
-      p++;
-
-    if (*p == '"' || *p == '\'') {
-      int delim = *p++;
-      char *q = strdup(p);
-      argv[argc++] = q;
-      while (*p && (*p != delim)) {
-        if (*p == '\\')
-          p++;
-        *q++ = *p++;
-      }
-      *q = 0;
-    } else {
-      argv[argc++] = p;
-      while (*p && !isspace((int)*p))
-        p++;
-    }
-
-    if (*p == 0)
-      break;
-    *p++ = 0;
-  }
-
-  argv[argc] = NULL;
-  parse_arg(argc, argv);
-  optind = 0;
-}
-
 #define IDNA_RESOLV(func) { \
   rc = func(dsthost, &hostname, 0); \
-  if (rc == IDNA_SUCCESS) \
-    rc = getaddrinfo(hostname, NULL, &hints, &res); \
-  else \
-    rc_msg = idna_strerror(rc); \
-  if (hostname) \
-    free(hostname); \
+  if (rc == IDNA_SUCCESS) rc = getaddrinfo(hostname, NULL, &hints, &res); \
+  else rc_msg = idna_strerror(rc); \
+  if (hostname) free(hostname); \
 }
 
-static bool set_hostent(struct addrinfo *res) {
+
+static bool set_host(struct addrinfo *res) {
   struct addrinfo *ai;
   for (ai = res; ai; ai = ai->ai_next)
     if (af == ai->ai_family)  // use only the desired AF
       break;
   if (af != ai->ai_family) {  // not found
-    warnx("hostent: Desired address family %d not found", af);
+    WARNX_("Desired address family %d not found", af);
     return false;
   }
 
@@ -685,24 +585,24 @@ static bool set_hostent(struct addrinfo *res) {
     alptr[0] = (void*) &(((struct sockaddr_in6 *)ai->ai_addr)->sin6_addr);
 #endif
   else {
-    warnx("hostent: Unknown address family %d", af);
+    WARNX_("Unknown address family %d", af);
     return false;
   }
 
-  static struct hostent entry;
-  memset(&entry, 0, sizeof(entry));
-  entry.h_name = ai->ai_canonname;
-  entry.h_aliases = NULL;
-  entry.h_addrtype = ai->ai_family;
-  entry.h_length = ai->ai_addrlen;
-  entry.h_addr_list = alptr;
+  static struct hostent h;
+  memset(&h, 0, sizeof(h));
+  h.h_name = ai->ai_canonname;
+  h.h_aliases = NULL;
+  h.h_addrtype = ai->ai_family;
+  h.h_length = ai->ai_addrlen;
+  h.h_addr_list = alptr;
 
-  if (net_open(&entry)) {
-    warnx("hostent: %s", "Unable to start net module");
+  if (!net_set_host(&h)) {
+    WARNX("Unable to set host entry");
     return false;
   }
-  if (net_set_ifaddr(iface_addr)) {
-    warnx("hostent: %s", "Couldn't set interface address");
+  if (!net_set_ifaddr(iface_addr)) {
+    WARNX("Unable to set interface address");
     return false;
   }
   return true;
@@ -710,18 +610,12 @@ static bool set_hostent(struct addrinfo *res) {
 
 
 int main(int argc, char **argv) {
-  net_init(0);		// Use IPv4 by default
-
-  /*  Get the raw sockets first thing, so we can drop to user euid immediately  */
-  if (net_preopen() < 0)
-    errx(EXIT_FAILURE, "Unable to get raw sockets");
-
-  /*  Now drop to user permissions  */
-  if (setgid(getgid()) || setuid(getuid()))
-    err(EXIT_FAILURE, "Unable to drop permissions");
-  /*  Double check, just in case  */
-  if ((geteuid() != getuid()) || (getegid() != getgid()))
-    errx(EXIT_FAILURE, "Unable to drop permissions");
+  if (!net_open())  // Get the raw sockets first thing, so we can drop to user euid immediately
+    FAIL("Unable to get raw sockets");
+  if (setgid(getgid()) || setuid(getuid()))  // Now drop to user permissions
+    ERRR(EXIT_FAILURE, "Unable to drop permissions");
+  if ((geteuid() != getuid()) || (getegid() != getgid())) // Double check, just in case
+    FAIL("Unable to drop permissions");
 
   mypid = getpid();
 
@@ -751,7 +645,7 @@ int main(int argc, char **argv) {
     if (iswprint(L'▁'))
       dm_histogram = true;
     else
-      warnx("Unicode block elements are not printable");
+      WARNX("Unicode block elements are not printable");
   }
 #endif
   if (dm_histogram)
@@ -762,8 +656,7 @@ int main(int argc, char **argv) {
 #endif
 
   set_fld_active(FLD_ACTIVE_DEFAULT);
-  parse_mtr_options(getenv("MTR_OPTIONS"));
-  parse_arg(argc, argv);
+  parse_options(argc, argv);
 
   while (optind < argc) {
     char* name = argv[optind++];
@@ -777,11 +670,11 @@ int main(int argc, char **argv) {
 
   /* Now that we know mtrtype we can select which socket to use */
   if (net_selectsocket() < 0)
-    errx(EXIT_FAILURE, "Couldn't determine raw socket type");
+    FAIL("Unable to determine type of socket");
 
   dns_open();
 #ifdef IPINFO
-  ii_open();
+  ipinfo_open();
 #endif
   if (gethostname(srchost, sizeof(srchost)))
     strncpy(srchost, "UNKNOWN", sizeof(srchost));
@@ -807,19 +700,19 @@ int main(int argc, char **argv) {
 #endif
     if (rc) {
       if (rc == EAI_SYSTEM)
-        warn("getaddrinfo(%s)", dsthost);
+        WARN_("getaddrinfo(%s)", dsthost);
       else
-        warnx("Failed to resolve \"%s\": %s", dsthost, rc_msg ? rc_msg : gai_strerror(rc));
+        WARNX_("Failed to resolve \"%s\": %s", dsthost, rc_msg ? rc_msg : gai_strerror(rc));
     } else {
-      if (set_hostent(res)) {
-        lock(stdout);
+      if (set_host(res)) {
+        locker(stdout, F_WRLCK);
         if (display_open())
           display_loop();
         else
-          warnx("display.open() failed");
+          WARNX("Unable to open display");
         net_end_transit();
         display_close(notfirst);
-        unlock(stdout);
+        locker(stdout, F_UNLCK);
       }
       freeaddrinfo(res);
     }
@@ -828,7 +721,7 @@ int main(int argc, char **argv) {
 
   display_finish();
 #ifdef IPINFO
-  ii_close();
+  ipinfo_close();
 #endif
   dns_close();
   net_close();

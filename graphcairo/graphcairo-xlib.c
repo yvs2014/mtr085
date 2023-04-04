@@ -1,16 +1,15 @@
 
 #include <stdio.h>
-#include <stdlib.h>
+#include <stdbool.h>
 #include <ctype.h>
-#include <err.h>
 #include <X11/Xlib.h>
-
 #define XK_LATIN1
 #define XK_MISCELLANY
 #include <X11/keysymdef.h>
-
 #include <cairo/cairo-xlib.h>
+
 #include "graphcairo-backend.h"
+#include "macros.h"
 
 static Display *display;
 static Window window;
@@ -27,7 +26,7 @@ bool backend_create_window(cairo_rectangle_int_t *rectangle, frontend_resize_t f
 	frontend_resize = frontend_resize_func;
 	display = XOpenDisplay(NULL);
 	if (!display) {
-		warnx("xlib.backend.create.window: %s", "can't open display");
+		WARNX("Cannot open display");
 		return false;
 	}
 	screen = DefaultScreen(display);

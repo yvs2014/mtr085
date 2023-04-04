@@ -27,7 +27,6 @@
 
 #include "config.h"
 #include "mtr.h"
-#include "version.h"
 #include "report.h"
 #include "net.h"
 #include "dns.h"
@@ -101,7 +100,7 @@ static void report_addr_extra(int at, char *bufname, char *lbuf, const char *dfm
       break; // done
     snprint_addr(bufname, MAXDNAME, addr);
 #ifdef IPINFO
-    if (ii_ready())
+    if (ipinfo_ready())
       snprintf(lbuf, MAXDNAME, dfmt, fmt_ipinfo(at, i), bufname);
     else
 #endif
@@ -127,10 +126,10 @@ void report_close(bool wide) {
 
   // header: left
 #ifdef IPINFO
-  if (ii_ready()) {
-    snprintf(lfmt, sizeof(lfmt), "%%2d. %%-%ds %%-%ds", ii_getwidth(), len); // "at. IPINFO HOST"
-    snprintf(dfmt, sizeof(dfmt), "    %%-%ds %%-%ds", ii_getwidth(), len);
-    char* h = ii_getheader();
+  if (ipinfo_ready()) {
+    snprintf(lfmt, sizeof(lfmt), "%%2d. %%-%ds %%-%ds", ipinfo_width(), len); // "at. IPINFO HOST"
+    snprintf(dfmt, sizeof(dfmt), "    %%-%ds %%-%ds",   ipinfo_width(), len);
+    char *h = ipinfo_header();
     snprintf(lbuf, MAXDNAME, dfmt, h ? h : "", HOSTTITLE);
   } else
 #endif
@@ -169,7 +168,7 @@ void report_close(bool wide) {
 
     // body: left
 #ifdef IPINFO
-    if (ii_ready())
+    if (ipinfo_ready())
       snprintf(lbuf, MAXDNAME, lfmt, at + 1, fmt_ipinfo(at, host[at].current), bufname);
     else
 #endif
@@ -244,7 +243,7 @@ void xml_close(void) {
       }
     }
 #ifdef IPINFO
-    if (ii_ready())
+    if (ipinfo_ready())
       printf("%*s<IpInfo>[%s]</IpInfo>\n", XML_MARGIN * 3, "", sep_ipinfo(at, host[at].current, ','));
 #endif
     printf("%*s</HOP>\n", XML_MARGIN * 2, "");
@@ -285,7 +284,7 @@ void json_close(bool notfirst) {
       }
     }
 #ifdef IPINFO
-    if (ii_ready())
+    if (ipinfo_ready())
       printf(",\"ipinfo\":[%s]", sep_ipinfo(at, host[at].current, ','));
 #endif
     printf("}");
@@ -315,7 +314,7 @@ void csv_close(bool notfirst) {
     printf("\n");
   printf("DESTINATION" CSV_DELIMITER "HOP" CSV_DELIMITER "STATUS" CSV_DELIMITER "HOST");
 #ifdef IPINFO
-  if (ii_ready())
+  if (ipinfo_ready())
     printf(CSV_DELIMITER "INFO");
 #endif
   for (int i = 0; i < MAXFLD; i++) {
@@ -336,7 +335,7 @@ void csv_close(bool notfirst) {
     printf(CSV_DELIMITER "%s", host[at].up ? "up" : "down");
     printf(CSV_DELIMITER "%s", buf);
 #ifdef IPINFO
-    if (ii_ready())
+    if (ipinfo_ready())
       printf(CSV_DELIMITER "%s", sep_ipinfo(at, host[at].current, COMA));
 #endif
 

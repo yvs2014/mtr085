@@ -1,13 +1,17 @@
 AC_INIT([mtr], [0.85])
 AC_CONFIG_SRCDIR([mtr.c])
-AM_INIT_AUTOMAKE([foreign subdir-objects])
+dnl AM_INIT_AUTOMAKE([foreign nostdinc subdir-objects -Wall -Werror silent-rules -Wno-extra-portability])
+AM_INIT_AUTOMAKE([foreign nostdinc subdir-objects -Wall -Werror silent-rules])
+m4_ifdef([AM_PROG_AR], [AM_PROG_AR])
 
 AC_CONFIG_FILES([version.h.tmp:version.h.in])
 
-# AC_PROG_CC_C99 is obsolete since autoconf-2.70
+# don't complain on AC_PROG_CC_C99 with autoconf newer than 2.70
 m4_version_prereq([2.70],, [AC_PROG_CC_C99])
 AM_PROG_CC_C_O
 AC_PROG_RANLIB
+
+AC_CHECK_HEADERS([sys/param.h], AC_DEFINE(HAVE_SYS_PARAM_H, 1)) dnl common Unix parameters
 
 AC_ARG_ENABLE(ipv6,
 	AS_HELP_STRING([--disable-ipv6], [do not enable IPv6]),

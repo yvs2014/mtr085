@@ -146,23 +146,23 @@ extern struct nethost host[];
 
 extern char localaddr[];
 
-void net_init(int ipv6_mode);
-int net_tcp_init(void);
-int net_preopen(void);
-int net_open(struct hostent *host);
+void net_init(int ipv6);
+bool net_tcp_init(void);
+bool net_open(void);
+bool net_set_host(struct hostent *h);
+bool net_set_ifaddr(char *ifaddr);
 int net_selectsocket(void);
-int net_set_ifaddr(char *ifaddr);
 void net_reset(void);
 void net_close(void);
-int net_waitfd(void);
-void net_process_return(void);
+int net_wait(void);
+void net_parse(void);
+bool net_tcp_parse(void);
 int net_max(void);
 int net_min(void);
 int net_elem(int at, char c);
 int net_send_batch(void);
 void net_end_transit(void);
 int net_duplicate(int at, int seq);
-bool net_process_tcp_fds(void);
 
 void sockaddrtop(struct sockaddr *saddr, char *strptr, size_t len);
 void decodempls(int num, const uint8_t *packet, mpls_data_t *mpls, int off);

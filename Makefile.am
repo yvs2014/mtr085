@@ -42,7 +42,7 @@ endif
 if GRAPHCAIRO_XLIB
 libgraphcairo_a_SOURCES += graphcairo/graphcairo-xlib.c
 endif
-libgraphcairo_a_CPPFLAGS = @graphcairo_CFLAGS@ -Igraphcairo
+libgraphcairo_a_CPPFLAGS = @graphcairo_CFLAGS@ -I.
 AM_CPPFLAGS += -Igraphcairo
 mtr_LDADD += @graphcairo_LIBS@
 mtr_SOURCES += $(graphcairo_a_SOURCES)

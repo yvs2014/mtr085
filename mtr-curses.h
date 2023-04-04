@@ -19,7 +19,6 @@
 #ifndef MTR_CURSES_H
 #define MTR_CURSES_H
 
-#include <stdbool.h>
 #include "config.h"
 
 #ifdef UNICODE

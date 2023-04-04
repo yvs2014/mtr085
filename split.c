@@ -20,7 +20,7 @@
     Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 */
 
-#include <err.h>
+#include <stdio.h>
 #include <ctype.h>
 #include <termios.h>
 
@@ -33,6 +33,7 @@
 #ifdef IPINFO
 #include "ipinfo.h"
 #endif
+#include "macros.h"
 
 #define SPLIT_SEP	'\t'
 
@@ -53,7 +54,7 @@ void split_redraw(void) {
       printf("%c%.1f", SPLIT_SEP, host[at].avg / 1000.);
       printf("%c%.1f", SPLIT_SEP, host[at].worst / 1000.);
 #ifdef IPINFO
-      if (ii_ready())
+      if (ipinfo_ready())
         printf("%c%s", SPLIT_SEP, sep_ipinfo(at, host[at].current, SPLIT_SEP));
 #endif
       printf("\n");
@@ -70,7 +71,7 @@ void split_redraw(void) {
         if (show_ips)
           printf("%c%s", SPLIT_SEP, strlongip(ip));
 #ifdef IPINFO
-        if (ii_ready())
+        if (ipinfo_ready())
           printf("%c%s", SPLIT_SEP, sep_ipinfo(at, ndx, SPLIT_SEP));
 #endif
         printf("\n");
@@ -83,7 +84,7 @@ void split_redraw(void) {
 void split_open(void) {
   struct termios t;
   if (tcgetattr(0, &t) < 0) {
-    warn("split.open: %s", "tcgetattr()");
+    WARN("tcgetattr");
     warnx("non-interactive mode is ON");
     interactive = false;
     return;
@@ -93,7 +94,7 @@ void split_open(void) {
   t.c_cc[VMIN] = 1;
   t.c_cc[VTIME] = 0;
   if (tcsetattr(0, TCSANOW, &t) < 0) {
-    warn("split.open: %s", "tcsetattr()");
+    WARN("tcsetattr");
     interactive = false;
   }
 }
@@ -103,13 +104,13 @@ void split_close(void) {
   if (!interactive)
     return;
   if (tcgetattr(0, &t) < 0) {
-    warn("split.close: %s", "tcgetattr()");
+    WARN("tcgetattr");
     return;
   }
   t.c_lflag |= ICANON;
   t.c_lflag |= ECHO;
   if (tcsetattr(0, TCSADRAIN, &t))
-    warn("split.close: %s", "tcsetattr()");
+    WARN("tcsetattr");
 }
 
 #define SPLIT_HELP_MESSAGE	\
@@ -125,7 +126,7 @@ void split_close(void) {
 int split_keyaction(void) {
   char c;
   if (read(0, &c, 1) < 0) {
-    warn("split.keyaction: %s", "read()");
+    WARN("read");
     return 0;
   }
 

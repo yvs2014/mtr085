@@ -1,17 +1,17 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdbool.h>
 #include <ctype.h>
-#include <err.h>
 #include <xcb/xcb.h>
 #include <xcb/xcb_keysyms.h>
-
 #define XK_LATIN1
 #define XK_MISCELLANY
 #include <X11/keysymdef.h>
-
 #include <cairo/cairo-xcb.h>
+
 #include "graphcairo-backend.h"
+#include "macros.h"
 
 static xcb_connection_t *connection;
 static xcb_window_t window;
@@ -22,18 +22,12 @@ static frontend_resize_t frontend_resize;
 static int shiftkey_pressed;
 
 static void root_visual_type(void) {
-    xcb_depth_iterator_t depth_iter;
-    for (depth_iter = xcb_screen_allowed_depths_iterator(screen);
-		depth_iter.rem; xcb_depth_next(&depth_iter)) {
-			xcb_visualtype_iterator_t visual_iter;
-			for (visual_iter = xcb_depth_visuals_iterator(depth_iter.data);
-				visual_iter.rem; xcb_visualtype_next(&visual_iter))
-				if (screen->root_visual == visual_iter.data->visual_id) {
-					visual_type = visual_iter.data;
-					return;
-				}
-	}
-	visual_type = NULL;
+  for (xcb_depth_iterator_t i = xcb_screen_allowed_depths_iterator(screen); i.rem; xcb_depth_next(&i))
+    for (xcb_visualtype_iterator_t j = xcb_depth_visuals_iterator(i.data); j.rem; xcb_visualtype_next(&j))
+      if (screen->root_visual == j.data->visual_id) {
+        visual_type = j.data;
+        return;
+      }
 }
 
 cairo_surface_t* backend_create_surface(int width, int height) {
@@ -45,7 +39,7 @@ static void set_delete_window_atom() {
 	xcb_intern_atom_cookie_t cookie = xcb_intern_atom(connection, 1, 12, "WM_PROTOCOLS");
 	xcb_intern_atom_reply_t* reply = xcb_intern_atom_reply(connection, cookie, &error);
 	if (!reply) {
-		warnx("xcb.set.del.atom: WM_PROTOCOLS error %d", error->error_code);
+		WARNX_("WM_PROTOCOLS error %d", error->error_code);
 		free(error);
 		return;
 	}
@@ -56,14 +50,14 @@ static void set_delete_window_atom() {
 		delete_window_atom = (*reply2).atom;
 		free(reply2);
 	} else {
-		warnx("xcb.set.del.atom: WM_DELETE_WINDOW error %d", error->error_code);
+		WARNX_("WM_DELETE_WINDOW error %d", error->error_code);
 		free(error);
 	}
 	free(reply);
 }
 
 #define DISCONN_AND_RETURN(msg) { \
-	warnx("%s: error code %d", msg, error->error_code); \
+	WARNX_("%s: error code %d", msg, error->error_code); \
 	free(error); \
 	xcb_destroy_window(connection, window); \
 	xcb_disconnect(connection); \
@@ -76,17 +70,15 @@ bool backend_create_window(cairo_rectangle_int_t *rectangle, frontend_resize_t f
 	int screen_no;
 	connection = xcb_connect(NULL, &screen_no);
 	if (xcb_connection_has_error(connection)) {
-		warnx("xcb.backend.create.window: %s", "can't connect to an X server");
+		WARNX("Cannot connect to X server");
 		return false;
 	}
 
 	const xcb_setup_t *setup = xcb_get_setup(connection);
 	screen = NULL;
-	xcb_screen_iterator_t screen_iter;
-	for (screen_iter = xcb_setup_roots_iterator(setup); screen_iter.rem != 0;
-		--screen_no, xcb_screen_next(&screen_iter))
+	for (xcb_screen_iterator_t i = xcb_setup_roots_iterator(setup); i.rem; --screen_no, xcb_screen_next(&i))
 		if (screen_no == 0) {
-			screen = screen_iter.data;
+			screen = i.data;
 			break;
 		}
 
@@ -103,25 +95,25 @@ bool backend_create_window(cairo_rectangle_int_t *rectangle, frontend_resize_t f
 		XCB_WINDOW_CLASS_INPUT_OUTPUT, screen->root_visual, mask, values);
 	error = xcb_request_check(connection, cookie);
 	if (error)
-		DISCONN_AND_RETURN("xcb.backend.create.window: can't create window");
+		DISCONN_AND_RETURN("Cannot create window");
 
 	cookie = xcb_map_window_checked(connection, window);
 	error = xcb_request_check(connection, cookie);
 	if (error)
-		DISCONN_AND_RETURN("xcb.backend.create.window: can't map window");
+		DISCONN_AND_RETURN("Cannot map window");
 
 	set_delete_window_atom();
 
 	xcb_flush(connection);
 	if (xcb_connection_has_error(connection)) {
-		warnx("xcb.backend.create.window failed: %s", "connection has errors");
+		WARNX("Connection has errors");
 		return false;
 	}
 
 	while (1) {
 		xcb_generic_event_t *ev = xcb_wait_for_event(connection);
 		if (!ev) {
-			warnx("xcb.backend.create.window failed: %s", "xcb_wait_for_event()");
+			WARNX("Event wait failed");
 			return false;
 		}
 		uint8_t type = ev->response_type;

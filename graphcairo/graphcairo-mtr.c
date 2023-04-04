@@ -1,9 +1,8 @@
 
-#include <stdbool.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
-#include <err.h>
 #include <sys/time.h>
 
 #include "config.h"
@@ -23,6 +22,10 @@
 #include "ipinfo.h"
 #endif
 #include "display.h"
+#include "macros.h"
+
+// set GCDEBUG (output to console)
+#define GCDEBUG
 #include "graphcairo.h"
 
 #define GC_ARGS_SEP	','
@@ -73,37 +76,36 @@ enum {
 static char legend_hd[LEGEND_HD_NO][HOSTSTAT_LEN];
 
 bool gc_open(void) {
-	if ((data = malloc(maxTTL * sizeof(int))))
-		memset(data, -1, maxTTL * sizeof(int));
-	else {
-		warn("gc.open: malloc(%zd)", maxTTL * sizeof(int));
-		return false;
-	}
+  size_t data_sz = maxTTL * sizeof(int);
+  data = malloc(data_sz);
+  if (!data) {
+    WARN_("malloc(%zd)", data_sz);
+    return false;
+  }
+  memset(data, -1, data_sz);
 
-	timeout = POS_ROUND(wait_time * USECONDS);
-	gettimeofday(&lasttime, NULL);
+  timeout = POS_ROUND(wait_time * USECONDS);
+  gettimeofday(&lasttime, NULL);
 
-	params.graph_type = (args[ARG_GRAPH_TYPE] > 0) ? args[ARG_GRAPH_TYPE] : 0;
-	params.period = (args[ARG_PERIOD] > 0) ? args[ARG_PERIOD] : 0;
-	params.enable_legend = args[ARG_LEGEND] ? true : false;
-	params.enable_multipath = (args[ARG_MULTIPATH] > 0) ? true : false;
-	params.jitter_graph = (args[ARG_JITTER_GRAPH] > 0);
-	params.cols_max = SAVED_PINGS;
-	params.path_max = MAXPATH;
-	params.label_max = MAXLABELS;
+  params.graph_type = (args[ARG_GRAPH_TYPE] > 0) ? args[ARG_GRAPH_TYPE] : 0;
+  params.period = (args[ARG_PERIOD] > 0) ? args[ARG_PERIOD] : 0;
+  params.enable_legend = args[ARG_LEGEND] ? true : false;
+  params.enable_multipath = (args[ARG_MULTIPATH] > 0) ? true : false;
+  params.jitter_graph = (args[ARG_JITTER_GRAPH] > 0);
+  params.cols_max = SAVED_PINGS;
+  params.path_max = MAXPATH;
+  params.label_max = MAXLABELS;
 
-	if (!cr_open(&params))
-		return false;
-
-	if (params.enable_legend) {
-		if (params.jitter_graph)
-			strcpy((char*)fld_active, FLD_ACTIVE_JITTER);
-		mtr_curses_data_fields(legend_hd[LEGEND_HEADER_STATIC]);
-		curses_cols = cr_recalc(hostinfo_max);
-		mtr_curses_init();
-	}
-
-	return true;
+  if (!cr_open(&params))
+    return false;
+  if (params.enable_legend) {
+    if (params.jitter_graph)
+      strcpy((char*)fld_active, FLD_ACTIVE_JITTER);
+    mtr_curses_data_fields(legend_hd[LEGEND_HEADER_STATIC]);
+    curses_cols = cr_recalc(hostinfo_max);
+    mtr_curses_init();
+  }
+  return true;
 }
 
 void gc_close(void) {
@@ -124,9 +126,7 @@ void gc_parsearg(char* arg) {
 			args[i++] = (*p) ? atoi(p) : -1;
 		free(h);
 	}
-
-	int j;
-	for (j = i; j < GC_ARGS_MAX; j++)
+	for (int j = i; j < GC_ARGS_MAX; j++)
 		args[j] = -1;
 }
 
@@ -135,7 +135,7 @@ static void fill_hostinfo(int at, int ndx) {
 	char *p = buf;
 	ip_t *addr = &IP_AT_NDX(at, ndx);
 #ifdef IPINFO
-	if (ii_ready()) {
+	if (ipinfo_ready()) {
 		int sz = 2 * STARTSTAT;
 		int l = snprintf(p, sz, "%s", fmt_ipinfo(at, ndx));
 		if (l < 0) sz = 0;
@@ -189,7 +189,7 @@ static void gc_keyaction(int c) {
 				if (display_offset >= hops)
 					display_offset = hops - 1;
 				hostinfo_max = 0;
-				GCDEBUG_MSG("display_offset=%d\n", display_offset);
+				GCMSG_("display_offset=%d\n", display_offset);
 			} break;
 			case '-': {	// ScrollUp
 				int rest = display_offset % 5;
@@ -200,18 +200,18 @@ static void gc_keyaction(int c) {
 				if (display_offset < 0)
 					display_offset = 0;
 				hostinfo_max = 0;
-				GCDEBUG_MSG("display_offset=%d\n", display_offset);
+				GCMSG_("display_offset=%d\n", display_offset);
 			} break;
 #ifdef IPINFO
 			case 'y':	// IP Info
-				ii_action(ActionII);
+				ipinfo_action(ActionII);
 				hostinfo_max = 0;
-				GCDEBUG_MSG("%s", "switching ip info\n");
+				GCMSG("switching ip info\n");
 				break;
 			case 'z':	// ASN
-				ii_action(ActionAS);
+				ipinfo_action(ActionAS);
 				hostinfo_max = 0;
-				GCDEBUG_MSG("%s", "toggle asn info\n");
+				GCMSG("toggle asn info\n");
 				break;
 #endif
 		}
@@ -221,11 +221,11 @@ static void gc_keyaction(int c) {
 				if (curses_mode)
 					curses_cols = cr_recalc(hostinfo_max);
 				pr_lastd();
-				GCDEBUG_MSG("curses_mode=%d\n", curses_mode);
+				GCMSG_("curses_mode=%d\n", curses_mode);
 				break;
 			case 'e':	// MPLS
 				enable_mpls = !enable_mpls;
-				GCDEBUG_MSG("enable_mpls=%d\n", enable_mpls);
+				GCMSG_("enable_mpls=%d\n", enable_mpls);
 				break;
 			case 'j':
 				if (index((char*)fld_active, 'N'))
@@ -233,12 +233,12 @@ static void gc_keyaction(int c) {
 				else
 					strcpy((char*)fld_active, FLD_ACTIVE_DEFAULT);
 				mtr_curses_data_fields(legend_hd[LEGEND_HEADER_STATIC]);
-				GCDEBUG_MSG("%s", "toggle latency(default)/jitter stats\n");
+				GCMSG("toggle latency/jitter stats\n");
 				break;
 			case 'n':	// DNS
 				enable_dns = !enable_dns;
 				hostinfo_max = 0;
-				GCDEBUG_MSG("enable_dns=%d\n", enable_dns);
+				GCMSG_("enable_dns=%d\n", enable_dns);
 				break;
 		}
 	}
@@ -246,41 +246,41 @@ static void gc_keyaction(int c) {
 	switch (c) {
 		case 'q':	// Quit
 			gc_close();
-			GCDEBUG_MSG("%s", "close\n");
+			GCMSG("close\n");
 			exit(EXIT_SUCCESS);
 		case ' ':	// Resume
 			paused = false;
 			cr_net_reset(1);
-			GCDEBUG_MSG("%s", "...resume\n");
+			GCMSG("...resume\n");
 			break;
 	}
 	switch (tolower(c)) {
 		case 'p':	// Pause
 			paused = true;
-			GCDEBUG_MSG("%s", "pause...\n");
+			GCMSG("pause...\n");
 			break;
 		case 'r':	// Reset
 			net_reset();
 			cr_net_reset(0);
 			num_pings = 0;
-			GCDEBUG_MSG("%s", "net reset\n");
+			GCMSG("net reset\n");
 			break;
 		case 't':	// TCP on/off
 			if (mtrtype == IPPROTO_TCP) {
 				mtrtype = IPPROTO_ICMP;
-				GCDEBUG_MSG("%s", "icmp_echo packets\n");
+				GCMSG("icmp_echo packets\n");
 			} else if (net_tcp_init()) {
 				mtrtype = IPPROTO_TCP;
-				GCDEBUG_MSG("%s", "tcp_syn packets\n");
+				GCMSG("tcp_syn packets\n");
 			}
 			break;
 		case 'u':	// UDP on/off
 			if (mtrtype == IPPROTO_UDP) {
 				mtrtype = IPPROTO_ICMP;
-				GCDEBUG_MSG("%s", "icmp_echo packets\n");
+				GCMSG("icmp_echo packets\n");
 			} else {
 				mtrtype = IPPROTO_UDP;
-				GCDEBUG_MSG("%s", "udp datagrams\n");
+				GCMSG("udp datagrams\n");
 			}
 			break;
 	}
@@ -369,8 +369,7 @@ void gc_redraw(void) {
 					char *pos = stat;
 #ifdef UNICODE
 					if (curses_mode == 3) {
-						int j;
-						for (j = SAVED_PINGS - curses_cols; j < SAVED_PINGS; j++) {
+						for (int j = SAVED_PINGS - curses_cols; j < SAVED_PINGS; j++) {
 							*(wchar_t*)pos = mtr_curses_saved_wch(host[at].saved[j]);
 							pos += sizeof(wchar_t);
 						}
@@ -378,8 +377,7 @@ void gc_redraw(void) {
 					} else
 #endif
 					{
-						int j;
-						for (j = SAVED_PINGS - curses_cols; j < SAVED_PINGS; j++)
+						for (int j = SAVED_PINGS - curses_cols; j < SAVED_PINGS; j++)
 							*pos++ = mtr_curses_saved_ch(host[at].saved[j]);
 						*pos = 0;
 					}

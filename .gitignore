@@ -17,6 +17,7 @@ compile
 install-sh
 missing
 stamp-h1*
+ar-lib
 
 /autom4te.cache/
 **/.deps/

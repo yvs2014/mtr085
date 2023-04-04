@@ -1,13 +1,10 @@
 
 #include <math.h>
-#include <err.h>
 #include <sys/time.h>
 #include <cairo.h>
 #include <pango/pangocairo.h>
 
 #include "config.h"
-#include "mtr.h"
-#include "net.h"
 
 #ifdef UNICODE
 #ifdef HAVE_WCHAR_H
@@ -19,38 +16,30 @@
 #include <fontconfig/fontconfig.h>
 #endif
 
+#include "mtr.h"
+#include "net.h"
 #include "graphcairo.h"
 #include "graphcairo-backend.h"
+#include "macros.h"
 
-/*
-  Cairo backends:
-  - X11 XCB
-  - X11 Xlib
-*/
+// Cairo backends: XCB or Xlib
 #ifndef GRAPHCAIRO_XCB
 #ifndef GRAPHCAIRO_XLIB
 #error "No cairo backend defined"
 #endif
 #endif
 
-enum {
-	CR_BASE,
-	CR_WORK,
-	CR_GRID,
-	CR_LGND,
-	CR_LAYR,
-	CR_TEMP
-};
-#define CAIRO_SURFACES	6
+enum { BASE, WORK, GRID, LEGEND, LAYER, TEMP };
+#define SKINS	6
 
 typedef struct {
-	cairo_t *cairo;
-	cairo_surface_t *surface;
-	cairo_rectangle_int_t *rectangle;
-	PangoLayout *pango;
-	PangoFontDescription *font_desc;
-} cairos_t;
-static cairos_t cairos[CAIRO_SURFACES];
+  cairo_t *cairo;
+  cairo_surface_t *surface;
+  cairo_rectangle_int_t *rect;
+  PangoLayout *pango;
+  PangoFontDescription *font;
+} skin_t;
+static skin_t skins[SKINS];
 
 enum {
 	GRAPHTYPE_NONE,
@@ -89,7 +78,7 @@ static cr_params_t *params;
 
 #define SPLINE_POINTS	4
 static int x_point[SPLINE_POINTS];
-static int *y_point[SPLINE_POINTS];
+static int* y_point[SPLINE_POINTS];
 typedef struct {
 	long long data;
 	int count;
@@ -111,7 +100,7 @@ static int hops, first_hop;
 static int x_point_in_usec;
 static int action;
 static int tm_fmt;
-static struct timeval lasttime;
+static struct timeval last;
 
 typedef struct {
 	int hop_x;
@@ -154,106 +143,96 @@ static double cr_colors[][3] = { // 128 g.e. default ttl in various systems
 static int cr_colors_max = sizeof(cr_colors) / sizeof(cr_colors[0]);
 
 
-static bool cr_status_ok(cairo_t *cr, char *s) {
-	int status = cairo_status(cr);
-	if (status)
-		warnx("cr.status: %s failed: %s", s, cairo_status_to_string(status));
-	return status ? false : true;
+static bool status(cairo_t *c, const char *fn) {
+  int rc = cairo_status(c);
+  if (rc)
+    WARNX_("%s: %s", fn, cairo_status_to_string(rc));
+  return rc ? false : true;
 }
 
-static void swap_cairos(int ndx1, int ndx2) {
-	cairos_t cairos_temp = cairos[ndx1];
-	cairos[ndx1] = cairos[ndx2];
-	cairos[ndx2] = cairos_temp;
+static inline void swap(int a, int b) { skin_t t = skins[a]; skins[a] = skins[b]; skins[b] = t; }
+
+static bool clone(int from, int to, cairo_rectangle_int_t *r) {
+  skin_t *dst = &skins[to];
+  cairo_surface_t *src = (from < 0) ? NULL : skins[from].surface;
+  cairo_surface_t *surface = src
+    ? cairo_surface_create_similar(src, CAIRO_CONTENT_COLOR_ALPHA, r->width, r->height)
+    : backend_create_surface(r->width, r->height);
+  if (!surface) {
+    WARNX("surface creation failed");
+    return false;
+  }
+  cairo_t *cairo = cairo_create(surface);
+  bool re = status(cairo, __FUNCTION__);
+  if (re) {
+    dst->rect = r;
+    if (dst->surface)
+      cairo_surface_destroy(dst->surface);
+    dst->surface = surface;
+    if (dst->cairo)
+      cairo_destroy(dst->cairo);
+    dst->cairo = cairo;
+  } else
+    cairo_surface_destroy(surface);
+  return re;
 }
 
-static bool cr_create_similar(int ndx, int similar, cairo_rectangle_int_t *r) {
-	cairos[ndx].rectangle = r;
-	if (cairos[ndx].cairo) {
-		cairo_destroy(cairos[ndx].cairo);
-		cairos[ndx].cairo = NULL;
-	}
-	if (cairos[ndx].surface) {
-		cairo_surface_destroy(cairos[ndx].surface);
-		cairos[ndx].surface = NULL;
-	}
-
-	if (similar >= 0)
-		cairos[ndx].surface = cairo_surface_create_similar(cairos[similar].surface,
-			CAIRO_CONTENT_COLOR_ALPHA, r->width, r->height);
-	else
-		cairos[ndx].surface = backend_create_surface(r->width, r->height);
-
-	if (!cairos[ndx].surface) {
-		warnx("cr.create.similar: %s", "surface creation failed");
-		return false;
-	}
-	cairos[ndx].cairo = cairo_create(cairos[ndx].surface);
-	return cr_status_ok(cairos[ndx].cairo, "create.similar");
+static bool create_surfaces(int save) {
+  if (save)
+    swap(WORK, TEMP);
+  if (!clone(-1, BASE, &base_window))
+    return false;
+  cairo_set_source_rgb(skins[BASE].cairo, 1, 1, 1);
+  cairo_paint(skins[BASE].cairo);
+  if (!clone(BASE, WORK, &vp))
+    return false;
+  if (!clone(BASE, GRID, &grid))
+    return false;
+  if (params->enable_legend && !clone(BASE, LEGEND, &legend))
+    return false;
+  if ((params->graph_type == GRAPHTYPE_CURVE) && !clone(BASE, LAYER, &vp_layer))
+    return false;
+  if (!save && !clone(BASE, TEMP, &vp))
+    return false;
+  return true;
 }
 
-static bool cr_recreate_surfaces(int save) {
-	if (save)
-		swap_cairos(CR_WORK, CR_TEMP);
-	if (cr_create_similar(CR_BASE, -1, &base_window)) {
-		cairo_set_source_rgb(cairos[CR_BASE].cairo, 1, 1, 1);
-		cairo_paint(cairos[CR_BASE].cairo);
-	} else {
-		warnx("cr.create.similar [%s]: failed", "CR_BASE, -1");
-		return false;
-	}
-	if (!cr_create_similar(CR_WORK, CR_BASE, &vp)) {
-		warnx("cr.create.similar [%s]: failed", "CR_WORK, CR_BASE");
-		return false;
-	}
-	if (!cr_create_similar(CR_GRID, CR_BASE, &grid)) {
-		warnx("cr.create.similar [%s]: failed", "CR_GRID, CR_BASE");
-		return false;
-	}
-	if (params->enable_legend && !cr_create_similar(CR_LGND, CR_BASE, &legend)) {
-		warnx("cr.create.similar [%s]: failed", "CR_LGND, CR_BASE");
-		return false;
-	}
-	if ((params->graph_type == GRAPHTYPE_CURVE) && !cr_create_similar(CR_LAYR, CR_BASE, &vp_layer)) {
-		warnx("cr.create.similar [%s]: failed", "CR_LAYR, CR_BASE");
-		return false;
-	}
-	if (!save && !cr_create_similar(CR_TEMP, CR_BASE, &vp)) {
-		warnx("cr.create.similar [%s]: failed", "CR_TEMP, CR_BASE");
-		return false;
-	}
-	return true;
+static bool paint_on_base(int ndx) {
+  skin_t *src = &skins[ndx];
+  cairo_t *dst = skins[BASE].cairo;
+  cairo_set_source_surface(dst, src->surface, src->rect->x, src->rect->y);
+  cairo_rectangle(dst, src->rect->x, src->rect->y, src->rect->width, src->rect->height);
+  cairo_fill(dst);
+  return status(dst, __FUNCTION__);
 }
 
-static bool cr_fill_base(int src) {
-	cairo_t *dst = cairos[CR_BASE].cairo;
-	cairo_set_source_surface(dst, cairos[src].surface, cairos[src].rectangle->x, cairos[src].rectangle->y);
-	cairo_rectangle(dst, cairos[src].rectangle->x, cairos[src].rectangle->y,
-		cairos[src].rectangle->width, cairos[src].rectangle->height);
-	cairo_fill(dst);
-	return cr_status_ok(dst, "cr_fill_base()");
+static void paint(void) {
+  paint_on_base(WORK);
+  if (params->graph_type == GRAPHTYPE_CURVE) paint_on_base(LAYER);
+  paint_on_base(GRID);
+  if (params->enable_legend) paint_on_base(LEGEND);
+  backend_flush();
 }
 
-static void cr_paint(void) {
-	cr_fill_base(CR_WORK);
-	if (params->graph_type == GRAPHTYPE_CURVE)
-		cr_fill_base(CR_LAYR);
-	cr_fill_base(CR_GRID);
-	if (params->enable_legend)
-		cr_fill_base(CR_LGND);
-	backend_flush();
-}
-
-static bool cr_pango_open(int ndx) {
-	static char *font_family = "monospace";
-	if (!(cairos[ndx].font_desc = pango_font_description_new()))
-		return false;
-	pango_font_description_set_family(cairos[ndx].font_desc, font_family);
-	pango_font_description_set_absolute_size(cairos[ndx].font_desc, font_size * PANGO_SCALE);
-	if (!(cairos[ndx].pango = pango_cairo_create_layout(cairos[ndx].cairo)))
-		return false;
-	pango_layout_set_font_description(cairos[ndx].pango, cairos[ndx].font_desc);
-	return true;
+static bool set_pango(int ndx) {
+  static char *font_family = "monospace";
+  PangoFontDescription *font = pango_font_description_new();
+  if (!font) {
+    WARNX("Cannot allocate new pango font");
+    return false;
+  }
+  pango_font_description_set_family(font, font_family);
+  pango_font_description_set_absolute_size(font, font_size * PANGO_SCALE);
+  PangoLayout *layout = pango_cairo_create_layout(skins[ndx].cairo);
+  if (!layout) {
+    WARNX("Cannot create pango layout");
+    pango_font_description_free(font);
+    return false;
+  }
+  pango_layout_set_font_description(layout, font);
+  skins[ndx].font = font;
+  skins[ndx].pango = layout;
+  return true;
 }
 
 static void set_viewport_params() {
@@ -325,8 +304,8 @@ static void set_viewport_params() {
 }
 
 static void draw_grid(void) {
-	cairo_t *cr = cairos[CR_GRID].cairo;
-	PangoLayout *pl = cairos[CR_GRID].pango;
+	cairo_t *cr = skins[GRID].cairo;
+	PangoLayout *pl = skins[GRID].pango;
 
 	// x-axis, y-axis
 	cairo_set_source_rgb(cr, 0, 0, 0);
@@ -379,8 +358,8 @@ static void draw_grid(void) {
 	}
 
 	// plus axis labels
-	cr = cairos[CR_BASE].cairo;
-	pl = cairos[CR_BASE].pango;
+	cr = skins[BASE].cairo;
+	pl = skins[BASE].pango;
 
 	cairo_set_source_rgb(cr, 1, 1, 1);
 	int xl_x = vp.x + vp.width + tick_size * 2;
@@ -411,7 +390,7 @@ static void draw_grid(void) {
 }
 
 static void scale_viewport(void) {
-	cairo_t *cr = cairos[CR_TEMP].cairo;
+	cairo_t *cr = skins[TEMP].cairo;
 	cairo_save(cr);
 	cairo_set_source_rgb(cr, 1, 1, 1);
 	cairo_paint(cr);
@@ -420,10 +399,10 @@ static void scale_viewport(void) {
 	cairo_matrix_t m;
 	cairo_matrix_init(&m, 1, 0, 0, sy, 0, vp.height * (1 - sy));
 	cairo_transform(cr, &m);
-	cairo_set_source_surface(cr, cairos[CR_WORK].surface, 0, 0);
+	cairo_set_source_surface(cr, skins[WORK].surface, 0, 0);
 	cairo_paint(cr);
 	cairo_restore(cr);
-	swap_cairos(CR_WORK, CR_TEMP);
+	swap(WORK, TEMP);
 }
 
 static int data_scale(int data) {
@@ -445,67 +424,64 @@ static void draw_dot(cairo_t *cr, int i, int x0, int y0) {
 	cairo_stroke(cr);
 }
 
-static void draw_line(cairo_t *cr, int i, int x0, int y0, int x1, int y1) {
-	set_source_rgb_func(cr, i);
-	cairo_move_to(cr, x0, y0);
-	cairo_line_to(cr, x1, y1);
-	cairo_stroke(cr);
+static void draw_line(cairo_t *c, int i, int x0, int y0, int x1, int y1) {
+  set_source_rgb_func(c, i);
+  cairo_move_to(c, x0, y0);
+  cairo_line_to(c, x1, y1);
+  cairo_stroke(c);
 }
 
-static void graph_dot(cairo_t *cr) {
-	cairo_save(cr);
-	cairo_set_line_cap(cr, CAIRO_LINE_CAP_ROUND);
-	cairo_set_line_width(cr, DOT_SIZE);
-	int x0 = x_point[0];
-	int i;
-	for (i = display_offset; i < hops; i++) {
-		int y0 = y_point[0][i];
-		if (y0)
-			draw_dot(cr, i, x0, y0);
-	}
-	cairo_restore(cr);
+static void graph_dot(cairo_t *c) {
+  cairo_save(c);
+  cairo_set_line_cap(c, CAIRO_LINE_CAP_ROUND);
+  cairo_set_line_width(c, DOT_SIZE);
+  int x0 = x_point[0];
+  for (int i = display_offset; i < hops; i++) {
+    int y0 = y_point[0][i];
+    if (y0)
+      draw_dot(c, i, x0, y0);
+  }
+  cairo_restore(c);
 }
 
-static void graph_line(cairo_t *cr) {
-	int x0 = x_point[0];
-	int x1 = x_point[1];
-	int i;
-	for (i = display_offset; i < hops; i++) {
-		int y0 = y_point[0][i];
-		int y1 = y_point[1][i];
-		if (y0 && y1)
-			draw_line(cr, i, x0, y0, x1, y1);
-		else if (y1) {
-			cairo_save(cr);
-			cairo_set_line_cap(cr, CAIRO_LINE_CAP_ROUND);
-			cairo_set_line_width(cr, DOT_SIZE);
-			draw_dot(cr, i, x1, y1);
-			cairo_restore(cr);
-		}
-	}
-	int *tmp = y_point[1];
-	y_point[1] = y_point[0];
-	y_point[0] = tmp;
+static void graph_line(cairo_t *c) {
+  int x0 = x_point[0];
+  int x1 = x_point[1];
+  for (int i = display_offset; i < hops; i++) {
+    int y0 = y_point[0][i];
+    int y1 = y_point[1][i];
+    if (y0 && y1)
+      draw_line(c, i, x0, y0, x1, y1);
+    else if (y1) {
+      cairo_save(c);
+      cairo_set_line_cap(c, CAIRO_LINE_CAP_ROUND);
+      cairo_set_line_width(c, DOT_SIZE);
+      draw_dot(c, i, x1, y1);
+      cairo_restore(c);
+    }
+  }
+  int *t = y_point[1];
+  y_point[1] = y_point[0];
+  y_point[0] = t;
 }
 
 static double distance(int x0, int y0, int x1, int y1) {
-	int dx1 = x1 - x0; int dy1 = y1 - y0;
-	return sqrt(dx1 * dx1 + dy1 * dy1);
+  int dx1 = x1 - x0; int dy1 = y1 - y0;
+  return sqrt(dx1 * dx1 + dy1 * dy1);
 }
 
 static int centripetal(double d1, double q1, double d2, double q2, int p0, int p1, int p2) {
-	double b = (d1*p0 - d2*p1 + (2*d1 + 3*q1*q2 + d2)*p2) / (3*q1*(q1 + q2));
-	return POS_ROUND(b);
+  double b = (d1*p0 - d2*p1 + (2*d1 + 3*q1*q2 + d2)*p2) / (3*q1*(q1 + q2));
+  return POS_ROUND(b);
 }
 
-static void graph_curve(cairo_t *cr) {
+static void graph_curve(cairo_t *c) {
 	int x3 = x_point[0];
 	int x2 = x_point[1];
 	int x1 = x_point[2];
 	int x0 = x_point[3];
 
-	int i;
-	for (i = display_offset; i < hops; i++) {
+	for (int i = display_offset; i < hops; i++) {
 		int y3 = y_point[0][i];
 		int y2 = y_point[1][i];
 		int y1 = y_point[2][i];
@@ -547,35 +523,35 @@ b2 = ---------------------------------------------------
 				by = y2 - (y3 - y1) / 6;
 			}
 
-			set_source_rgb_func(cr, i);
-			cairo_move_to(cr, x1, y1);
-			cairo_curve_to(cr, ax, ay, bx, by, x2, y2);
-//			cairo_line_to(cr, x3, y3);
-			cairo_stroke(cr);
+			set_source_rgb_func(c, i);
+			cairo_move_to(c, x1, y1);
+			cairo_curve_to(c, ax, ay, bx, by, x2, y2);
+//			cairo_line_to(c, x3, y3);
+			cairo_stroke(c);
 		} else if (y1 && y2)
-			draw_line(cr, i, x1, y1, x2, y2);
+			draw_line(c, i, x1, y1, x2, y2);
 		else if (y2) {
-			cairo_save(cr);
-			cairo_set_line_cap(cr, CAIRO_LINE_CAP_ROUND);
-			cairo_set_line_width(cr, DOT_SIZE);
-			draw_dot(cr, i, x2, y2);
-			cairo_restore(cr);
+			cairo_save(c);
+			cairo_set_line_cap(c, CAIRO_LINE_CAP_ROUND);
+			cairo_set_line_width(c, DOT_SIZE);
+			draw_dot(c, i, x2, y2);
+			cairo_restore(c);
 		}
 
 		if (y2 && y3) {
-			cairo_t *cl = cairos[CR_LAYR].cairo;
-			set_source_rgb_func(cl, i);
-			cairo_move_to(cl, 0, y2);
-			cairo_line_to(cl, x3 - x2, y3);
-			cairo_stroke(cl);
+			cairo_t *layer = skins[LAYER].cairo;
+			set_source_rgb_func(layer, i);
+			cairo_move_to(layer, 0, y2);
+			cairo_line_to(layer, x3 - x2, y3);
+			cairo_stroke(layer);
 		}
 	}
 
-	int *tmp = y_point[3];
+	int *t = y_point[3];
 	y_point[3] = y_point[2];
 	y_point[2] = y_point[1];
 	y_point[1] = y_point[0];
-	y_point[0] = tmp;
+	y_point[0] = t;
 }
 
 #ifdef UNICODE
@@ -584,8 +560,8 @@ static void print_legend_desc(int x, int y, char *desc, int desc_max, bool is_wi
 static void print_legend_desc(int x, int y, char *desc, int desc_max) {
 #endif
 	if (desc) {
-		cairo_t *cr = cairos[CR_LGND].cairo;
-		PangoLayout *pl = cairos[CR_LGND].pango;
+		cairo_t *cr = skins[LEGEND].cairo;
+		PangoLayout *pl = skins[LEGEND].pango;
 
 		char *s;
 #ifdef UNICODE
@@ -628,7 +604,7 @@ static void print_legend_desc(int x, int y, char *desc, int desc_max) {
 
 int cr_recalc(int hostinfo_max) {
 	int w, h;
-	PangoLayout *pl = cairos[CR_LGND].pango;
+	PangoLayout *pl = skins[LEGEND].pango;
 	pango_layout_set_text(pl, ".", -1);
 	pango_layout_get_pixel_size(pl, &w, &h);
 	coords.dy = (h * 3) / 2;
@@ -649,7 +625,7 @@ int cr_recalc(int hostinfo_max) {
 void cr_init_legend(void) {
 	coords.text_y = coords.dy;
 	coords.line_y = coords.text_y + font_size / 2 + 1;
-	cairo_t *cr = cairos[CR_LGND].cairo;
+	cairo_t *cr = skins[LEGEND].cairo;
 	cairo_set_source_rgb(cr, 1, 1, 1);
 	cairo_paint(cr);
 }
@@ -673,8 +649,8 @@ void cr_print_legend_footer(char *footer) {
 void cr_print_hop(int at) {
 	if (at < display_offset)
 		return;
-	cairo_t *cr = cairos[CR_LGND].cairo;
-	PangoLayout *pl = cairos[CR_LGND].pango;
+	cairo_t *cr = skins[LEGEND].cairo;
+	PangoLayout *pl = skins[LEGEND].pango;
 
 	// line
 	set_source_rgb_func(cr, at);
@@ -695,8 +671,8 @@ void cr_print_host(int at, int data, char *host, char *stat) {
 	if (at < display_offset)
 		return;
 
-	cairo_t *cr = cairos[CR_LGND].cairo;
-	PangoLayout *pl = cairos[CR_LGND].pango;
+	cairo_t *cr = skins[LEGEND].cairo;
+	PangoLayout *pl = skins[LEGEND].pango;
 	if (data < 0)
 		cairo_set_source_rgb(cr, 1, 0, 0);
 	else
@@ -743,20 +719,14 @@ void cr_print_host(int at, int data, char *host, char *stat) {
 }
 
 static void rescale(int max) {
-	datamax_prev = datamax;
-	datamax = max + DATAMAX;
-	draw_grid();
-	scale_viewport();
-
-	int i;
-	for (i = 0; i < SPLINE_POINTS; i++) {
-		int j;
-		for (j = 0; j < hops; j++)
-			if (y_point[i][j]) {
-				double dy = ((double)(vp.height - y_point[i][j]) * datamax_prev) / datamax;
-				y_point[i][j] = vp.height - POS_ROUND(dy);
-			}
-	}
+  datamax_prev = datamax;
+  datamax = max + DATAMAX;
+  draw_grid();
+  scale_viewport();
+  for (int i = 0; i < SPLINE_POINTS; i++)
+    for (int j = 0; j < hops; j++)
+      if (y_point[i][j])
+        y_point[i][j] = vp.height - POS_ROUND(((double)(vp.height - y_point[i][j]) * datamax_prev) / datamax);
 }
 
 void cr_redraw(int *data) {
@@ -770,10 +740,10 @@ void cr_redraw(int *data) {
 	static int remaining_time;
 	struct timeval now, _tv;
 	gettimeofday(&now, NULL);
-	timersub(&now, &lasttime, &_tv);
+	timersub(&now, &last, &_tv);
 	time_t dt = timer2usec(&_tv);
 	int unclosed_dt = dt + remaining_time;
-	lasttime = now;
+	last = now;
 
 	cycle_period -= dt;
 	if (cycle_period < 0) {
@@ -787,8 +757,7 @@ void cr_redraw(int *data) {
 
 	if (dx) {	// work
 		// mean
-		int i;
-		for (i = 0; i < hops; i++)
+		for (int i = 0; i < hops; i++)
 			if (unclosed_data[i].count) {
 				if (data[i] >= 0)
 					data[i] = (data[i] + unclosed_data[i].data) / (unclosed_data[i].count + 1);
@@ -800,7 +769,7 @@ void cr_redraw(int *data) {
 
 		// max
 		int current_max = 0;
-		for (i = 0; i < hops; i++) {
+		for (int i = 0; i < hops; i++) {
 			int d = data[i];
 			if (d > current_max)
 				current_max = d;
@@ -813,11 +782,11 @@ void cr_redraw(int *data) {
 
 		// shift
 		if (dx < vp.width) {
-			cairo_t *cr = cairos[CR_TEMP].cairo;
-			cairo_set_source_surface(cr, cairos[CR_WORK].surface, -dx, 0);
+			cairo_t *cr = skins[TEMP].cairo;
+			cairo_set_source_surface(cr, skins[WORK].surface, -dx, 0);
 			cairo_rectangle(cr, 0, 0, vp.width - dx, vp.height);
 			cairo_fill(cr);
-			swap_cairos(CR_WORK, CR_TEMP);
+			swap(WORK, TEMP);
 		} else
 			dx = vp.width;
 
@@ -827,11 +796,11 @@ void cr_redraw(int *data) {
 			vp_layer.width = x_point[0] - x_point[1];
 			cl_dx += vp_layer.width;
 			vp_layer.x = vp.x + vp.width - vp_layer.width;
-			cairo_t *cr = cairos[CR_LAYR].cairo;
+			cairo_t *cr = skins[LAYER].cairo;
 			cairo_set_source_rgb(cr, 1, 1, 1);
 			cairo_paint(cr);
 		}
-		cairo_t *cr = cairos[CR_WORK].cairo;
+		cairo_t *cr = skins[WORK].cairo;
 		cairo_set_source_rgb(cr, 1, 1, 1);
 		cairo_rectangle(cr, vp.width - cl_dx, 0, cl_dx, vp.height);
 		cairo_fill(cr);
@@ -846,18 +815,16 @@ void cr_redraw(int *data) {
 		graph_func(cr);	// fill new area
 		f_repaint = true;
 	} else {	// accumulate
-		int i;
-		for (i = 0; i < hops; i++)
+		for (int i = 0; i < hops; i++)
 			if (data[i] >= 0) {
 				unclosed_data[i].data += data[i];
 				unclosed_data[i].count++;
 			}
 	}
 
-
 	if (unclosed_dt > USECONDS) {	// top: systime
-		cairo_t* cr = cairos[CR_BASE].cairo;
-		PangoLayout *pl = cairos[CR_BASE].pango;
+		cairo_t* cr = skins[BASE].cairo;
+		PangoLayout *pl = skins[BASE].pango;
 
 		pango_layout_set_width(pl, vp.width * PANGO_SCALE);
 		pango_layout_set_alignment(pl, PANGO_ALIGN_CENTER);
@@ -879,8 +846,8 @@ void cr_redraw(int *data) {
 		((tm_fmt == TM_MMSS) && (unclosed_dt > USECONDS)) ||
 		((tm_fmt == TM_HHMM) && (unclosed_dt > 60 * USECONDS))) {	// bottom: x-axis tick marks
 
-		cairo_t* cr = cairos[CR_BASE].cairo;
-		PangoLayout *pl = cairos[CR_BASE].pango;
+		cairo_t* cr = skins[BASE].cairo;
+		PangoLayout *pl = skins[BASE].pango;
 
 		cairo_set_source_rgb(cr, 1, 1, 1);
 		cairo_rectangle(cr, vp.x - coords.label_w / 2, vp.y + vp.height, vp.width + coords.label_w, 3 * font_size);
@@ -918,82 +885,74 @@ void cr_redraw(int *data) {
 	}
 
 	if (f_repaint)
-		cr_paint();
+		paint();
+}
+
+static void horizontal(cairo_t *c, double x, double w, cairo_surface_t *src, int dx) {
+  cairo_save(c);
+  src ? cairo_set_source_surface(c, src, dx, 0) : cairo_set_source_rgb(c, 1, 1, 1);
+  cairo_rectangle(c, x, 0, w, vp.height);
+  cairo_fill(c);
+  cairo_restore(c);
 }
 
 void cr_net_reset(int paused) {
-	cairo_t *cr;
-	int dx = vp.width;
+  if (!paused)
+    horizontal(skins[WORK].cairo, 0, vp.width, NULL, 0);
+  else {
+    struct timeval now;
+    gettimeofday(&now, NULL);
+    if ((now.tv_sec - last.tv_sec) < params->period) { // more precisely
+      struct timeval _tv;
+      timersub(&now, &last, &_tv);
+      int dx = timer2usec(&_tv) / x_point_in_usec;
+      horizontal(skins[TEMP].cairo, 0, vp.width - dx, skins[WORK].surface, -dx);
+      swap(WORK, TEMP);
+      horizontal(skins[WORK].cairo, vp.width - dx, dx, NULL, 0);
+    }
+  }
+  paint();
+  for (int i = 0; i < SPLINE_POINTS; i++)
+    memset(y_point[i], 0, maxTTL * sizeof(int));
+  memset(unclosed_data, 0, maxTTL * sizeof(unclosed_data_t));
+}
 
-	if (paused) {
-		struct timeval now;
-		gettimeofday(&now, NULL);
-		if ((now.tv_sec - lasttime.tv_sec) < params->period) { // more precisely
-			struct timeval _tv;
-			timersub(&now, &lasttime, &_tv);
-			dx = timer2usec(&_tv) / x_point_in_usec;
-			// shift
-			cairo_t *cr = cairos[CR_TEMP].cairo;
-			cairo_save(cr);
-			cairo_set_source_surface(cr, cairos[CR_WORK].surface, -dx, 0);
-			cairo_rectangle(cr, 0, 0, vp.width - dx, vp.height);
-			cairo_fill(cr);
-			cairo_restore(cr);
-			swap_cairos(CR_WORK, CR_TEMP);
-		}
-	}
-
-	cr = cairos[CR_WORK].cairo;
-	cairo_save(cr);
-	cairo_set_source_rgb(cr, 1, 1, 1);
-	cairo_rectangle(cr, vp.width - dx, 0, dx, vp.height);
-	cairo_fill(cr);
-	cairo_restore(cr);
-
-	cr_paint();
-
-	int i;
-	for (i = 0; i < SPLINE_POINTS; i++)
-		memset(y_point[i], 0, maxTTL * sizeof(int));
-
-	memset(unclosed_data, 0, maxTTL * sizeof(*unclosed_data));
+static void destroy_skin(skin_t *s) {
+  if (s->pango) {
+    g_object_unref(s->pango);
+    s->pango = NULL;
+  }
+  if (s->font) {
+    pango_font_description_free(s->font);
+    s->font = NULL;
+  }
+  if (s->cairo) {
+    cairo_destroy(s->cairo);
+    s->cairo = NULL;
+  }
+  if (s->surface) {
+    cairo_surface_destroy(s->surface);
+    s->surface = NULL;
+  }
 }
 
 void cr_close(void) {
-	if (unclosed_data)
-		free(unclosed_data);
-	for (int i = 0; i < SPLINE_POINTS; i++)
-		if (y_point[i])
-			free(y_point[i]);
-	for (int i = 0; i < CAIRO_SURFACES; i++) {
-		if ((i == CR_LGND) && !params->enable_legend)
-			continue;
-		if ((i == CR_LAYR) && (params->graph_type != GRAPHTYPE_CURVE))
-			continue;
-		if (cairos[i].pango) {
-			g_object_unref(cairos[i].pango);
-			cairos[i].pango = NULL;
-		}
-		if (cairos[i].font_desc) {
-			pango_font_description_free(cairos[i].font_desc);
-			cairos[i].font_desc = NULL;
-		}
-		if (cairos[i].cairo) {
-			cairo_destroy(cairos[i].cairo);
-			cairos[i].cairo = NULL;
-		}
-		if (cairos[i].surface) {
-			cairo_surface_destroy(cairos[i].surface);
-			cairos[i].surface = NULL;
-		}
-	}
-	backend_destroy_window();
-
+  if (unclosed_data)
+    free(unclosed_data);
+  for (int i = 0; i < SPLINE_POINTS; i++)
+    if (y_point[i])
+      free(y_point[i]);
+  for (int i = 0; i < SKINS; i++) {
+    if ((i == LEGEND) && !params->enable_legend) continue;
+    if ((i == LAYER) && (params->graph_type != GRAPHTYPE_CURVE)) continue;
+    destroy_skin(&skins[i]);
+  }
+  backend_destroy_window();
 // minimize memory-related complaints (libasan, valgrind)
-	pango_cairo_font_map_set_default(NULL);
-	cairo_debug_reset_static_data();
+  pango_cairo_font_map_set_default(NULL);
+  cairo_debug_reset_static_data();
 #ifdef FC_FINI
-	FcFini();
+  FcFini();
 #endif
 }
 
@@ -1001,11 +960,11 @@ static void cr_resize(int width, int height, int shift) {
 	if (((!base_window.width) || (!base_window.height)) ||
 		((base_window.width == width) && (base_window.height == height)))
 		return;
-	if (!cairos[CR_BASE].cairo)
+	if (!skins[BASE].cairo)
 		return;
-	GCDEBUG_MSG("%sresize: (%d, %d) => (%d, %d)\n", shift ? "shift+" : "", base_window.width, base_window.height, width, height);
+	GCMSG_("%sresize: (%d, %d) => (%d, %d)\n", shift ? "shift+" : "", base_window.width, base_window.height, width, height);
 	if (shift) {
-		GCDEBUG_MSG("legend: (%d, %d, %d, %d) => ", legend.x, legend.y, legend.width, legend.height);
+		GCMSG_("legend: (%d, %d, %d, %d) => ", legend.x, legend.y, legend.width, legend.height);
 		legend.width += width - base_window.width;
 		if (legend.width < 0)
 			legend.width = 0;
@@ -1013,7 +972,7 @@ static void cr_resize(int width, int height, int shift) {
 		legend.height += height - base_window.height;
 		if (legend.height < 0)
 			legend.height = 0;
-		GCDEBUG_MSG("(%d, %d, %d, %d)\n", legend.x, legend.y, legend.width, legend.height);
+		GCMSG_("(%d, %d, %d, %d)\n", legend.x, legend.y, legend.width, legend.height);
 		base_window.width = width;
 		base_window.height = height;
 		return;
@@ -1025,39 +984,37 @@ static void cr_resize(int width, int height, int shift) {
 		return;
 
 	set_viewport_params();
-	if (!cr_recreate_surfaces(1)) {
-		warnx("cr.resize: %s failed", "recreate.surfaces");
+	if (!create_surfaces(1)) {
+		WARNX("surface creation failed");
 		return;
 	}
-	int i;
-	for (i = 0; i < CAIRO_SURFACES; i++) {
-		if ((i == CR_LGND) && !params->enable_legend)
+	for (int i = 0; i < SKINS; i++) {
+		if ((i == LEGEND) && !params->enable_legend)
 			continue;
-		pango_font_description_set_absolute_size(cairos[i].font_desc, font_size * PANGO_SCALE);
+		pango_font_description_set_absolute_size(skins[i].font, font_size * PANGO_SCALE);
 	}
 
 	action = ACTION_RESIZE;
 
 	// workarea rescaling
-	cairo_t *cr = cairos[CR_WORK].cairo;
+	cairo_t *cr = skins[WORK].cairo;
 	cairo_save(cr);
 	cairo_matrix_t m;
 	cairo_matrix_init(&m, (double)vp.width / vp_prev.width, 0, 0,
 		(double)vp.height / vp_prev.height, 0, 0);
 	cairo_transform(cr, &m);
-	cairo_set_source_surface(cr, cairos[CR_TEMP].surface, 0, 0);
+	cairo_set_source_surface(cr, skins[TEMP].surface, 0, 0);
 	cairo_rectangle(cr, 0, 0, vp_prev.width, vp_prev.height);
 	cairo_fill(cr);
 	cairo_restore(cr);
 
 	// spline point recalculation
-	for (i = 0; i < SPLINE_POINTS; i++) {
+	for (int i = 0; i < SPLINE_POINTS; i++) {
 		double x = x_point[i];
 		double y = 0;
 		cairo_matrix_transform_point(&m, &x, &y);
 		x_point[i] = POS_ROUND(x);
-		int j;
-		for (j = 0; j < hops; j++)
+		for (int j = 0; j < hops; j++)
 			if (y_point[i][j]) {
 				x = 0;
 				y = y_point[i][j];
@@ -1067,88 +1024,80 @@ static void cr_resize(int width, int height, int shift) {
 	}
 	x_point[0] = vp.width;
 
-	if (!cr_create_similar(CR_TEMP, CR_BASE, &vp)) {
-		warnx("cr.resize: %s failed", "create.similar");
+	if (!clone(BASE, TEMP, &vp))
 		return;
-	}
 	draw_grid();
-	cr_paint();
+	paint();
 }
 
 bool cr_open(cr_params_t *cr_params) {
 	params = cr_params;
-	GCDEBUG_MSG("params: %s", "type=");
+	GCMSG_("params: %s", "type=");
 	switch (params->graph_type) {
 		case GRAPHTYPE_DOT:
 			graph_func = graph_dot;
-			GCDEBUG_MSG("%s", "dot");
+			GCMSG("dot");
 			break;
 		case GRAPHTYPE_LINE:
 			graph_func = graph_line;
-			GCDEBUG_MSG("%s", "line");
+			GCMSG("line");
 			break;
 		case GRAPHTYPE_CURVE:
 			graph_func = graph_curve;
-			GCDEBUG_MSG("%s", "curve");
+			GCMSG("curve");
 			break;
 		default:
 			params->graph_type = GRAPHTYPE_CURVE;
 			graph_func = graph_curve;
-			GCDEBUG_MSG("%s", "curve");
+			GCMSG("curve");
 	}
 
 	if (params->period)
 		params->period *= GRIDLINES;
 	else
 		params->period = VIEWPORT_TIMEPERIOD;
-	GCDEBUG_MSG(", period=%dsec", params->period);
+	GCMSG_(", period=%dsec", params->period);
 	tm_fmt = (params->period < 3600) ? TM_MMSS : TM_HHMM;
 
 	if (params->enable_legend)
 		base_window.height *= 1.6;
 
-	GCDEBUG_MSG(", legend=%d, multipath=%d, jitter_graph=%d\n", params->enable_legend, params->enable_multipath, params->jitter_graph);
+	GCMSG_(", legend=%d, multipath=%d, jitter_graph=%d\n", params->enable_legend, params->enable_multipath, params->jitter_graph);
 	set_source_rgb_func = (maxTTL < cr_colors_max) ? set_source_rgb_dir : set_source_rgb_mod;
 
 	if (backend_create_window(&base_window, cr_resize)) {
-		if (!(unclosed_data = malloc(maxTTL * sizeof(*unclosed_data)))) {
-			warn("cr.open: malloc(%zd)", maxTTL * sizeof(*unclosed_data));
+		unclosed_data = calloc(maxTTL, sizeof(unclosed_data_t));
+		if (!unclosed_data) {
+			WARN_("calloc(%d, %zd)", maxTTL, sizeof(unclosed_data_t));
 			return false;
 		}
-		memset(unclosed_data, 0, maxTTL * sizeof(*unclosed_data));
-
-		int i;
-		for (i = 0; i < SPLINE_POINTS; i++) {
-			if (!(y_point[i] = malloc(maxTTL * sizeof(int)))) {
-				warn("cr.open: malloc(%zd)", maxTTL * sizeof(int));
+		for (int i = 0; i < SPLINE_POINTS; i++) {
+			y_point[i] = calloc(maxTTL, sizeof(int));
+			if (!y_point[i]) {
+				WARN_("calloc(%d, %zd)", maxTTL, sizeof(int));
 				return false;
 			}
-			memset(y_point[i], 0, maxTTL * sizeof(int));
 		}
-
 		datamax = datamax_prev = DATAMAX;
 		set_viewport_params();
 	} else
 		return false;
-	if (!cr_recreate_surfaces(0)) {
-		warnx("cr.open: %s failed", "recreate.surfaces(0)");
+	if (!create_surfaces(0)) {
+		WARNX("Surface creation failed");
 		return false;
 	}
-	int i;
-	for (i = 0; i < CAIRO_SURFACES; i++) {
-		if ((i == CR_LGND) && !params->enable_legend)
+	for (int i = 0; i < SKINS; i++) {
+		if ((i == LEGEND) && !params->enable_legend)
 			continue;
-		if ((i == CR_LAYR) && (params->graph_type != GRAPHTYPE_CURVE))
+		if ((i == LAYER) && (params->graph_type != GRAPHTYPE_CURVE))
 			continue;
-		if (!cr_pango_open(i)) {
-			warnx("cr.open: pango.open(%d) failed", i);
+		if (!set_pango(i))
 			return false;
-		}
 	}
 	draw_grid();
-	cr_paint();
+	paint();
 
-	gettimeofday(&lasttime, NULL);
+	gettimeofday(&last, NULL);
 	return true;
 }
 

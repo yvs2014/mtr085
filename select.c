@@ -16,9 +16,8 @@
     Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 */
 
-#include <stdlib.h>
+#include <stdio.h>
 #include <errno.h>
-#include <err.h>
 #include <sys/time.h>
 
 #include "config.h"
@@ -30,8 +29,9 @@
 #include "ipinfo.h"
 #endif
 #include "display.h"
+#include "macros.h"
 
-typedef struct mtrfd { int net; int dns; int dns6; int ii; } mtrfd_t;
+typedef struct mtrfd { int net; int dns; int dns6; int ipinfo; } mtrfd_t;
 
 // global vars
 fd_set wset;
@@ -56,18 +56,18 @@ void set_fds(fd_set *rset, fd_set *wset, mtrfd_t *fd) {
   if (interactive)
     SET_MTRFD(0);
   if (enable_dns) {
-    fd->dns = dns_waitfd(AF_INET);
+    fd->dns = dns_wait(AF_INET);
     SET_MTRFD(fd->dns);
 #ifdef ENABLE_IPV6
-    fd->dns6 = dns_waitfd(AF_INET6);
+    fd->dns6 = dns_wait(AF_INET6);
     SET_MTRFD(fd->dns6);
 #endif
   }
 #ifdef IPINFO
-  fd->ii = ii_waitfd();
-  SET_MTRFD(fd->ii);
+  fd->ipinfo = ipinfo_wait();
+  SET_MTRFD(fd->ipinfo);
 #endif
-  fd->net = net_waitfd();
+  fd->net = net_wait();
   SET_MTRFD(fd->net);
 }
 
@@ -142,13 +142,13 @@ int chk_kbd_click(bool* paused) { // Has a key been pressed?
 #ifdef IPINFO
     case ActionAS:
     case ActionII:
-      ii_action(action);
+      ipinfo_action(action);
       // 3,4 bits: ASN Lookup, IPInfo
       CLRBIT(iargs, 3);
       CLRBIT(iargs, 4);
       if (enable_ipinfo)
         SETBIT(iargs, (action == ActionAS) ? 3 : 4);
-      ii_open();
+      ipinfo_open();
       break;
 #endif
     case ActionScrollDown:
@@ -197,39 +197,49 @@ void display_ipinfo() {
 }
 #endif
 
+
 bool something_new(mtrfd_t *fd, fd_set *rset) {
   bool re = false;
-  if ((fd->net > 0) && FD_ISSET(fd->net, rset)) { // net packet
-    net_process_return();
+
+  // net packet
+  if ((fd->net > 0) && FD_ISSET(fd->net, rset)) {
+    net_parse();
     re = true;
   }
+
+  // dns lookup
   if (enable_dns) {
-    if ((fd->dns > 0) && FD_ISSET(fd->dns, rset)) { // dns lookup
-      dns_ack(fd->dns, AF_INET);
+    if ((fd->dns > 0) && FD_ISSET(fd->dns, rset)) {
+      dns_parse(fd->dns, AF_INET);
       re = true;
     }
 #ifdef ENABLE_IPV6
     if ((fd->dns6 > 0) && FD_ISSET(fd->dns6, rset)) {
-      dns_ack(fd->dns6, AF_INET6);
+      dns_parse(fd->dns6, AF_INET6);
       re = true;
     }
 #endif
   }
+
 #ifdef IPINFO
-  if (ii_ready()) {
-    if ((fd->ii > 0) && FD_ISSET(fd->ii, rset)) { // ipinfo lookup
-      ii_ack();
+  // ipinfo lookup
+  if (ipinfo_ready()) {
+    if ((fd->ipinfo > 0) && FD_ISSET(fd->ipinfo, rset)) {
+      ipinfo_parse();
       re = true;
     }
   }
 #endif
+
+  // tcp data
   if (mtrtype == IPPROTO_TCP)
-    if (net_process_tcp_fds()) // tcp data ready
+    if (net_tcp_parse())
       re = true;
   return re;
 }
 
-// main mtr loop
+
+// main loop
 void select_loop(void) {
   fd_set rset;
   bool anyset = false, paused = false;
@@ -259,7 +269,7 @@ void select_loop(void) {
         if (interactive || (display_mode == DisplaySplit))
           display_redraw();
 #ifdef IPINFO
-        if (ii_ready())
+        if (ipinfo_ready())
           display_ipinfo();
 #endif
         if ((graceperiod = timing(&lasttime, &interval, &startgrace, &timeout, graceperiod)) < 0)
@@ -269,7 +279,7 @@ void select_loop(void) {
     } while ((rv < 0) && (errno == EINTR));
 
     if (rv < 0)
-      err(errno, "select.loop: select()");
+      ERRR(errno, "select");
 
     anyset = something_new(&mtrfd, &rset);
     if (FD_ISSET(0, &rset)) { // check keyboard events too

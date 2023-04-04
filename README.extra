@@ -1,0 +1,90 @@
+>>> IDN (Internationalized Domain Names)
+
+% ./configure --with-libidn ...
+...
+% mtr köthe.de
+% mtr はじめよう.みんな
+
+   ----------------------------
+
+>>> Unicode (histograms)
+
+% ./configure --with-unicode ...
+...
+% mtr -d3 ...
+% mtr -d11 ...
+
+   ----------------------------
+
+>>> Ipinfo (additional information about hopes)
+
+ -y ORIGIN,FIELDS
+
+  1 = origin.asn.cymru.com (both IPv4 and IPv6)
+      1=ASN 2=Route 3=CC 4=Registry 5=Allocated
+  2 = riswhois.ripe.net (both IPv4 and IPv6)
+      1=Route 2=Origin 3=Descr 4=CC
+  3 = peer.asn.shadowserver.org
+      1=Peers 2=ASN 3=Route 4=ASName 5=CC 6=Org
+  4 = origin.asn.spameatingmonkey.net
+      1=Route 2=ASN 3=Org 4=Allocated 5=CC
+  5 = ip-api.com
+      1=Country 2=CC 3=RC 4=Region 5=City 6=Zip 7=Lat 8=Long 9=TZ 10=ISP
+  6 = asn.routeviews.org
+      1=ASN
+
+ Examples:
+   -y5,2,5,7,8   ip-api.com: CC City Lat Long
+   -y2,4,2       riswhois.ripe.net: CC Origin
+   -y,           origin.asn.cymru.com: ASN
+
+   ----------------------------
+
+>>> Graphcairo (XCB/Xlib graphs)
+
+Dependencies:
+  XCB  backend:  cairo >= 1.12 pango cairo-xcb xcb xcb-keysyms
+  Xlib backend:  cairo pango cairo-xlib x11
+
+Ubuntu packages:
+  XCB:  libcairo(-dev) libpango(-dev) libxcb(-dev) libxcb-keysyms(-dev)
+        Xlib: libcairo(-dev) libpango(-dev) libx11(-dev)
+FreeBSD packages:
+  XCB:  cairo >= 1.12 (see http://people.freebsd.org/~kwm/cairo-1.12-CFT.txt)
+        pango libxcb xcb-util-keysyms
+  Xlib: cairo pango libX11
+NetBSD packages:
+  XCB:  cairo pango libxcb xcb-util-keysyms
+  Xlib: cairo pango libX11
+OpenIndiana packages:
+  Xlib: cairo pango libx11
+
+
+Build and run:
+% ./configure --with-graphcairo-xcb
+...
+% mtr -g, hostname
+
+
+Arguments (-g args):
+  Available arguments:
+    1st argument:  graph type
+      1=dot 2=line 3=curve (default 3, curve)
+    2nd argument:  viewport timeperiod
+      in 10sec ticks (default 6, i.e. 60sec)
+    3rd argument:  enable legend
+      0=disable 1=enable (default 1)
+    4th argument:  enable multipath
+      0=disable 1=enable (default 1)
+    5th argument:	jitter graph instead of latency graph
+      0=latency 1=jitter (default 0, latency)
+
+Examples:
+  -g,       all args in default (curve, 1min, legend, multipath, latency)
+  -g2       line, default, default, default, default
+  -g,30,,0  default, 5min, default, disable, default
+
+
+[TODO: update] NetBSD pkgsrc: https://wip.pkgsrc.org/cgi-bin/gitweb.cgi?p=pkgsrc-wip.git;a=tree;f=mtr-graph
+[TODO: update] FreeBSD port: http://sourceforge.net/p/freebsdwip/code/HEAD/tree/net/mtr-graph/
+
