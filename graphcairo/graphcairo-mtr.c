@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 #include <ctype.h>
 #include <sys/time.h>
 
@@ -23,9 +24,6 @@
 #endif
 #include "display.h"
 #include "macros.h"
-
-// set GCDEBUG (output to console)
-#define GCDEBUG
 #include "graphcairo.h"
 
 #define GC_ARGS_SEP	','
@@ -246,7 +244,7 @@ static void gc_keyaction(int c) {
 	switch (c) {
 		case 'q':	// Quit
 			gc_close();
-			GCMSG("close\n");
+			GCMSG("quit\n");
 			exit(EXIT_SUCCESS);
 		case ' ':	// Resume
 			paused = false;

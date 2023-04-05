@@ -1,17 +1,19 @@
 AC_INIT([mtr], [0.85])
 AC_CONFIG_SRCDIR([mtr.c])
-dnl AM_INIT_AUTOMAKE([foreign nostdinc subdir-objects -Wall -Werror silent-rules -Wno-extra-portability])
+AC_CONFIG_FILES([version.h.tmp:version.h.in])
+AC_PROG_RANLIB
+
 AM_INIT_AUTOMAKE([foreign nostdinc subdir-objects -Wall -Werror silent-rules])
 m4_ifdef([AM_PROG_AR], [AM_PROG_AR])
-
-AC_CONFIG_FILES([version.h.tmp:version.h.in])
 
 # don't complain on AC_PROG_CC_C99 with autoconf newer than 2.70
 m4_version_prereq([2.70],, [AC_PROG_CC_C99])
 AM_PROG_CC_C_O
-AC_PROG_RANLIB
 
-AC_CHECK_HEADERS([sys/param.h], AC_DEFINE(HAVE_SYS_PARAM_H, 1)) dnl common Unix parameters
+# common Unix parameters
+AC_CHECK_HEADERS([sys/param.h], AC_DEFINE(HAVE_SYS_PARAM_H, 1))
+# for netcode
+dnl AC_CHECK_HEADERS([netinet/in_systm.h], AC_DEFINE(HAVE_NETINET_IN_SYSTM_H, 1))
 
 AC_ARG_ENABLE(ipv6,
 	AS_HELP_STRING([--disable-ipv6], [do not enable IPv6]),
@@ -35,7 +37,7 @@ AC_ARG_WITH(unicode,
 AS_IF([test "x$curses" = "xno"], [unicode=no])
 
 AS_IF([test "x$unicode" = "xyes"], [
-	AC_CHECK_HEADERS([ncursesw/cursesw.h ncursesw/curses.h curses.h], break)
+	AC_CHECK_HEADERS([ncursesw/cursesw.h ncursesw/curses.h ncurses/curses.h curses.h], break)
 	AC_CHECK_HEADERS([wchar.h wctype.h locale.h langinfo.h])
 	AC_SEARCH_LIBS([add_wch], [ncursesw curses],	# Ncursesw and X/Open curses provide add_wch()
 		AC_DEFINE([UNICODE], [1], [Define to enable unicode]),
@@ -94,9 +96,8 @@ AS_IF([test "x$graphcairo_xcb" = "xyes" -o "x$graphcairo_xlib" = "xyes"], [
 	AC_SEARCH_LIBS([FcFini], [fontconfig], AC_DEFINE([FC_FINI], 1, [finalize fontconfig library]))
 ])
 
-dnl
-dnl Extra output formats: csv, raw, txt, xml, json
-dnl 	"csv, json" enabled by default
+# Extra output formats: csv, raw, txt, xml, json
+# 	"csv, json" enabled by default
 
 AC_ARG_WITH([output_csv],
 	AS_HELP_STRING([--with-output-csv], [CSV output format]),
@@ -124,8 +125,7 @@ AC_ARG_WITH([output_json],
 AS_IF([test "x$output_json" != "xno"], [AC_DEFINE([OUTPUT_FORMAT_JSON], 1, [Support JSON output format])])
 
 
-dnl
-dnl Add some syslog debug: net, dns, ipinfo
+# Add some syslog debug: net, dns, ipinfo
 
 AC_ARG_WITH([syslog_net],
 	AS_HELP_STRING([--with-syslog-net], [Enable debug: net syslog]),
@@ -143,7 +143,7 @@ AC_ARG_WITH([syslog_ipinfo],
 AS_IF([test "x$syslog_ipinfo" != "xno"], [AC_DEFINE([LOG_IPINFO], 1, [Enable debug: ipinfo syslog])])
 
 
-dnl don't break anything if pkg-config is absent
+# don't break anything if pkg-config is absent
 m4_ifndef([PKG_CHECK_MODULES], [m4_defun([PKG_CHECK_MODULES], [AC_MSG_ERROR([
   Could not locate the pkg-config automake macros, these are usually located in
     .../share/aclocal/pkg.m4
@@ -188,7 +188,7 @@ AS_IF([test "x$libidn" = "xyes"], [
 	])
 ])
 
-dnl Add C flags to display more warnings
+# Add C flags to display more warnings
 AC_MSG_CHECKING(for C flags to get more warnings)
 AS_IF([test "x$ac_cv_c_compiler_gnu" = "xyes"], [
 	CFLAGS="$CFLAGS -Wall"
@@ -209,7 +209,7 @@ AH_BOTTOM([
 dnl AC_CONFIG_FILES([Makefile img/Makefile])
 AC_CONFIG_FILES([Makefile])
 
-dnl fix mandir
+# fix mandir
 AC_CANONICAL_HOST
 AS_CASE([$host_os], [freebsd*|openbsd*], [fixmandir=/usr/local], [netbsd*], [fixmandir=/usr/pkg])
 AS_IF([test "x$fixmandir" != "x"], [

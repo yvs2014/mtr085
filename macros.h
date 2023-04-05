@@ -12,6 +12,7 @@
 // misc
 #include "version.h"
 #define UNKN_ITEM "???"
+#define GCDEBUG  // graphcairo output to console
 
 /* C99 __func__, and two sets below to not detect ##/VA_OPT */
 

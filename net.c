@@ -24,7 +24,8 @@
 #include <time.h>
 #include <sys/time.h>
 #include <fcntl.h>
-#include <sys/ioctl.h>
+#include <sys/socket.h>
+#include <netinet/in_systm.h>
 #include <netinet/in.h>
 #include <netinet/ip.h>
 #include <netinet/ip_icmp.h>
@@ -308,9 +309,9 @@ static void net_send_tcp(int index) {
   if (getsockname(s, (struct sockaddr *) &local, &addrlen))
     EXIT("getsockname");
 
-  int opt = 1;
-  if (ioctl(s, FIONBIO, &opt))
-    EXIT("ioctl");
+  int flags = fcntl(s, F_GETFL, 0);
+  if (fcntl(s, F_SETFL, flags | O_NONBLOCK) < 0)
+    EXIT("fcntl(O_NONBLOCK");
 
   switch (af) {
   case AF_INET:

@@ -43,20 +43,20 @@
 >>> Graphcairo (XCB/Xlib graphs)
 
 Dependencies:
-  XCB  backend:  cairo >= 1.12 pango cairo-xcb xcb xcb-keysyms
+  XCB  backend:  cairo pango cairo-xcb xcb xcb-keysyms
   Xlib backend:  cairo pango cairo-xlib x11
 
 Ubuntu packages:
   XCB:  libcairo(-dev) libpango(-dev) libxcb(-dev) libxcb-keysyms(-dev)
-        Xlib: libcairo(-dev) libpango(-dev) libx11(-dev)
+  Xlib: libcairo(-dev) libpango(-dev) libx11(-dev)
 FreeBSD packages:
-  XCB:  cairo >= 1.12 (see http://people.freebsd.org/~kwm/cairo-1.12-CFT.txt)
-        pango libxcb xcb-util-keysyms
+  XCB:  cairo >= 1.12 pango libxcb xcb-util-keysyms
   Xlib: cairo pango libX11
 NetBSD packages:
   XCB:  cairo pango libxcb xcb-util-keysyms
   Xlib: cairo pango libX11
 OpenIndiana packages:
+  XCB:  cairo pango libxcb
   Xlib: cairo pango libx11
 
 
@@ -85,6 +85,6 @@ Examples:
   -g,30,,0  default, 5min, default, disable, default
 
 
-[TODO: update] NetBSD pkgsrc: https://wip.pkgsrc.org/cgi-bin/gitweb.cgi?p=pkgsrc-wip.git;a=tree;f=mtr-graph
-[TODO: update] FreeBSD port: http://sourceforge.net/p/freebsdwip/code/HEAD/tree/net/mtr-graph/
+? NetBSD pkgsrc: https://wip.pkgsrc.org/cgi-bin/gitweb.cgi?p=pkgsrc-wip.git;a=tree;f=mtr-graph
+? FreeBSD port: http://sourceforge.net/p/freebsdwip/code/HEAD/tree/net/mtr-graph/
 

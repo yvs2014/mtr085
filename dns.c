@@ -46,7 +46,7 @@ struct __res_state myres;
 #else
 #define NSSOCKADDR6(i) (&(myres._u._ext.ext->nsaddrs[i].sin6))
 #endif
-#if defined(__FreeBSD__) || defined(__NetBSD__)
+#if defined(__FreeBSD__) || defined(__NetBSD__) || (__sun)
 struct __res_state_ext {
   union res_sockaddr_union nsaddrs[MAXNS];
   struct sort_list {
@@ -426,7 +426,7 @@ static bool validate_ns(int family) {
   } else
 #endif
   {
-    static struct in_addr localhost4 = { INADDR_LOOPBACK };
+    static struct in_addr localhost4 = { .s_addr = INADDR_LOOPBACK };
     bool local = addr4equal(&(from4->sin_addr), &localhost4);
     for (int i = 0; i < myres.nscount; i++) {
       if (addr4equal(&(myres.nsaddr_list[i].sin_addr), &(from4->sin_addr)))
