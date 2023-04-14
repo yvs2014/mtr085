@@ -18,7 +18,6 @@
 
 #include <string.h>
 #include <errno.h>
-#include <time.h>
 #include <netinet/in.h>
 #include <arpa/nameser.h>
 #include <resolv.h>
@@ -61,20 +60,20 @@ struct __res_state_ext {
 #ifdef __FreeBSD__
   struct timespec conf_mtim;
   time_t conf_stat;
-  u_short reload_period;
+  uint16_t reload_period;
 #endif
 };
 #endif
 #endif
 
-#ifdef __OpenBSD__
-#define MYRES_INIT(res) res_init()
-#define MYRES_CLOSE(res)
-#define MYRES_QUERY(res, ...) res_mkquery(__VA_ARGS__)
-#else
+#ifdef HAVE_RES_NMKQUERY
 #define MYRES_INIT(res) res_ninit(&res)
 #define MYRES_CLOSE(res) res_nclose(&res)
 #define MYRES_QUERY(res, ...) res_nmkquery(&res, __VA_ARGS__)
+#else
+#define MYRES_INIT(res) res_init()
+#define MYRES_CLOSE(res)
+#define MYRES_QUERY(res, ...) res_mkquery(__VA_ARGS__)
 #endif
 
 #define ARPA4_SUFFIX "in-addr.arpa"
@@ -84,10 +83,6 @@ struct __res_state_ext {
 bool enable_dns = true;  // use DNS by default
 unsigned dns_queries[3]; // number of queries (sum, ptr, txt)
 unsigned dns_replies[3]; // number of replies (sum, ptr, txt)
-#ifndef __OpenBSD__
-struct __res_state myres;
-#endif
-//
 
 // external callbacks for T_PTR and T_TXT replies
 //   first one is used by net-module
@@ -119,8 +114,8 @@ int dns_wait(int family) {
   resfd) : -1;
 }
 
-static int dns_mkquery(int op, const char *dname, int class, int type, const unsigned char *data, int datalen,
-  const unsigned char *newrr, unsigned char *buf, int buflen) {
+static int dns_mkquery(int op, const char *dname, int class, int type, const uint8_t *data, int datalen,
+  const uint8_t *newrr, uint8_t *buf, int buflen) {
   return MYRES_QUERY(myres, op, dname, class, type, data, datalen, newrr, buf, buflen);
 }
 
@@ -144,13 +139,19 @@ void dns_socket(void) {
   int option = 1;
   if ((resfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
     WARN("socket");
-  else if (setsockopt(resfd, SOL_SOCKET, SO_BROADCAST, (char*)&option, sizeof(option)) < 0)
-    WARN("setsockopt");
+  else {
+    /*stat*/ sum_sock[0]++;
+    if (setsockopt(resfd, SOL_SOCKET, SO_BROADCAST, (char*)&option, sizeof(option)) < 0)
+      WARN("setsockopt");
+  }
 #ifdef ENABLE_IPV6
   if ((resfd6 = socket(AF_INET6, SOCK_DGRAM, 0)) < 0)
 ;//    WARN("socket6");
-  else if (setsockopt(resfd6, SOL_SOCKET, SO_BROADCAST, (char*)&option, sizeof(option)) < 0)
+  else {
+    /*stat*/ sum_sock[0]++;
+    if (setsockopt(resfd6, SOL_SOCKET, SO_BROADCAST, (char*)&option, sizeof(option)) < 0)
 ;//    WARN("setsockopt6");
+  }
 #endif
 }
 
@@ -167,11 +168,13 @@ void dns_close(void) {
   // close sockets
   if (resfd >= 0) {
     close(resfd);
+    /*stat*/ sum_sock[1]++;
     resfd = -1;
   }
 #ifdef ENABLE_IPV6
   if (resfd6 >= 0) {
     close(resfd6);
+    /*stat*/ sum_sock[1]++;
     resfd6 = -1;
   }
 #endif
@@ -184,7 +187,7 @@ void dns_close(void) {
 
 #ifdef ENABLE_IPV6
 // Returns an ip6.arpa character string
-static void ip2arpa6(const unsigned char *p, char *buf, int sz, const char *suff) {
+static void ip2arpa6(const uint8_t *p, char *buf, int sz, const char *suff) {
   int l = 0;
   for (int i = 0xf; i >= 0; i--) {
     l += snprintf(buf + l, sz - l, "%x.%x.", p[i] & 0xf, p[i] >> 4);
@@ -196,7 +199,7 @@ static void ip2arpa6(const unsigned char *p, char *buf, int sz, const char *suff
 
 char* ip2arpa(ip_t *ip, const char *suff4, const char *suff6) {
   static char lqbuf[NAMELEN];
-  unsigned char *p = (unsigned char*)ip;
+  uint8_t *p = (uint8_t*)ip;
 #ifdef ENABLE_IPV6
   if (af == AF_INET6) ip2arpa6(p, lqbuf, sizeof(lqbuf), suff6 ? suff6 : ARPA6_SUFFIX); else
 #endif
@@ -206,7 +209,7 @@ char* ip2arpa(ip_t *ip, const char *suff4, const char *suff6) {
 
 
 int dns_send_query(int at, int ndx, const char *qstr, int type) {
-  static unsigned char req_buf[PACKETSZ];
+  static uint8_t req_buf[PACKETSZ];
   int len = dns_mkquery(QUERY, qstr, C_IN, type, NULL, 0, NULL, req_buf, sizeof(req_buf));
   if (len < 0) {
     WARN_("[%d:%d type=%d]", at, ndx, type);
@@ -287,7 +290,7 @@ static atndx_t *find_query(const char* q, uint16_t hint) {
   return NULL;     // not found
 }
 
-static atndx_t *expand_query(const u_char *packet, int psize, const u_char *dn, char *answer, int asize, uint16_t id, int *r) {
+static atndx_t *expand_query(const uint8_t *packet, int psize, const uint8_t *dn, char *answer, int asize, uint16_t id, int *r) {
   *r = dn_expand(packet, packet + psize, dn, answer, asize);
   if (*r < 0)
     LOG_RE(NULL, "dn_expand() failed while expanding query domain");
@@ -298,7 +301,7 @@ static atndx_t *expand_query(const u_char *packet, int psize, const u_char *dn, 
 }
 
 
-static void dns_parse_reply(unsigned char *buf, ssize_t len) {
+static void dns_parse_reply(uint8_t *buf, ssize_t len) {
   static char answer[MAXDNAME];
 
   if (len < (int)sizeof(HEADER))
@@ -321,8 +324,8 @@ static void dns_parse_reply(unsigned char *buf, ssize_t len) {
     LOGRET("Not a reply");
   if (hp->opcode) // non-standard query
     LOGRET("Invalid opcode");
-  unsigned char *eob = buf + len;
-  unsigned char *c = buf + sizeof(HEADER);
+  uint8_t *eob = buf + len;
+  uint8_t *c = buf + sizeof(HEADER);
   int l;
   atndx_t *an;
 
@@ -439,7 +442,7 @@ static bool validate_ns(int family) {
 }
 
 void dns_parse(int fd, int family) {
-  static unsigned char buf[PACKETSZ];
+  static uint8_t buf[PACKETSZ];
   static socklen_t fromlen = sizeof(from_sastruct);
   ssize_t r = recvfrom(fd, buf, sizeof(buf), 0, from, &fromlen);
   if (r > 0) {

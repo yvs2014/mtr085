@@ -54,6 +54,7 @@
 #ifdef CURSES
 #include "mtr-curses.h"
 #endif
+#include "mtr-poll.h"
 #include "getopt.h"
 #include "display.h"
 #include "dns.h"
@@ -67,63 +68,68 @@
 #endif
 #include "macros.h"
 
+#define REPORT_PINGS 10
 #define CACHE_TIMEOUT 60
 
 typedef struct names { char *name; struct names *next; } names_t;
 
-// global vars
+#define FLD_DEFAULT "LS NABWV"
+static const char fld_jitter[MAXFLD + 1] = "DR AGJMXI";
+static char fld_custom[MAXFLD + 1];
+static unsigned fld_index[256]; // key->index backresolv
+
+//// global vars
 pid_t mypid;
-char mtr_args[1024];	// posix/susvn: 4096+
-unsigned iargs;		// args passed interactively
+char mtr_args[1024];          // posix,susvn: 4096+
+unsigned iargs;               // args passed interactively
 bool show_ips = false;
 bool enable_mpls = false;
 bool report_wide = false;
-bool endpoint_mode = false; // -fa option, i.e. auto, corresponding to TTL of the destination host
+bool endpoint_mode = false;   // -fa option, i.e. auto, corresponding to TTL of the destination host
 bool cache_mode = false;            // don't ping known hops
 int cache_timeout = CACHE_TIMEOUT;  // cache timeout in seconds
 bool enable_stat_at_exit = false;
-int fstTTL = 1;		// default start at first hop
-int maxTTL = 30;	// enough?
-int bitpattern;	// packet bit pattern used by ping
-int remoteport = -1;	// target port
-int tos;	// type of service set in ping packet
-int cpacketsize = 64;	// default packet size
-int tcp_timeout = 10 * 1000000;	// for TCP tracing
+int fstTTL = 1;	              // default start at first hop
+int maxTTL = 30;              // enough?
+int bitpattern;               // packet bit pattern used by ping
+int remoteport = -1;          // target port
+int tos;                      // type of service set in ping packet
+int cpacketsize = 64;         // default packet size
+int tcp_timeout = MIL;        // for TCP tracing (1sec in msec)
+int sum_sock[2];              // opened-closed sockets
 //
 int display_offset;
-int curses_mode;	// 1st and 2nd bits
+int curses_mode;      // 1st and 2nd bits
 #if defined(CURSES) || defined(GRAPHCAIRO)
 int curses_mode_max = 3;
 #endif
-int color_mode;	// 4th bit
-int audible_bell;	// 5th bit
-int visible_bell;	// 6th bit
-int target_bell_only;	// 7th bit
+int color_mode;       // 4th bit
+int audible_bell;     // 5th bit
+int visible_bell;     // 6th bit
+int target_bell_only; // 7th bit
 int mtrtype = IPPROTO_ICMP;	// Use ICMP as default packet type
-	// default display field and order
-int fld_index[256];
-char fld_avail[AVLFLD + 1];
-FLD_BUF_T fld_active;
-FLD_BUF_T fld_save;
-const struct fields data_fields[AVLFLD + 1] = {
-	// Key, Remark, Header, Format, Width
-	{' ', "<sp>: Space between fields", " ",  " ",        1},
-	{'L', "L: Loss Ratio",          "Loss",   " %4.1f%%", 6},
-	{'D', "D: Dropped Packets",     "Drop",   " %4d",     5},
-	{'R', "R: Received Packets",    "Rcv",    " %5d",     6},
-	{'S', "S: Sent Packets",        "Snt",    " %5d",     6},
-	{'N', "N: Newest RTT(ms)",      "Last",   " %5.1f",   6},
-	{'B', "B: Min/Best RTT(ms)",    "Best",   " %5.1f",   6},
-	{'A', "A: Average RTT(ms)",     "Avg",    " %5.1f",   6},
-	{'W', "W: Max/Worst RTT(ms)",   "Wrst",   " %5.1f",   6},
-	{'V', "V: Standard Deviation",  "StDev",  " %5.1f",   6},
-	{'G', "G: Geometric Mean",      "Gmean",  " %5.1f",   6},
-	{'J', "J: Current Jitter",      "Jttr",   " %4.1f",   5},
-	{'M', "M: Jitter Mean/Avg.",    "Javg",   " %4.1f",   5},
-	{'X', "X: Worst Jitter",        "Jmax",   " %4.1f",   5},
-	{'I', "I: Interarrival Jitter", "Jint",   " %4.1f",   5},
-	{'\0', NULL, NULL, NULL, 0}
+const char *fld_active;
+//
+const struct statf statf[] = {
+// Key, Remark, Header, Width
+  {' ', "<sp>: Space between fields", " ", 1},
+  {'L', "L: Loss Ratio",          "Loss",  6},
+  {'D', "D: Dropped Packets",     "Drop",  5},
+  {'R', "R: Received Packets",    "Rcv",   6},
+  {'S', "S: Sent Packets",        "Snt",   6},
+  {'N', "N: Newest RTT(ms)",      "Last",  6},
+  {'B', "B: Min/Best RTT(ms)",    "Best",  6},
+  {'A', "A: Average RTT(ms)",     "Avg",   6},
+  {'W', "W: Max/Worst RTT(ms)",   "Wrst",  6},
+  {'V', "V: Standard Deviation",  "StDev", 6},
+  {'G', "G: Geometric Mean",      "Gmean", 6},
+  {'J', "J: Current Jitter",      "Jttr",  5},
+  {'M', "M: Jitter Mean/Avg.",    "Javg",  5},
+  {'X', "X: Worst Jitter",        "Jmax",  5},
+  {'I', "I: Interarrival Jitter", "Jint",  5},
 };
+const int statf_max = sizeof(statf) / sizeof(statf[0]);
+//// end-of-global
 
 #if defined(OUTPUT_FORMAT_RAW) || defined(OUTPUT_FORMAT_TXT) || defined(OUTPUT_FORMAT_CSV) || defined(OUTPUT_FORMAT_JSON) || defined(OUTPUT_FORMAT_XML)
 #define OUTPUT_FORMAT
@@ -179,23 +185,27 @@ static char *short_options;
 
 char srchost[NAMELEN];
 char *dsthost = NULL;
-int display_mode;
-float wait_time = 1.0;
+int display_mode = -1;
+double wait_time = 1;
 bool interactive = true;
-int max_ping = 10;
-bool alter_ping = false;
+long max_ping;
 //
 
 static char *iface_addr = NULL;
 static names_t *names = NULL;
+//
 
-void set_fld_active(const char *s) {
-  static FLD_BUF_T s_copy;
-  strncpy((char*)s_copy, s, sizeof(s_copy) - 1);
-  memset(fld_save, 0, sizeof(fld_save));
-  strncpy((char*)fld_save, (char*)fld_active, sizeof(fld_save));
-  memset(fld_active, 0, sizeof(fld_active));
-  strncpy((char*)fld_active, (char*)s_copy, sizeof(fld_active));
+#define FLOAT_UPTO 10 /* values > FLOAT_UPTO in integer format */
+inline int val2len(double v) { return ((v > 0) && (v < FLOAT_UPTO)) ? (v < 0.1 ? 2 : 1) : 0; }
+
+inline void set_fld_active(const char *s) { strncpy(fld_custom, s, MAXFLD); fld_active = fld_custom; }
+inline bool is_custom_fld(void) { return strncmp(fld_active, fld_jitter, MAXFLD) && strncmp(fld_active, FLD_DEFAULT, MAXFLD); }
+inline void onoff_jitter(void) { int cmp = strncmp(fld_active, fld_jitter, MAXFLD); fld_active = cmp ? fld_jitter : fld_custom; }
+
+const struct statf* active_statf(unsigned i) {
+  if (i > MAXFLD) return NULL;
+  unsigned n = fld_index[(uint8_t)fld_active[i]];
+  return ((n >= 0) && (n < statf_max)) ? &statf[n] : NULL;
 }
 
 char* trim(char *s) {
@@ -330,13 +340,13 @@ static void usage(char *name) {
   }
 }
 
-static int limit_int(const int v0, const int v1, const int v, const char *it) {
-  if (v < v0) {
-    WARNX_("'%s' is out of range %d..%d: %d -> %d", it, v0, v1, v, v0);
+int limit_int(const int v0, const int v1, const int v, const char *it) {
+  if ((v0 >= 0) && (v < v0)) {
+    WARNX_("'%s' is less than %d: %d -> %d", it, v0, v, v0);
     return v0;
   }
-  if (v > v1) {
-    WARNX_("'%s' is out of range %d..%d: %d -> %d", it, v0, v1, v, v1);
+  if ((v1 >= 0) && (v > v1)) {
+    WARNX_("'%s' is greater than %d: %d -> %d", it, v1, v, v1);
     return v1;
   }
   return v;
@@ -372,8 +382,7 @@ static void parse_options(int argc, char **argv) {
         bitpattern = -1;
       break;
     case 'c':
-      max_ping = atoi(optarg);
-      alter_ping = true;
+      max_ping = atol(optarg);
       break;
 #if defined(CURSES) || defined(GRAPHCAIRO)
     case 'd':
@@ -392,15 +401,20 @@ static void parse_options(int argc, char **argv) {
         endpoint_mode = true;
         break;
       }
-      fstTTL = limit_int(1, maxTTL, atoi(optarg), "first ttl");
+      fstTTL = limit_int(1, maxTTL, atoi(optarg), "First TTL");
       break;
     case 'F':
       if (strlen(optarg) >= sizeof(fld_active))
         FAIL_("-F: Too many fields (max=%zd): %s", sizeof(fld_active) - 1, optarg);
-      for (int i = 0; optarg[i]; i++)
-        if(!strchr(fld_avail, optarg[i]))
-          FAIL_("-F: Unknown field identifier %c", optarg[i]);
-      set_fld_active(optarg);
+      for (int i = 0; optarg[i]; i++) {
+        int j = 0;
+        for (; j < statf_max; j++)
+          if (optarg[i] == statf[j].key)
+            break;
+        if (j >= statf_max)
+          FAIL_("-F: Unknown field identifier '%c'", optarg[i]);
+      }
+	  set_fld_active(optarg);
       break;
 #ifdef GRAPHCAIRO
     case 'g':
@@ -419,13 +433,14 @@ static void parse_options(int argc, char **argv) {
         FAIL("-i: Non-root users cannot set an interval less than one second");
       break;
     case 'm':
-      maxTTL = limit_int(1, ((MAXHOST - 1) > maxTTL) ? maxTTL : (MAXHOST - 1), atoi(optarg), "maximum ttl");
+      maxTTL = limit_int(1, ((MAXHOST - 1) > maxTTL) ? maxTTL : (MAXHOST - 1), atoi(optarg), "Max TTL");
       break;
     case 'n':
       enable_dns = false;
       break;
 #ifdef OUTPUT_FORMAT
     case 'o':
+      max_ping = REPORT_PINGS;
       switch (tolower((int)optarg[0])) {
 #ifdef OUTPUT_FORMAT_RAW
         case 'r':
@@ -476,6 +491,7 @@ static void parse_options(int argc, char **argv) {
       break;
     case 'r':
       display_mode = DisplayReport;
+      max_ping = REPORT_PINGS;
       break;
     case 's':
       cpacketsize = atoi(optarg);
@@ -484,15 +500,12 @@ static void parse_options(int argc, char **argv) {
       enable_stat_at_exit = true;
       break;
     case 't':
-      if (mtrtype != IPPROTO_ICMP)
+      if (mtrtype == IPPROTO_UDP)
         FAIL("-t and -u are mutually exclusive");
-      if (net_tcp_init())
-        mtrtype = IPPROTO_TCP;
-      else
-        FAIL("-t: Switch to TCP mode failed");
+      mtrtype = IPPROTO_TCP;
       break;
     case 'u':
-      if (mtrtype != IPPROTO_ICMP)
+      if (mtrtype == IPPROTO_TCP)
         FAIL("-u and -t are mutually exclusive");
       mtrtype = IPPROTO_UDP;
       break;
@@ -500,8 +513,9 @@ static void parse_options(int argc, char **argv) {
       printf("%s-%s\n", argv[0], MTR_VERSION);
       exit(EXIT_SUCCESS);
     case 'w':
-      report_wide = true;
       display_mode = DisplayReport;
+      max_ping = REPORT_PINGS;
+      report_wide = true;
       break;
     case 'x':
       cache_mode = true;
@@ -521,8 +535,7 @@ static void parse_options(int argc, char **argv) {
       break;
 #endif
     case 'Z':
-      tcp_timeout = atoi(optarg);
-      tcp_timeout *= 1000000;
+      tcp_timeout = atoi(optarg) * MIL; // in msec
       break;
     default:
       usage(argv[0]);
@@ -601,12 +614,28 @@ static bool set_host(struct addrinfo *res) {
     WARNX("Unable to set host entry");
     return false;
   }
-  if (!net_set_ifaddr(iface_addr)) {
-    WARNX("Unable to set interface address");
+  if (iface_addr && !net_set_ifaddr(iface_addr)) {
+    WARNX_("Unable to set interface address \"%s\"", iface_addr);
     return false;
   }
   return true;
 }
+
+#ifdef UNICODE
+void autotest_unicode_print(void) {
+#if defined(HAVE_LOCALE_H) && defined(HAVE_LANGINFO_H)
+  setlocale(LC_CTYPE, "");
+  if (strcasecmp("UTF-8", nl_langinfo(CODESET)) == 0) {
+    if (iswprint(L'▁')) {
+      curses_mode_max++;
+      return;
+    }
+    WARNX("Unicode block elements are not printable");
+  }
+  setlocale(LC_CTYPE, NULL);
+#endif
+}
+#endif
 
 
 int main(int argc, char **argv) {
@@ -618,46 +647,19 @@ int main(int argc, char **argv) {
     FAIL("Unable to drop permissions");
 
   mypid = getpid();
+  srand(mypid); // reset the random seed
 
-  /* reset the random seed */
-  srand(mypid);
-
-  display_detect(&argc, &argv);
-#if defined(CURSES) || defined(GRAPHCAIRO)
-  curses_mode = 0;
-#endif
-
-  /* The field options are now in a static array all together,
-     but that requires a run-time initialization. */
-  memset(fld_index, -1, sizeof(fld_index));
-  for (int i = 0; (data_fields[i].key) && (i < sizeof(fld_avail)); i++) {
-    fld_avail[i] = data_fields[i].key;
-    fld_index[data_fields[i].key] = i;
-  }
+  // initialiaze fld_index
+  memset(fld_index, -1, sizeof(fld_index)); // any value > statf_max
+  for (int i = 0; i < statf_max; i++)
+    if (statf[i].key <= sizeof(fld_index))
+      fld_index[(uint8_t)statf[i].key] = i;
 
 #ifdef UNICODE
-  bool dm_histogram = false;
-#ifdef HAVE_LOCALE_H
-  char *lc_ctype = setlocale(LC_CTYPE, NULL);
-  setlocale(LC_CTYPE, "");
-#ifdef HAVE_LANGINFO_H
-  if (strcasecmp("UTF-8", nl_langinfo(CODESET)) == 0) {
-    if (iswprint(L'▁'))
-      dm_histogram = true;
-    else
-      WARNX("Unicode block elements are not printable");
-  }
+  autotest_unicode_print();
 #endif
-  if (dm_histogram)
-    curses_mode_max++;
-  else
-    setlocale(LC_CTYPE, lc_ctype);
-#endif
-#endif
-
-  set_fld_active(FLD_ACTIVE_DEFAULT);
+  set_fld_active(FLD_DEFAULT);
   parse_options(argc, argv);
-
   while (optind < argc) {
     char* name = argv[optind++];
     append_to_names(name);
@@ -668,10 +670,9 @@ int main(int argc, char **argv) {
     exit(EXIT_SUCCESS);
   }
 
-  /* Now that we know mtrtype we can select which socket to use */
-  if (net_selectsocket() < 0)
-    FAIL("Unable to determine type of socket");
-
+#ifdef ENABLE_IPV6
+  net_setsocket6();
+#endif
   dns_open();
 #ifdef IPINFO
   ipinfo_open();
@@ -719,13 +720,15 @@ int main(int argc, char **argv) {
     notfirst = true;
   }
 
-  display_finish();
+  display_final();
 #ifdef IPINFO
   ipinfo_close();
 #endif
   dns_close();
   net_close();
+
   if (enable_stat_at_exit) {
+    printf("SOCKET: %u opened, %u closed\n", sum_sock[0], sum_sock[1]);
     printf("NET: %lu queries (%lu icmp, %lu udp, %lu tcp), %lu replies (%lu icmp, %lu udp, %lu tcp)\n",
       net_queries[0], net_queries[1], net_queries[2], net_queries[3],
       net_replies[0], net_replies[1], net_replies[2], net_replies[3]);
@@ -733,7 +736,7 @@ int main(int argc, char **argv) {
       dns_queries[0], dns_queries[1], dns_queries[2],
       dns_replies[0], dns_replies[1], dns_replies[2]);
 #ifdef IPINFO
-    printf("EXTRA: %u queries (%u http, %u whois), %u replies (%u http, %u whois)\n",
+    printf("IPINFO: %u queries (%u http, %u whois), %u replies (%u http, %u whois)\n",
       ipinfo_queries[0], ipinfo_queries[1], ipinfo_queries[2],
       ipinfo_replies[0], ipinfo_replies[1], ipinfo_replies[2]);
 #endif

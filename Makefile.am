@@ -10,7 +10,7 @@ mtr_SOURCES = mtr.c \
               dns.c dns.h \
               display.c display.h \
               report.c report.h \
-              select.c select.h
+              poll.c mtr-poll.h
 
 nodist_mtr_SOURCES = version.h
 

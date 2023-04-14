@@ -1,10 +1,8 @@
 
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 #include <strings.h>
 #include <ctype.h>
-#include <sys/time.h>
 
 #include "config.h"
 
@@ -16,7 +14,7 @@
 
 #include "mtr.h"
 #include "mtr-curses.h"
-#include "select.h"
+#include "mtr-poll.h"
 #include "net.h"
 #include "dns.h"
 #ifdef IPINFO
@@ -24,6 +22,7 @@
 #endif
 #include "display.h"
 #include "macros.h"
+
 #include "graphcairo.h"
 
 #define GC_ARGS_SEP	','
@@ -48,7 +47,7 @@
 #define	NUMHOSTS	10	// net.c static numhosts = 10
 
 static int timeout;
-static struct timeval lasttime;
+static struct timespec lasttime;
 
 static bool paused = false;
 static cr_params_t params;
@@ -82,9 +81,8 @@ bool gc_open(void) {
   }
   memset(data, -1, data_sz);
 
-  timeout = POS_ROUND(wait_time * USECONDS);
-  gettimeofday(&lasttime, NULL);
-
+  timeout = POS_ROUND(wait_time * MIL);
+  clock_gettime(CLOCK_MONOTONIC, &lasttime);
   params.graph_type = (args[ARG_GRAPH_TYPE] > 0) ? args[ARG_GRAPH_TYPE] : 0;
   params.period = (args[ARG_PERIOD] > 0) ? args[ARG_PERIOD] : 0;
   params.enable_legend = args[ARG_LEGEND] ? true : false;
@@ -98,8 +96,8 @@ bool gc_open(void) {
     return false;
   if (params.enable_legend) {
     if (params.jitter_graph)
-      strcpy((char*)fld_active, FLD_ACTIVE_JITTER);
-    mtr_curses_data_fields(legend_hd[LEGEND_HEADER_STATIC]);
+      onoff_jitter();
+    mtr_curses_statf_title(legend_hd[LEGEND_HEADER_STATIC], sizeof(legend_hd[LEGEND_HEADER_STATIC]));
     curses_cols = cr_recalc(hostinfo_max);
     mtr_curses_init();
   }
@@ -226,11 +224,8 @@ static void gc_keyaction(int c) {
 				GCMSG_("enable_mpls=%d\n", enable_mpls);
 				break;
 			case 'j':
-				if (index((char*)fld_active, 'N'))
-					strcpy((char*)fld_active, FLD_ACTIVE_JITTER);
-				else
-					strcpy((char*)fld_active, FLD_ACTIVE_DEFAULT);
-				mtr_curses_data_fields(legend_hd[LEGEND_HEADER_STATIC]);
+				onoff_jitter();
+				mtr_curses_statf_title(legend_hd[LEGEND_HEADER_STATIC], sizeof(legend_hd[LEGEND_HEADER_STATIC]));
 				GCMSG("toggle latency/jitter stats\n");
 				break;
 			case 'n':	// DNS
@@ -244,6 +239,7 @@ static void gc_keyaction(int c) {
 	switch (c) {
 		case 'q':	// Quit
 			gc_close();
+			poll_close_tcpfds();
 			GCMSG("quit\n");
 			exit(EXIT_SUCCESS);
 		case ' ':	// Resume
@@ -264,22 +260,18 @@ static void gc_keyaction(int c) {
 			GCMSG("net reset\n");
 			break;
 		case 't':	// TCP on/off
-			if (mtrtype == IPPROTO_TCP) {
-				mtrtype = IPPROTO_ICMP;
-				GCMSG("icmp_echo packets\n");
-			} else if (net_tcp_init()) {
-				mtrtype = IPPROTO_TCP;
-				GCMSG("tcp_syn packets\n");
-			}
+			mtrtype = (mtrtype == IPPROTO_ICMP) ? IPPROTO_TCP : IPPROTO_ICMP;
+			GCMSG_("%s\n", (mtrtype == IPPROTO_ICMP) ? "icmp_echo packets" : "tcp_syn packets");
+#ifdef ENABLE_IPV6
+			net_setsocket6();
+#endif
 			break;
 		case 'u':	// UDP on/off
-			if (mtrtype == IPPROTO_UDP) {
-				mtrtype = IPPROTO_ICMP;
-				GCMSG("icmp_echo packets\n");
-			} else {
-				mtrtype = IPPROTO_UDP;
-				GCMSG("udp datagrams\n");
-			}
+			mtrtype = (mtrtype == IPPROTO_ICMP) ? IPPROTO_UDP : IPPROTO_ICMP;
+			GCMSG_("%s\n", (mtrtype == IPPROTO_ICMP) ? "icmp_echo packets" : "udp datagrams");
+#ifdef ENABLE_IPV6
+			net_setsocket6();
+#endif
 			break;
 	}
 }
@@ -306,16 +298,16 @@ void gc_redraw(void) {
 
 	cr_set_hops(hops, min);
 
-	struct timeval now, _tv;
-	gettimeofday(&now, NULL);
-	timersub(&now, &lasttime, &_tv);
-	time_t dt = timer2usec(&_tv);
+	struct timespec now, tv;
+	clock_gettime(CLOCK_MONOTONIC, &now);
+	timespecsub(&now, &lasttime, &tv);
+	time_t dt = time2msec(tv);
 	lasttime = now;
 
 	if (dt < timeout) {
-		int pings = host[min].xmit;
+		int pings = host[min].sent;
 		for (int at = min + 1; at < (max - 1); at++)
-			if (host[at].xmit != pings)
+			if (host[at].sent != pings)
 				return;
 		if (pings > num_pings)
 			num_pings = pings;
@@ -363,7 +355,7 @@ void gc_redraw(void) {
 				char *stat = buf + stat_pos;
 				// statistics
 				if (curses_mode) {
-					mtr_gen_scale_gc();
+					mtr_curses_scale();
 					char *pos = stat;
 #ifdef UNICODE
 					if (curses_mode == 3) {
@@ -380,7 +372,7 @@ void gc_redraw(void) {
 						*pos = 0;
 					}
 				} else
-					mtr_fill_data(at, stat, sizeof(buf) - stat_pos);
+					mtr_curses_print_at(at, stat, sizeof(buf) - stat_pos);
 				cr_print_host(i, data[i], buf, stat);
 
 				// mpls
@@ -418,6 +410,6 @@ void gc_redraw(void) {
 	cr_redraw(data);
 
 	if (hops)
-		timeout = POS_ROUND(((wait_time * hops) / NUMHOSTS) * USECONDS);
+		timeout = POS_ROUND(((wait_time * hops) / NUMHOSTS) * MIL);
 }
 

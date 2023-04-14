@@ -21,18 +21,19 @@
 
 enum { ActionNone,  ActionQuit,  ActionReset,  ActionDisplay, 
   ActionClear, ActionPauseResume, ActionScrollDown, ActionScrollUp,
-  ActionDNS, ActionTCP, ActionMPLS, ActionCache, ActionAS, ActionII };
+  ActionDNS, ActionUDP, ActionTCP, ActionMPLS, ActionCache, ActionAS, ActionII
+};
 enum { DisplayReport, DisplayCurses, DisplayRaw, DisplaySplit,
   DisplayTXT, DisplayCSV, DisplayJSON, DisplayXML, DisplayGraphCairo };
 
-void display_detect(int *argc, char ***argv);
+void display_start(void);
+void display_final(void);
 bool display_open(void);
 void display_close(bool notfirst);
+
 void display_redraw(void);
 int display_keyaction(void);
 void display_loop(void);
 void display_clear(void);
-void display_start(void);
-void display_finish(void);
 
 #endif

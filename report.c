@@ -34,6 +34,7 @@
 #ifdef IPINFO
 #include "ipinfo.h"
 #endif
+#include "macros.h"
 
 #define HOSTTITLE	"Host"	// report mode
 #define LSIDE_LEN	40	// non-wide report mode: left side of output
@@ -112,7 +113,6 @@ static void report_addr_extra(int at, char *bufname, char *lbuf, const char *dfm
   }
 }
 
-#define REPORT_FACTOR(factor) snprintf(rbuf + r, MAXDNAME - r, data_fields[j].format, net_elem(at, data_fields[j].key) factor)
 
 void report_close(bool wide) {
   assert(LSIDE_LEN < MAXDNAME);
@@ -140,15 +140,11 @@ void report_close(bool wide) {
     snprintf(lbuf, MAXDNAME, dfmt, HOSTTITLE);
   }
 
-  { // header: right
-  char fmt[16];
-  for (int i = 0, r = 0; i < sizeof(fld_active); i++) {
-    int j = fld_index[fld_active[i]];
-    if (j >= 0) {
-      snprintf(fmt, sizeof(fmt), "%%%ds", data_fields[j].length);
-      r += snprintf(rbuf + r, MAXDNAME - r, fmt, data_fields[j].title);
-    }
-  }
+  // header: right
+  for (int i = 0, r = 0; (i < MAXFLD) && (r < MAXDNAME); i++) {
+    const struct statf *sf = active_statf(i);
+    if (sf)
+      r += snprintf(rbuf + r, MAXDNAME - r, "%*s", sf->len, sf->name);
   }
 
   // header: left + right
@@ -176,10 +172,12 @@ void report_close(bool wide) {
       snprintf(lbuf, MAXDNAME, lfmt, at + 1, bufname);
 
     // body: right
-    for (int i = 0, r = 0; i < sizeof(fld_active); i++) {
-      int j = fld_index[fld_active[i]];
-      if (j > 0)
-        r += (index(data_fields[j].format, 'f')) ? REPORT_FACTOR(/1000.0) : REPORT_FACTOR();
+    for (int i = 0, r = 0; (i < MAXFLD) && (r < MAXDNAME); i++) {
+      const struct statf *sf = active_statf(i);
+      if (sf) {
+        const char *str = net_elem(at, sf->key);
+        r += snprintf(rbuf + r, MAXDNAME - r, "%*s", sf->len, str ? str : "");
+      }
     }
 
     // body: left + right
@@ -213,15 +211,14 @@ void txt_close(bool notfirst) {
 #ifdef OUTPUT_FORMAT_XML
 
 #define XML_MARGIN 2
-#define XML_FACTOR(factor) snprintf(buf, MAXDNAME, data_fields[j].format, net_elem(at, data_fields[j].key) factor)
 
 void xml_head(void) {
   printf("<?xml version=\"1.0\"?>\n");
   printf("<MTR SRC=\"%s\"", srchost);
   printf(" TOS=\"0x%X\"", tos);
-  printf(" PSIZE=\"%d\"", packetsize);
-  printf(" BITPATTERN=\"0x%02X\"", (unsigned char)abs(bitpattern));
-  printf(" TESTS=\"%d\">\n", max_ping);
+  printf(" PSIZE=\"%d\"", cpacketsize);
+  printf(" BITPATTERN=\"0x%02X\"", abs(bitpattern));
+  printf(" TESTS=\"%ld\">\n", max_ping);
 }
 
 void xml_tail(void) { printf("</MTR>\n"); }
@@ -234,13 +231,12 @@ void xml_close(void) {
   for (int at = net_min(); at < max; at++) {
     snprint_addr(buf, MAXDNAME, &CURRENT_IP(at));
     printf("%*s<HOP TTL=\"%d\" HOST=\"%s\">\n", XML_MARGIN * 2, "", at + 1, buf);
-
     for (int i = 0; i < MAXFLD; i++) {
-      int j = fld_index[fld_active[i]];
-      if (j > 0) {
-        // 1000.0 is a temporary hack for stats usec to ms, impacted net_loss
-        (index(data_fields[j].format, 'f')) ?  XML_FACTOR(/1000.) : XML_FACTOR();
-        printf("%*s<%s>%s</%s>\n", XML_MARGIN * 3, "", data_fields[j].title, trim(buf), data_fields[j].title);
+      const struct statf *sf = active_statf(i);
+      if (sf) {
+        const char *str = net_elem(at, sf->key);
+        if (str)
+          printf("%*s<%s>%s</%s>\n", XML_MARGIN * 3, "", sf->name, str, sf->name);
       }
     }
 #ifdef IPINFO
@@ -258,13 +254,12 @@ void xml_close(void) {
 #ifdef OUTPUT_FORMAT_JSON
 
 #define JSON_MARGIN 4
-#define JSON_FACTOR(factor) snprintf(buf, MAXDNAME, data_fields[j].format, net_elem(at, data_fields[j].key) factor)
 
 void json_head(void) { printf("["); }
 void json_tail(void) { printf("\n]\n"); }
 
 void json_close(bool notfirst) {
-  char *buf = calloc(1, MAXDNAME);
+  char *buf = malloc(MAXDNAME);
   assert(buf);
   if (notfirst)
     printf(",");
@@ -276,12 +271,13 @@ void json_close(bool notfirst) {
     snprint_addr(buf, MAXDNAME, addr);
     printf("%*s{\"host\":\"%s\",\"hop\":%d,\"up\":%d", JSON_MARGIN * 2, "", buf, at + 1, host[at].up);
     for (int i = 0; i < MAXFLD; i++) {
-      int j = fld_index[fld_active[i]];
-      if (j > 0) {
-        // 1000.0 is a temporary hack for stats usec to ms, impacted net_loss
-		int l = (index(data_fields[j].format, 'f')) ? JSON_FACTOR(/1000.) : JSON_FACTOR();
-		if ((l > 0) && (buf[l - 1] == '%')) buf[l - 1] = 0;
-        printf(",\"%s\":%s", data_fields[j].title, trim(buf));
+      const struct statf *sf = active_statf(i);
+      if (sf) {
+        const char *str = net_elem(at, sf->key);
+        if (str) {
+          int l = strnlen(str, MAXDNAME); // for trimming '%' at the end
+          printf(",\"%*s\":%s", (sf->name[l] == '%') ? (l - 1) : l, sf->name, str);
+        }
       }
     }
 #ifdef IPINFO
@@ -301,11 +297,7 @@ void json_close(bool notfirst) {
 #define CSV_DELIMITER	";"
 #define COMA	','
 
-static void prupper(const char *str) {
-  while (*str)
-    putchar(toupper((int) *str++));
-}
-
+static inline void prupper(const char *s) { while (*s) putchar(toupper((int)*s++)); }
 
 void csv_close(bool notfirst) {
   char *buf = calloc(1, MAXDNAME);
@@ -319,10 +311,10 @@ void csv_close(bool notfirst) {
     printf(CSV_DELIMITER "INFO");
 #endif
   for (int i = 0; i < MAXFLD; i++) {
-    int j = fld_index[fld_active[i]];
-    if (j > 0) {
+    const struct statf *sf = active_statf(i);
+    if (sf) {
       printf(CSV_DELIMITER);
-      prupper(data_fields[j].title);
+      prupper(sf->name);
     }
   }
   printf("\n");
@@ -339,14 +331,12 @@ void csv_close(bool notfirst) {
     if (ipinfo_ready())
       printf(CSV_DELIMITER "%s", sep_ipinfo(at, host[at].current, COMA));
 #endif
-
     for (int i = 0; i < MAXFLD; i++) {
-      int j = fld_index[fld_active[i]];
-      if (j > 0) {
-        // 1000.0 is a temporary hack for stats usec to ms, impacted net_loss
-        (index(data_fields[j].format, 'f')) ?
-          printf(CSV_DELIMITER "%.1f", net_elem(at, data_fields[j].key) / 1000.) :
-          printf(CSV_DELIMITER "%d", net_elem(at, data_fields[j].key));
+      const struct statf *sf = active_statf(i);
+      if (sf) {
+        const char *str = net_elem(at, sf->key);
+        if (str)
+          printf(CSV_DELIMITER "%s", str);
       }
     }
     printf("\n");
@@ -361,7 +351,7 @@ void csv_close(bool notfirst) {
 bool enable_raw = false; // global var
 static int havename[MAXHOST];
 
-void raw_rawping(int at, int msec) {
+void raw_rawping(int at, int usec) {
   if (!havename[at]) {
     const char *name = dns_ptr_lookup(at, host[at].current);
     if (name) {
@@ -369,7 +359,8 @@ void raw_rawping(int at, int msec) {
       printf("d %d %s\n", at, name);
     }
   }
-  printf("p %d %d\n", at, msec);
+  LENVALMIL((double)usec / MIL);
+  printf("p %d %.*f\n", at, _l, _v); // ping in msec
   fflush(stdout);
 }
 

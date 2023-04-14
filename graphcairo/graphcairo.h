@@ -10,9 +10,8 @@
 #define GCMSG_(fmt, ...) {}
 #endif
 
-#define POS_ROUND(x)	((int)((x) + 0.5))
-#define USECONDS	1000000
-#define ACTION_RESIZE	-1
+#define POS_ROUND(x) ((int)((x) + 0.5))
+#define ACTION_RESIZE -1
 
 typedef struct {
   int graph_type;

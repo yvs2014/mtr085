@@ -16,14 +16,13 @@
     Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 */
 
-#ifndef SELECT_H
-#define SELECT_H
+#ifndef MTR_POLL_H
+#define MTR_POLL_H
 
-#include <sys/select.h>
+#include <poll.h>
 
-extern fd_set wset; // write descriptors
-extern int maxfd;
-
-void select_loop(void);
+void poll_loop(void);
+bool poll_count_on_fd(int fd, int seq);
+void poll_close_tcpfds(void);
 
 #endif

@@ -1,6 +1,5 @@
 
 #include <math.h>
-#include <sys/time.h>
 #include <cairo.h>
 #include <pango/pangocairo.h>
 
@@ -41,32 +40,21 @@ typedef struct {
 } skin_t;
 static skin_t skins[SKINS];
 
-enum {
-	GRAPHTYPE_NONE,
-	GRAPHTYPE_DOT,
-	GRAPHTYPE_LINE,
-	GRAPHTYPE_CURVE
-};
+enum { GT_NONE, GT_DOT, GT_LINE, GT_CURVE };
+enum { TM_MMSS, TM_HHMM };
 
-enum {
-	TM_MMSS,
-	TM_HHMM
-};
-
-#define DATAMAX		5000	// in usec	(y-axis)
-#define VIEWPORT_TIMEPERIOD	60	// in sec	(x-axis)
-
-#define MARGIN_LEFT		2.0	// in dx
-#define MARGIN_RIGHT		1.3	// in dx
-#define MARGIN_TOP		1.0	// in dy
-#define MARGIN_BOTTOM		1.3	// in dy
-#define GRID_RGB		0.7
-#define FONT_SIZE		0.3	// in cells
-#define TICKLABEL_LEN		5
-#define GRIDLINES		10
-#define GRAPHFUNCS_MAX		3
-#define DOT_SIZE		3
-#define CYCLE_FACTOR		1.0
+#define DATAMAX	        5   // in msec (y-axis)
+#define VIEWPORT_PERIOD	60  // in sec  (x-axis)
+#define MARGIN_LEFT     2.0 // in dx
+#define MARGIN_RIGHT    1.3 // in dx
+#define MARGIN_TOP      1.0 // in dy
+#define MARGIN_BOTTOM   1.3 // in dy
+#define GRID_RGB        0.7
+#define FONT_SIZE       0.3 // in cells
+#define TICKLABEL_LEN   5
+#define GRIDLINES       10
+#define DOT_SIZE        3
+#define CYCLE_FACTOR    1.0
 
 typedef void (*graph_func_t)(cairo_t *cr);
 static graph_func_t graph_func;
@@ -97,10 +85,10 @@ static int font_size;
 static int tick_size;
 static int datamax, datamax_prev;
 static int hops, first_hop;
-static int x_point_in_usec;
+static int x_mil; // x-axis magnitude multiplied by MIL
 static int action;
 static int tm_fmt;
-static struct timeval last;
+static struct timespec last;
 
 typedef struct {
 	int hop_x;
@@ -190,7 +178,7 @@ static bool create_surfaces(int save) {
     return false;
   if (params->enable_legend && !clone(BASE, LEGEND, &legend))
     return false;
-  if ((params->graph_type == GRAPHTYPE_CURVE) && !clone(BASE, LAYER, &vp_layer))
+  if ((params->graph_type == GT_CURVE) && !clone(BASE, LAYER, &vp_layer))
     return false;
   if (!save && !clone(BASE, TEMP, &vp))
     return false;
@@ -208,7 +196,7 @@ static bool paint_on_base(int ndx) {
 
 static void paint(void) {
   paint_on_base(WORK);
-  if (params->graph_type == GRAPHTYPE_CURVE) paint_on_base(LAYER);
+  if (params->graph_type == GT_CURVE) paint_on_base(LAYER);
   paint_on_base(GRID);
   if (params->enable_legend) paint_on_base(LEGEND);
   backend_flush();
@@ -265,7 +253,7 @@ static void set_viewport_params() {
 	vp.height = cell.x * cell.height;
 	vp_layer = vp;
 
-	x_point_in_usec = POS_ROUND((USECONDS * (double)params->period) / vp.width);
+	x_mil = POS_ROUND((MIL * (double)params->period) / vp.width);
 	tick_size = cell.width / 8;
 	font_size = POS_ROUND(FONT_SIZE * cell.height);
 
@@ -289,17 +277,8 @@ static void set_viewport_params() {
 	printf("viewport=(%d, %d, %d, %d), ", vp.x, vp.y, vp.width, vp.height);
 	if (params->enable_legend)
 		printf("legend=(%d, %d, %d, %d), ", legend.x, legend.y, legend.width, legend.height);
-	int xp = x_point_in_usec;
-	char scale = 'u';
-	if (xp > 10*1000000) {
-		xp = POS_ROUND((double)xp / 1000000);
-		scale = 0;
-	} else
-		if (xp > 10*1000) {
-			xp = POS_ROUND((double)xp / 1000);
-			scale = 'm';
-		}
-	printf("x-point=%d%csec\n", xp, scale);
+	LENVALMIL(x_mil);
+	printf("x-point=%.*fms", _l, _v);
 #endif
 }
 
@@ -345,14 +324,12 @@ static void draw_grid(void) {
 	cairo_set_source_rgb(cr, 1, 1, 1);
 	cairo_rectangle(cr, 0, 0, pl_width, grid.height);
 	cairo_fill(cr);
-	char fmt[16];
 	char buf[16];
-	sprintf(fmt, "%%%d.1f", TICKLABEL_LEN);
 	cairo_set_source_rgb(cr, 0, 0, 0);
-	double coef1 = (double)datamax / (cell.x * 1000);	// 1000: usec -> msec
+	double coef1 = (double)datamax / cell.x / MIL;
 	for (int i = 0, a = vp.height; i <= cell.x; i++, a -= cell.height) {
 		cairo_move_to(cr, 0, a);
-		sprintf(buf, fmt, coef1 * i);
+		sprintf(buf, "%*.1f", TICKLABEL_LEN, coef1 * i);
 		pango_layout_set_text(pl, buf, -1);
 		pango_cairo_show_layout(cr, pl);
 	}
@@ -673,11 +650,7 @@ void cr_print_host(int at, int data, char *host, char *stat) {
 
 	cairo_t *cr = skins[LEGEND].cairo;
 	PangoLayout *pl = skins[LEGEND].pango;
-	if (data < 0)
-		cairo_set_source_rgb(cr, 1, 0, 0);
-	else
-		cairo_set_source_rgb(cr, 0, 0, 0);
-
+	cairo_set_source_rgb(cr, (data < 0) ? 1 : 0, 0, 0);
 	cairo_move_to(cr, coords.host_x, coords.text_y);
 	pango_layout_set_text(pl, host ? host : "???", -1);
 	pango_cairo_show_layout(cr, pl);
@@ -685,11 +658,7 @@ void cr_print_host(int at, int data, char *host, char *stat) {
 	if (stat) {
 		pango_layout_set_width(pl, (legend.width - coords.stat_x) * PANGO_SCALE);
 		pango_layout_set_alignment(pl, PANGO_ALIGN_RIGHT);
-
-		if (data < 0)
-			cairo_set_source_rgb(cr, 1, 0, 0);
-		else
-			cairo_set_source_rgb(cr, 0, 0, 0);
+		cairo_set_source_rgb(cr, (data < 0) ? 1 : 0, 0, 0);
 		cairo_move_to(cr, coords.stat_x, coords.text_y);
 
 		char *s;
@@ -730,19 +699,17 @@ static void rescale(int max) {
 }
 
 void cr_redraw(int *data) {
-	static int cycle_datamax;
-	static long long cycle_period;
+	static time_t cycle_datamax, cycle_period, remaining_time;
 	if (!cycle_period)
-		cycle_period = (long long)(USECONDS * (params->period * CYCLE_FACTOR) + 0.5);
+		cycle_period = MIL * CYCLE_FACTOR * params->period + 0.5;
 	bool f_repaint = false;
 
 	// timing
-	static int remaining_time;
-	struct timeval now, _tv;
-	gettimeofday(&now, NULL);
-	timersub(&now, &last, &_tv);
-	time_t dt = timer2usec(&_tv);
-	int unclosed_dt = dt + remaining_time;
+	struct timespec now, tv;
+	clock_gettime(CLOCK_MONOTONIC, &now);
+	timespecsub(&now, &last, &tv);
+	time_t dt = time2msec(tv);
+	time_t unclosed_dt = dt + remaining_time;
 	last = now;
 
 	cycle_period -= dt;
@@ -752,8 +719,8 @@ void cr_redraw(int *data) {
 		cycle_period = cycle_datamax = 0;
 	}
 
-	time_t dx = unclosed_dt / x_point_in_usec;
-	remaining_time = unclosed_dt % x_point_in_usec;
+	time_t dx = unclosed_dt / x_mil;
+	remaining_time = unclosed_dt % x_mil;
 
 	if (dx) {	// work
 		// mean
@@ -768,9 +735,9 @@ void cr_redraw(int *data) {
 			}
 
 		// max
-		int current_max = 0;
+		time_t current_max = 0;
 		for (int i = 0; i < hops; i++) {
-			int d = data[i];
+			time_t d = data[i];
 			if (d > current_max)
 				current_max = d;
 			y_point[0][i] = data_scale(d);
@@ -791,8 +758,8 @@ void cr_redraw(int *data) {
 			dx = vp.width;
 
 		// clearing
-		int cl_dx = dx;
-		if (params->graph_type == GRAPHTYPE_CURVE) {
+		time_t cl_dx = dx;
+		if (params->graph_type == GT_CURVE) {
 			vp_layer.width = x_point[0] - x_point[1];
 			cl_dx += vp_layer.width;
 			vp_layer.x = vp.x + vp.width - vp_layer.width;
@@ -805,11 +772,11 @@ void cr_redraw(int *data) {
 		cairo_rectangle(cr, vp.width - cl_dx, 0, cl_dx, vp.height);
 		cairo_fill(cr);
 
-		if (params->graph_type == GRAPHTYPE_CURVE) {
+		if (params->graph_type == GT_CURVE) {
 			x_point[3] = x_point[2] - dx;
 			x_point[2] = x_point[1] - dx;
 			x_point[1] = x_point[0] - dx;
-		} else if (params->graph_type == GRAPHTYPE_LINE)
+		} else if (params->graph_type == GT_LINE)
 			x_point[1] = x_point[0] - dx;
 
 		graph_func(cr);	// fill new area
@@ -822,10 +789,9 @@ void cr_redraw(int *data) {
 			}
 	}
 
-	if (unclosed_dt > USECONDS) {	// top: systime
+	if (unclosed_dt > MIL) {  // top: systime
 		cairo_t* cr = skins[BASE].cairo;
 		PangoLayout *pl = skins[BASE].pango;
-
 		pango_layout_set_width(pl, vp.width * PANGO_SCALE);
 		pango_layout_set_alignment(pl, PANGO_ALIGN_CENTER);
 		cairo_set_source_rgb(cr, 1, 1, 1);
@@ -842,9 +808,9 @@ void cr_redraw(int *data) {
 			f_repaint = true;
 	}
 
-	if ((dx && (unclosed_dt > USECONDS)) ||
-		((tm_fmt == TM_MMSS) && (unclosed_dt > USECONDS)) ||
-		((tm_fmt == TM_HHMM) && (unclosed_dt > 60 * USECONDS))) {	// bottom: x-axis tick marks
+	if ((dx && (unclosed_dt > MIL)) ||
+		((tm_fmt == TM_MMSS) && (unclosed_dt > MIL)) ||
+		((tm_fmt == TM_HHMM) && (unclosed_dt > 60 * MIL))) {	// bottom: x-axis tick marks
 
 		cairo_t* cr = skins[BASE].cairo;
 		PangoLayout *pl = skins[BASE].pango;
@@ -853,8 +819,8 @@ void cr_redraw(int *data) {
 		cairo_rectangle(cr, vp.x - coords.label_w / 2, vp.y + vp.height, vp.width + coords.label_w, 3 * font_size);
 		cairo_fill(cr);
 
-		time_t actual_sec = now.tv_sec - POS_ROUND(wait_time * USECONDS) / USECONDS;
-		if (now.tv_usec < (POS_ROUND(wait_time * USECONDS) % USECONDS))
+		time_t actual_sec = now.tv_sec - POS_ROUND(wait_time * MIL) / MIL;
+		if ((now.tv_nsec / MICRO) < (POS_ROUND(wait_time * MIL) % MIL))
 			actual_sec--;
 		int label_y = vp.y + vp.height + font_size / 2;
 		int axis_dt = POS_ROUND((2.0 * params->period) / cell.y);
@@ -900,12 +866,12 @@ void cr_net_reset(int paused) {
   if (!paused)
     horizontal(skins[WORK].cairo, 0, vp.width, NULL, 0);
   else {
-    struct timeval now;
-    gettimeofday(&now, NULL);
+    struct timespec now;
+    clock_gettime(CLOCK_MONOTONIC, &now);
     if ((now.tv_sec - last.tv_sec) < params->period) { // more precisely
-      struct timeval _tv;
-      timersub(&now, &last, &_tv);
-      int dx = timer2usec(&_tv) / x_point_in_usec;
+      struct timespec tv;
+      timespecsub(&now, &last, &tv);
+      int dx = time2msec(tv) / x_mil;
       horizontal(skins[TEMP].cairo, 0, vp.width - dx, skins[WORK].surface, -dx);
       swap(WORK, TEMP);
       horizontal(skins[WORK].cairo, vp.width - dx, dx, NULL, 0);
@@ -944,7 +910,7 @@ void cr_close(void) {
       free(y_point[i]);
   for (int i = 0; i < SKINS; i++) {
     if ((i == LEGEND) && !params->enable_legend) continue;
-    if ((i == LAYER) && (params->graph_type != GRAPHTYPE_CURVE)) continue;
+    if ((i == LAYER) && (params->graph_type != GT_CURVE)) continue;
     destroy_skin(&skins[i]);
   }
   backend_destroy_window();
@@ -1034,20 +1000,20 @@ bool cr_open(cr_params_t *cr_params) {
 	params = cr_params;
 	GCMSG_("params: %s", "type=");
 	switch (params->graph_type) {
-		case GRAPHTYPE_DOT:
+		case GT_DOT:
 			graph_func = graph_dot;
 			GCMSG("dot");
 			break;
-		case GRAPHTYPE_LINE:
+		case GT_LINE:
 			graph_func = graph_line;
 			GCMSG("line");
 			break;
-		case GRAPHTYPE_CURVE:
+		case GT_CURVE:
 			graph_func = graph_curve;
 			GCMSG("curve");
 			break;
 		default:
-			params->graph_type = GRAPHTYPE_CURVE;
+			params->graph_type = GT_CURVE;
 			graph_func = graph_curve;
 			GCMSG("curve");
 	}
@@ -1055,7 +1021,7 @@ bool cr_open(cr_params_t *cr_params) {
 	if (params->period)
 		params->period *= GRIDLINES;
 	else
-		params->period = VIEWPORT_TIMEPERIOD;
+		params->period = VIEWPORT_PERIOD;
 	GCMSG_(", period=%dsec", params->period);
 	tm_fmt = (params->period < 3600) ? TM_MMSS : TM_HHMM;
 
@@ -1089,7 +1055,7 @@ bool cr_open(cr_params_t *cr_params) {
 	for (int i = 0; i < SKINS; i++) {
 		if ((i == LEGEND) && !params->enable_legend)
 			continue;
-		if ((i == LAYER) && (params->graph_type != GRAPHTYPE_CURVE))
+		if ((i == LAYER) && (params->graph_type != GT_CURVE))
 			continue;
 		if (!set_pango(i))
 			return false;
@@ -1097,7 +1063,7 @@ bool cr_open(cr_params_t *cr_params) {
 	draw_grid();
 	paint();
 
-	gettimeofday(&last, NULL);
+	clock_gettime(CLOCK_MONOTONIC, &last);
 	return true;
 }
 

@@ -31,45 +31,13 @@
 #include <netinet/icmp6.h>
 #endif
 
-// just in case
-#define timer2usec(t) ((t)->tv_sec * 1000000 + (t)->tv_usec)
-#ifndef timerclear
-#define timerclear(t) ((t)->tv_sec = (t)->tv_usec = 0)
-#endif
-#ifndef timercmp
-#define timercmp(a, b, CMP)          \
-  (((a)->tv_sec  ==  (b)->tv_sec)  ? \
-   ((a)->tv_usec CMP (b)->tv_usec) : \
-   ((a)->tv_sec  CMP (b)->tv_sec))
-#endif
-#ifndef timeradd
-#define timeradd(a, b, s) do {                \
-  (s)->tv_sec  = (a)->tv_sec  + (b)->tv_sec;  \
-  (s)->tv_usec = (a)->tv_usec + (b)->tv_usec; \
-  if ((s)->tv_usec >= 1000000) {              \
-    ++(s)->tv_sec;                            \
-    (s)->tv_usec -= 1000000;                  \
-  }                                           \
-} while (0)
-#endif
-#ifndef timersub
-#define timersub(a, b, s) do {                \
-  (s)->tv_sec  = (a)->tv_sec  - (b)->tv_sec;  \
-  (s)->tv_usec = (a)->tv_usec - (b)->tv_usec; \
-  if ((s)->tv_usec < 0) {                     \
-    --(s)->tv_sec;                            \
-    (s)->tv_usec += 1000000;                  \
-  }                                           \
-} while (0)
-#endif
-//
-
 #ifndef INET6_ADDRSTRLEN
 #define INET6_ADDRSTRLEN	46
 #endif
 
 #define MAXHOST 64          // if you choose 256, then adjust IDMASK ID2AT AT2ID ID2NDX
 #define MAXPATH 8           // if you change it, then adjust macros
+#define MAXSEQ 16384        // maximum pings in processing
 // 16bits as [hash:7 at:6 ndx:3]
 #define IDMASK    (0xFE00)
 #define AT2ID(n)  ((n & 0x003F) << 3)
@@ -79,29 +47,58 @@
 #define MAXPACKET 4470		// largest test packet size
 #define MINPACKET 28		// 20 bytes IP and 8 bytes ICMP or UDP
 
+#ifdef CURSES
 #define SAVED_PINGS 200
+#define CT_UNKN   -1
+#define CT_UNSENT -2
+#define CT_SEAL   -3
+#endif
 
 extern int af;
-extern int packetsize;
-extern ip_t unspec_addr;	// zero by definition
+extern ip_t unspec_addr;
+
 extern bool (*addr_exist)(const void *); // true if specified
 extern bool (*addr_equal)(const void *, const void *); // equal
 extern void* (*addr_copy)(void *a, const void *b);
+
 extern unsigned long net_queries[];
 extern unsigned long net_replies[];
-
-// MPLS description
-typedef struct { uint32_t lab:20, exp:3, s:1, ttl:8; } mpls_label_t;
-typedef struct mpls_data {
-  mpls_label_t label[MAXLABELS]; // N x 32b labels
-  uint8_t n;
-} mpls_data_t;
 
 #ifdef IPINFO
 #define MAX_TXT_ITEMS 25
 #endif
 
 #define PAUSE_BETWEEN_QUERIES 10 // pause between dns queries, in seconds
+
+// time stats, in msec
+typedef struct timemsec {
+  time_t ms; // in milliseconds
+  int frac;  // in nanoseconds
+} timemsec_t;
+
+typedef union mpls_label { // RFC4950
+  struct {
+#if BYTE_ORDER == LITTLE_ENDIAN
+  uint32_t ttl:8;
+  uint32_t bos:1;
+  uint32_t exp:3;
+  uint32_t lab:20;
+#elif BYTE_ORDER == BIG_ENDIAN
+  uint32_t lab:20;
+  uint32_t exp:3;
+  uint32_t bos:1;
+  uint32_t ttl:8;
+#else
+#error "Undefined byte order"
+#endif
+  };
+  uint32_t u32;
+} mpls_label_t; /* must be 4 bytes */
+
+typedef struct mpls_data {
+  mpls_label_t label[MAXLABELS]; // N x 32b labels
+  uint8_t n;
+} mpls_data_t;
 
 // Address(es) plus associated data
 typedef struct eaddr {
@@ -120,13 +117,19 @@ typedef struct eaddr {
 struct nethost {
   // addresses with all associated data (dns names, mpls labels, extended ip info)
   eaddr_t eaddr[MAXPATH];
-  int current;     // index of the last received address
+  int current;            // index of the last received address
   // a lot of statistics
-  int xmit, returned, sent, up, last, best, worst, avg, gmean, jitter, javg, jworst, jinta, transit;
-  long long var;       // variance, could be overflowed
-  int saved[SAVED_PINGS];
+  int sent, recv;         // %d
+  timemsec_t last, best, worst;  // >10 ? %d : %1.f [msec]
+  double avg, mean;              // >10 ? %d : %1.f [msec]
+  double jitter, javg, jworst, jinta; // jitters
+  long double var;        // variance as base for std deviance: sqrt(var/(recv-1))
+  bool transit, up;       // states: ping in transit, host alive
+#ifdef CURSES
+  int saved[SAVED_PINGS]; // map for display mode: <0 " ?" chars, >=0 pong in usec
   int saved_seq_offset;
-  time_t seen;         // timestamp for caching, last seen
+#endif
+  time_t seen;            // timestamp for caching, last seen
 };
 extern struct nethost host[];
 
@@ -147,34 +150,33 @@ extern struct nethost host[];
 extern char localaddr[];
 
 void net_init(int ipv6);
-bool net_tcp_init(void);
 bool net_open(void);
 bool net_set_host(struct hostent *h);
 bool net_set_ifaddr(char *ifaddr);
-int net_selectsocket(void);
 void net_reset(void);
 void net_close(void);
 int net_wait(void);
-void net_parse(void);
-bool net_tcp_parse(void);
-int net_max(void);
+void net_icmp_parse(void);
+void net_tcp_parse(int sock, int seq, int noerr);
+bool net_timedout(int seq);
 int net_min(void);
-int net_elem(int at, char c);
+int net_max(void);
+const char *net_elem(int at, char c);
 int net_send_batch(void);
 void net_end_transit(void);
 int net_duplicate(int at, int seq);
 
 void sockaddrtop(struct sockaddr *saddr, char *strptr, size_t len);
-void decodempls(int num, const uint8_t *packet, mpls_data_t *mpls, int off);
 const char *strlongip(ip_t *ip);
-time_t wait_usec(float t);
 bool addr4equal(const void *a, const void *b);
 void* addr4copy(void *a, const void *b);
 #ifdef ENABLE_IPV6
 bool addr6equal(const void *a, const void *b);
 void* addr6copy(void *a, const void *b);
+void net_setsocket6(void);
 #endif
 const char *mpls2str(const mpls_label_t *label, int indent);
 uint16_t str2hint(const char* s, uint16_t at, uint16_t ndx);
+void waitspec(struct timespec *tv);
 
 #endif

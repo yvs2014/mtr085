@@ -85,6 +85,6 @@ Examples:
   -g,30,,0  default, 5min, default, disable, default
 
 
-? NetBSD pkgsrc: https://wip.pkgsrc.org/cgi-bin/gitweb.cgi?p=pkgsrc-wip.git;a=tree;f=mtr-graph
-? FreeBSD port: http://sourceforge.net/p/freebsdwip/code/HEAD/tree/net/mtr-graph/
+[outdated] NetBSD pkgsrc: https://wip.pkgsrc.org/cgi-bin/gitweb.cgi?p=pkgsrc-wip.git;a=tree;f=mtr-graph
+[outdated] FreeBSD port: http://sourceforge.net/p/freebsdwip/code/HEAD/tree/net/mtr-graph/
 

@@ -3,6 +3,7 @@ AC_CONFIG_SRCDIR([mtr.c])
 AC_CONFIG_FILES([version.h.tmp:version.h.in])
 AC_PROG_RANLIB
 
+dnl AM_INIT_AUTOMAKE([foreign nostdinc subdir-objects -Wall -Werror silent-rules -Wno-extra-portability])
 AM_INIT_AUTOMAKE([foreign nostdinc subdir-objects -Wall -Werror silent-rules])
 m4_ifdef([AM_PROG_AR], [AM_PROG_AR])
 
@@ -11,7 +12,7 @@ m4_version_prereq([2.70],, [AC_PROG_CC_C99])
 AM_PROG_CC_C_O
 
 # common Unix parameters
-AC_CHECK_HEADERS([sys/param.h], AC_DEFINE(HAVE_SYS_PARAM_H, 1))
+dnl AC_CHECK_HEADERS([sys/param.h], AC_DEFINE(HAVE_SYS_PARAM_H, 1))
 # for netcode
 dnl AC_CHECK_HEADERS([netinet/in_systm.h], AC_DEFINE(HAVE_NETINET_IN_SYSTM_H, 1))
 
@@ -44,7 +45,7 @@ AS_IF([test "x$unicode" = "xyes"], [
 		AC_MSG_ERROR([No wide-character curses library found]))
 	AC_SEARCH_LIBS([tgetent], [ncursesw curses termcap tinfo])	# don't leak ncursesw/curses in LIBS
 	AC_SEARCH_LIBS([use_default_colors], [ncursesw curses],
-		AC_DEFINE([HAVE_USE_DEFAULT_COLORS], [1], [Define this if your curses library has the use_default_colors() command.]))
+		AC_DEFINE([HAVE_USE_DEFAULT_COLORS], [1], [Define this if curses library has use_default_colors()]))
 	AC_DEFINE(CURSES, 1, Build with curses support)
 ], [
 	AS_IF([test "x$curses" = "xyes"], [
@@ -54,7 +55,7 @@ AS_IF([test "x$unicode" = "xyes"], [
 		AC_DEFINE(CURSES, 1, Build with curses support),
 		AC_MSG_WARN(Building without curses display support))
 	AC_SEARCH_LIBS([use_default_colors], [ncurses curses],
-		AC_DEFINE([HAVE_USE_DEFAULT_COLORS], [1], [Define this if your curses library has the use_default_colors() command.]))
+		AC_DEFINE([HAVE_USE_DEFAULT_COLORS], [1], [Define this if curses library has use_default_colors()]))
 ])
 ])
 
@@ -62,6 +63,11 @@ AC_SEARCH_LIBS([pow], [m],, AC_MSG_ERROR(No math library found))
 AC_SEARCH_LIBS([socket], [socket],, AC_MSG_ERROR(No socket library found))
 AC_SEARCH_LIBS([gethostbyname], [nsl],, AC_MSG_ERROR(No nameservice library found))
 AC_SEARCH_LIBS([dn_expand], [resolv],, AC_SEARCH_LIBS([__dn_expand], [resolv],, AC_MSG_ERROR(No resolv found)))
+AC_SEARCH_LIBS([res_nmkquery], [resolv],
+	AC_DEFINE([HAVE_RES_NMKQUERY], [1], [Define this if res_nmkquery() is present]),
+	AC_SEARCH_LIBS([__res_nmkquery], [resolv],
+		AC_DEFINE([HAVE_RES_NMKQUERY], [1], [Define this if res_nmkquery() is present]),
+		AC_SEARCH_LIBS([res_mkquery], [resolv],, AC_MSG_ERROR(No resolv found))))
 
 AC_ARG_WITH([libidn],
 	AS_HELP_STRING([--with-libidn], [IDN support (libidn)]),
@@ -125,7 +131,12 @@ AC_ARG_WITH([output_json],
 AS_IF([test "x$output_json" != "xno"], [AC_DEFINE([OUTPUT_FORMAT_JSON], 1, [Support JSON output format])])
 
 
-# Add some syslog debug: net, dns, ipinfo
+# Add some syslog debug: poll, net, dns, ipinfo
+
+AC_ARG_WITH([syslog_poll],
+	AS_HELP_STRING([--with-syslog-poll], [Enable debug: poll syslog]),
+	[syslog_poll="${withval}"], [syslog_poll=no])
+AS_IF([test "x$syslog_poll" != "xno"], [AC_DEFINE([LOG_POLL], 1, [Enable debug: poll syslog])])
 
 AC_ARG_WITH([syslog_net],
 	AS_HELP_STRING([--with-syslog-net], [Enable debug: net syslog]),

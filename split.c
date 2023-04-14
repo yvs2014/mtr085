@@ -23,6 +23,7 @@
 #include <stdio.h>
 #include <ctype.h>
 #include <termios.h>
+#include <math.h>
 
 #include "config.h"
 #include "mtr.h"
@@ -38,6 +39,7 @@
 #define SPLIT_SEP	'\t'
 
 void split_redraw(void) {
+  const char fields[] = "LRSBAW"; // Loss, Recv, Sent, Best, Avg, Worst
   int max = net_max();
   for (int at = net_min() + display_offset; at < max; at++) {
     ip_t *addr = &CURRENT_IP(at);
@@ -47,12 +49,10 @@ void split_redraw(void) {
       printf("%c%s", SPLIT_SEP, name ? name : strlongip(addr));
       if (show_ips)
         printf("%c%s", SPLIT_SEP, strlongip(addr));
-      printf("%c%.1f", SPLIT_SEP, net_elem(at, 'L') / 1000.);
-      printf("%c%d", SPLIT_SEP, host[at].returned);
-      printf("%c%d", SPLIT_SEP, host[at].xmit);
-      printf("%c%.1f", SPLIT_SEP, host[at].best / 1000.);
-      printf("%c%.1f", SPLIT_SEP, host[at].avg / 1000.);
-      printf("%c%.1f", SPLIT_SEP, host[at].worst / 1000.);
+      for (int i = 0; i < sizeof(fields); i++) {
+        const char *str = net_elem(at, fields[i]);
+        if (str) printf("%c%s", SPLIT_SEP, str);
+      }
 #ifdef IPINFO
       if (ipinfo_ready())
         printf("%c%s", SPLIT_SEP, sep_ipinfo(at, host[at].current, SPLIT_SEP));
@@ -113,15 +113,21 @@ void split_close(void) {
     WARN("tcsetattr");
 }
 
-#define SPLIT_HELP_MESSAGE	\
-  "Command:\n" \
-  "  ?|h     help\n" \
-  "  n       toggle DNS on/off\n" \
-  "  p|SPACE pause/resume\n" \
-  "  q       quit\n" \
-  "  r       reset all counters\n" \
-  "  t       switch between ICMP ECHO and TCP SYN\n" \
-  "  u       switch between ICMP ECHO and UDP datagrams\n"
+const char SMODE_HINTS[] =
+"Command:\n"
+"  h   help\n"
+"  n   toggle DNS on/off\n"
+"  p   pause/resume\n"
+"  q   quit\n"
+"  r   reset all counters\n"
+"  t   switch between ICMP ECHO and TCP SYN\n"
+"  u   switch between ICMP ECHO and UDP datagrams\n"
+#ifdef IPINFO
+"  y   switching IP Info\n"
+"  z   toggle ASN Lookup on/off\n"
+#endif
+"\n"
+"press SPACE to resume... ";
 
 int split_keyaction(void) {
   char c;
@@ -129,16 +135,9 @@ int split_keyaction(void) {
     WARN("read");
     return 0;
   }
-
   switch (tolower((int)c)) {
-    case '?':
     case 'h':
-      printf("%s", SPLIT_HELP_MESSAGE);
-#ifdef IPINFO
-      printf("  y       switching IP Info\n");
-      printf("  z       toggle ASN Lookup on/off\n");
-#endif
-      printf("\npress SPACE to resume... ");
+      printf("%s", SMODE_HINTS);
       fflush(stdout);
       return ActionPauseResume;
     case 'n': return ActionDNS;
@@ -146,8 +145,7 @@ int split_keyaction(void) {
     case 'q': return ActionQuit;
     case 'r': return ActionReset;
     case 't': return ActionTCP;
-    case 'u': mtrtype = (mtrtype == IPPROTO_UDP) ? IPPROTO_ICMP : IPPROTO_UDP;
-      return ActionNone;
+    case 'u': return ActionUDP;
 #ifdef IPINFO
     case 'y': return ActionII;
     case 'z': return ActionAS;
@@ -155,12 +153,9 @@ int split_keyaction(void) {
   }
   switch (c) {
     case 3: return ActionQuit;
-    case 17:
-    case 19:
-    case ' ': return ActionPauseResume;
     case '+': return ActionScrollDown;
     case '-': return ActionScrollUp;
   }
-
   return 0;
 }
+

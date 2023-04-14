@@ -23,7 +23,7 @@
 #include "mtr-curses.h"
 #endif
 #include "report.h"
-#include "select.h"
+#include "mtr-poll.h"
 #include "dns.h"
 #ifdef IPINFO
 #include "ipinfo.h"
@@ -35,30 +35,17 @@
 #include "split.h"
 #endif
 
-void display_detect(int *argc, char ***argv) {
-  display_mode = DisplayReport;
-#ifdef CURSES
-  display_mode = DisplayCurses;
-#endif
-}
-
 bool display_open(void) {
   switch (display_mode) {
-  case DisplayReport:
-    report_open();
-    break;
+    case DisplayReport: report_open(); break;
 #ifdef CURSES
-  case DisplayCurses:
-    return mtr_curses_open();
+    case DisplayCurses: return mtr_curses_open();
 #endif
 #ifdef SPLITMODE
-  case DisplaySplit:
-    split_open();
-    break;
+    case DisplaySplit: split_open(); break;
 #endif
 #ifdef GRAPHCAIRO
-  case DisplayGraphCairo:
-    return gc_open();
+    case DisplayGraphCairo: return gc_open();
 #endif
   }
   return true;
@@ -66,73 +53,56 @@ bool display_open(void) {
 
 void display_close(bool notfirst) {
   switch (display_mode) {
-  case DisplayReport:
-    report_close(report_wide);
-    break;
+    case DisplayReport: report_close(report_wide); break;
 #ifdef OUTPUT_FORMAT_TXT
-  case DisplayTXT:
-    txt_close(notfirst);
-    break;
+    case DisplayTXT: txt_close(notfirst); break;
 #endif
 #ifdef OUTPUT_FORMAT_CSV
-  case DisplayCSV:
-    csv_close(notfirst);
-    break;
+    case DisplayCSV: csv_close(notfirst); break;
 #endif
 #ifdef OUTPUT_FORMAT_JSON
-  case DisplayJSON:
-    json_close(notfirst);
-    break;
+    case DisplayJSON: json_close(notfirst); break;
 #endif
 #ifdef OUTPUT_FORMAT_XML
-  case DisplayXML:
-    xml_close();
-    break;
+    case DisplayXML: xml_close(); break;
 #endif
 #ifdef CURSES
-  case DisplayCurses:
-    mtr_curses_close();
-    break;
+    case DisplayCurses: mtr_curses_close(); break;
 #endif
 #ifdef SPLITMODE
-  case DisplaySplit:
-    split_close();
-    break;
+    case DisplaySplit: split_close(); break;
 #endif
 #ifdef GRAPHCAIRO
-  case DisplayGraphCairo:
-    gc_close();  
-    break;
+    case DisplayGraphCairo: gc_close(); break;
 #endif
   }
 }
 
 void display_start(void) {
+  if (display_mode < 0) {
+#ifdef CURSES
+    display_mode = DisplayCurses;   // by default
+#endif
+    if (display_mode != DisplayCurses)
+      display_mode = DisplayReport; // default unless curses
+  }
   switch (display_mode) {
 #ifdef OUTPUT_FORMAT_JSON
-  case DisplayJSON:
-    json_head();
-    break;
+    case DisplayJSON: json_head(); break;
 #endif
 #ifdef OUTPUT_FORMAT_XML
-  case DisplayXML:
-    xml_head();
-    break;
+    case DisplayXML: xml_head(); break;
 #endif
   }
 }
 
-void display_finish(void) {
+void display_final(void) {
   switch (display_mode) {
 #ifdef OUTPUT_FORMAT_JSON
-  case DisplayJSON:
-    json_tail();
-    break;
+    case DisplayJSON: json_tail(); break;
 #endif
 #ifdef OUTPUT_FORMAT_XML
-  case DisplayXML:
-    xml_tail();
-    break;
+    case DisplayXML: xml_tail(); break;
 #endif
   }
 }
@@ -140,19 +110,13 @@ void display_finish(void) {
 void display_redraw(void) {
   switch(display_mode) {
 #ifdef CURSES
-  case DisplayCurses:
-    mtr_curses_redraw();
-    break;
+    case DisplayCurses: mtr_curses_redraw(); break;
 #endif
 #ifdef SPLITMODE
-  case DisplaySplit:
-    split_redraw();
-    break;
+    case DisplaySplit: split_redraw(); break;
 #endif
 #ifdef GRAPHCAIRO
-  case DisplayGraphCairo:
-    gc_redraw();
-    break;
+    case DisplayGraphCairo: gc_redraw(); break;
 #endif
   }
 }
@@ -160,12 +124,10 @@ void display_redraw(void) {
 int display_keyaction(void) {
   switch(display_mode) {
 #ifdef CURSES
-  case DisplayCurses:
-    return mtr_curses_keyaction();
+    case DisplayCurses: return mtr_curses_keyaction();
 #endif
 #ifdef SPLITMODE
-  case DisplaySplit:
-    return split_keyaction();
+    case DisplaySplit: return split_keyaction();
 #endif
   }
   return 0;
@@ -173,29 +135,28 @@ int display_keyaction(void) {
 
 void display_loop(void) {
   switch(display_mode) {
-  case DisplayReport:
+    case DisplayReport:
 #ifdef OUTPUT_FORMAT_RAW
-  case DisplayRaw:
+    case DisplayRaw:
 #endif
 #ifdef OUTPUT_FORMAT_TXT
-  case DisplayTXT:
+    case DisplayTXT:
 #endif
 #ifdef OUTPUT_FORMAT_CSV
-  case DisplayCSV:
+    case DisplayCSV:
 #endif
 #ifdef OUTPUT_FORMAT_JSON
-  case DisplayJSON:
+    case DisplayJSON:
 #endif
 #ifdef OUTPUT_FORMAT_XML
-  case DisplayXML:
+    case DisplayXML:
 #endif
-  case DisplaySplit:
-  case DisplayCurses:
+    case DisplaySplit:
+    case DisplayCurses:
 #ifdef GRAPHCAIRO
-  case DisplayGraphCairo:
+    case DisplayGraphCairo:
 #endif
-    select_loop();
-    break;
+      poll_loop(); break;
   }
 }
 
@@ -205,3 +166,4 @@ void display_clear(void) {
     mtr_curses_clear();
 #endif
 }
+
