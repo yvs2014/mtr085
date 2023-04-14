@@ -18,9 +18,8 @@
 
 #include <string.h>
 #include <errno.h>
-#include <time.h>
 #include <fcntl.h>
-#include <sys/select.h>
+#include <poll.h>
 #include <netinet/in.h>
 #include <arpa/nameser.h>
 #include <resolv.h>
@@ -403,8 +402,10 @@ void ipinfo_parse(void) { // except dns, dns.ack in dns.c
   } else if (r < 0)
     WARN_("recv(sock=%d)", ORIG_FD);
   else { // got 0 bytes
-    if (ORIG_FD >= 0)
+    if (ORIG_FD >= 0) {
       close(ORIG_FD);
+      /*stat*/ sum_sock[1]++;
+    }
     ORIG_FD = -1;
     lastid = (atndx_t){.at = -1, .ndx = -1};
     LOGMSG_("Close connection to %s", ORIG_HOST);
@@ -430,12 +431,15 @@ static int open_tcp_connection(void) {
   for (int i = 0; h->h_addr_list[i]; i++) {
     re.sin_addr = *(struct in_addr*)h->h_addr_list[i];
 
-    if (sock)
+    if (sock) {
       close(sock);
+      /*stat*/ sum_sock[1]++;
+    }
     if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
       WARN("socket");
       break;
     }
+    /*stat*/ sum_sock[0]++;
     if (fcntl(sock, F_SETFL, O_NONBLOCK) < 0) {
       WARN("fcntl");
       break;
@@ -446,29 +450,29 @@ static int open_tcp_connection(void) {
       WARN("connect");
       continue;
     }
-    fd_set fds;
-    FD_ZERO(&fds);
-    FD_SET(sock, &fds);
-    struct timeval tv = { TCP_CONN_TIMEOUT, 0 };
-    rc = select(sock + 1, NULL, &fds, NULL, &tv);
+    struct pollfd fd = { .fd = sock, .events = POLLOUT };
+    rc = poll(&fd, 1, TCP_CONN_TIMEOUT * MIL);
     if (rc > 0) {
       int so_error;
       socklen_t len = sizeof(so_error);
       getsockopt(sock, SOL_SOCKET, SO_ERROR, &so_error, &len);
       if (!so_error) {
-        if (ORIG_FD >= 0)
+        if (ORIG_FD >= 0) {
           close(ORIG_FD);
+          /*stat*/ sum_sock[1]++;
+        }
         ORIG_FD = sock;
         return 0;
       }
     } else if (rc < 0)
-      WARN("select");
+      WARN("poll");
     else
       LOGMSG_("Timeout expires: %s", inet_ntoa(re.sin_addr));
   }
 
   if (sock >= 0) {
     close(sock);
+    /*stat*/ sum_sock[1]++;
     ORIG_FD = -1;
   }
   LOG_RE_(-1, "Cannot create connection to %s", ORIG_HOST);
@@ -627,6 +631,7 @@ void ipinfo_close(void) {
   if (ii_initiated) {
     if (ORIG_FD >= 0) {
       close(ORIG_FD);
+      /*stat*/ sum_sock[1]++;
       ORIG_FD = -1;
     }
     ii_initiated = false;

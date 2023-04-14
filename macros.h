@@ -3,6 +3,8 @@
 
 #include <err.h>
 #include <stdlib.h>
+#include <time.h>
+#include <sys/time.h>
 
 // common Unix parameters
 #ifdef HAVE_SYS_PARAM_H
@@ -11,7 +13,51 @@
 
 // misc
 #include "version.h"
+#define MIL   1000
+#define MICRO 1000000
+#define NANO  1000000000
 #define UNKN_ITEM "???"
+#define GCDEBUG  // graphcairo output to console
+
+// time conversions
+#define time2msec(t) ((t).tv_sec * MIL + (t).tv_nsec / MICRO)
+#define time2mfrac(t) ((t).tv_nsec % MICRO)
+#define time2usec(t) ((t).tv_sec * MICRO + (t).tv_nsec / MIL)
+#define mseccmp(a, b, CMP) (((a).ms == (b).ms) ? ((a).frac CMP (b).frac) : ((a).ms CMP (b).ms))
+#define msec2float(a)        ((a).ms          + (a).frac              / (double)MICRO)
+#define float_sub_msec(a, b) ((a).ms - (b).ms + ((a).frac - (b).frac) / (double)MICRO)
+
+// just in case (usually defined in sys/time.h)
+#ifndef timespecclear
+#define timespecclear(t) ((t)->tv_sec = (t)->tv_nsec = 0)
+#endif
+#ifndef timespeccmp
+#define timespeccmp(a, b, CMP)       \
+  (((a)->tv_sec  ==  (b)->tv_sec)  ? \
+   ((a)->tv_nsec CMP (b)->tv_nsec) : \
+   ((a)->tv_sec  CMP (b)->tv_sec))
+#endif
+#ifndef timespecadd
+#define timespecadd(a, b, s) do {             \
+  (s)->tv_sec  = (a)->tv_sec  + (b)->tv_sec;  \
+  (s)->tv_nsec = (a)->tv_nsec + (b)->tv_nsec; \
+  if ((s)->tv_nsec >= NANO) {                 \
+    ++(s)->tv_sec;                            \
+    (s)->tv_nsec -= NANO;                     \
+  }                                           \
+} while (0)
+#endif
+#ifndef timespecsub
+#define timespecsub(a, b, s) do {             \
+  (s)->tv_sec  = (a)->tv_sec  - (b)->tv_sec;  \
+  (s)->tv_nsec = (a)->tv_nsec - (b)->tv_nsec; \
+  if ((s)->tv_nsec < 0) {                     \
+    --(s)->tv_sec;                            \
+    (s)->tv_nsec += NANO;                     \
+  }                                           \
+} while (0)
+#endif
+//
 
 /* C99 __func__, and two sets below to not detect ##/VA_OPT */
 

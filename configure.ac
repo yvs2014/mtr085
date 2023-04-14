@@ -35,14 +35,14 @@ AC_ARG_WITH(unicode,
 AS_IF([test "x$curses" = "xno"], [unicode=no])
 
 AS_IF([test "x$unicode" = "xyes"], [
-	AC_CHECK_HEADERS([ncursesw/cursesw.h ncursesw/curses.h curses.h], break)
+	AC_CHECK_HEADERS([ncursesw/cursesw.h ncursesw/curses.h ncurses/curses.h curses.h], break)
 	AC_CHECK_HEADERS([wchar.h wctype.h locale.h langinfo.h])
 	AC_SEARCH_LIBS([add_wch], [ncursesw curses],	# Ncursesw and X/Open curses provide add_wch()
 		AC_DEFINE([UNICODE], [1], [Define to enable unicode]),
 		AC_MSG_ERROR([No wide-character curses library found]))
 	AC_SEARCH_LIBS([tgetent], [ncursesw curses termcap tinfo])	# don't leak ncursesw/curses in LIBS
 	AC_SEARCH_LIBS([use_default_colors], [ncursesw curses],
-		AC_DEFINE([HAVE_USE_DEFAULT_COLORS], [1], [Define this if your curses library has the use_default_colors() command.]))
+		AC_DEFINE([HAVE_USE_DEFAULT_COLORS], [1], [Define this if curses library has use_default_colors()]))
 	AC_DEFINE(CURSES, 1, Build with curses support)
 ], [
 	AS_IF([test "x$curses" = "xyes"], [
@@ -52,7 +52,7 @@ AS_IF([test "x$unicode" = "xyes"], [
 		AC_DEFINE(CURSES, 1, Build with curses support),
 		AC_MSG_WARN(Building without curses display support))
 	AC_SEARCH_LIBS([use_default_colors], [ncurses curses],
-		AC_DEFINE([HAVE_USE_DEFAULT_COLORS], [1], [Define this if your curses library has the use_default_colors() command.]))
+		AC_DEFINE([HAVE_USE_DEFAULT_COLORS], [1], [Define this if curses library has use_default_colors()]))
 ])
 ])
 
@@ -60,6 +60,11 @@ AC_SEARCH_LIBS([pow], [m],, AC_MSG_ERROR(No math library found))
 AC_SEARCH_LIBS([socket], [socket],, AC_MSG_ERROR(No socket library found))
 AC_SEARCH_LIBS([gethostbyname], [nsl],, AC_MSG_ERROR(No nameservice library found))
 AC_SEARCH_LIBS([dn_expand], [resolv],, AC_SEARCH_LIBS([__dn_expand], [resolv],, AC_MSG_ERROR(No resolv found)))
+AC_SEARCH_LIBS([res_nmkquery], [resolv],
+	AC_DEFINE([HAVE_RES_NMKQUERY], [1], [Define this if res_nmkquery() is present]),
+	AC_SEARCH_LIBS([__res_nmkquery], [resolv],
+		AC_DEFINE([HAVE_RES_NMKQUERY], [1], [Define this if res_nmkquery() is present]),
+		AC_SEARCH_LIBS([res_mkquery], [resolv],, AC_MSG_ERROR(No resolv found))))
 
 AC_ARG_WITH([libidn],
 	AS_HELP_STRING([--with-libidn], [IDN support (libidn)]),
@@ -94,9 +99,8 @@ AS_IF([test "x$graphcairo_xcb" = "xyes" -o "x$graphcairo_xlib" = "xyes"], [
 	AC_SEARCH_LIBS([FcFini], [fontconfig], AC_DEFINE([FC_FINI], 1, [finalize fontconfig library]))
 ])
 
-dnl
-dnl Extra output formats: csv, raw, txt, xml, json
-dnl 	"csv, json" enabled by default
+# Extra output formats: csv, raw, txt, xml, json
+# 	"csv, json" enabled by default
 
 AC_ARG_WITH([output_csv],
 	AS_HELP_STRING([--with-output-csv], [CSV output format]),
@@ -124,8 +128,12 @@ AC_ARG_WITH([output_json],
 AS_IF([test "x$output_json" != "xno"], [AC_DEFINE([OUTPUT_FORMAT_JSON], 1, [Support JSON output format])])
 
 
-dnl
-dnl Add some syslog debug: net, dns, ipinfo
+# Add some syslog debug: poll, net, dns, ipinfo
+
+AC_ARG_WITH([syslog_poll],
+	AS_HELP_STRING([--with-syslog-poll], [Enable debug: poll syslog]),
+	[syslog_poll="${withval}"], [syslog_poll=no])
+AS_IF([test "x$syslog_poll" != "xno"], [AC_DEFINE([LOG_POLL], 1, [Enable debug: poll syslog])])
 
 AC_ARG_WITH([syslog_net],
 	AS_HELP_STRING([--with-syslog-net], [Enable debug: net syslog]),
@@ -143,7 +151,7 @@ AC_ARG_WITH([syslog_ipinfo],
 AS_IF([test "x$syslog_ipinfo" != "xno"], [AC_DEFINE([LOG_IPINFO], 1, [Enable debug: ipinfo syslog])])
 
 
-dnl don't break anything if pkg-config is absent
+# don't break anything if pkg-config is absent
 m4_ifndef([PKG_CHECK_MODULES], [m4_defun([PKG_CHECK_MODULES], [AC_MSG_ERROR([
   Could not locate the pkg-config automake macros, these are usually located in
     .../share/aclocal/pkg.m4
@@ -188,7 +196,7 @@ AS_IF([test "x$libidn" = "xyes"], [
 	])
 ])
 
-dnl Add C flags to display more warnings
+# Add C flags to display more warnings
 AC_MSG_CHECKING(for C flags to get more warnings)
 AS_IF([test "x$ac_cv_c_compiler_gnu" = "xyes"], [
 	CFLAGS="$CFLAGS -Wall"
@@ -209,7 +217,7 @@ AH_BOTTOM([
 dnl AC_CONFIG_FILES([Makefile img/Makefile])
 AC_CONFIG_FILES([Makefile])
 
-dnl fix mandir
+# fix mandir
 AC_CANONICAL_HOST
 AS_CASE([$host_os], [freebsd*|openbsd*], [fixmandir=/usr/local], [netbsd*], [fixmandir=/usr/pkg])
 AS_IF([test "x$fixmandir" != "x"], [

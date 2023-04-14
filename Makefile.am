@@ -10,7 +10,7 @@ mtr_SOURCES = mtr.c \
               dns.c dns.h \
               display.c display.h \
               report.c report.h \
-              select.c select.h
+              poll.c mtr-poll.h
 
 nodist_mtr_SOURCES = version.h
 
@@ -67,7 +67,7 @@ BUILT_SOURCES = version.h
 version.h: version.h.tmp Makefile $(mtr_SOURCES)
 	@cat version.h.tmp > $@; \
 	if [ -d .git ] && [ -n "$$(which git)" ]; then \
-	  xver=".$$(git rev-list HEAD | sed '/^97af563/q' | sed -un '$$=')"; \
+	  xver=".$$(git rev-list HEAD | sed '/^97af563/q' | sed -n '$$=')"; \
 	  sed \
 	    -e "/#define *MTR_VERSION */{s/\"\([^\"]*\)\"/\"\1$$xver\"/;}" \
 	    version.h.tmp > $@; \
