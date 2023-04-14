@@ -595,6 +595,9 @@ static void net_stat(unsigned port, const mpls_data_t *mpls, const void *addr, s
     if (enable_raw)
       raw_rawhost(at, &IP_AT_NDX(at, ndx));
 #endif
+  } else if (mpls && memcmp(&MPLS_AT_NDX(at, ndx), mpls, sizeof(mpls_data_t))) {
+    LOGMSG_("update mpls at=%d ndx=%d (labels=%d)", at, ndx, mpls->n);
+    memcpy(&MPLS_AT_NDX(at, ndx), mpls, sizeof(mpls_data_t));
   }
 
   struct timespec tv;
@@ -724,14 +727,14 @@ void net_icmp_parse(void) {
     case IPPROTO_ICMP: {
       if (icmp->type == echoreplytype) {
         reason = RE_PONG;
-		ICMPSEQID;
+        ICMPSEQID;
       } else if ((icmp->type == timeexceededtype) || (icmp->type == unreachabletype)) {
         reason = (icmp->type == timeexceededtype) ? RE_EXCEED : RE_UNREACH;
         icmp = (struct _icmphdr *)data;
-		ICMPSEQID;
+        ICMPSEQID;
         mplson = mplslike(sz, data - packet);
       }
-      LOGMSG_("icmp seq=%d type=%d", seq, icmp->type);
+      LOGMSG_("icmp seq=%d type=%d mpls=%d", seq, icmp->type, mplson);
       /*stat*/ net_replies[QR_SUM]++; net_replies[QR_ICMP]++;
     } break;
 
@@ -748,7 +751,7 @@ void net_icmp_parse(void) {
       }
       seq -= LO_UDPPORT;
       mplson = mplslike(sz, data - packet);
-      LOGMSG_("udp seq=%d id=%d", seq, portpid);
+      LOGMSG_("udp seq=%d id=%d mpls=%d", seq, portpid, mplson);
       /*stat*/ net_replies[QR_SUM]++; net_replies[QR_UDP]++;
     } break;
 
@@ -756,7 +759,7 @@ void net_icmp_parse(void) {
       struct tcphdr *th = (struct tcphdr *)data;
       seq = ntohs(th->th_sport);
       mplson = mplslike(sz, data - packet);
-      LOGMSG_("tcp seq=%d", seq);
+      LOGMSG_("tcp seq=%d mpls=%d", seq, mplson);
       /*stat*/ net_replies[QR_SUM]++; net_replies[QR_TCP]++;
     } break;
   } /*end of switch*/
