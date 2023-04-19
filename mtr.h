@@ -26,6 +26,9 @@
 #include <time.h>
 
 #include "config.h"
+#ifdef HAVE_SYS_PARAM_H
+#include <sys/param.h>
+#endif
 
 #ifdef ENABLE_IPV6
 typedef struct in6_addr ip_t;
@@ -33,7 +36,11 @@ typedef struct in6_addr ip_t;
 typedef struct in_addr ip_t;
 #endif
 
+#if defined(__NetBSD__) || defined(__FreeBSD__) || defined(__OpenBSD__)
+#define LOG_PRIORITY LOG_NOTICE
+#else
 #define LOG_PRIORITY LOG_INFO
+#endif
 
 #define NAMELEN	256
 #define MAXLABELS 8
@@ -83,7 +90,7 @@ extern bool endpoint_mode; // -fa option
 extern bool cache_mode;    // don't ping known hops
 extern int cache_timeout;  // cache timeout in seconds
 extern int cpacketsize;    // default packet size, or user-defined
-extern int tcp_timeout;    // timeout for TCP connections
+extern int syn_timeout;    // timeout for TCP connections
 extern int sum_sock[];     // opened-closed sockets
 //
 extern int display_offset;

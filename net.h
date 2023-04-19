@@ -68,7 +68,8 @@ extern unsigned long net_replies[];
 #define MAX_TXT_ITEMS 25
 #endif
 
-#define PAUSE_BETWEEN_QUERIES 10 // pause between dns queries, in seconds
+#define PAUSE_BETWEEN_QUERIES 3 // pause between identical queries (and ipinfo too), in seconds
+#define TXT_PTR_PAUSE 1         // pause between txt and ptr queries, in seconds
 
 // time stats, in msec
 typedef struct timemsec {

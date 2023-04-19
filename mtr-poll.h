@@ -22,7 +22,8 @@
 #include <poll.h>
 
 void poll_loop(void);
-bool poll_count_on_fd(int fd, int seq);
+int  poll_reg_fd(int fd, int seq);
+void poll_dereg_fd(int slot);
 void poll_close_tcpfds(void);
 
 #endif

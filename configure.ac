@@ -12,7 +12,7 @@ m4_version_prereq([2.70],, [AC_PROG_CC_C99])
 AM_PROG_CC_C_O
 
 # common Unix parameters
-dnl AC_CHECK_HEADERS([sys/param.h], AC_DEFINE(HAVE_SYS_PARAM_H, 1))
+AC_CHECK_HEADERS([sys/param.h], AC_DEFINE(HAVE_SYS_PARAM_H, 1))
 # for netcode
 dnl AC_CHECK_HEADERS([netinet/in_systm.h], AC_DEFINE(HAVE_NETINET_IN_SYSTM_H, 1))
 

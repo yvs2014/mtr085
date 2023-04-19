@@ -19,7 +19,7 @@
 #ifndef DISPLAY_H
 #define DISPLAY_H
 
-enum { ActionNone,  ActionQuit,  ActionReset,  ActionDisplay, 
+enum { ActionNone, ActionQuit, ActionReset, ActionDisplay,
   ActionClear, ActionPauseResume, ActionScrollDown, ActionScrollUp,
   ActionDNS, ActionUDP, ActionTCP, ActionMPLS, ActionCache, ActionAS, ActionII
 };

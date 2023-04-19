@@ -95,7 +95,7 @@ int bitpattern;               // packet bit pattern used by ping
 int remoteport = -1;          // target port
 int tos;                      // type of service set in ping packet
 int cpacketsize = 64;         // default packet size
-int tcp_timeout = MIL;        // for TCP tracing (1sec in msec)
+int syn_timeout = MIL;        // for TCP tracing (1sec in msec)
 int sum_sock[2];              // opened-closed sockets
 //
 int display_offset;
@@ -535,7 +535,7 @@ static void parse_options(int argc, char **argv) {
       break;
 #endif
     case 'Z':
-      tcp_timeout = atoi(optarg) * MIL; // in msec
+      syn_timeout = atoi(optarg) * MIL; // in msec
       break;
     default:
       usage(argv[0]);
@@ -652,8 +652,7 @@ int main(int argc, char **argv) {
   // initialiaze fld_index
   memset(fld_index, -1, sizeof(fld_index)); // any value > statf_max
   for (int i = 0; i < statf_max; i++)
-    if (statf[i].key <= sizeof(fld_index))
-      fld_index[(uint8_t)statf[i].key] = i;
+    fld_index[(uint8_t)statf[i].key] = i;
 
 #ifdef UNICODE
   autotest_unicode_print();
@@ -673,7 +672,8 @@ int main(int argc, char **argv) {
 #ifdef ENABLE_IPV6
   net_setsocket6();
 #endif
-  dns_open();
+  if (enable_dns)
+    dns_open();
 #ifdef IPINFO
   ipinfo_open();
 #endif

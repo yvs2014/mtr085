@@ -41,14 +41,14 @@
 
 #define SCROLL_LINES 5
 #define FD_BATCHMAX 30
-#define USLEEP 10 /* minimal polling in microseconds */
+// between poll() calls
+#define MINSLEEP_USEC 10  // minimal pause, in microseconds
+#define PAUSE_MSEC 100    // when pause button is pressed, in milliseconds
 
-enum FD_POLL { FD_STDIN, FD_NET, FD_DNS,
+// base file descriptors
+enum { FD_STDIN, FD_NET, FD_DNS,
 #ifdef ENABLE_IPV6
 FD_DNS6,
-#endif
-#ifdef ENABLE_IPV6
-FD_IPINFO,
 #endif
 FD_MAX };
 
@@ -56,29 +56,32 @@ static struct pollfd *allfds; // FDs
 static int *tcpseq;           // and corresponding sequence indexes from net.c
 static int maxfd;
 static const struct timespec GRACETIME = { 5, 0 };
-static long numpings;
 static int prev_mtrtype = IPPROTO_ICMP;
+static long numpings;
+static bool need_dns;
 
 #define SET_POLLFD(ndx, sock) { allfds[ndx].fd = sock; allfds[ndx].revents = 0; }
 #define IN_ISSET(ndx) ((allfds[ndx].fd >= 0) && ((allfds[ndx].revents & POLLIN) == POLLIN))
-#define CLOSE_FD(ndx) { close(allfds[ndx].fd); allfds[ndx].fd = -1; allfds[ndx].revents = 0; tcpseq[ndx] = -1; /*stat*/ sum_sock[1]++;}
+#define CLOSE_FD(ndx) { if (tcpseq) tcpseq[ndx] = -1; \
+  if (allfds) { close(allfds[ndx].fd); allfds[ndx].fd = -1; allfds[ndx].revents = 0; /*summ*/ sum_sock[1]++;} \
+}
 
 static void set_fds() {
-  if (interactive)
-    SET_POLLFD(FD_STDIN, 0);
+  SET_POLLFD(FD_STDIN, interactive ? 0 : -1);
   SET_POLLFD(FD_NET, net_wait());
-  if (enable_dns) {
-    SET_POLLFD(FD_DNS, dns_wait(AF_INET));
-#ifdef ENABLE_IPV6
-    SET_POLLFD(FD_DNS6, dns_wait(AF_INET6));
-#endif
-  }
+  need_dns = enable_dns
 #ifdef IPINFO
-  SET_POLLFD(FD_IPINFO, ipinfo_wait());
+               || enable_ipinfo;
 #endif
+  SET_POLLFD(FD_DNS, need_dns ? dns_wait(AF_INET) : -1);
+#ifdef ENABLE_IPV6
+  SET_POLLFD(FD_DNS6, need_dns ? dns_wait(AF_INET6) : -1);
+#endif
+  // clean rest triggers
   if ((mtrtype == IPPROTO_TCP) && (maxfd > FD_MAX))
     for (int i = FD_MAX; i < maxfd; i++)
-      allfds[i].revents = 0;
+      if (allfds[i].revents)
+        allfds[i].revents = 0;
 }
 
 static int sock_already_accounted(int sock) {
@@ -126,7 +129,7 @@ static bool allocate_more_memory(void) {
   return true;
 }
 
-bool poll_count_on_fd(int sock, int seq) {
+int poll_reg_fd(int sock, int seq) {
   int slot = sock_already_accounted(sock);
   if (slot < 0) {
     if ((slot = save_in_vacant_slot(sock, seq)) < 0) {
@@ -137,44 +140,69 @@ bool poll_count_on_fd(int sock, int seq) {
         LOGMSG_("sock=%d: memory allocation failed", sock);
     }
   }
-  return (slot >= 0);
+  return slot;
 }
 
+void poll_dereg_fd(int slot) { if ((slot >=0) && (slot < maxfd)) CLOSE_FD(slot); }
 void poll_close_tcpfds(void) { if (maxfd > FD_MAX) for (int i = FD_MAX; i < maxfd; i++) if (allfds[i].fd >= 0) CLOSE_FD(i); }
 
 // not relying on ETIMEDOUT close stalled TCP connections
 static void tcp_timedout(void) {
-  for (int i = FD_MAX; i < maxfd; i++)
-    if ((allfds[i].fd >= 0) && (tcpseq[i] >= 0))
-      if (net_timedout(tcpseq[i]))
-        CLOSE_FD(i);
-}
-
-static bool tcpfds(void) {
-  bool re = false;
   for (int i = FD_MAX; i < maxfd; i++) {
-    int sock = allfds[i].fd;
-    if (sock >= 0) {
-      if (allfds[i].revents) { /* option: ((allfds[i].revents & POLLOUT) == POLLOUT) */
-        LOGMSG_("revents=%d in slot#%d", allfds[i].revents, i);
-        int seq = tcpseq[i];
-        if (seq >= 0)
-          net_tcp_parse(sock, seq, allfds[i].revents == POLLOUT);
-        else
-          LOGMSG_("no sequence for tcp sock=%d in slot#%d", sock, i);
-        CLOSE_FD(i);
+    int seq = tcpseq[i];
+    if (seq >= 0) {
+      bool timedout =
+#ifdef IPINFO
+        (seq < MAXSEQ) ? net_timedout(seq) : ipinfo_timedout(seq);
+#else
+        net_timedout(seq);
+#endif
+      if (timedout) {
+        tcpseq[i] = -1;
+        if (allfds[i].fd >= 0)
+          CLOSE_FD(i);
       }
     }
   }
-  return re;
 }
 
-enum GRACE_VALUES { NO_GRACE, GRACE_START, GRACE_FINISH };
+static void proceed_tcp(void) {
+  for (int i = FD_MAX; i < maxfd; i++) {
+    int sock = allfds[i].fd;
+    short ev = allfds[i].revents;
+    if ((sock < 0) || !ev)
+      continue;
+    LOGMSG_("slot#%d sock=%d event=%d", i, sock, ev);
+    int seq = tcpseq[i];
+    bool postclose = true;
+    if (seq >= 0) {
+      if (seq < MAXSEQ) // ping tcp-mode
+        net_tcp_parse(sock, seq, ev == POLLOUT);
+#ifdef IPINFO
+      else { // ipinfo tcp-origin
+        postclose = false; // close it on timeout only
+        allfds[i].revents = 0;  // clear trigger
+        if (ev == POLLIN)
+          ipinfo_parse(sock, seq);
+        else if (ev == POLLOUT) {
+          ipinfo_seq_ready(seq);
+          allfds[i].events = POLLIN;
+        }
+      }
+#endif
+    } else
+      LOGMSG_("no sequence for tcp sock=%d in slot#%d", sock, i);
+    if (postclose)
+      CLOSE_FD(i);
+  }
+}
+
+enum { NO_GRACE, GRACE_START, GRACE_FINISH }; // state of grace period
 
 static bool svc(struct timespec *last, const struct timespec *interval, int *timeout) {
   static int grace = NO_GRACE;
   static struct timespec grace_started;
-  // set last,start and timeout(msec), then return boolean grace or -1
+  // set last,start and timeout(msec), return false it is necessary to stop
   struct timespec now, tv;
   clock_gettime(CLOCK_MONOTONIC, &now);
   timespecadd(last, interval, &tv);
@@ -210,13 +238,13 @@ static bool svc(struct timespec *last, const struct timespec *interval, int *tim
   return true;
 }
 
-
-static int keyboard_click(bool* paused) { // Has a key been pressed?
+// proceed keyboard events and return action
+static int keyboard_events(void) {
   int action = display_keyaction();
   switch (action) {
     case ActionQuit:
       LOGMSG("quit");
-      return -1;
+      break;
     case ActionReset:
       LOGMSG("reset network counters");
       net_reset();
@@ -237,8 +265,7 @@ static int keyboard_click(bool* paused) { // Has a key been pressed?
       display_clear();
       break;
     case ActionPauseResume:
-      *paused = !(*paused);
-      LOGMSG_("'%s' pressed", *paused ? "pause" : "resume");
+      LOGMSG_("'%s' pressed", "pause/resume");
       break;
     case ActionMPLS:
       enable_mpls = !enable_mpls;
@@ -296,12 +323,13 @@ static int keyboard_click(bool* paused) { // Has a key been pressed?
       net_setsocket6();
 #endif
     } break;
+    default: action = ActionNone;
   }
-  return 0;
+  return action;
 }
 
 #ifdef IPINFO
-void display_ipinfo() {
+static void proceed_ipinfo() {
   switch (display_mode) {
     case DisplayReport:
     case DisplayTXT:
@@ -314,44 +342,46 @@ void display_ipinfo() {
 }
 #endif
 
+static inline bool tcpish(void) {
+  return ((maxfd > FD_MAX) && (
+    (mtrtype == IPPROTO_TCP)
+#ifdef IPINFO
+    || ipinfo_tcpmode
+#endif
+  ));
+}
 
-bool polled() {
-  bool re = false;
+// work out events
+static int conclude() {
+  int rc = ActionNone;
+  if (IN_ISSET(FD_STDIN)) { // check keyboard events
+    LOGMSG("got stdin event");
+    int ev = keyboard_events();
+    if (ev == ActionQuit)
+      return ev; // return immediatelly if 'quit' is pressed
+    else if (ev == ActionPauseResume)
+      rc = ev;
+  }
   if (IN_ISSET(FD_NET)) { // net packet
     LOGMSG("got icmp or udp response");
     net_icmp_parse();
-    re = true;
   }
-  if (enable_dns) { // dns lookup
+  if (need_dns) { // dns lookup
     if (IN_ISSET(FD_DNS)) {
       LOGMSG("got dns response");
       dns_parse(allfds[FD_DNS].fd, AF_INET);
-      re = true;
     }
 #ifdef ENABLE_IPV6
     if (IN_ISSET(FD_DNS6)) {
       LOGMSG("got dns6 response");
       dns_parse(allfds[FD_DNS6].fd, AF_INET6);
-      re = true;
     }
 #endif
   }
-#ifdef IPINFO
-  if (ipinfo_ready()) { // ipinfo lookup
-    if (IN_ISSET(FD_IPINFO)) {
-      LOGMSG("got ipinfo response");
-      ipinfo_parse();
-      re = true;
-    }
-  }
-#endif
-  if ((mtrtype == IPPROTO_TCP) && (maxfd > FD_MAX)) {
-    if (tcpfds()) // tcp data
-      re = true;
-  }
-  return re;
+  if (tcpish())
+    proceed_tcp();
+  return rc;
 }
-
 
 static bool seqfd_init(void) {
   size_t sz = FD_MAX * sizeof(int);
@@ -367,6 +397,7 @@ static bool seqfd_init(void) {
   if (!allfds) {
     WARN_("fd malloc(%zd)", sz);
     free(tcpseq);
+    tcpseq = NULL;
     return false;
   }
   for (int i = 0; i < FD_MAX; i++) {
@@ -406,13 +437,13 @@ void poll_loop(void) {
 
     do {
       if (anyset || paused)
-        timeout = paused ? 100 : 0;  // 100 milliseconds polling in pause, if 0 then at least usleep(10 usec) below
+        timeout = paused ? PAUSE_MSEC : 0;
       else {
         if (interactive || (display_mode == DisplaySplit))
           display_redraw();
 #ifdef IPINFO
         if (ipinfo_ready())
-          display_ipinfo();
+          proceed_ipinfo();
 #endif
         if (!svc(&lasttime, &interval, &timeout)) {
           seqfd_free();
@@ -421,7 +452,7 @@ void poll_loop(void) {
         }
       }
       if (!timeout)
-        usleep(USLEEP);
+        usleep(MINSLEEP_USEC);
       rv = poll(allfds, maxfd, timeout);
     } while ((rv < 0) && (errno == EINTR));
 
@@ -430,17 +461,17 @@ void poll_loop(void) {
       display_close(true);
       WARN_("poll: %s", strerror(e));
       LOGMSG_("poll: %s", strerror(e));
-      seqfd_free();
-      return;
-    } else if (!rv && (mtrtype == IPPROTO_TCP) && (maxfd > FD_MAX))
-      tcp_timedout(); // not waiting for TCP ETIMEDOUT
-
-    anyset = polled();
-    if (IN_ISSET(FD_STDIN)) { // check keyboard too
-      if (keyboard_click(&paused) < 0) // i.e. quit
-        break;
-      anyset = true;
+      break;
     }
+    anyset = rv ? true : false; // something triggered, or not
+    if (anyset) {
+      int rc = conclude();
+      if (rc == ActionQuit)
+        break;
+      else if (rc == ActionPauseResume)
+        paused = !paused;
+    } else if (tcpish())
+      tcp_timedout(); // not waiting for TCP ETIMEDOUT
   }
 
   seqfd_free();

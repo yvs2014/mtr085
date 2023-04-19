@@ -113,8 +113,6 @@ static const int ies_sz = sizeof(struct icmpext_struct);
 static const int ieo_sz = sizeof(struct icmpext_object);
 static const int lab_sz = sizeof(mpls_label_t);
 static const int mplsmin = 120; // min after: [ip] icmp ip
-// given: icmpext_struct(4) icmpext_object(4) label(4) [label(4) ...]
-static const int mplsoff = mplsmin - ies_sz - ieo_sz - lab_sz;
 
 #define LO_UDPPORT 33433	// start from LO_UDPPORT+1
 #define UDPPORTS 90		// go thru udp:33434-33523 acl
@@ -133,12 +131,6 @@ static const int mplsoff = mplsmin - ies_sz - ieo_sz - lab_sz;
 #define IPLEN_RAW(sz) sz
 #endif
 
-#ifdef __OpenBSD__
-#define TVSEC_FMT "%lld"
-#else
-#define TVSEC_FMT "%zd"
-#endif
-
 #define EXIT(s) { int e = errno; display_close(true); ERRX_(e, "%s: %s", s, strerror(e)); }
 
 #define SET_TCP_ATTR(lo_addr, ssa_addr, re_addr, re_port, paddr) { \
@@ -148,7 +140,7 @@ static const int mplsoff = mplsmin - ies_sz - ieo_sz - lab_sz;
   addrlen = sizeof(*paddr); \
 }
 
-#define CLOSE(fd) if ((fd) >= 0) { close(fd); fd = -1; /*stat*/ sum_sock[1]++; }
+#define CLOSE(fd) if ((fd) >= 0) { close(fd); fd = -1; /*summ*/ sum_sock[1]++; }
 
 #define WARNRE0(fd, fmt, ...) { int e = errno; display_clear(); CLOSE(fd); \
   WARNX_(fmt ": %s", __VA_ARGS__, strerror(e)); \
@@ -172,9 +164,9 @@ void* (*addr_copy)(void *, const void *);
 int af;	// address family
 struct nethost host[MAXHOST];
 char localaddr[INET6_ADDRSTRLEN];
-enum _QR { QR_SUM = 0 /*sure*/, QR_ICMP, QR_UDP, QR_TCP };
 unsigned long net_queries[4]; // number of queries (sum, icmp, udp, tcp)
 unsigned long net_replies[4]; // number of replies (sum, icmp, udp, tcp)
+enum { QR_SUM = 0 /*sure*/, QR_ICMP, QR_UDP, QR_TCP };
 //
 
 
@@ -218,7 +210,7 @@ static int batch_at;
 static int numhosts = 10;
 static int portpid;
 static int stopper = MAXHOST;
-enum RE_REASONS { RE_PONG, RE_EXCEED, RE_UNREACH };
+enum { RE_PONG, RE_EXCEED, RE_UNREACH }; // reason of a pong response
 
 
 bool addr4exist(const void *a) { return memcmp(a, &unspec_addr, sizeof(struct in_addr)) ? true : false; }
@@ -336,7 +328,7 @@ static bool net_send_tcp(int at) {
   int sock = socket(af, SOCK_STREAM, 0);
   if (sock < 0)
     WARNRE0(sock, "socket[at=%d]", at);
-  /*stat*/ sum_sock[0]++;
+  /*summ*/ sum_sock[0]++;
 
   memset(&local, 0, sizeof (local));
   memset(&remote, 0, sizeof (remote));
@@ -372,16 +364,16 @@ static bool net_send_tcp(int at) {
   }
 
   int seq = port % MAXSEQ;
-  if (!poll_count_on_fd(sock, seq))
+  if (poll_reg_fd(sock, seq) < 0)
     WARNRE0(sock, "no place in pool for sockets (at=%d)", at);
   save_sequence(seq, at);
   connect(sock, (struct sockaddr *) &remote, addrlen);
 #ifdef LOGMOD
   struct timespec now;
   clock_gettime(CLOCK_MONOTONIC, &now);
-  LOGMSG_("at=%d seq=%d sock=%d: ttl=%d (ts=" TVSEC_FMT "%09zd)", at, seq, sock, ttl, now.tv_sec, now.tv_nsec);
+  LOGMSG_("at=%d seq=%d sock=%d: ttl=%d (ts=" TVSEC_FMT ".%09zd)", at, seq, sock, ttl, now.tv_sec, now.tv_nsec);
 #endif
-  /*stat*/ net_queries[QR_SUM]++; net_queries[QR_TCP]++;
+  /*summ*/ net_queries[QR_SUM]++; net_queries[QR_TCP]++;
   return true;
 }
 
@@ -475,7 +467,7 @@ static bool net_send(int at) {
 
   if (sendto(sendsock, packet, packetsize, 0, remotesockaddr, salen) < 0)
     WARNRE0(sendsock, "sendto at=%d: ttl=%d", at, ttl);
-  /*stat*/ net_queries[QR_SUM]++; (mtrtype == IPPROTO_ICMP) ? net_queries[QR_ICMP]++ : net_queries[QR_UDP];
+  /*summ*/ net_queries[QR_SUM]++; (mtrtype == IPPROTO_ICMP) ? net_queries[QR_ICMP]++ : net_queries[QR_UDP];
   return true;
 }
 
@@ -627,6 +619,8 @@ static inline int proto_hdrsz(int type) {
 static mpls_data_t *decodempls(const uint8_t *data, int sz) {
   static mpls_data_t mplsdata;
   static int ext_sz = ies_sz + ieo_sz + lab_sz;
+// given: icmpext_struct(4) icmpext_object(4) label(4) [label(4) ...]
+  static const int mplsoff = mplsmin - ies_sz - ieo_sz - lab_sz;
   int off = mplsoff;
   // at least 12bytes ahead: icmp_ext_struct(4) icmp_ext_object(4) label(4) [label(4) ...]
   if ((off + ext_sz) < sz) {
@@ -735,7 +729,7 @@ void net_icmp_parse(void) {
         mplson = mplslike(sz, data - packet);
       }
       LOGMSG_("icmp seq=%d type=%d mpls=%d", seq, icmp->type, mplson);
-      /*stat*/ net_replies[QR_SUM]++; net_replies[QR_ICMP]++;
+      /*summ*/ net_replies[QR_SUM]++; net_replies[QR_ICMP]++;
     } break;
 
     case IPPROTO_UDP: {
@@ -752,7 +746,7 @@ void net_icmp_parse(void) {
       seq -= LO_UDPPORT;
       mplson = mplslike(sz, data - packet);
       LOGMSG_("udp seq=%d id=%d mpls=%d", seq, portpid, mplson);
-      /*stat*/ net_replies[QR_SUM]++; net_replies[QR_UDP]++;
+      /*summ*/ net_replies[QR_SUM]++; net_replies[QR_UDP]++;
     } break;
 
 	case IPPROTO_TCP: {
@@ -760,7 +754,7 @@ void net_icmp_parse(void) {
       seq = ntohs(th->th_sport);
       mplson = mplslike(sz, data - packet);
       LOGMSG_("tcp seq=%d mpls=%d", seq, mplson);
-      /*stat*/ net_replies[QR_SUM]++; net_replies[QR_TCP]++;
+      /*summ*/ net_replies[QR_SUM]++; net_replies[QR_TCP]++;
     } break;
   } /*end of switch*/
 
@@ -889,7 +883,7 @@ static void net_sock_close(void) {
   CLOSE(recvsock6);
 }
 
-#define WARNCLRE(sock, msg) { if ((sock) < 0) { WARN(msg); net_sock_close(); return false; }; /*stat*/ sum_sock[0]++; }
+#define WARNCLRE(sock, msg) { if ((sock) < 0) { WARN(msg); net_sock_close(); return false; }; /*summ*/ sum_sock[0]++; }
 
 bool net_open(void) { // optional IPv6: no error
   net_init(0);  // no IPv6 by default
@@ -1100,20 +1094,19 @@ void net_tcp_parse(int sock, int seq, int noerr) {
 //  case EAGAIN: // need to wait more
   }
   seqlist[seq].transit = false;
-  if (noerr) { /*stat*/ net_replies[QR_SUM]++; net_replies[QR_TCP]++; }
+  if (noerr) { /*summ*/ net_replies[QR_SUM]++; net_replies[QR_TCP]++; }
 }
 
-// Close timed out TCP connection
+// Clean timed out TCP connection
 bool net_timedout(int seq) {
-  struct timespec now, msec;
+  struct timespec now, dt;
   clock_gettime(CLOCK_MONOTONIC, &now);
-  timespecsub(&now, &seqlist[seq].time, &msec);
-  if (time2msec(msec) > tcp_timeout) {
-    LOGMSG_("clean tcp seq=%d after %d sec", seq, tcp_timeout / MIL);
-    seqlist[seq].transit = false;
-    return true;
-  }
-  return false;
+  timespecsub(&now, &seqlist[seq].time, &dt);
+  if (time2msec(dt) <= syn_timeout)
+    return false;
+  LOGMSG_("clean tcp seq=%d after %d sec", seq, syn_timeout / MIL);
+  seqlist[seq].transit = false;
+  return true;
 }
 
 static void save_ptr_answer(int at, int ndx, const char* answer) {

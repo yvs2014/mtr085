@@ -23,8 +23,7 @@ extern bool enable_dns;
 extern unsigned dns_queries[];
 extern unsigned dns_replies[];
 
-bool dns_init(void);
-void dns_open(void);
+bool dns_open(void);
 void dns_close(void);
 int dns_wait(int family);
 void dns_parse(int fd, int family);

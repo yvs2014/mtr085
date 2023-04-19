@@ -23,19 +23,21 @@ void  ipinfo_open(void);
 void  ipinfo_close(void);
 int   ipinfo_args(char *arg);
 void  ipinfo_action(int action);
-void  ipinfo_parse(void);
-int   ipinfo_wait(void);
+void  ipinfo_parse(int sock, int seq);
 bool  ipinfo_ready(void);
 int   ipinfo_width(void);
 char* ipinfo_header(void);
+bool  ipinfo_timedout(int seq);
+void  ipinfo_seq_ready(int seq);
 
 char  *fmt_ipinfo(int at, int ndx);
 char  *sep_ipinfo(int at, int ndx, char sep);
 void query_ipinfo(void);
 
 #define ASLOOKUP_DEFAULT	NULL	// cymru
-//#define ASLOOKUP_DEFAULT	"2,2"	// riswhois
+//#define ASLOOKUP_DEFAULT	"2,2"	// riswhois (with this default: set ipinfo_tcpmode to 'true')
 extern bool enable_ipinfo;
+extern bool ipinfo_tcpmode;
 extern unsigned ipinfo_queries[];
 extern unsigned ipinfo_replies[];
 

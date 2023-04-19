@@ -35,8 +35,6 @@
 #endif
 #include "macros.h"
 
-struct __res_state myres;
-
 #ifdef ENABLE_IPV6
 #ifdef __GLIBC__
 #define NSSOCKADDR6(i) (myres._u._ext.nsaddrs[i])
@@ -67,10 +65,13 @@ struct __res_state_ext {
 #endif
 
 #ifdef HAVE_RES_NMKQUERY
+struct __res_state myres;
 #define MYRES_INIT(res) res_ninit(&res)
 #define MYRES_CLOSE(res) res_nclose(&res)
 #define MYRES_QUERY(res, ...) res_nmkquery(&res, __VA_ARGS__)
 #else
+extern struct __res_state _res;
+#define myres _res
 #define MYRES_INIT(res) res_init()
 #define MYRES_CLOSE(res)
 #define MYRES_QUERY(res, ...) res_mkquery(__VA_ARGS__)
@@ -91,7 +92,8 @@ void (*dns_ptr_handler)(int at, int ndx, const char* answer);
 void (*dns_txt_handler)(int at, int ndx, const char* answer);
 //
 
-static bool dns_initiated = false;
+static bool resolv_ready;
+static bool dns_ready;
 static int resfd = -1;
 #ifdef ENABLE_IPV6
 static int resfd6 = -1;
@@ -107,7 +109,7 @@ static struct sockaddr_in *from4 = (struct sockaddr_in *) &from_sastruct;
 static struct sockaddr *from = (struct sockaddr *) &from_sastruct;
 
 int dns_wait(int family) {
- return (enable_dns && dns_initiated) ? (
+ return dns_ready ? (
 #ifdef ENABLE_IPV6
   (family == AF_INET6) ? resfd6 :
 #endif
@@ -119,69 +121,72 @@ static int dns_mkquery(int op, const char *dname, int class, int type, const uin
   return MYRES_QUERY(myres, op, dname, class, type, data, datalen, newrr, buf, buflen);
 }
 
-bool dns_init(void) {
-  if (!dns_initiated) {
+static bool init_resolv(void) {
+  if (!resolv_ready) {
     if (MYRES_INIT(myres) >= 0) {
       if (myres.nscount) {
         myres.options |= RES_DEFAULT;
         myres.options &= ~(RES_DNSRCH | RES_DEFNAMES);
-        dns_initiated = true;
+        resolv_ready = true;
+      } else {
+        WARNX("No defined nameservers");
+        MYRES_CLOSE(myres);
       }
-#ifndef __OpenBSD__
-        else WARNX("No defined nameservers");
-#endif
     } else WARN("res_init");
   }
-  return dns_initiated;
+  return resolv_ready;
 }
 
-void dns_socket(void) {
-  int option = 1;
-  if ((resfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
-    WARN("socket");
-  else {
-    /*stat*/ sum_sock[0]++;
-    if (setsockopt(resfd, SOL_SOCKET, SO_BROADCAST, (char*)&option, sizeof(option)) < 0)
-      WARN("setsockopt");
+static bool open_sockets(void) {
+  if (resfd < 0) {
+    if ((resfd = socket(AF_INET, SOCK_DGRAM, 0)) >= 0)
+      /*summ*/ sum_sock[0]++;
+    else
+      WARN("socket");
   }
 #ifdef ENABLE_IPV6
-  if ((resfd6 = socket(AF_INET6, SOCK_DGRAM, 0)) < 0)
-;//    WARN("socket6");
-  else {
-    /*stat*/ sum_sock[0]++;
-    if (setsockopt(resfd6, SOL_SOCKET, SO_BROADCAST, (char*)&option, sizeof(option)) < 0)
-;//    WARN("setsockopt6");
+  if (resfd6 < 0) {
+    if ((resfd6 = socket(AF_INET6, SOCK_DGRAM, 0)) >= 0)
+      /*summ*/ sum_sock[0]++;
+    else
+      LOGMSG("socket6");
   }
 #endif
+  return (resfd >= 0)
+#ifdef ENABLE_IPV6
+     || (resfd6 >= 0)
+#endif
+  ;
 }
 
-void dns_open(void) {
-  if (!enable_dns)
-    return;
-  LOGMSG("");
-  if (!dns_initiated)
-    dns_init();
-  dns_socket();
+bool dns_open(void) {
+  if (init_resolv())
+    dns_ready = open_sockets();
+  LOGMSG_("%s", dns_ready ? "ok" : "failed");
+  return dns_ready;
 }
 
 void dns_close(void) {
-  // close sockets
-  if (resfd >= 0) {
-    close(resfd);
-    /*stat*/ sum_sock[1]++;
-    resfd = -1;
-  }
+  if (dns_ready) { // close own sockets
+    if (resfd >= 0) {
+      close(resfd);
+      /*summ*/ sum_sock[1]++;
+      resfd = -1;
+    }
 #ifdef ENABLE_IPV6
-  if (resfd6 >= 0) {
-    close(resfd6);
-    /*stat*/ sum_sock[1]++;
-    resfd6 = -1;
-  }
+    if (resfd6 >= 0) {
+      close(resfd6);
+      /*summ*/ sum_sock[1]++;
+      resfd6 = -1;
+    }
 #endif
-  // res_nclose()
-  if (dns_initiated) {
+    dns_ready = false;
+    LOGMSG("ok");
+  }
+  // res_close()
+  if (resolv_ready) {
     MYRES_CLOSE(myres);
-    dns_initiated = false;
+    resolv_ready = false;
   }
 }
 
@@ -210,6 +215,8 @@ char* ip2arpa(ip_t *ip, const char *suff4, const char *suff6) {
 
 int dns_send_query(int at, int ndx, const char *qstr, int type) {
   static uint8_t req_buf[PACKETSZ];
+  if (!dns_ready)
+    return -1;
   int len = dns_mkquery(QUERY, qstr, C_IN, type, NULL, 0, NULL, req_buf, sizeof(req_buf));
   if (len < 0) {
     WARN_("[%d:%d type=%d]", at, ndx, type);
@@ -228,7 +235,7 @@ int dns_send_query(int at, int ndx, const char *qstr, int type) {
     else
 #endif
       re = sendto(resfd, req_buf, len, 0, (struct sockaddr *)&myres.nsaddr_list[i], sizeof(struct sockaddr));
-    /*stat*/ { dns_queries[0]++; if (type == T_PTR) dns_queries[1]++; else if (type == T_TXT) dns_queries[2]++; }
+    /*summ*/ { dns_queries[0]++; if (type == T_PTR) dns_queries[1]++; else if (type == T_TXT) dns_queries[2]++; }
     if (re >= 0) // one successful request is enough
       return re;
     LOGMSG_("[%d:%d type=%d id=%d] #%d: %s", at, ndx, type, hp->id, i, strerror(errno));
@@ -252,8 +259,11 @@ const char *dns_ptr_lookup(int at, int ndx) {
       return NULL;
   }}
 
-  if ((time(NULL) - QPTR_TS_AT_NDX(at, ndx)) > PAUSE_BETWEEN_QUERIES) { // if less, wait a little
-    QPTR_TS_AT_NDX(at, ndx) = time(NULL); // save time of trying to send
+  time_t now = time(NULL);
+  time_t dt_ptr = now - QPTR_TS_AT_NDX(at, ndx);
+  time_t dt_txt = now - QTXT_TS_AT_NDX(at, ndx);
+  if ((dt_ptr >= PAUSE_BETWEEN_QUERIES) && (dt_txt >= TXT_PTR_PAUSE)) {
+    QPTR_TS_AT_NDX(at, ndx) = now; // save time of trying to send
     dns_send_query(at, ndx, QPTR_AT_NDX(at, ndx), T_PTR);
   }
   return NULL;
@@ -311,7 +321,7 @@ static void dns_parse_reply(uint8_t *buf, ssize_t len) {
   HEADER *hp = (HEADER*)buf;
 
   LOGMSG_("got %zd bytes, id=%u at=%u ndx=%u", len, hp->id, ID2AT(hp->id), ID2NDX(hp->id));
-  dns_replies[0]++; /*stat*/
+  dns_replies[0]++; /*summ*/
 
   hp->qdcount = ntohs(hp->qdcount);
   hp->ancount = ntohs(hp->ancount);
@@ -340,7 +350,7 @@ static void dns_parse_reply(uint8_t *buf, ssize_t len) {
         else if ((an->type == 1) && dns_txt_handler)
           dns_txt_handler(an->at, an->ndx, answer);
 #endif
-		/*stat*/ { if (an->type == 0) dns_replies[1]++; else if (an->type == 1) dns_replies[2]++; }
+		/*summ*/ { if (an->type == 0) dns_replies[1]++; else if (an->type == 1) dns_replies[2]++; }
       }
     } else
       LOGRET_("Response error %d", hp->rcode);
@@ -362,7 +372,7 @@ static void dns_parse_reply(uint8_t *buf, ssize_t len) {
   c += l;
   if (c + 4 > eob)
     LOGRET("Query resource record truncated");
-  { int type; GETSHORT(type, c); if (type == T_PTR) dns_replies[1]++; /*stat*/
+  { int type; GETSHORT(type, c); if (type == T_PTR) dns_replies[1]++; /*summ*/
 #ifdef IPINFO
     else if (type == T_TXT) dns_replies[2]++;
 #endif

@@ -6,6 +6,8 @@
 #include <time.h>
 #include <sys/time.h>
 
+#include "config.h"
+
 // common Unix parameters
 #ifdef HAVE_SYS_PARAM_H
 #include <sys/param.h>
@@ -18,6 +20,11 @@
 #define NANO  1000000000
 #define UNKN_ITEM "???"
 #define GCDEBUG  // graphcairo output to console
+#ifdef __OpenBSD__
+#define TVSEC_FMT "%lld"
+#else
+#define TVSEC_FMT "%zd"
+#endif
 
 // time conversions
 #define time2msec(t) ((t).tv_sec * MIL + (t).tv_nsec / MICRO)
