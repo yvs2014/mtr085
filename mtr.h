@@ -108,7 +108,7 @@ extern const struct statf statf[];
 extern const int statf_max;
 //
 extern char srchost[];
-extern char *dsthost;
+extern const char *dsthost;
 extern int display_mode;
 extern double wait_time;
 extern bool interactive;

@@ -3,9 +3,10 @@
 sbin_PROGRAMS = mtr
 man_MANS = mtr.8
 install-exec-hook:
-	chmod u+s $(DESTDIR)$(sbindir)/mtr
+	test "`uname -s`" == "Linux" && `setcap cap_net_raw+ep $(DESTDIR)$(sbindir)/mtr` || chmod u+s $(DESTDIR)$(sbindir)/mtr
 
-mtr_SOURCES = mtr.c \
+mtr_SOURCES = mtr.c mtr.h \
+              macros.h \
               net.c net.h \
               dns.c dns.h \
               display.c display.h \

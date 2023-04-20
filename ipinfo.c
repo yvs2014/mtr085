@@ -471,7 +471,7 @@ static int send_tcp_query(int sock, const char *q) {
   if (rc >= 0) {
     /*summ*/ ipinfo_queries[0]++; (ORIG_TYPE == OT_HTTP) ? ipinfo_queries[1]++ : ipinfo_queries[2]++;
   }
-  LOGMSG_("[orig=%d sock=%d] q=\"%s\" rc=%d ts=" TVSEC_FMT, origin_no, sock, q, rc, time(NULL));
+  LOGMSG_("[orig=%d sock=%d] q=\"%s\" rc=%d ts=%lld", origin_no, sock, q, rc, (long long)time(NULL));
   return rc;
 }
 

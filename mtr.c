@@ -71,8 +71,6 @@
 #define REPORT_PINGS 10
 #define CACHE_TIMEOUT 60
 
-typedef struct names { char *name; struct names *next; } names_t;
-
 #define FLD_DEFAULT "LS NABWV"
 static const char fld_jitter[MAXFLD + 1] = "DR AGJMXI";
 static char fld_custom[MAXFLD + 1];
@@ -80,7 +78,8 @@ static unsigned fld_index[256]; // key->index backresolv
 
 //// global vars
 pid_t mypid;
-char mtr_args[1024];          // posix,susvn: 4096+
+#define ARGS_LEN 64 /* seem to be enough */
+char mtr_args[ARGS_LEN + 1];  // display in curses title
 unsigned iargs;               // args passed interactively
 bool show_ips = false;
 bool enable_mpls = false;
@@ -184,15 +183,14 @@ static struct option long_options[] = {
 static char *short_options;
 
 char srchost[NAMELEN];
-char *dsthost = NULL;
+const char *dsthost;
 int display_mode = -1;
 double wait_time = 1;
 bool interactive = true;
 long max_ping;
 //
 
-static char *iface_addr = NULL;
-static names_t *names = NULL;
+static char *iface_addr;
 //
 
 #define FLOAT_UPTO 10 /* values > FLOAT_UPTO in integer format */
@@ -218,28 +216,8 @@ char* trim(char *s) {
   return p;
 }
 
-static void append_to_names(const char* item) {
-  names_t* name = malloc(sizeof(names_t));
-  if (name) {
-    char* itemname = strdup(item);
-    if (itemname) {
-      name->name = itemname;
-      name->next = names;
-      names = name;
-    } else {
-      WARN_("strdup(%s)", item);
-      free(name);
-    }
-  } else
-    WARN_("malloc(%zd)", sizeof(names_t));
-}
-
-/*
- * If the file stream is associated with a regular file, lock/unlock the file
- * in order coordinate writes to a common file from multiple mtr
- * instances. This is useful if, for example, multiple mtr instances
- * try to append results to a common file.
- */
+// If the file stream is associated with a regular file, lock/unlock the file
+// in order coordinate writes to a common file from multiple mtr instances
 static void locker(FILE *file, short type) {
   if (!file)
     return;
@@ -543,32 +521,18 @@ static void parse_options(int argc, char **argv) {
     }
   }
 
-  static int sz;
-  for (int i = 1; i < argc; i++)
-    sz += snprintf(mtr_args + sz, sizeof(mtr_args) - sz, " %s", argv[i]);
+  for (int i = 1, l = 0; (i < argc) && (l < ARGS_LEN); i++)
+    l += snprintf(mtr_args + l, ARGS_LEN - l, " %s", argv[i]);
 
   switch (display_mode) {
     case DisplayReport:
-#ifdef OUTPUT_FORMAT_RAW
     case DisplayRaw:
-#endif
-#ifdef OUTPUT_FORMAT_TXT
     case DisplayTXT:
-#endif
-#ifdef OUTPUT_FORMAT_CSV
     case DisplayCSV:
-#endif
-#ifdef OUTPUT_FORMAT_JSON
     case DisplayJSON:
-#endif
-#ifdef OUTPUT_FORMAT_XML
     case DisplayXML:
-#endif
       interactive = false;
   }
-
-  if (optind > argc - 1)
-    return;
 }
 
 
@@ -601,7 +565,6 @@ static bool set_host(struct addrinfo *res) {
     WARNX_("Unknown address family %d", af);
     return false;
   }
-
   static struct hostent h;
   memset(&h, 0, sizeof(h));
   h.h_name = ai->ai_canonname;
@@ -659,12 +622,8 @@ int main(int argc, char **argv) {
 #endif
   set_fld_active(FLD_DEFAULT);
   parse_options(argc, argv);
-  while (optind < argc) {
-    char* name = argv[optind++];
-    append_to_names(name);
-  }
 
-  if (!names) {
+  if (optind >= argc) {
     usage(argv[0]);
     exit(EXIT_SUCCESS);
   }
@@ -681,9 +640,10 @@ int main(int argc, char **argv) {
     strncpy(srchost, "UNKNOWN", sizeof(srchost));
   display_start();
 
-  for (names_t* n = names; n; n = n->next) {
+  for (; optind < argc; optind++) {
     static bool notfirst;
-    dsthost = n->name;
+    if (!(dsthost = argv[optind]))
+      continue;
 
     struct addrinfo hints, *res;
     memset(&hints, 0, sizeof(hints));

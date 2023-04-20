@@ -371,7 +371,7 @@ static bool net_send_tcp(int at) {
 #ifdef LOGMOD
   struct timespec now;
   clock_gettime(CLOCK_MONOTONIC, &now);
-  LOGMSG_("at=%d seq=%d sock=%d: ttl=%d (ts=" TVSEC_FMT ".%09zd)", at, seq, sock, ttl, now.tv_sec, now.tv_nsec);
+  LOGMSG_("at=%d seq=%d sock=%d: ttl=%d (ts=%lld.%09ld)", at, seq, sock, ttl, (long long)now.tv_sec, now.tv_nsec);
 #endif
   /*summ*/ net_queries[QR_SUM]++; net_queries[QR_TCP]++;
   return true;
@@ -474,7 +474,7 @@ static bool net_send(int at) {
 
 static void stats(int at, timemsec_t curr) {
   double curr_f = msec2float(curr);
-  LOGMSG_("prev=" TVSEC_FMT ".%09d curr=" TVSEC_FMT ".%09d", host[at].last.ms, host[at].last.frac, curr.ms, curr.frac);
+  LOGMSG_("prev=%lld.%09ld curr=%lld.%09ld", (long long)host[at].last.ms, host[at].last.frac, (long long)curr.ms, curr.frac);
 
   if (host[at].recv < 1) {
     host[at].best = host[at].worst = curr;
@@ -926,8 +926,6 @@ bool net_set_host(struct hostent *h) {
   struct sockaddr_in name_struct;
 #endif
   struct sockaddr *name = (struct sockaddr *) &name_struct;
-
-  net_reset();
   remotesockaddr->sa_family = h->h_addrtype;
 
   switch (h->h_addrtype) {
@@ -940,8 +938,10 @@ bool net_set_host(struct hostent *h) {
     break;
 #ifdef ENABLE_IPV6
   case AF_INET6:
-    if ((sendsock6 < 0) || (recvsock6 < 0))
-      FAIL("Unable to open IPv6 socket");
+    if ((sendsock6 < 0) || (recvsock6 < 0)) {
+      WARNX("Unable to open IPv6 socket");
+      return false;
+    }
     sendsock = sendsock6;
     recvsock = recvsock6;
     addr_copy(&(rsa6->sin6_addr), h->h_addr);
@@ -950,9 +950,16 @@ bool net_set_host(struct hostent *h) {
     break;
 #endif
   default:
-    FAIL_("Unknown address type %d", h->h_addrtype);
+    WARNX_("Unknown address type %d", h->h_addrtype);
+    return false;
   }
 
+  if (!addr_exist(remoteaddress)) {
+    WARNX("Unspecified destination");
+    return false;
+  }
+
+  net_reset();
   socklen_t len = sizeof(name_struct);
   getsockname(recvsock, name, &len);
   sockaddrtop(name, localaddr, sizeof(localaddr));
@@ -1079,7 +1086,7 @@ void net_tcp_parse(int sock, int seq, int noerr) {
   struct timespec now;
   clock_gettime(CLOCK_MONOTONIC, &now);
   int reason = -1, e = err_slippage(sock);
-  LOGMSG_("recv <e=%d> sock=%d ts=" TVSEC_FMT ".%09zd", e, sock, now.tv_sec, now.tv_nsec);
+  LOGMSG_("recv <e=%d> sock=%d ts=%lld.%09ld", e, sock, (long long)now.tv_sec, now.tv_nsec);
   // if no errors, or connection refused, or host down, the target is probably reached
   switch (e) {
     case EHOSTUNREACH:

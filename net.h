@@ -73,8 +73,8 @@ extern unsigned long net_replies[];
 
 // time stats, in msec
 typedef struct timemsec {
-  time_t ms; // in milliseconds
-  int frac;  // in nanoseconds
+  time_t ms;  // in milliseconds
+  long frac;  // in nanoseconds
 } timemsec_t;
 
 typedef union mpls_label { // RFC4950

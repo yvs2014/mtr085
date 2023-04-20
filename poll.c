@@ -174,13 +174,13 @@ static void proceed_tcp(void) {
       continue;
     LOGMSG_("slot#%d sock=%d event=%d", i, sock, ev);
     int seq = tcpseq[i];
-    bool postclose = true;
     if (seq >= 0) {
-      if (seq < MAXSEQ) // ping tcp-mode
+      if (seq < MAXSEQ) { // ping tcp-mode
         net_tcp_parse(sock, seq, ev == POLLOUT);
+        CLOSE_FD(i);
+      }
 #ifdef IPINFO
       else { // ipinfo tcp-origin
-        postclose = false; // close it on timeout only
         allfds[i].revents = 0;  // clear trigger
         if (ev == POLLIN)
           ipinfo_parse(sock, seq);
@@ -192,8 +192,6 @@ static void proceed_tcp(void) {
 #endif
     } else
       LOGMSG_("no sequence for tcp sock=%d in slot#%d", sock, i);
-    if (postclose)
-      CLOSE_FD(i);
   }
 }
 
