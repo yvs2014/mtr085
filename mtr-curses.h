@@ -27,23 +27,18 @@
 #endif
 #endif
 
-bool mtr_curses_open(void);
-void mtr_curses_close(void);
-void mtr_curses_redraw(void);
-int mtr_curses_keyaction(void);
-void mtr_curses_clear(void);
+bool mc_open(void);
+void mc_close(void);
+void mc_redraw(void);
+int mc_keyaction(void);
+void mc_clear(void);
 
 #define STARTSTAT	30
 #ifdef GRAPHCAIRO
-void mtr_curses_init(void);
-void mtr_curses_scale(void);
-void mtr_curses_scale_desc(char *buf);
-char mtr_curses_saved_ch(int saved_int);
-int mtr_curses_statf_title(char *buf, int sz);
-void mtr_curses_print_at(int at, char *buf, int sz);
-#ifdef UNICODE
-wchar_t mtr_curses_saved_wch(int saved_int);
-#endif
+void mc_init(void);
+int mc_statf_title(char *buf, int sz);
+int mc_print_at(int at, char *buf, int sz);
+int mc_snprint_args(char *buf, int sz);
 #endif
 
 #endif

@@ -39,7 +39,7 @@ bool display_open(void) {
   switch (display_mode) {
     case DisplayReport: report_open(); break;
 #ifdef CURSES
-    case DisplayCurses: return mtr_curses_open();
+    case DisplayCurses: return mc_open();
 #endif
 #ifdef SPLITMODE
     case DisplaySplit: split_open(); break;
@@ -67,7 +67,7 @@ void display_close(bool notfirst) {
     case DisplayXML: xml_close(); break;
 #endif
 #ifdef CURSES
-    case DisplayCurses: mtr_curses_close(); break;
+    case DisplayCurses: mc_close(); break;
 #endif
 #ifdef SPLITMODE
     case DisplaySplit: split_close(); break;
@@ -110,7 +110,7 @@ void display_final(void) {
 void display_redraw(void) {
   switch(display_mode) {
 #ifdef CURSES
-    case DisplayCurses: mtr_curses_redraw(); break;
+    case DisplayCurses: mc_redraw(); break;
 #endif
 #ifdef SPLITMODE
     case DisplaySplit: split_redraw(); break;
@@ -121,16 +121,24 @@ void display_redraw(void) {
   }
 }
 
-int display_keyaction(void) {
+int display_key_action(void) {
   switch(display_mode) {
 #ifdef CURSES
-    case DisplayCurses: return mtr_curses_keyaction();
+    case DisplayCurses: return mc_keyaction();
 #endif
 #ifdef SPLITMODE
     case DisplaySplit: return split_keyaction();
 #endif
   }
-  return 0;
+  return ActionNone;
+}
+
+int display_extra_action(void) {
+  return
+#ifdef GRAPHCAIRO
+    (display_mode == DisplayGraphCairo) ? gc_keyaction() :
+#endif
+    ActionNone;
 }
 
 void display_loop(void) {
@@ -163,7 +171,7 @@ void display_loop(void) {
 void display_clear(void) {
 #ifdef CURSES
   if (display_mode == DisplayCurses)
-    mtr_curses_clear();
+    mc_clear();
 #endif
 }
 

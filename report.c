@@ -348,7 +348,7 @@ void csv_close(bool notfirst) {
 
 #ifdef OUTPUT_FORMAT_RAW
 
-bool enable_raw = false; // global var
+bool enable_raw; // global var
 static int havename[MAXHOST];
 
 void raw_rawping(int at, int usec) {

@@ -45,6 +45,8 @@
 #define MINSLEEP_USEC 10  // minimal pause, in microseconds
 #define PAUSE_MSEC 100    // when pause button is pressed, in milliseconds
 
+long numpings; // global
+
 // base file descriptors
 enum { FD_STDIN, FD_NET, FD_DNS,
 #ifdef ENABLE_IPV6
@@ -57,7 +59,6 @@ static int *tcpseq;           // and corresponding sequence indexes from net.c
 static int maxfd;
 static const struct timespec GRACETIME = { 5, 0 };
 static int prev_mtrtype = IPPROTO_ICMP;
-static long numpings;
 static bool need_dns;
 
 #define SET_POLLFD(ndx, sock) { allfds[ndx].fd = sock; allfds[ndx].revents = 0; }
@@ -237,8 +238,8 @@ static bool svc(struct timespec *last, const struct timespec *interval, int *tim
 }
 
 // proceed keyboard events and return action
-static int keyboard_events(void) {
-  int action = display_keyaction();
+static int keyboard_events(int action) {
+  LOGMSG_("action=%d", action);
   switch (action) {
     case ActionQuit:
       LOGMSG("quit");
@@ -263,7 +264,7 @@ static int keyboard_events(void) {
       display_clear();
       break;
     case ActionPauseResume:
-      LOGMSG_("'%s' pressed", "pause/resume");
+      LOGMSG("'pause/resume' pressed");
       break;
     case ActionMPLS:
       enable_mpls = !enable_mpls;
@@ -295,16 +296,20 @@ static int keyboard_events(void) {
       ipinfo_open();
       break;
 #endif
-    case ActionScrollDown:
+    case ActionScrollDown: {
       LOGMSG_("scroll down %d lines", SCROLL_LINES);
       display_offset += SCROLL_LINES;
-      break;
-    case ActionScrollUp:
+      int hops = net_max() - net_min();
+      if (display_offset >= hops)
+        display_offset = hops - 1;
+    } break;
+    case ActionScrollUp: {
       LOGMSG_("scroll up %d lines", SCROLL_LINES);
-      display_offset -= SCROLL_LINES;
+      int rest = display_offset % 5;
+      display_offset -= rest ? rest : SCROLL_LINES;
       if (display_offset < 0)
         display_offset = 0;
-      break;
+    } break;
     case ActionUDP:
     case ActionTCP: {
       int asked = (action == ActionUDP) ? IPPROTO_UDP : IPPROTO_TCP;
@@ -350,15 +355,18 @@ static inline bool tcpish(void) {
 }
 
 // work out events
-static int conclude() {
+static int conclude(void) {
   int rc = ActionNone;
   if (IN_ISSET(FD_STDIN)) { // check keyboard events
     LOGMSG("got stdin event");
-    int ev = keyboard_events();
-    if (ev == ActionQuit)
-      return ev; // return immediatelly if 'quit' is pressed
-    else if (ev == ActionPauseResume)
-      rc = ev;
+    int ev = display_key_action();
+    if (ev != ActionNone) {
+      ev = keyboard_events(ev);
+      if (ev == ActionQuit)
+        return ev; // return immediatelly if 'quit' is pressed
+      else if (ev == ActionPauseResume)
+        rc = ev;
+    }
   }
   if (IN_ISSET(FD_NET)) { // net packet
     LOGMSG("got icmp or udp response");
@@ -470,6 +478,19 @@ void poll_loop(void) {
         paused = !paused;
     } else if (tcpish())
       tcp_timedout(); // not waiting for TCP ETIMEDOUT
+#ifdef GRAPHCAIRO
+	{ // external triggers
+      int ev = display_extra_action();
+      if (ev != ActionNone) {
+//LOGMSG_("extra=%d", ev);
+        ev = keyboard_events(ev);
+        if (ev == ActionQuit)
+          break;
+        else if (ev == ActionPauseResume)
+          paused = !paused;
+      }
+    }
+#endif
   }
 
   seqfd_free();

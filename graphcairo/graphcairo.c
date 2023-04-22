@@ -5,17 +5,12 @@
 
 #include "config.h"
 
-#ifdef UNICODE
-#ifdef HAVE_WCHAR_H
-#include <wchar.h>
-#endif
-#endif
-
 #ifdef FC_FINI
 #include <fontconfig/fontconfig.h>
 #endif
 
 #include "mtr.h"
+#include "mtr-curses.h"
 #include "net.h"
 #include "graphcairo.h"
 #include "graphcairo-backend.h"
@@ -43,7 +38,8 @@ static skin_t skins[SKINS];
 enum { GT_NONE, GT_DOT, GT_LINE, GT_CURVE };
 enum { TM_MMSS, TM_HHMM };
 
-#define DATAMAX	        5   // in msec (y-axis)
+#define DATAMAX_MIN   5000  // in usec (y-axis)
+#define DATAMAX_EXTRA    5  // in % (y-axis)
 #define VIEWPORT_PERIOD	60  // in sec  (x-axis)
 #define MARGIN_LEFT     2.0 // in dx
 #define MARGIN_RIGHT    1.3 // in dx
@@ -83,7 +79,7 @@ static cairo_rectangle_int_t cell; // x,y: horizontal/vertical gridlines
 
 static int font_size;
 static int tick_size;
-static int datamax, datamax_prev;
+static long datamax, datamax_prev;
 static int hops, first_hop;
 static int x_mil; // x-axis magnitude multiplied by MIL
 static int action;
@@ -278,7 +274,7 @@ static void set_viewport_params() {
 	if (params->enable_legend)
 		printf("legend=(%d, %d, %d, %d), ", legend.x, legend.y, legend.width, legend.height);
 	LENVALMIL(x_mil);
-	printf("x-point=%.*fms", _l, _v);
+	printf("x-point=%.*fms\n", _l, _v);
 #endif
 }
 
@@ -531,25 +527,10 @@ b2 = ---------------------------------------------------
 	y_point[0] = t;
 }
 
-#ifdef UNICODE
-static void print_legend_desc(int x, int y, char *desc, int desc_max, bool is_wide) {
-#else
 static void print_legend_desc(int x, int y, char *desc, int desc_max) {
-#endif
 	if (desc) {
 		cairo_t *cr = skins[LEGEND].cairo;
 		PangoLayout *pl = skins[LEGEND].pango;
-
-		char *s;
-#ifdef UNICODE
-		if (is_wide) {
-			static char mbs[1024];
-			wcstombs(mbs, (wchar_t*)desc, 1024);
-			s = mbs;
-		} else
-#endif
-			s = desc;
-
 /*
 		char *txt;
 		PangoAttrList *attrs;
@@ -559,21 +540,19 @@ static void print_legend_desc(int x, int y, char *desc, int desc_max) {
 		if (strlen(txt) > desc_max)
 			txt[desc_max] = 0;
 */
-		if (strlen(s) > desc_max)
-			s[desc_max] = 0;
+		if (strlen(desc) > desc_max)
+			desc[desc_max] = 0;
 		pango_layout_set_width(pl, (legend.width - x) * PANGO_SCALE);
 		pango_layout_set_alignment(pl, PANGO_ALIGN_RIGHT);
-		pango_layout_set_text(pl, s, -1);
+		pango_layout_set_text(pl, desc, -1);
 //		pango_layout_set_text(pl, txt, -1);
 //		pango_layout_set_attributes(pl, attrs);
-
 		cairo_move_to(cr, x, y);
 		cairo_set_source_rgb(cr, 0, 0, 0);
 		pango_cairo_show_layout(cr, pl);
 		pango_layout_set_attributes(pl, NULL);	// unref
 //		pango_attr_list_unref(attrs);
 //		free(txt);
-
 		pango_layout_set_width(pl, -1);
 		pango_layout_set_alignment(pl, PANGO_ALIGN_LEFT);
 	}
@@ -600,27 +579,19 @@ int cr_recalc(int hostinfo_max) {
 }
 
 void cr_init_legend(void) {
-	coords.text_y = coords.dy;
-	coords.line_y = coords.text_y + font_size / 2 + 1;
-	cairo_t *cr = skins[LEGEND].cairo;
-	cairo_set_source_rgb(cr, 1, 1, 1);
-	cairo_paint(cr);
+  coords.text_y = coords.dy;
+  coords.line_y = coords.text_y + font_size / 2 + 1;
+  cairo_t *cr = skins[LEGEND].cairo;
+  cairo_set_source_rgb(cr, 1, 1, 1);
+  cairo_paint(cr);
 }
 
-void cr_print_legend_header(char *header) {
-#ifdef UNICODE
-	print_legend_desc(coords.stat_x, 0, header, coords.stat_max, false);
-#else
-	print_legend_desc(coords.stat_x, 0, header, coords.stat_max);
-#endif
+inline void cr_print_legend_header(char *header) {
+  print_legend_desc(coords.stat_x, 0, header, coords.stat_max);
 }
 
-void cr_print_legend_footer(char *footer) {
-#ifdef UNICODE
-	print_legend_desc(0, coords.text_y, footer, coords.footer_max, curses_mode == 3);
-#else
-	print_legend_desc(0, coords.text_y, footer, coords.footer_max);
-#endif
+inline void cr_print_legend_footer(char *footer) {
+  print_legend_desc(0, coords.text_y, footer, coords.footer_max);
 }
 
 void cr_print_hop(int at) {
@@ -647,49 +618,32 @@ void cr_print_hop(int at) {
 void cr_print_host(int at, int data, char *host, char *stat) {
 	if (at < display_offset)
 		return;
-
 	cairo_t *cr = skins[LEGEND].cairo;
 	PangoLayout *pl = skins[LEGEND].pango;
 	cairo_set_source_rgb(cr, (data < 0) ? 1 : 0, 0, 0);
 	cairo_move_to(cr, coords.host_x, coords.text_y);
 	pango_layout_set_text(pl, host ? host : "???", -1);
 	pango_cairo_show_layout(cr, pl);
-
 	if (stat) {
 		pango_layout_set_width(pl, (legend.width - coords.stat_x) * PANGO_SCALE);
 		pango_layout_set_alignment(pl, PANGO_ALIGN_RIGHT);
 		cairo_set_source_rgb(cr, (data < 0) ? 1 : 0, 0, 0);
 		cairo_move_to(cr, coords.stat_x, coords.text_y);
-
-		char *s;
-#ifdef UNICODE
-		if (curses_mode == 3) {
-			if (wcslen((wchar_t*)stat) > coords.stat_max)
-				*(((wchar_t*)stat) + coords.stat_max) = L'\0';
-			static char mbs[1024];
-			wcstombs(mbs, (wchar_t*)stat, 1024);
-			s = mbs;
-		} else
-#endif
-		{
-			if (strlen(stat) > coords.stat_max)
-				stat[coords.stat_max] = 0;
-			s = stat;
-		}
-		pango_layout_set_text(pl, s, -1);
+		if (strlen(stat) > coords.stat_max)
+			stat[coords.stat_max] = 0;
+		pango_layout_set_text(pl, stat, -1);
 		pango_cairo_show_layout(cr, pl);
-
 		pango_layout_set_width(pl, -1);
 		pango_layout_set_alignment(pl, PANGO_ALIGN_LEFT);
 	}
-
 	coords.text_y += coords.dy;
 	coords.line_y += coords.dy;
 }
 
-static void rescale(int max) {
+static void rescale(long max) {
   datamax_prev = datamax;
-  datamax = max + DATAMAX;
+  max += max * DATAMAX_EXTRA / 100;
+  datamax = (max < DATAMAX_MIN) ? DATAMAX_MIN : max;
   draw_grid();
   scale_viewport();
   for (int i = 0; i < SPLINE_POINTS; i++)
@@ -699,9 +653,10 @@ static void rescale(int max) {
 }
 
 void cr_redraw(int *data) {
-	static time_t cycle_datamax, cycle_period, remaining_time;
-	if (!cycle_period)
-		cycle_period = MIL * CYCLE_FACTOR * params->period + 0.5;
+	static long viewport_datamax;
+	static time_t viewport_period, remaining_time;
+	if (!viewport_period)
+		viewport_period = MIL * CYCLE_FACTOR * params->period + 0.5;
 	bool f_repaint = false;
 
 	// timing
@@ -712,11 +667,11 @@ void cr_redraw(int *data) {
 	time_t unclosed_dt = dt + remaining_time;
 	last = now;
 
-	cycle_period -= dt;
-	if (cycle_period < 0) {
-		if (datamax > (cycle_datamax + DATAMAX))
-			rescale(cycle_datamax);
-		cycle_period = cycle_datamax = 0;
+	viewport_period -= dt;
+	if (viewport_period < 0) {
+		if (datamax > (viewport_datamax + DATAMAX_MIN))
+			rescale(viewport_datamax);
+		viewport_period = viewport_datamax = 0;
 	}
 
 	time_t dx = unclosed_dt / x_mil;
@@ -735,17 +690,17 @@ void cr_redraw(int *data) {
 			}
 
 		// max
-		time_t current_max = 0;
+		long _max = 0;
 		for (int i = 0; i < hops; i++) {
 			time_t d = data[i];
-			if (d > current_max)
-				current_max = d;
+			if (d > _max)
+				_max = d;
 			y_point[0][i] = data_scale(d);
 		}
-		if (current_max > cycle_datamax)
-			cycle_datamax = current_max;
-		if (current_max > datamax)
-			rescale(current_max);
+		if (_max > viewport_datamax)
+			viewport_datamax = _max;
+		if (_max > datamax)
+			rescale(_max);
 
 		// shift
 		if (dx < vp.width) {
@@ -795,12 +750,16 @@ void cr_redraw(int *data) {
 		pango_layout_set_width(pl, vp.width * PANGO_SCALE);
 		pango_layout_set_alignment(pl, PANGO_ALIGN_CENTER);
 		cairo_set_source_rgb(cr, 1, 1, 1);
-		cairo_rectangle(cr, vp.x + coords.label_w, (vp.y - font_size) / 2, vp.width - coords.label_w, font_size);
+		cairo_rectangle(cr, vp.x + coords.label_w, (vp.y - 3 * font_size / 2) / 2, vp.width - coords.label_w, 2 * font_size);
 		cairo_fill(cr);
 		cairo_set_source_rgb(cr, 0, 0, 0);
 		cairo_move_to(cr, vp.x, (vp.y - font_size) / 2);
-		char buf[32];
-		strftime(buf, sizeof(buf), "%c", localtime(&(now.tv_sec)));
+		char buf[256];
+		time_t t = time(NULL);
+		int l = snprintf(buf, sizeof(buf), "%s", ctime(&t));
+		buf[--l] = 0; // '\n' from ctime
+		if (iargs)
+			mc_snprint_args(buf + l, sizeof(buf) - l);
 		pango_layout_set_text(pl, buf, -1);
 		pango_cairo_show_layout(cr, pl);
 		pango_layout_set_alignment(pl, PANGO_ALIGN_LEFT);
@@ -1044,7 +1003,7 @@ bool cr_open(cr_params_t *cr_params) {
 				return false;
 			}
 		}
-		datamax = datamax_prev = DATAMAX;
+		datamax = datamax_prev = DATAMAX_MIN;
 		set_viewport_params();
 	} else
 		return false;

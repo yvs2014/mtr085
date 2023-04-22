@@ -81,13 +81,13 @@ pid_t mypid;
 #define ARGS_LEN 64 /* seem to be enough */
 char mtr_args[ARGS_LEN + 1];  // display in curses title
 unsigned iargs;               // args passed interactively
-bool show_ips = false;
-bool enable_mpls = false;
-bool report_wide = false;
-bool endpoint_mode = false;   // -fa option, i.e. auto, corresponding to TTL of the destination host
-bool cache_mode = false;            // don't ping known hops
+bool show_ips;
+bool enable_mpls;
+bool report_wide;
+bool endpoint_mode;           // -fa option, i.e. auto, corresponding to TTL of the destination host
+bool cache_mode;              // don't ping known hops
 int cache_timeout = CACHE_TIMEOUT;  // cache timeout in seconds
-bool enable_stat_at_exit = false;
+bool enable_stat_at_exit;
 int fstTTL = 1;	              // default start at first hop
 int maxTTL = 30;              // enough?
 int bitpattern;               // packet bit pattern used by ping

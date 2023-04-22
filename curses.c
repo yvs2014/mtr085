@@ -144,10 +144,14 @@ static void enter_stat_fields(void) {
   if (curs != ERR) curs_set(curs);
 }
 
-int mtr_curses_keyaction(void) {
+int mc_keyaction(void) {
   int c = getch();
 
-  switch (tolower(c)) { // lowercase/uppercase independent
+  switch (c) {
+    case '+':
+      return ActionScrollDown;
+    case '-':
+      return ActionScrollUp;
     case '?':
     case 'h':
       erase();
@@ -206,6 +210,14 @@ int mtr_curses_keyaction(void) {
       return ActionNone;
     case 'p':
       return ActionPauseResume;
+    case 'q':
+      return ActionQuit;
+    case 'Q':
+      mvprintw(2, 0, "ToS (Type of Service): %d\n", tos);
+      mvprintw(3, 0, "Bits: 1st lowcost, 2nd reliability, 3rd throughput, 4th lowdelay\n");
+      if (enter_smth(23))
+        tos = limit_int(0, 0xff, atoi((char*)entered), "Type of Service (ToS)");
+      return ActionNone;
     case 'r':
       return ActionReset;
     case 's':
@@ -218,19 +230,6 @@ int mtr_curses_keyaction(void) {
       return ActionTCP;
     case 'u':
       return ActionUDP;
-  }
-
-  switch (c) { // exact match
-    case 3:
-      return ActionQuit;
-    case 12:
-      return ActionClear;
-    case 17:
-    case 19:
-    case ' ':
-      return ActionPauseResume;
-    case 'q':
-      return ActionQuit;
     case 'x':
       return ActionCache;
 #ifdef IPINFO
@@ -239,21 +238,11 @@ int mtr_curses_keyaction(void) {
     case 'z':
       return ActionAS;
 #endif
-    case '+':
-      return ActionScrollDown;
-    case '-':
-      return ActionScrollUp;
-    case 'Q':
-      mvprintw(2, 0, "ToS (Type of Service): %d\n", tos);
-      mvprintw(3, 0, "Bits: 1st lowcost, 2nd reliability, 3rd throughput, 4th lowdelay\n");
-      if (enter_smth(23))
-        tos = limit_int(0, 0xff, atoi((char*)entered), "Type of Service (ToS)");
-      return ActionNone;
   }
   return ActionNone; // ignore unknown input
 }
 
-void mtr_curses_print_at(int at, char *buf, int sz) {
+int mc_print_at(int at, char *buf, int sz) {
   int l = 0;
   for (int i = 0; (i < MAXFLD) && (l < sz); i++) {
     const struct statf *sf = active_statf(i);
@@ -263,7 +252,7 @@ void mtr_curses_print_at(int at, char *buf, int sz) {
       l += snprintf(buf + l, sz - l, "%*s", sf->len, str ? str : "");
     }
   }
-  buf[l] = 0;
+  return l;
 }
 
 static int printw_mpls(const mpls_data_t *m) {
@@ -297,7 +286,7 @@ static void printw_addr(int at, int ndx, int up) {
 }
 
 #define BELL_AT	SAVED_PINGS - 3	// wait at least -i interval for reliability
-static void mtr_curses_seal(int at, int max) {
+static void seal_n_bell(int at, int max) {
   if (host[at].saved[BELL_AT] == CT_UNKN) {
     host[at].saved[BELL_AT] = CT_SEAL; // sealed
     if (target_bell_only)
@@ -310,10 +299,10 @@ static void mtr_curses_seal(int at, int max) {
 
 static int print_stat(int at, int y, int start, int max) { // statistics
   static char statbuf[1024];
-  mtr_curses_print_at(at, statbuf, sizeof(statbuf));
+  mc_print_at(at, statbuf, sizeof(statbuf));
   mvprintw(y, start, "%s", statbuf);
   if (audible_bell || visible_bell)
-    mtr_curses_seal(at, max);
+    seal_n_bell(at, max);
   return move(y + 1, 0);
 }
 
@@ -335,7 +324,7 @@ static void print_addr_extra(int at, int y) { // mpls + multipath
   }
 }
 
-static void mtr_curses_hosts(int statx) {
+static void print_hops(int statx) {
   int max = net_max();
   for (int at = net_min() + display_offset; at < max; at++) {
     int y;
@@ -402,16 +391,16 @@ static void scale_map(int *scale, double *factors, int num) {
     scale[i] = minval + range * factors[i];
 }
 
-void mtr_curses_scale(void) {
+static void dmode_scale_map(void) {
 #ifdef UNICODE
-    if (curses_mode == 3)
-      scale_map(scale3, factors3, color_mode ? NUM_FACTORS3 : (NUM_FACTORS3_MONO + 1));
-    else
+  if (curses_mode == 3)
+    scale_map(scale3, factors3, color_mode ? NUM_FACTORS3 : (NUM_FACTORS3_MONO + 1));
+  else
 #endif
-      scale_map(scale2, factors2, NUM_FACTORS2);
+    scale_map(scale2, factors2, NUM_FACTORS2);
 }
 
-static inline void mtr_curses_dm_init(double *factors, int num) {
+static inline void dmode_init(double *factors, int num) {
   double inv = 1 / (double)num;
   for (int i = 0; i < num; i++) {
     double f = (i + 1) * inv;
@@ -419,12 +408,12 @@ static inline void mtr_curses_dm_init(double *factors, int num) {
   }
 }
 
-void mtr_curses_init(void) {
+void mc_init(void) {
   // display mode 2
-  mtr_curses_dm_init(factors2, NUM_FACTORS2);
+  dmode_init(factors2, NUM_FACTORS2);
 #ifdef UNICODE
   // display mode 3
-  mtr_curses_dm_init(factors3, color_mode ? NUM_FACTORS3 : (NUM_FACTORS3_MONO + 1));
+  dmode_init(factors3, color_mode ? NUM_FACTORS3 : (NUM_FACTORS3_MONO + 1));
 #endif
 
   // Initialize block_map
@@ -474,7 +463,7 @@ void mtr_curses_init(void) {
     return map[1]; /* no response '?' */ \
 }
 
-static chtype mtr_saved_ch(int saved_int) {
+static chtype get_saved_ch(int saved_int) {
   NA_MAP(map_na2);
   if (curses_mode == 1)
     return map1[(saved_int <= scale2[NUM_FACTORS2 - 2]) ? 0 : 1];
@@ -496,7 +485,7 @@ static cchar_t* mtr_saved_cc(int saved_int) {
 }
 #endif
 
-static void mtr_curses_graph(int statx, int cols) {
+static void histogram(int statx, int cols) {
 	int max = net_max();
 	for (int at = net_min() + display_offset; at < max; at++) {
 		int y;
@@ -524,9 +513,9 @@ static void mtr_curses_graph(int statx, int cols) {
 			else
 #endif
 				for (int i = SAVED_PINGS - cols; i < SAVED_PINGS; i++)
-					addch(mtr_saved_ch(host[at].saved[i]));
+					addch(get_saved_ch(host[at].saved[i]));
 			if (audible_bell || visible_bell)
-				mtr_curses_seal(at, max);
+				seal_n_bell(at, max);
 		} else
 			printw("%s", UNKN_ITEM);
 		if (move(y + 1, 0) == ERR)
@@ -534,7 +523,7 @@ static void mtr_curses_graph(int statx, int cols) {
 	}
 }
 
-int mtr_curses_statf_title(char *buf, int sz) {
+int mc_statf_title(char *buf, int sz) {
   int l = 0;
   for (int i = 0; (i < MAXFLD) && (l < sz); i++ ) {
     const struct statf *sf = active_statf(i);
@@ -558,7 +547,7 @@ static void mtr_print_scale3(int min, int max, int step) {
 }
 #endif
 
-static int chk_n_print(int bit, char *buf, int sz, const char *msg) {
+static int snprint_iarg(int bit, char *buf, int sz, const char *msg) {
   int l = 0;
   if (CHKBIT(iargs, bit)) {
     if (iargs & ((1 << bit) - 1))	// is there smth before?
@@ -611,10 +600,29 @@ static void print_scale(void) {
 #endif
 }
 
+int mc_snprint_args(char *buf, int sz) {
+  int l = snprintf(buf, sz, " (");
+  l += snprint_iarg(0, buf + l, sz - l, "UDP-mode");   // udp mode
+  l += snprint_iarg(1, buf + l, sz - l, "TCP-mode");   // tcp mode
+  l += snprint_iarg(2, buf + l, sz - l, "MPLS");       // mpls
+#ifdef IPINFO
+  l += snprint_iarg(3, buf + l, sz - l, "ASN-Lookup"); // asn lookup
+  l += snprint_iarg(4, buf + l, sz - l, "IP-Info");    // ip info
+#endif
+  l += snprint_iarg(5, buf + l, sz - l, "DNS-off");    // dns
+  l += snprint_iarg(6, buf + l, sz - l, "Jitter");     // jitter
+  if ((iargs >> 7) & 3) {        // 7,8 bits: display type
+    if (iargs & ((1 << 7) - 1))
+      l += snprintf(buf + l, sz - l, ", ");
+    l += snprintf(buf + l, sz - l, "Display-Type: %d", (iargs >> 7) & 3);
+  }
+  l += snprint_iarg(9, buf + l, sz - l, "Cache-mode");  // cache mode
+  l += snprintf(buf + l, sz - l, ")");
+  return l;
+}
 
-void mtr_curses_redraw(void) {
-  static char redraw_buf[1024];
-
+void mc_redraw(void) {
+  static char linebuf[1024];  // seems enough for one line
   int maxx, maxy;
   int statx, staty = 5;
   erase();
@@ -623,29 +631,10 @@ void mtr_curses_redraw(void) {
   // title
   move(0, 0);
   attron(A_BOLD);
-  int l = snprintf(redraw_buf, sizeof(redraw_buf), "%s-%s%s", PACKAGE_NAME, MTR_VERSION, mtr_args);
-  if (iargs) {
-    l += snprintf(redraw_buf + l, sizeof(redraw_buf) - l, " (");
-
-    l += chk_n_print(0, redraw_buf + l, sizeof(redraw_buf) - l, "UDP-mode");	// udp mode
-    l += chk_n_print(1, redraw_buf + l, sizeof(redraw_buf) - l, "TCP-mode");	// tcp mode
-    l += chk_n_print(2, redraw_buf + l, sizeof(redraw_buf) - l, "MPLS");	// mpls
-#ifdef IPINFO
-    l += chk_n_print(3, redraw_buf + l, sizeof(redraw_buf) - l, "ASN-Lookup");	// asn lookup
-    l += chk_n_print(4, redraw_buf + l, sizeof(redraw_buf) - l, "IP-Info");	// ip info
-#endif
-    l += chk_n_print(5, redraw_buf + l, sizeof(redraw_buf) - l, "DNS-off");	// dns
-    l += chk_n_print(6, redraw_buf + l, sizeof(redraw_buf) - l, "Jitter");	// jitter
-    if ((iargs >> 7) & 3) {	// 7,8 bits: display type
-      if (iargs & ((1 << 7) - 1))	// is there smth before?
-        l += snprintf(redraw_buf + l, sizeof(redraw_buf) - l, ", ");
-      l += snprintf(redraw_buf + l, sizeof(redraw_buf) - l, "Display-Type: %d", (iargs >> 7) & 3);
-    }
-    l += chk_n_print(9, redraw_buf + l, sizeof(redraw_buf) - l, "Cache-mode");	// cache mode
-
-    snprintf(redraw_buf + l, sizeof(redraw_buf) - l, ")");
-  }
-  printw("%*s", (maxx + (int)strnlen(redraw_buf, sizeof(redraw_buf))) / 2, redraw_buf);
+  int l = snprintf(linebuf, sizeof(linebuf), "%s-%s%s", PACKAGE_NAME, MTR_VERSION, mtr_args);
+  if (iargs)
+    l += mc_snprint_args(linebuf + l, sizeof(linebuf) - l);
+  printw("%*s", (maxx + l) / 2, linebuf);
   attroff(A_BOLD);
 
   mvprintw(1, 0, "%s (%s)", srchost, localaddr);
@@ -661,7 +650,7 @@ void mtr_curses_redraw(void) {
 
   if (curses_mode == 0) {
     statx = 4;	// indent: "NN. "
-    int tlen = mtr_curses_statf_title(redraw_buf, sizeof(redraw_buf));
+    int tlen = mc_statf_title(linebuf, sizeof(linebuf));
     attron(A_BOLD);
 #ifdef IPINFO
     if (ipinfo_ready()) {
@@ -673,17 +662,17 @@ void mtr_curses_redraw(void) {
 #endif
     mvprintw(staty - 1, statx, "Host");
     l = maxx - tlen - 1;
-    mvprintw(staty - 1, l > 0 ? l : 0, "%s", redraw_buf);
+    mvprintw(staty - 1, l > 0 ? l : 0, "%s", linebuf);
     if (is_custom_fld())
-      l = snprintf(redraw_buf, sizeof(redraw_buf), "CUSTOMIZED-OUTPUT: %s", fld_active);
+      l = snprintf(linebuf, sizeof(linebuf), "CUSTOMIZED-OUTPUT: %s", fld_active);
     else
-      l = snprintf(redraw_buf, sizeof(redraw_buf), "Packets      Pings");
+      l = snprintf(linebuf, sizeof(linebuf), "Packets      Pings");
     l = l >= tlen ? maxx - l : maxx - tlen + 1;
-    mvprintw(staty - 2, l > 0 ? l : 0, "%s", redraw_buf);
+    mvprintw(staty - 2, l > 0 ? l : 0, "%s", linebuf);
     attroff(A_BOLD);
 
     if (move(staty, 0) != ERR)
-      mtr_curses_hosts(maxx - tlen - 1);
+      print_hops(maxx - tlen - 1);
 
   } else {
     statx = STARTSTAT;
@@ -696,8 +685,8 @@ void mtr_curses_redraw(void) {
     mvprintw(staty - 1, statx, " Last %3d pings", max_cols);
 	if (move(staty, 0) != ERR) {
 		attroff(A_BOLD);
-		mtr_curses_scale();
-		mtr_curses_graph(statx, max_cols);
+		dmode_scale_map();
+		histogram(statx, max_cols);
 		int y;
 		getyx(stdscr, y, __unused_int);
 		int re = move(y + 1, 0);
@@ -711,7 +700,7 @@ void mtr_curses_redraw(void) {
 }
 
 
-bool mtr_curses_open(void) {
+bool mc_open(void) {
   if (!initscr()) {
     WARNX("initscr() failed");
     return false;
@@ -754,61 +743,20 @@ bool mtr_curses_open(void) {
 #endif
   }
 
-  mtr_curses_init();
-  mtr_curses_redraw();
+  mc_init();
+  mc_redraw();
   curs_set(0);
   return true;
 }
 
 
-void mtr_curses_close(void) {
+void mc_close(void) {
   addch('\n');
   endwin();
 }
 
-
-void mtr_curses_clear(void) {
-  mtr_curses_close();
-  mtr_curses_open();
+void mc_clear(void) {
+  mc_close();
+  mc_open();
 }
 
-#ifdef GRAPHCAIRO
-
-void mtr_curses_scale_desc(char *buf) {
-  static char scale_hs[] = "Scale:";
-  if (curses_mode == 1) {
-    LENVALMIL(scale2[NUM_FACTORS2 - 2]);
-    sprintf(buf, "%s  %c less than %.*fms   %c greater than %c   %c Unknown", scale_hs,
-      (char)(map1[0] & A_CHARTEXT), _l, _v,
-      (char)(map1[1] & A_CHARTEXT), (char)(map1[0] & A_CHARTEXT),
-      (char)(map_na2[1] & A_CHARTEXT));
-  } else if (curses_mode == 2) {
-    int len = sprintf(buf, "%s", scale_hs);
-    for (int i = 0; i < NUM_FACTORS2 - 1; i++) {
-      LENVALMIL(scale2[i]);
-      len += sprintf(buf + len, "  %c:%.*fms", (char)(map2[i] & A_CHARTEXT), _l, _v);
-    }
-    sprintf(buf + len, "  %c", (char)(map2[NUM_FACTORS2 - 1] & A_CHARTEXT));
-  }
-#ifdef UNICODE
-  else if (curses_mode == 3) {
-    int len = swprintf((wchar_t*)buf, 16, L"%s", scale_hs);
-    for (int i = 0; i < NUM_FACTORS3_MONO; i++) {
-      LENVALMIL(scale3[i]);
-      len += swprintf(((wchar_t*)buf) + len, 16, L"  %lc:%.*fms", map3[i].CCHAR_chars[0], _l, _v);
-    }
-    swprintf(((wchar_t*)buf) + len, 4, L"  %c", map3[NUM_FACTORS3_MONO].CCHAR_chars[0]);
-  }
-#endif
-}
-
-#ifdef UNICODE
-inline wchar_t mtr_curses_saved_wch(int saved_int) {
-  cchar_t *cc = mtr_saved_cc(saved_int);
-  return cc->CCHAR_chars[0];
-}
-#endif
-
-inline char mtr_curses_saved_ch(int saved_int) { return (char)(mtr_saved_ch(saved_int) & A_CHARTEXT); }
-
-#endif

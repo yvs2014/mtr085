@@ -32,8 +32,9 @@ bool display_open(void);
 void display_close(bool notfirst);
 
 void display_redraw(void);
-int display_keyaction(void);
 void display_loop(void);
 void display_clear(void);
+int display_key_action(void);
+int display_extra_action(void);
 
 #endif
