@@ -181,10 +181,12 @@ static struct timespec reset;
 
 static int sendsock4 = -1;
 static int recvsock4 = -1;
+#ifdef ENABLE_IPV6
 static int sendsock6 = -1;
 static int sendsock6_icmp = -1;
 static int sendsock6_udp = -1;
 static int recvsock6 = -1;
+#endif
 static int sendsock = -1;
 static int recvsock = -1;
 
@@ -878,9 +880,11 @@ int net_send_batch(void) {
 static void net_sock_close(void) {
   CLOSE(sendsock4);
   CLOSE(recvsock4);
+#ifdef ENABLE_IPV6
   CLOSE(sendsock6_icmp);
   CLOSE(sendsock6_udp);
   CLOSE(recvsock6);
+#endif
 }
 
 #define WARNCLRE(sock, msg) { if ((sock) < 0) { WARN(msg); net_sock_close(); return false; }; /*summ*/ sum_sock[0]++; }

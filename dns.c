@@ -260,9 +260,11 @@ const char *dns_ptr_lookup(int at, int ndx) {
   }}
 
   time_t now = time(NULL);
-  time_t dt_ptr = now - QPTR_TS_AT_NDX(at, ndx);
-  time_t dt_txt = now - QTXT_TS_AT_NDX(at, ndx);
-  if ((dt_ptr >= PAUSE_BETWEEN_QUERIES) && (dt_txt >= TXT_PTR_PAUSE)) {
+  if (((now - QPTR_TS_AT_NDX(at, ndx)) >= PAUSE_BETWEEN_QUERIES)
+#ifdef IPINFO
+   && ((now - QTXT_TS_AT_NDX(at, ndx)) >= TXT_PTR_PAUSE)
+#endif
+     ) {
     QPTR_TS_AT_NDX(at, ndx) = now; // save time of trying to send
     dns_send_query(at, ndx, QPTR_AT_NDX(at, ndx), T_PTR);
   }

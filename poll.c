@@ -72,8 +72,9 @@ static void set_fds() {
   SET_POLLFD(FD_NET, net_wait());
   need_dns = enable_dns
 #ifdef IPINFO
-               || enable_ipinfo;
+          || enable_ipinfo
 #endif
+  ;
   SET_POLLFD(FD_DNS, need_dns ? dns_wait(AF_INET) : -1);
 #ifdef ENABLE_IPV6
   SET_POLLFD(FD_DNS6, need_dns ? dns_wait(AF_INET6) : -1);
