@@ -33,6 +33,5 @@ char* ip2arpa(ip_t *ip, const char *suff4, const char *suff6);
 
 extern void (*dns_ptr_handler)(int at, int ndx, const char* answer);
 extern void (*dns_txt_handler)(int at, int ndx, const char* answer);
-typedef struct atndx { int at, ndx, type; } atndx_t;
 
 #endif

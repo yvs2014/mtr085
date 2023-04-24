@@ -72,7 +72,9 @@
 #include "display.h"
 #include "mtr-curses.h"
 #include "net.h"
+#ifdef DNS
 #include "dns.h"
+#endif
 #ifdef IPINFO
 #include "ipinfo.h"
 #endif
@@ -89,15 +91,19 @@ const char CMODE_HINTS[] =
 "  j        toggle lattency/jitter stats (default latency)\n"
 "  f <int>  set min TTL (default 1)\n"
 "  m <int>  set max TTL (default 30)\n"
+#ifdef DNS
 "  n        toggle DNS (default on)\n"
+#endif
 "  p        pause/resume\n"
 "  q <int>  set ToS (default 0)\n"
 "  r        reset all counters\n"
 "  s <int>  set packet size (default 64), or random (if < 0)\n"
-"  t        switch between ICMP ECHO and TCP SYN\n"
-"  u        switch between ICMP ECHO and UDP datagrams\n"
+"  t        toggle TCP pings\n"
+"  u        toggle UDP pings\n"
 "  x        toggle cache mode (default off)\n"
+#ifdef MPLS
 "  e        toggle MPLS info (default off)\n"
+#endif
 #ifdef IPINFO
 "  y        switching IP info\n"
 "  z        toggle ASN Lookup (default off)\n"
@@ -148,10 +154,8 @@ int mc_keyaction(void) {
   int c = getch();
 
   switch (c) {
-    case '+':
-      return ActionScrollDown;
-    case '-':
-      return ActionScrollUp;
+    case '+': return ActionScrollDown;
+    case '-': return ActionScrollUp;
     case '?':
     case 'h':
       erase();
@@ -164,16 +168,15 @@ int mc_keyaction(void) {
       if (enter_smth(18))
         bitpattern = limit_int(-1, 0xff, atoi((char*)entered), "Bit Pattern");
       return ActionNone;
-    case 'd':
-      return ActionDisplay;
-    case 'e':
-      return ActionMPLS;
-    case 'f': {
+    case 'd': return ActionDisplay;
+#ifdef MPLS
+    case 'e': return ActionMPLS;
+#endif
+    case 'f':
       mvprintw(2, 0, "First TTL: %d\n\n", fstTTL);
       if (enter_smth(11))
         fstTTL = limit_int(1, maxTTL, atoi((char*)entered), "First TTL");
       return ActionNone;
-    }
     case 'i':
       mvprintw(2, 0, "Interval: %0.0f\n\n", wait_time);
       if (enter_smth(11)) {
@@ -190,14 +193,14 @@ int mc_keyaction(void) {
       TGLBIT(iargs, 6);	// 6th bit: latency(default) / jitter
       onoff_jitter();
       return ActionNone;
-    case 'm': {
+    case 'm':
       mvprintw(2, 0, "Max TTL: %d\n\n", maxTTL);
       if (enter_smth(9))
         maxTTL = limit_int(1, ((MAXHOST - 1) > maxTTL) ? maxTTL : (MAXHOST - 1), atoi((char*)entered), "Max TTL");
       return ActionNone;
-    }
-    case 'n':
-      return ActionDNS;
+#ifdef DNS
+    case 'n': return ActionDNS;
+#endif
     case 'o':  // fields to display and their ordering
       mvprintw(2, 0, "Fields: %s\n\n", fld_active);
       for (int i = 0; i < statf_max; i++)
@@ -208,35 +211,28 @@ int mc_keyaction(void) {
       refresh();
       enter_stat_fields();
       return ActionNone;
-    case 'p':
-      return ActionPauseResume;
-    case 'q':
-      return ActionQuit;
+    case 'p': return ActionPauseResume;
+	case  3 : // ^C
+    case 'q': return ActionQuit;
     case 'Q':
       mvprintw(2, 0, "ToS (Type of Service): %d\n", tos);
       mvprintw(3, 0, "Bits: 1st lowcost, 2nd reliability, 3rd throughput, 4th lowdelay\n");
       if (enter_smth(23))
         tos = limit_int(0, 0xff, atoi((char*)entered), "Type of Service (ToS)");
       return ActionNone;
-    case 'r':
-      return ActionReset;
+    case 'r': return ActionReset;
     case 's':
       mvprintw(2, 0, "Change Packet Size: %d\n", cpacketsize);
       mvprintw(3, 0, "Size Range: %d-%d, < 0:random.\n", MINPACKET, MAXPACKET);
       if (enter_smth(20))
         cpacketsize = atoi((char*)entered);
       return ActionNone;
-    case 't':
-      return ActionTCP;
-    case 'u':
-      return ActionUDP;
-    case 'x':
-      return ActionCache;
+    case 't': return ActionTCP;
+    case 'u': return ActionUDP;
+    case 'x': return ActionCache;
 #ifdef IPINFO
-    case 'y':
-      return ActionII;
-    case 'z':
-      return ActionAS;
+    case 'y': return ActionII;
+    case 'z': return ActionAS;
 #endif
   }
   return ActionNone; // ignore unknown input
@@ -255,6 +251,7 @@ int mc_print_at(int at, char *buf, int sz) {
   return l;
 }
 
+#ifdef MPLS
 static int printw_mpls(const mpls_data_t *m) {
   for (int i = 0; i < m->n; i++) {
     int y;
@@ -265,6 +262,7 @@ static int printw_mpls(const mpls_data_t *m) {
   }
   return OK;
 }
+#endif
 
 static void printw_addr(int at, int ndx, int up) {
   ip_t *addr = &IP_AT_NDX(at, ndx);
@@ -274,13 +272,15 @@ static void printw_addr(int at, int ndx, int up) {
 #endif
   if (!up)
     attron(A_BOLD);
+#ifdef DNS
   const char *name = dns_ptr_lookup(at, ndx);
   if (name) {
     printw("%s", name);
     if (show_ips)
       printw(" (%s)", strlongip(addr));
   } else
-    printw("%s", strlongip(addr));
+#endif
+  printw("%s", strlongip(addr));
   if (!up)
     attroff(A_BOLD);
 }
@@ -318,9 +318,11 @@ static void print_addr_extra(int at, int y) { // mpls + multipath
     getyx(stdscr, y, __unused_int);
     if (move(y + 1, 0) == ERR)
         break;
+#ifdef MPLS
     if (enable_mpls)
       if (printw_mpls(&MPLS_AT_NDX(at, ndx)) == ERR)
         break;
+#endif
   }
 }
 
@@ -344,8 +346,10 @@ static void print_hops(int statx) {
       printw_addr(at, host[at].current, host[at].up);
       if (print_stat(at, y, statx, max) == ERR)
         break;
+#ifdef MPLS
       if (enable_mpls)
         printw_mpls(&CURRENT_MPLS(at));
+#endif
       print_addr_extra(at, y);
     }
   }
@@ -501,8 +505,12 @@ static void histogram(int statx, int cols) {
 			if (ipinfo_ready())
 				printw("%s", fmt_ipinfo(at, host[at].current));
 #endif
+#ifdef DNS
 			const char *name = dns_ptr_lookup(at, host[at].current);
 			printw("%s", name ? name : strlongip(addr));
+#else
+			printw("%s", strlongip(addr));
+#endif
 			if (!host[at].up)
 				attroff(A_BOLD);
 			mvprintw(y, statx, " ");
@@ -602,14 +610,18 @@ static void print_scale(void) {
 
 int mc_snprint_args(char *buf, int sz) {
   int l = snprintf(buf, sz, " (");
-  l += snprint_iarg(0, buf + l, sz - l, "UDP-mode");   // udp mode
-  l += snprint_iarg(1, buf + l, sz - l, "TCP-mode");   // tcp mode
+  l += snprint_iarg(0, buf + l, sz - l, "UDP-pings");  // udp mode
+  l += snprint_iarg(1, buf + l, sz - l, "TCP-pings");  // tcp mode
+#ifdef MPLS
   l += snprint_iarg(2, buf + l, sz - l, "MPLS");       // mpls
+#endif
 #ifdef IPINFO
   l += snprint_iarg(3, buf + l, sz - l, "ASN-Lookup"); // asn lookup
   l += snprint_iarg(4, buf + l, sz - l, "IP-Info");    // ip info
 #endif
+#ifdef DNS
   l += snprint_iarg(5, buf + l, sz - l, "DNS-off");    // dns
+#endif
   l += snprint_iarg(6, buf + l, sz - l, "Jitter");     // jitter
   if ((iargs >> 7) & 3) {        // 7,8 bits: display type
     if (iargs & ((1 << 7) - 1))

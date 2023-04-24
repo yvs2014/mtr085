@@ -77,9 +77,13 @@ extern unsigned iargs;     // args passed interactively (used to display hints)
   //   8 [d]: -//-
   //   9 [x]: cache mode
 extern int mtrtype;        // default packet type
+#ifdef MPLS
 extern bool enable_mpls;
+#endif
 extern bool report_wide;
+#ifdef DNS
 extern bool show_ips;
+#endif
 extern bool hinit;         // make sure that a hashtable already exists or not
 extern int fstTTL;
 extern int maxTTL;

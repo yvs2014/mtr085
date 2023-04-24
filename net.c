@@ -36,8 +36,10 @@
 #include "mtr-poll.h"
 #include "net.h"
 #include "display.h"
-#include "dns.h"
 #include "report.h"
+#ifdef DNS
+#include "dns.h"
+#endif
 
 #if defined(LOG_NET) && !defined(LOGMOD)
 #define LOGMOD
@@ -85,6 +87,8 @@ struct udp_ph {
   uint16_t len;
 }; /* must be 12 bytes */
 
+
+#ifdef MPLS
 struct icmpext_struct { // RFC4884
 #if BYTE_ORDER == LITTLE_ENDIAN
   uint8_t res:4;
@@ -113,6 +117,12 @@ static const int ies_sz = sizeof(struct icmpext_struct);
 static const int ieo_sz = sizeof(struct icmpext_object);
 static const int lab_sz = sizeof(mpls_label_t);
 static const int mplsmin = 120; // min after: [ip] icmp ip
+
+#define MPLSFNTAIL(arg) , arg
+#else
+#define MPLSFNTAIL(arg)
+#endif /*MPLS*/
+
 
 #define LO_UDPPORT 33433	// start from LO_UDPPORT+1
 #define UDPPORTS 90		// go thru udp:33434-33523 acl
@@ -529,10 +539,12 @@ int at2next(int hop) { // return first free slot at 'hop', otherwise -1
 }
 
 // Set new ip-addr and clear associated data
-void set_new_addr(int at, int ndx, const ip_t *ip, const mpls_data_t *mpls) {
+void set_new_addr(int at, int ndx, const ip_t *ip MPLSFNTAIL(const mpls_data_t *mpls)) {
   addr_copy(&IP_AT_NDX(at, ndx), ip);
+#ifdef MPLS
   mpls ? memcpy(&MPLS_AT_NDX(at, ndx), mpls, sizeof(mpls_data_t))
     : memset(&MPLS_AT_NDX(at, ndx), 0, sizeof(mpls_data_t));
+#endif
   if (QPTR_AT_NDX(at, ndx)) {
     free(QPTR_AT_NDX(at, ndx));
     QPTR_AT_NDX(at, ndx) = NULL;
@@ -557,12 +569,15 @@ void set_new_addr(int at, int ndx, const ip_t *ip, const mpls_data_t *mpls) {
 
 
 // Got a return
-static void net_stat(unsigned port, const mpls_data_t *mpls, const void *addr, struct timespec now, int reason) {
+static void net_stat(unsigned port, const void *addr, struct timespec now, int reason MPLSFNTAIL(const mpls_data_t *mpls)) {
   unsigned seq = port % MAXSEQ;
   if (!seqlist[seq].transit)
     return;
-
+#ifdef MPLS
   LOGMSG_("at=%d seq=%d (labels=%d)", seqlist[seq].at, seq, mpls ? mpls->n : 0);
+#else
+  LOGMSG_("at=%d seq=%d", seqlist[seq].at, seq);
+#endif
   seqlist[seq].transit = false;
 
   int at = seqlist[seq].at;
@@ -584,15 +599,18 @@ static void net_stat(unsigned port, const mpls_data_t *mpls, const void *addr, s
       WARNX_("MAXPATH=%d is exceeded at hop=%d", MAXPATH, at);
       ndx = MAXPATH - 1;
     }
-    set_new_addr(at, ndx, &copy, mpls);
+    set_new_addr(at, ndx, &copy MPLSFNTAIL(mpls));
 #ifdef OUTPUT_FORMAT_RAW
     if (enable_raw)
       raw_rawhost(at, &IP_AT_NDX(at, ndx));
 #endif
-  } else if (mpls && memcmp(&MPLS_AT_NDX(at, ndx), mpls, sizeof(mpls_data_t))) {
+  }
+#ifdef MPLS
+  else if (mpls && memcmp(&MPLS_AT_NDX(at, ndx), mpls, sizeof(mpls_data_t))) {
     LOGMSG_("update mpls at=%d ndx=%d (labels=%d)", at, ndx, mpls->n);
     memcpy(&MPLS_AT_NDX(at, ndx), mpls, sizeof(mpls_data_t));
   }
+#endif
 
   struct timespec tv;
   timespecsub(&now, &seqlist[seq].time, &tv);
@@ -617,7 +635,7 @@ static inline int proto_hdrsz(int type) {
   return 0;
 }
 
-// Decode MPLS
+#ifdef MPLS
 static mpls_data_t *decodempls(const uint8_t *data, int sz) {
   static mpls_data_t mplsdata;
   static int ext_sz = ies_sz + ieo_sz + lab_sz;
@@ -659,6 +677,7 @@ static mpls_data_t *decodempls(const uint8_t *data, int sz) {
   }
   return &mplsdata;
 }
+#endif
 
 #define NET46SETS(sz, addr, er, te, un) { \
   fromsockaddrsize = sz; \
@@ -680,7 +699,9 @@ static int offsets(uint8_t *packet, int iph, uint8_t **icmp, uint8_t **data) {
   return offset + proto_hdrsz(mtrtype);
 }
 
+#ifdef MPLS
 static inline bool mplslike(int psize, int hsize) { return enable_mpls & ((psize - hsize) >= mplsmin); }
+#endif
 
 void net_icmp_parse(void) {
   uint8_t packet[MAXPACKET];
@@ -717,8 +738,10 @@ void net_icmp_parse(void) {
   if (sz < minsz)
     LOGRET_("incorrect packet size %zd [af=%d proto=%d minsz=%d]", sz, af, mtrtype, minsz);
 
-  int seq = -1, reason = -1;
+#ifdef MPLS
   bool mplson = false;
+#endif
+  int seq = -1, reason = -1;
   switch (mtrtype) {
     case IPPROTO_ICMP: {
       if (icmp->type == echoreplytype) {
@@ -728,9 +751,15 @@ void net_icmp_parse(void) {
         reason = (icmp->type == timeexceededtype) ? RE_EXCEED : RE_UNREACH;
         icmp = (struct _icmphdr *)data;
         ICMPSEQID;
+#ifdef MPLS
         mplson = mplslike(sz, data - packet);
+#endif
       }
+#ifdef MPLS
       LOGMSG_("icmp seq=%d type=%d mpls=%d", seq, icmp->type, mplson);
+#else
+      LOGMSG_("icmp seq=%d type=%d", seq, icmp->type);
+#endif
       /*summ*/ net_replies[QR_SUM]++; net_replies[QR_ICMP]++;
     } break;
 
@@ -746,22 +775,30 @@ void net_icmp_parse(void) {
         seq = ntohs(uh->uh_sport);
       }
       seq -= LO_UDPPORT;
+#ifdef MPLS
       mplson = mplslike(sz, data - packet);
       LOGMSG_("udp seq=%d id=%d mpls=%d", seq, portpid, mplson);
+#else
+      LOGMSG_("udp seq=%d id=%d", seq, portpid);
+#endif
       /*summ*/ net_replies[QR_SUM]++; net_replies[QR_UDP]++;
     } break;
 
 	case IPPROTO_TCP: {
       struct tcphdr *th = (struct tcphdr *)data;
       seq = ntohs(th->th_sport);
+#ifdef MPLS
       mplson = mplslike(sz, data - packet);
       LOGMSG_("tcp seq=%d mpls=%d", seq, mplson);
+#else
+      LOGMSG_("tcp seq=%d", seq);
+#endif
       /*summ*/ net_replies[QR_SUM]++; net_replies[QR_TCP]++;
     } break;
   } /*end of switch*/
 
   if (seq >= 0)
-    net_stat(seq, mplson ? decodempls(data, sz - (data - packet)) : NULL, fromaddress, now, reason);
+    net_stat(seq, fromaddress, now, reason MPLSFNTAIL(mplson ? decodempls(data, sz - (data - packet)) : NULL));
 }
 
 
@@ -974,7 +1011,7 @@ bool net_set_host(struct hostent *h) {
 void net_reset(void) {
   for (int at = 0; at < MAXHOST; at++)
     for (int ndx = 0; ndx < MAXPATH; ndx++)
-      set_new_addr(at, ndx, &unspec_addr, NULL); // clear all query/response cache
+      set_new_addr(at, ndx, &unspec_addr MPLSFNTAIL(NULL));  // clear all query-response cache
   memset(host, 0, sizeof(host));
 #ifdef CURSES
   for (int at = 0; at < MAXHOST; at++) {
@@ -1025,10 +1062,10 @@ bool net_set_ifaddr(char *ifaddr) {
 
 void net_close(void) {
   net_sock_close();
-  // clear memory allocated for query/response cache
+  // clear memory allocated for query-response cache
   for (int at = 0; at < MAXHOST; at++)
     for (int ndx = 0; ndx < MAXPATH; ndx++)
-      set_new_addr(at, ndx, &unspec_addr, NULL);
+      set_new_addr(at, ndx, &unspec_addr MPLSFNTAIL(NULL));
 }
 
 inline int net_wait(void) { return recvsock; }
@@ -1099,7 +1136,7 @@ void net_tcp_parse(int sock, int seq, int noerr) {
     case EHOSTDOWN:
     case ECONNREFUSED:
     case 0: // no error
-      net_stat(seq, NULL /*no MPLS decoding?*/, remoteaddress, now, reason);
+      net_stat(seq, remoteaddress, now, reason MPLSFNTAIL(NULL)); /*no MPLS decoding?*/
       LOGMSG_("stat seq=%d for sock=%d", seq, sock);
       break;
 //  case EAGAIN: // need to wait more
@@ -1120,6 +1157,7 @@ bool net_timedout(int seq) {
   return true;
 }
 
+#ifdef DNS
 static void save_ptr_answer(int at, int ndx, const char* answer) {
   if (RPTR_AT_NDX(at, ndx)) {
     LOGMSG_("T_PTR dup or update at=%d ndx=%d for %s", at, ndx, strlongip(&IP_AT_NDX(at, ndx)));
@@ -1132,9 +1170,12 @@ static void save_ptr_answer(int at, int ndx, const char* answer) {
   if (!RPTR_AT_NDX(at, ndx))
     WARN_("[%d:%d] strndup()", at, ndx);
 }
+#endif
 
 void net_init(int ipv6) {
+#ifdef DNS
   dns_ptr_handler = save_ptr_answer; // no checks, handler for net-module only
+#endif
 #ifdef ENABLE_IPV6
   if (ipv6) {
     af = AF_INET6;
@@ -1156,12 +1197,14 @@ const char *strlongip(ip_t *ip) {
   return inet_ntop(af, ip, addrstr, sizeof(addrstr));
 }
 
+#ifdef MPLS
 const char *mpls2str(const mpls_label_t *label, int indent) {
   static const char mpls_fmt[] = "%*s[Lbl:%u Exp:%u S:%u TTL:%u]";
   static char m2s_buf[64];
   snprintf(m2s_buf, sizeof(m2s_buf), mpls_fmt, indent, "", label->lab, label->exp, label->bos, label->ttl);
   return m2s_buf;
 }
+#endif
 
 // type must correspond 'id' in resolve HEADER (unsigned id:16)
 // it's used as a hint for fast search, 16bits as [hash:7 at:6 ndx:3]

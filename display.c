@@ -18,13 +18,12 @@
 
 #include "config.h"
 #include "mtr.h"
+#include "mtr-poll.h"
+#include "report.h"
 #include "display.h"
 #ifdef CURSES
 #include "mtr-curses.h"
 #endif
-#include "report.h"
-#include "mtr-poll.h"
-#include "dns.h"
 #ifdef IPINFO
 #include "ipinfo.h"
 #endif

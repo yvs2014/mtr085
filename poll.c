@@ -24,12 +24,14 @@
 #include "config.h"
 #include "mtr.h"
 #include "mtr-poll.h"
-#include "dns.h"
 #include "net.h"
+#include "display.h"
+#ifdef DNS
+#include "dns.h"
+#endif
 #ifdef IPINFO
 #include "ipinfo.h"
 #endif
-#include "display.h"
 
 #if defined(LOG_POLL) && !defined(LOGMOD)
 #define LOGMOD
@@ -48,9 +50,12 @@
 long numpings; // global
 
 // base file descriptors
-enum { FD_STDIN, FD_NET, FD_DNS,
+enum { FD_STDIN, FD_NET,
+#ifdef DNS
+       FD_DNS,
 #ifdef ENABLE_IPV6
-FD_DNS6,
+       FD_DNS6,
+#endif
 #endif
 FD_MAX };
 
@@ -59,7 +64,9 @@ static int *tcpseq;           // and corresponding sequence indexes from net.c
 static int maxfd;
 static const struct timespec GRACETIME = { 5, 0 };
 static int prev_mtrtype = IPPROTO_ICMP;
+#ifdef DNS
 static bool need_dns;
+#endif
 
 #define SET_POLLFD(ndx, sock) { allfds[ndx].fd = sock; allfds[ndx].revents = 0; }
 #define IN_ISSET(ndx) ((allfds[ndx].fd >= 0) && ((allfds[ndx].revents & POLLIN) == POLLIN))
@@ -70,6 +77,7 @@ static bool need_dns;
 static void set_fds() {
   SET_POLLFD(FD_STDIN, interactive ? 0 : -1);
   SET_POLLFD(FD_NET, net_wait());
+#ifdef DNS
   need_dns = enable_dns
 #ifdef IPINFO
           || enable_ipinfo
@@ -78,6 +86,7 @@ static void set_fds() {
   SET_POLLFD(FD_DNS, need_dns ? dns_wait(AF_INET) : -1);
 #ifdef ENABLE_IPV6
   SET_POLLFD(FD_DNS6, need_dns ? dns_wait(AF_INET6) : -1);
+#endif
 #endif
   // clean rest triggers
   if ((mtrtype == IPPROTO_TCP) && (maxfd > FD_MAX))
@@ -267,18 +276,22 @@ static int keyboard_events(int action) {
     case ActionPauseResume:
       LOGMSG("'pause/resume' pressed");
       break;
+#ifdef MPLS
     case ActionMPLS:
       enable_mpls = !enable_mpls;
       LOGMSG_("toggle MPLS: %d -> %d", !enable_mpls, enable_mpls);
       TGLBIT(iargs, 2);	// 2nd bit: MPLS on/off
       display_clear();
       break;
+#endif
+#ifdef DNS
     case ActionDNS:
       enable_dns = !enable_dns;
       LOGMSG_("toggle DNS: %d -> %d", !enable_dns, enable_dns);
       TGLBIT(iargs, 5);	// 5th bit: DNS on/off
       dns_open();
       break;
+#endif
     case ActionCache:
       cache_mode = !cache_mode;
       LOGMSG_("toggle cache-mode: %d -> %d", !cache_mode, cache_mode);
@@ -336,10 +349,18 @@ static int keyboard_events(int action) {
 static void proceed_ipinfo() {
   switch (display_mode) {
     case DisplayReport:
+#ifdef OUTPUT_FORMAT_TXT
     case DisplayTXT:
+#endif
+#ifdef OUTPUT_FORMAT_CSV
     case DisplayCSV:
+#endif
+#ifdef OUTPUT_FORMAT_JSON
     case DisplayJSON:
+#endif
+#ifdef OUTPUT_FORMAT_XML
     case DisplayXML:
+#endif
       LOGMSG("query extra IP info");
       query_ipinfo();
   }
@@ -373,6 +394,7 @@ static int conclude(void) {
     LOGMSG("got icmp or udp response");
     net_icmp_parse();
   }
+#ifdef DNS
   if (need_dns) { // dns lookup
     if (IN_ISSET(FD_DNS)) {
       LOGMSG("got dns response");
@@ -385,6 +407,7 @@ static int conclude(void) {
     }
 #endif
   }
+#endif
   if (tcpish())
     proceed_tcp();
   return rc;

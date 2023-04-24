@@ -10,13 +10,14 @@
 #include "mtr-curses.h"
 #include "mtr-poll.h"
 #include "net.h"
+#include "display.h"
+#ifdef DNS
 #include "dns.h"
+#endif
 #ifdef IPINFO
 #include "ipinfo.h"
 #endif
-#include "display.h"
 #include "macros.h"
-
 #include "graphcairo.h"
 
 #define GC_ARGS_SEP	','
@@ -104,6 +105,7 @@ static int fill_hostinfo(int at, int ndx, char *buf, int sz) {
   if (ipinfo_ready())
     l += snprintf(buf, sz, "%.*s", 2 * STARTSTAT, fmt_ipinfo(at, ndx));
 #endif
+#ifdef DNS
   const char *name = dns_ptr_lookup(at, ndx);
   if (name) {
     if (show_ips) {
@@ -112,7 +114,8 @@ static int fill_hostinfo(int at, int ndx, char *buf, int sz) {
     } else
       l += snprintf(buf + l, sz - l, "%.*s", STARTSTAT, name);
   } else
-    l += snprintf(buf + l, sz - l, "%.*s", STARTSTAT, strlongip(&IP_AT_NDX(at, ndx)));
+#endif
+  l += snprintf(buf + l, sz - l, "%.*s", STARTSTAT, strlongip(&IP_AT_NDX(at, ndx)));
   if (((at + 1) >= display_offset) && (l > hostinfo_max))
     hostinfo_max = l;
   return l;
@@ -138,25 +141,29 @@ int gc_keyaction(void) {
         GCMSG("scroll up\n");
         hostinfo_max = 0;
         return ActionScrollUp;
+#ifdef MPLS
       case 'e':  // MPLS
-        GCMSG("toggle mpls\n");
+        GCMSG("toggle MPLS\n");
         return ActionMPLS;
+#endif
       case 'j':  // Latency,Jitter
         GCMSG("toggle latency/jitter stats\n");
         onoff_jitter();
         mc_statf_title(legend_header, sizeof(legend_header));
         return ActionNone;
+#ifdef DNS
       case 'n':  // DNS
-        GCMSG("toggle dns\n");
+        GCMSG("toggle DNS\n");
         hostinfo_max = 0;
         return ActionDNS;
+#endif
 #ifdef IPINFO
       case 'y':  // IP Info
-        GCMSG("switching ip info\n");
+        GCMSG("switching IP info\n");
         hostinfo_max = 0;
         return ActionII;
       case 'z':  // ASN
-        GCMSG("toggle asn info\n");
+        GCMSG("toggle ASN info\n");
         hostinfo_max = 0;
         return ActionAS;
 #endif
@@ -167,6 +174,7 @@ int gc_keyaction(void) {
     case 'p':  // Pause,Resume
       GCMSG("pause/resume pressed");
       return ActionPauseResume;
+    case  3 :  // ^C
     case 'q':  // Quit
       GCMSG("quit\n");
       return ActionQuit;
@@ -175,16 +183,16 @@ int gc_keyaction(void) {
       cr_net_reset(0);
       return ActionReset;
     case 't':  // TCP on/off
-      GCMSG("TCP on/off\n");
+      GCMSG("toggle TCP pings\n");
       return ActionTCP;
     case 'u':  // UDP on/off
-      GCMSG("UDP on/off\n");
+      GCMSG("toggle UDP pings\n");
       return ActionUDP;
   }
   return ActionNone;
 }
 
-
+#ifdef MPLS
 static void gc_print_mpls(int i, int d, const mpls_data_t *m, char *buf, int sz) {
   if (!m)
     return;
@@ -193,7 +201,7 @@ static void gc_print_mpls(int i, int d, const mpls_data_t *m, char *buf, int sz)
     cr_print_host(i, d, buf, NULL);
   }
 }
-
+#endif
 
 void gc_redraw(void) {
   static char glinebuf[HOSTSTAT_LEN];
@@ -243,8 +251,10 @@ void gc_redraw(void) {
         l += 1; // step over 0
         mc_print_at(at, glinebuf + l, sizeof(glinebuf) - l); // statistics
         cr_print_host(i, data[i], glinebuf, glinebuf + l);   // host+stat
+#ifdef MPLS
         if (enable_mpls) // mpls
           gc_print_mpls(i, data[i], &CURRENT_MPLS(at), glinebuf, sizeof(glinebuf));
+#endif
         if (params.enable_multipath) {                       // multipath
           for (int j = 0; j < MAXPATH; j++) {
             if (j != host[at].current) {
@@ -253,8 +263,10 @@ void gc_redraw(void) {
                 break;
               fill_hostinfo(at, j, glinebuf, sizeof(glinebuf));
               cr_print_host(i, data[i], glinebuf, NULL);
+#ifdef MPLS
               if (enable_mpls) // multipath+mpls
                 gc_print_mpls(i, data[i], &MPLS_AT_NDX(at, j), glinebuf, sizeof(glinebuf));
+#endif
             }
           }
         }

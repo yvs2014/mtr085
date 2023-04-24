@@ -28,8 +28,10 @@
 #include "mtr.h"
 #include "mtr-poll.h"
 #include "net.h"
-#include "dns.h"
 #include "display.h"
+#ifdef DNS
+#include "dns.h"
+#endif
 #include "ipinfo.h"
 
 #if defined(LOG_IPINFO) && !defined(LOGMOD)
@@ -79,16 +81,14 @@ typedef struct {
   char* host6;
   char* name[MAX_TXT_ITEMS];
   char* unkn;
-  char sep;
-  int type; // 0 - dns, 1 - http, 2 - whois
+  char  sep;
+  int   type; // 0 - dns, 1 - http, 2 - whois
   int   skip_ndx[MAX_TXT_ITEMS]; // skip by index: 1, ...
   char* skip_str[MAX_TXT_ITEMS]; // skip by string: "query ip", ...
   char* prefix;
-  int width[MAX_TXT_ITEMS];
-  int fd;
+  int   width[MAX_TXT_ITEMS];
 } origin_t;
 
-#define ORIG_FD   (origins[origin_no].fd)
 #define ORIG_TYPE (origins[origin_no].type)
 #define ORIG_HOST (origins[origin_no].host)
 #define ORIG_UNKN (origins[origin_no].unkn)
@@ -105,32 +105,48 @@ static origin_t origins[] = {
   { .host  = "origin.asn.cymru.com", .host6 = "origin6.asn.cymru.com",
     .name  = { "ASN", "Route", "CC", "Registry", "Allocated" },
     .sep   = VSLASH,
-    .fd    = -1 },
+  },
 // 2
-  { .host  = "riswhois.ripe.net", .host6 = "riswhois.ripe.net",
+  { .host  =
+#ifdef DNS
+      "riswhois.ripe.net",
+#else
+      "193.0.11.5",
+#endif
+    .host6 =
+#ifdef DNS
+      "riswhois.ripe.net",
+#else
+      "2001:67c:2e8:25::c100:b05",
+#endif
     .name  = {"Route", "Origin", "Descr", "CC"},
     .sep   = 0, .type = OT_WHOIS, .prefix = "-m ",
-    .fd = -1 },
+  },
 // 3
   { .host  = "peer.asn.shadowserver.org",
     .name  = { "AS Path", "ASN", "Route", /*"AS Name",*/ "CC", "Org" },
     .sep   = VSLASH, .skip_ndx = {4},
-    .fd    = -1 },
+  },
 // 4
   { .host  = "origin.asn.spameatingmonkey.net",
     .name  = { "Route", "ASN", "Org", "Allocated", "CC" },
     .unkn  = "Unknown", .sep = VSLASH,
-    .fd    = -1 },
+  },
 // 5
-  { .host  = "ip-api.com",
+  { .host  =
+#ifdef DNS
+      "ip-api.com",
+#else
+      "208.95.112.1",
+#endif
     .name  = { /* Status, */ "Country", "CC", "RC", "Region", "City", "Zip", "Lat", "Long", "TZ", "ISP", "Org", "AS Name" /*, QueryIP */ },
     .sep   = COMMA, .type = OT_HTTP, .skip_ndx = {1, 14}, .prefix = "/csv/",
-    .fd = -1 },
+  },
 // 6
   { .host  = "asn.routeviews.org",
     .name  = { "ASN" },
     .unkn  = "4294967295",
-    .fd    = -1 },
+  },
 };
 
 static int skip_whois_comments(char** lines, int max) {
@@ -531,7 +547,11 @@ static int ipinfo_lookup(int at, int ndx, const char *qstr) {
     }
   }
 
-  return (ORIG_TYPE == OT_DNS) ? dns_send_query(at, ndx, qstr, T_TXT) : send_tcp_query(ipitseq[seq].sock, qstr);
+  return
+#ifdef DNS
+    (ORIG_TYPE == OT_DNS) ? dns_send_query(at, ndx, qstr, T_TXT) :
+#endif
+   	send_tcp_query(ipitseq[seq].sock, qstr);
 }
 
 bool ipinfo_timedout(int seq) {
@@ -558,8 +578,10 @@ static char *get_ipinfo(int at, int ndx, int nd) {
     case OT_WHOIS:
       ipinfo_lookup(at, ndx, make_tcp_qstr(ip));
       break;
+#ifdef DNS
     default:  // dns
       ipinfo_lookup(at, ndx, ip2arpa(ip, ORIG_HOST, origins[origin_no].host6));
+#endif
   }
   return NULL;
 }
@@ -634,7 +656,10 @@ void ipinfo_open(void) {
       }
       memset(ipitseq, -1, sz);
       LOGMSG_("allocated %zd bytes for tcp-sockets", sz);
-    } else if (!dns_open())
+    } else
+#ifdef DNS
+      if (!dns_open())
+#endif
       return;
     itemname_max = 0;
     for (int i = 0; i < MAX_TXT_ITEMS; i++, itemname_max++) {
@@ -642,7 +667,9 @@ void ipinfo_open(void) {
         break;
       ORIG_WIDTH(i) = strnlen(ORIG_NAME(i), NAMELEN);
     }
+#ifdef DNS
     dns_txt_handler = save_txt_answer; // no checks, handler for ipinfo only
+#endif
     ii_initiated = true;
   }
   LOGMSG_("%s", ii_initiated ? "ok" : "failed");
@@ -650,12 +677,6 @@ void ipinfo_open(void) {
 
 void ipinfo_close(void) {
   if (ii_initiated) {
-    if (ORIG_FD >= 0) {
-      LOGMSG_("close sock=%d", ORIG_FD);
-      close(ORIG_FD);
-      /*summ*/ sum_sock[1]++;
-      ORIG_FD = -1;
-    }
     if (ipitseq) {
       for (int i = 0; i < MAXHOST * MAXPATH; i++)
         close_ipitseq(i);
@@ -665,8 +686,10 @@ void ipinfo_close(void) {
     ii_initiated = false;
     LOGMSG("ok");
   }
+#ifdef DNS
   if (ORIG_TYPE == OT_DNS)
     dns_close();
+#endif
 }
 
 int ipinfo_args(char *arg) {

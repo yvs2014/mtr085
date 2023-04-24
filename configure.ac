@@ -16,15 +16,13 @@ AC_CHECK_HEADERS([sys/param.h], AC_DEFINE(HAVE_SYS_PARAM_H, 1))
 # for netcode
 dnl AC_CHECK_HEADERS([netinet/in_systm.h], AC_DEFINE(HAVE_NETINET_IN_SYSTM_H, 1))
 
+AC_SEARCH_LIBS([pow], [m],, AC_MSG_ERROR(No math library found))
+AC_SEARCH_LIBS([socket], [socket],, AC_MSG_ERROR(No socket library found))
+
 AC_ARG_ENABLE(ipv6,
 	AS_HELP_STRING([--disable-ipv6], [do not enable IPv6]),
 	ipv6=$enableval, ipv6=yes)
 AS_IF([test "x$ipv6" = "xyes"], [AC_DEFINE([ENABLE_IPV6], [], [Define to enable IPv6])])
-
-AC_ARG_WITH(curses,
-	AS_HELP_STRING([--without-curses], [without Curses library]),
-	[curses=${withval}], [curses=yes])
-AM_CONDITIONAL([CURSES], [test "x$curses" = "xyes"])
 
 AC_ARG_WITH(splitmode,
 	AS_HELP_STRING([--without-splitmode], [without split-mode]),
@@ -32,52 +30,61 @@ AC_ARG_WITH(splitmode,
 AM_CONDITIONAL([SPLITMODE], [test "x$splitmode" = "xyes"])
 AS_IF([test "x$splitmode" = "xyes"], [AC_DEFINE([SPLITMODE], [1], [Define to enable split-mode])])
 
-AC_ARG_WITH(unicode,
-	AS_HELP_STRING([--without-unicode], [without Unicode histogram]),
-	[unicode=${withval}], [unicode=yes])
-AS_IF([test "x$curses" = "xno"], [unicode=no])
-
-AS_IF([test "x$unicode" = "xyes"], [
-	AC_CHECK_HEADERS([ncursesw/cursesw.h ncursesw/curses.h ncurses/curses.h curses.h], break)
-	AC_CHECK_HEADERS([wchar.h wctype.h locale.h langinfo.h])
-	AC_SEARCH_LIBS([add_wch], [ncursesw curses],	# Ncursesw and X/Open curses provide add_wch()
-		AC_DEFINE([UNICODE], [1], [Define to enable unicode]),
-		AC_MSG_ERROR([No wide-character curses library found]))
-	AC_SEARCH_LIBS([tgetent], [ncursesw curses termcap tinfo])	# don't leak ncursesw/curses in LIBS
-	AC_SEARCH_LIBS([use_default_colors], [ncursesw curses],
-		AC_DEFINE([HAVE_USE_DEFAULT_COLORS], [1], [Define this if curses library has use_default_colors()]))
+AC_ARG_WITH(curses,
+	AS_HELP_STRING([--without-curses], [without Curses library]),
+	[curses=${withval}], [curses=yes])
+AM_CONDITIONAL([CURSES], [test "x$curses" = "xyes"])
+AS_IF([test "x$curses" = "xyes"], [
 	AC_DEFINE(CURSES, 1, Build with curses support)
-], [
-	AS_IF([test "x$curses" = "xyes"], [
-	AC_CHECK_HEADERS([ncurses.h ncurses/curses.h curses.h cursesX.h], break)
-	AC_SEARCH_LIBS([tgetent], [termcap tinfo])
-	AC_SEARCH_LIBS([initscr], [ncurses curses cursesX],
-		AC_DEFINE(CURSES, 1, Build with curses support),
-		AC_MSG_WARN(Building without curses display support))
-	AC_SEARCH_LIBS([use_default_colors], [ncurses curses],
-		AC_DEFINE([HAVE_USE_DEFAULT_COLORS], [1], [Define this if curses library has use_default_colors()]))
+	AC_ARG_WITH(unicode,
+		AS_HELP_STRING([--without-unicode], [without Unicode histogram]),
+		[unicode=${withval}], [unicode=yes])
+	AS_IF([test "x$unicode" = "xyes"], [
+		AC_CHECK_HEADERS([ncursesw/cursesw.h ncursesw/curses.h ncurses/curses.h curses.h], break)
+		AC_CHECK_HEADERS([wchar.h wctype.h locale.h langinfo.h])
+		AC_SEARCH_LIBS([add_wch], [ncursesw curses],	# Ncursesw and X/Open curses provide add_wch()
+			AC_DEFINE([UNICODE], [1], [Define to enable unicode]),
+			AC_MSG_ERROR([Wide-character curses library not found]))
+		AC_SEARCH_LIBS([use_default_colors], [ncursesw curses],
+			AC_DEFINE([HAVE_USE_DEFAULT_COLORS], [1], [Define this if curses library has use_default_colors()]))
+	], [
+		AC_CHECK_HEADERS([ncurses.h ncurses/curses.h curses.h cursesX.h], break)
+		AC_SEARCH_LIBS([initscr], [ncurses curses cursesX],
+			AC_DEFINE(CURSES, 1, Build with curses support),
+			AC_MSG_ERROR([Curses library not found]))
+		AC_SEARCH_LIBS([use_default_colors], [ncurses curses],
+			AC_DEFINE([HAVE_USE_DEFAULT_COLORS], [1], [Define this if curses library has use_default_colors()]))
+	])
 ])
-])
-
-AC_SEARCH_LIBS([pow], [m],, AC_MSG_ERROR(No math library found))
-AC_SEARCH_LIBS([socket], [socket],, AC_MSG_ERROR(No socket library found))
-AC_SEARCH_LIBS([gethostbyname], [nsl],, AC_MSG_ERROR(No nameservice library found))
-AC_SEARCH_LIBS([dn_expand], [resolv],, AC_SEARCH_LIBS([__dn_expand], [resolv],, AC_MSG_ERROR(No resolv found)))
-AC_SEARCH_LIBS([res_nmkquery], [resolv],
-	AC_DEFINE([HAVE_RES_NMKQUERY], [1], [Define this if res_nmkquery() is present]),
-	AC_SEARCH_LIBS([__res_nmkquery], [resolv],
+AC_ARG_ENABLE(dns,
+	AS_HELP_STRING([--disable-dns], [do not enable DNS]),
+	dns=$enableval, dns=yes)
+AM_CONDITIONAL([DNS], [test "x$dns" = "xyes"])
+AS_IF([test "x$dns" = "xyes"], [
+	AC_DEFINE([DNS], [], [Define to enable DNS])
+	AC_SEARCH_LIBS([gethostbyname], [nsl],, AC_MSG_ERROR(No nameservice library found))
+	AC_SEARCH_LIBS([dn_expand], [resolv],, AC_SEARCH_LIBS([__dn_expand], [resolv],, AC_MSG_ERROR(No resolv found)))
+	AC_SEARCH_LIBS([res_nmkquery], [resolv],
 		AC_DEFINE([HAVE_RES_NMKQUERY], [1], [Define this if res_nmkquery() is present]),
-		AC_SEARCH_LIBS([res_mkquery], [resolv],, AC_MSG_ERROR(No resolv found))))
-
-AC_ARG_WITH([libidn],
-	AS_HELP_STRING([--with-libidn], [IDN support (libidn)]),
-	[libidn="${withval}"], [libidn=no])
-AM_CONDITIONAL([LIBIDN], [test "x$libidn" = "xyes"])
+		AC_SEARCH_LIBS([__res_nmkquery], [resolv],
+			AC_DEFINE([HAVE_RES_NMKQUERY], [1], [Define this if res_nmkquery() is present]),
+			AC_SEARCH_LIBS([res_mkquery], [resolv],, AC_MSG_ERROR(No resolv found))))
+])
 
 AC_ARG_WITH([libasan],
 	AS_HELP_STRING([--with-libasan], [build with AddressSanitizer]),
 	[libasan="${withval}"], [libasan=no])
 AM_CONDITIONAL([LIBASAN], [test "x$libasan" = "xyes"])
+
+AC_ARG_WITH([mpls],
+	AS_HELP_STRING([--with-mpls], [build with MPLS decoding]),
+	[mpls="${withval}"], [mpls=yes])
+AS_IF([test "x$mpls" = "xyes"], [AC_DEFINE([MPLS], [1], [Define to support MPLS decoding])])
+
+AC_ARG_WITH([libidn],
+	AS_HELP_STRING([--with-libidn], [IDN support (libidn)]),
+	[libidn="${withval}"], [libidn=no])
+AM_CONDITIONAL([LIBIDN], [test "x$libidn" = "xyes"])
 
 AC_ARG_WITH([ipinfo],
 	AS_HELP_STRING([--without-ipinfo], [without IP-info lookup]),
@@ -102,13 +109,8 @@ AS_IF([test "x$graphcairo_xcb" = "xyes" -o "x$graphcairo_xlib" = "xyes"], [
 	AC_SEARCH_LIBS([FcFini], [fontconfig], AC_DEFINE([FC_FINI], 1, [finalize fontconfig library]))
 ])
 
-# Extra output formats: csv, raw, txt, xml, json
-# 	"csv, json" enabled by default
-
-AC_ARG_WITH([output_csv],
-	AS_HELP_STRING([--with-output-csv], [CSV output format]),
-	[output_csv="${withval}"], [output_csv=yes])
-AS_IF([test "x$output_csv" != "xno"], [AC_DEFINE([OUTPUT_FORMAT_CSV], 1, [Support CSV output format])])
+# Extra output formats: raw, txt, csv, json, xml
+# 	"txt, csv, json" are enabled by default, "raw, xml" are disabled
 
 AC_ARG_WITH([output_raw],
 	AS_HELP_STRING([--with-output-raw], [RAW output format]),
@@ -117,19 +119,23 @@ AS_IF([test "x$output_raw" != "xno"], [AC_DEFINE([OUTPUT_FORMAT_RAW], 1, [Suppor
 
 AC_ARG_WITH([output_txt],
 	AS_HELP_STRING([--with-output-txt], [TXT output format]),
-	[output_txt="${withval}"], [output_txt=no])
+	[output_txt="${withval}"], [output_txt=yes])
 AS_IF([test "x$output_txt" != "xno"], [AC_DEFINE([OUTPUT_FORMAT_TXT], 1, [Support TXT output format])])
 
-AC_ARG_WITH([output_xml],
-	AS_HELP_STRING([--with-output-xml], [XML output format]),
-	[output_xml="${withval}"], [output_xml=no])
-AS_IF([test "x$output_xml" != "xno"], [AC_DEFINE([OUTPUT_FORMAT_XML], 1, [Support XML output format])])
+AC_ARG_WITH([output_csv],
+	AS_HELP_STRING([--with-output-csv], [CSV output format]),
+	[output_csv="${withval}"], [output_csv=yes])
+AS_IF([test "x$output_csv" != "xno"], [AC_DEFINE([OUTPUT_FORMAT_CSV], 1, [Support CSV output format])])
 
 AC_ARG_WITH([output_json],
 	AS_HELP_STRING([--with-output-json], [JSON output format]),
 	[output_json="${withval}"], [output_json=yes])
 AS_IF([test "x$output_json" != "xno"], [AC_DEFINE([OUTPUT_FORMAT_JSON], 1, [Support JSON output format])])
 
+AC_ARG_WITH([output_xml],
+	AS_HELP_STRING([--with-output-xml], [XML output format]),
+	[output_xml="${withval}"], [output_xml=no])
+AS_IF([test "x$output_xml" != "xno"], [AC_DEFINE([OUTPUT_FORMAT_XML], 1, [Support XML output format])])
 
 # Add some syslog debug: poll, net, dns, ipinfo
 
@@ -143,27 +149,34 @@ AC_ARG_WITH([syslog_net],
 	[syslog_net="${withval}"], [syslog_net=no])
 AS_IF([test "x$syslog_net" != "xno"], [AC_DEFINE([LOG_NET], 1, [Enable debug: net syslog])])
 
-AC_ARG_WITH([syslog_dns],
-	AS_HELP_STRING([--with-syslog-dns], [Enable debug: dns syslog]),
-	[syslog_dns="${withval}"], [syslog_dns=no])
-AS_IF([test "x$syslog_dns" != "xno"], [AC_DEFINE([LOG_DNS], 1, [Enable debug: dns syslog])])
+AS_IF([test "x$dns" = "xyes"], [
+	AC_ARG_WITH([syslog_dns],
+		AS_HELP_STRING([--with-syslog-dns], [Enable debug: dns syslog]),
+		[syslog_dns="${withval}"], [syslog_dns=no])
+	AS_IF([test "x$syslog_dns" != "xno"], [AC_DEFINE([LOG_DNS], 1, [Enable debug: dns syslog])])
+])
 
-AC_ARG_WITH([syslog_ipinfo],
-	AS_HELP_STRING([--with-syslog-ipinfo], [Enable debug: ipinfo syslog]),
-	[syslog_ipinfo="${withval}"], [syslog_ipinfo=no])
-AS_IF([test "x$syslog_ipinfo" != "xno"], [AC_DEFINE([LOG_IPINFO], 1, [Enable debug: ipinfo syslog])])
+AS_IF([test "x$ipinfo" = "xyes"], [
+	AC_ARG_WITH([syslog_ipinfo],
+		AS_HELP_STRING([--with-syslog-ipinfo], [Enable debug: ipinfo syslog]),
+		[syslog_ipinfo="${withval}"], [syslog_ipinfo=no])
+	AS_IF([test "x$syslog_ipinfo" != "xno"], [AC_DEFINE([LOG_IPINFO], 1, [Enable debug: ipinfo syslog])])
+])
 
 
-# don't break anything if pkg-config is absent
-m4_ifndef([PKG_CHECK_MODULES], [m4_defun([PKG_CHECK_MODULES], [AC_MSG_ERROR([
+AS_IF([test "x$libidn" = "xyes" || test "x$graphcairo_xcb" = "xyes" || test "x$graphcairo_xlib" = "xyes"], [need_pkgconfig=yes])
+
+AS_IF([test "x$need_pkgconfig" = "xyes"], [
+	# don't break anything if pkg-config is absent
+	m4_ifndef([PKG_CHECK_MODULES], [m4_defun([PKG_CHECK_MODULES], [AC_MSG_ERROR([
   Could not locate the pkg-config automake macros, these are usually located in
     .../share/aclocal/pkg.m4
   Before running bootstrap try setting the environment variable
     ACLOCAL_PATH="/own/dir"
   or configure --without-libidn --without-graphcairo-*
-])])])
-
-PKG_PROG_PKG_CONFIG
+	])])])
+	PKG_PROG_PKG_CONFIG
+])
 
 AS_IF([test "x$graphcairo_xcb" = "xyes"], [
 	AC_DEFINE([GRAPHCAIRO], [1], [Define to enable cairo graph])

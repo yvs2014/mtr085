@@ -19,12 +19,41 @@
 #ifndef DISPLAY_H
 #define DISPLAY_H
 
+#include "config.h"
+
 enum { ActionNone, ActionQuit, ActionReset, ActionDisplay,
   ActionClear, ActionPauseResume, ActionScrollDown, ActionScrollUp,
-  ActionDNS, ActionUDP, ActionTCP, ActionMPLS, ActionCache, ActionAS, ActionII
+  ActionUDP, ActionTCP, ActionCache
+#ifdef MPLS
+  , ActionMPLS
+#endif
+#ifdef DNS
+  , ActionDNS
+#endif
+#ifdef IPINFO
+  , ActionAS, ActionII
+#endif
 };
-enum { DisplayReport, DisplayCurses, DisplayRaw, DisplaySplit,
-  DisplayTXT, DisplayCSV, DisplayJSON, DisplayXML, DisplayGraphCairo };
+enum { DisplayReport, DisplayCurses, DisplaySplit
+#ifdef GRAPHCAIRO
+  , DisplayGraphCairo
+#endif
+#ifdef OUTPUT_FORMAT_RAW
+  , DisplayRaw
+#endif
+#ifdef OUTPUT_FORMAT_TXT
+  , DisplayTXT
+#endif
+#ifdef OUTPUT_FORMAT_CSV
+  , DisplayCSV
+#endif
+#ifdef OUTPUT_FORMAT_JSON
+  , DisplayJSON
+#endif
+#ifdef OUTPUT_FORMAT_XML
+  , DisplayXML
+#endif
+};
 
 void display_start(void);
 void display_final(void);

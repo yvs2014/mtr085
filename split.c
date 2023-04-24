@@ -27,13 +27,15 @@
 
 #include "config.h"
 #include "mtr.h"
-#include "split.h"
-#include "display.h"
-#include "dns.h"
 #include "net.h"
+#include "display.h"
+#ifdef DNS
+#include "dns.h"
+#endif
 #ifdef IPINFO
 #include "ipinfo.h"
 #endif
+#include "split.h"
 #include "macros.h"
 
 #define SPLIT_SEP	'\t'
@@ -45,10 +47,12 @@ void split_redraw(void) {
     ip_t *addr = &CURRENT_IP(at);
     printf("%2d", at + 1);
     if (addr_exist(addr)) {
+#ifdef DNS
       const char *name = dns_ptr_lookup(at, host[at].current);
       printf("%c%s", SPLIT_SEP, name ? name : strlongip(addr));
       if (show_ips)
-        printf("%c%s", SPLIT_SEP, strlongip(addr));
+#endif
+      printf("%c%s", SPLIT_SEP, strlongip(addr));
       for (int i = 0; i < sizeof(fields); i++) {
         const char *str = net_elem(at, fields[i]);
         if (str) printf("%c%s", SPLIT_SEP, str);
@@ -65,11 +69,13 @@ void split_redraw(void) {
         ip_t *ip = &IP_AT_NDX(at, ndx);
         if (!addr_exist(ip))
           break;
-        name = dns_ptr_lookup(at, ndx);
         printf("%2d:%d", at + 1, ndx);
+#ifdef DNS
+        name = dns_ptr_lookup(at, ndx);
         printf("%c%s", SPLIT_SEP, name ? name : strlongip(ip));
         if (show_ips)
-          printf("%c%s", SPLIT_SEP, strlongip(ip));
+#endif
+        printf("%c%s", SPLIT_SEP, strlongip(ip));
 #ifdef IPINFO
         if (ipinfo_ready())
           printf("%c%s", SPLIT_SEP, sep_ipinfo(at, ndx, SPLIT_SEP));
@@ -116,15 +122,17 @@ void split_close(void) {
 const char SMODE_HINTS[] =
 "Command:\n"
 "  h   help\n"
-"  n   toggle DNS on/off\n"
+#ifdef DNS
+"  n   toggle DNS\n"
+#endif
 "  p   pause/resume\n"
 "  q   quit\n"
 "  r   reset all counters\n"
-"  t   switch between ICMP ECHO and TCP SYN\n"
-"  u   switch between ICMP ECHO and UDP datagrams\n"
+"  t   toggle TCP pings\n"
+"  u   toggle UDP pings\n"
 #ifdef IPINFO
-"  y   switching IP Info\n"
-"  z   toggle ASN Lookup on/off\n"
+"  y   switching IP info\n"
+"  z   toggle ASN lookup\n"
 #endif
 "\n"
 "press SPACE to resume... ";
@@ -135,13 +143,18 @@ int split_keyaction(void) {
     WARN("read");
     return 0;
   }
-  switch (tolower((int)c)) {
+  switch (c) {
+    case '+': return ActionScrollDown;
+    case '-': return ActionScrollUp;
     case 'h':
       printf("%s", SMODE_HINTS);
       fflush(stdout);
       return ActionPauseResume;
+#ifdef DNS
     case 'n': return ActionDNS;
+#endif
     case 'p': return ActionPauseResume;
+    case  3 : // ^C
     case 'q': return ActionQuit;
     case 'r': return ActionReset;
     case 't': return ActionTCP;
@@ -150,11 +163,6 @@ int split_keyaction(void) {
     case 'y': return ActionII;
     case 'z': return ActionAS;
 #endif
-  }
-  switch (c) {
-    case 3: return ActionQuit;
-    case '+': return ActionScrollDown;
-    case '-': return ActionScrollUp;
   }
   return 0;
 }

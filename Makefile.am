@@ -8,7 +8,6 @@ install-exec-hook:
 mtr_SOURCES = mtr.c mtr.h \
               macros.h \
               net.c net.h \
-              dns.c dns.h \
               display.c display.h \
               report.c report.h \
               poll.c mtr-poll.h
@@ -17,6 +16,10 @@ nodist_mtr_SOURCES = version.h
 
 AM_CPPFLAGS =
 mtr_LDADD = $(RESOLV_LIBS)
+
+if DNS
+mtr_SOURCES += dns.c dns.h
+endif
 
 if CURSES
 mtr_SOURCES += curses.c mtr-curses.h

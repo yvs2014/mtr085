@@ -30,7 +30,9 @@
 #include "mtr.h"
 #include "report.h"
 #include "net.h"
+#ifdef DNS
 #include "dns.h"
+#endif
 #ifdef IPINFO
 #include "ipinfo.h"
 #endif
@@ -52,6 +54,7 @@ void report_open(void) {
 
 static size_t snprint_addr(char *dst, size_t len, ip_t *addr) {
   if (addr_exist(addr)) {
+#ifdef DNS
     struct hostent *host = NULL;
     if (enable_dns) {
 #ifdef ENABLE_IPV6
@@ -67,15 +70,18 @@ static size_t snprint_addr(char *dst, size_t len, ip_t *addr) {
       else
         return snprintf(dst, len, "%s", host->h_name);
     } else
-      return snprintf(dst, len, "%s", strlongip(addr));
+#endif
+    return snprintf(dst, len, "%s", strlongip(addr));
   } else
     return snprintf(dst, len, "%s", "???");
 }
 
+#ifdef MPLS
 static void print_mpls(const mpls_data_t *m) {
   for (int i = 0; i < m->n; i++)
     printf("%s\n", mpls2str(&(m->label[i]), 4));
 }
+#endif
 
 static int get_longest_name(int min, int max) {
   char *buf = malloc(max);
@@ -108,8 +114,10 @@ static void report_addr_extra(int at, char *bufname, char *lbuf, const char *dfm
 #endif
       snprintf(lbuf, MAXDNAME, dfmt, bufname);
     printf("%s\n", lbuf);
+#ifdef MPLS
     if (enable_mpls)
       print_mpls(&MPLS_AT_NDX(at, i));
+#endif
   }
 }
 
@@ -186,10 +194,10 @@ void report_close(bool wide) {
         lbuf[LSIDE_LEN] = 0;
     // without space between because all the fields on the right side are with space-indent
     printf("%s%s\n", lbuf, rbuf);
-
+#ifdef MPLS
     if (enable_mpls)
       print_mpls(&CURRENT_MPLS(at));
-
+#endif
     // body-extra-lines: multipath, mpls, etc.
     report_addr_extra(at, bufname, lbuf, dfmt);
   }
@@ -349,16 +357,19 @@ void csv_close(bool notfirst) {
 #ifdef OUTPUT_FORMAT_RAW
 
 bool enable_raw; // global var
-static int havename[MAXHOST];
 
 void raw_rawping(int at, int usec) {
-  if (!havename[at]) {
+#ifdef DNS
+  static bool raw_printed_name[MAXHOST];
+  if (!raw_printed_name[at]) {
     const char *name = dns_ptr_lookup(at, host[at].current);
     if (name) {
-      havename[at]++;
       printf("d %d %s\n", at, name);
+      if (!raw_printed_name[at])
+        raw_printed_name[at] = true;
     }
   }
+#endif
   LENVALMIL((double)usec / MIL);
   printf("p %d %.*f\n", at, _l, _v); // ping in msec
   fflush(stdout);

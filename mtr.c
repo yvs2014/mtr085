@@ -19,6 +19,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <getopt.h>
 #include <string.h>
 #include <ctype.h>
 #include <assert.h>
@@ -51,15 +52,16 @@
 #endif
 
 #include "mtr.h"
+#include "mtr-poll.h"
+#include "net.h"
+#include "display.h"
+#include "report.h"
 #ifdef CURSES
 #include "mtr-curses.h"
 #endif
-#include "mtr-poll.h"
-#include "getopt.h"
-#include "display.h"
+#ifdef DNS
 #include "dns.h"
-#include "report.h"
-#include "net.h"
+#endif
 #ifdef IPINFO
 #include "ipinfo.h"
 #endif
@@ -81,8 +83,12 @@ pid_t mypid;
 #define ARGS_LEN 64 /* seem to be enough */
 char mtr_args[ARGS_LEN + 1];  // display in curses title
 unsigned iargs;               // args passed interactively
+#ifdef DNS
 bool show_ips;
+#endif
+#ifdef MPLS
 bool enable_mpls;
+#endif
 bool report_wide;
 bool endpoint_mode;           // -fa option, i.e. auto, corresponding to TTL of the destination host
 bool cache_mode;              // don't ping known hops
@@ -141,13 +147,17 @@ static struct option long_options[] = {
   { "inet6",      0, 0, '6' },  // use IPv6
 #endif
   { "address",    1, 0, 'a' },
+#ifdef DNS
   { "show-ips",   0, 0, 'b' },
+#endif
   { "bitpattern", 1, 0, 'B' },   // overload b>255, ->rand(0,255)
   { "cycles",     1, 0, 'c' },
 #if defined(CURSES) || defined(GRAPHCAIRO)
   { "display",    1, 0, 'd' },
 #endif
+#ifdef MPLS
   { "mpls",       0, 0, 'e' },
+#endif
   { "first-ttl",  1, 0, 'f' },   // -f and -m are borrowed from traceroute
   { "fields",     1, 0, 'F' },   // fields to display and their order
 #ifdef GRAPHCAIRO
@@ -156,7 +166,9 @@ static struct option long_options[] = {
   { "help",       0, 0, 'h' },
   { "interval",   1, 0, 'i' },
   { "max-ttl",    1, 0, 'm' },
+#ifdef DNS
   { "no-dns",     0, 0, 'n' },
+#endif
 #ifdef OUTPUT_FORMAT
   { "output",     1, 0, 'o' },  // output format: raw, txt, csv, json, xml
 #endif
@@ -351,9 +363,11 @@ static void parse_options(int argc, char **argv) {
     case 'a':
       iface_addr = optarg;
       break;
+#ifdef DNS
     case 'b':
       show_ips = true;
       break;
+#endif
     case 'B':
       bitpattern = atoi(optarg);
       if (bitpattern > 255)
@@ -371,9 +385,11 @@ static void parse_options(int argc, char **argv) {
       target_bell_only = ((atoi(optarg)) & 64) ? 1 : 0;
       break;
 #endif
+#ifdef MPLS
     case 'e':
       enable_mpls = true;
       break;
+#endif
     case 'f':
       if (optarg[0] == 'a') {
         endpoint_mode = true;
@@ -413,9 +429,11 @@ static void parse_options(int argc, char **argv) {
     case 'm':
       maxTTL = limit_int(1, ((MAXHOST - 1) > maxTTL) ? maxTTL : (MAXHOST - 1), atoi(optarg), "Max TTL");
       break;
+#ifdef DNS
     case 'n':
       enable_dns = false;
       break;
+#endif
 #ifdef OUTPUT_FORMAT
     case 'o':
       max_ping = REPORT_PINGS;
@@ -526,11 +544,21 @@ static void parse_options(int argc, char **argv) {
 
   switch (display_mode) {
     case DisplayReport:
+#ifdef OUTPUT_FORMAT_RAW
     case DisplayRaw:
+#endif
+#ifdef OUTPUT_FORMAT_TXT
     case DisplayTXT:
+#endif
+#ifdef OUTPUT_FORMAT_CSV
     case DisplayCSV:
+#endif
+#ifdef OUTPUT_FORMAT_JSON
     case DisplayJSON:
+#endif
+#ifdef OUTPUT_FORMAT_XML
     case DisplayXML:
+#endif
       interactive = false;
   }
 }
@@ -631,8 +659,10 @@ int main(int argc, char **argv) {
 #ifdef ENABLE_IPV6
   net_setsocket6();
 #endif
+#ifdef DNS
   if (enable_dns)
     dns_open();
+#endif
 #ifdef IPINFO
   ipinfo_open();
 #endif
@@ -684,7 +714,9 @@ int main(int argc, char **argv) {
 #ifdef IPINFO
   ipinfo_close();
 #endif
+#ifdef DNS
   dns_close();
+#endif
   net_close();
 
   if (enable_stat_at_exit) {
@@ -692,9 +724,11 @@ int main(int argc, char **argv) {
     printf("NET: %lu queries (%lu icmp, %lu udp, %lu tcp), %lu replies (%lu icmp, %lu udp, %lu tcp)\n",
       net_queries[0], net_queries[1], net_queries[2], net_queries[3],
       net_replies[0], net_replies[1], net_replies[2], net_replies[3]);
+#ifdef DNS
     printf("DNS: %u queries (%u ptr, %u txt), %u replies (%u ptr, %u txt)\n",
       dns_queries[0], dns_queries[1], dns_queries[2],
       dns_replies[0], dns_replies[1], dns_replies[2]);
+#endif
 #ifdef IPINFO
     printf("IPINFO: %u queries (%u http, %u whois), %u replies (%u http, %u whois)\n",
       ipinfo_queries[0], ipinfo_queries[1], ipinfo_queries[2],

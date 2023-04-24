@@ -77,6 +77,7 @@ typedef struct timemsec {
   long frac;  // in nanoseconds
 } timemsec_t;
 
+#ifdef MPLS
 typedef union mpls_label { // RFC4950
   struct {
 #if BYTE_ORDER == LITTLE_ENDIAN
@@ -100,11 +101,14 @@ typedef struct mpls_data {
   mpls_label_t label[MAXLABELS]; // N x 32b labels
   uint8_t n;
 } mpls_data_t;
+#endif
 
 // Address(es) plus associated data
 typedef struct eaddr {
   ip_t ip;
+#ifdef MPLS
   mpls_data_t mpls;
+#endif
   char *q_ptr, *r_ptr; // t_ptr query, reply
   time_t q_ptr_ts;     // timestamp when 'q_ptr' is sent
 #ifdef IPINFO
@@ -133,12 +137,15 @@ struct nethost {
   time_t seen;            // timestamp for caching, last seen
 };
 extern struct nethost host[];
+typedef struct atndx { int at, ndx, type; } atndx_t;
 
 // helpful macros
 #define CURRENT_IP(at)   (host[at].eaddr[host[at].current].ip)
-#define CURRENT_MPLS(at) (host[at].eaddr[host[at].current].mpls)
 #define IP_AT_NDX(at, ndx)   (host[at].eaddr[ndx].ip)
+#ifdef MPLS
+#define CURRENT_MPLS(at) (host[at].eaddr[host[at].current].mpls)
 #define MPLS_AT_NDX(at, ndx) (host[at].eaddr[ndx].mpls)
+#endif
 #define QPTR_AT_NDX(at, ndx) (host[at].eaddr[ndx].q_ptr)
 #define RPTR_AT_NDX(at, ndx) (host[at].eaddr[ndx].r_ptr)
 #define QPTR_TS_AT_NDX(at, ndx) (host[at].eaddr[ndx].q_ptr_ts)
@@ -176,7 +183,9 @@ bool addr6equal(const void *a, const void *b);
 void* addr6copy(void *a, const void *b);
 void net_setsocket6(void);
 #endif
+#ifdef MPLS
 const char *mpls2str(const mpls_label_t *label, int indent);
+#endif
 uint16_t str2hint(const char* s, uint16_t at, uint16_t ndx);
 void waitspec(struct timespec *tv);
 
