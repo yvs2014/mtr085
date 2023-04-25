@@ -746,13 +746,14 @@ int net_open(
         return err;
     }
 
-    net_reopen(ctl, res);
+    if (net_reopen(ctl, res) != 0)
+        return -1; /* fail */
 
     return 0;
 }
 
 
-void net_reopen(
+int net_reopen(
     struct mtr_ctl *ctl,
     struct addrinfo *res)
 {
@@ -767,6 +768,8 @@ void net_reopen(
     ctl->af = remotesockaddr->sa_family = sourcesockaddr->sa_family = res->ai_family;
     remoteaddress = sockaddr_addr_offset(remotesockaddr);
     memcpy(remoteaddress, sockaddr_addr_offset(res->ai_addr), sockaddr_addr_size(remotesockaddr));
+    if (addrcmp(remoteaddress, &ctl->unspec_addr, ctl->af) == 0)
+        return -1; /* fail */
     inet_ntop(remotesockaddr->sa_family, remoteaddress, remoteaddr, sizeof(remoteaddr));
 
     sourceaddress = sockaddr_addr_offset(sourcesockaddr);
@@ -780,7 +783,7 @@ void net_reopen(
     } else {
         net_find_local_address();
     }
-
+    return 0; /* norm */
 }
 
 
