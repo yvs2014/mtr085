@@ -261,7 +261,7 @@ const char *dns_ptr_lookup(int at, int ndx) {
 
   time_t now = time(NULL);
   if (((now - QPTR_TS_AT_NDX(at, ndx)) >= PAUSE_BETWEEN_QUERIES)
-#ifdef IPINFO
+#ifdef WITH_IPINFO
    && ((now - QTXT_TS_AT_NDX(at, ndx)) >= TXT_PTR_PAUSE)
 #endif
      ) {
@@ -274,7 +274,7 @@ const char *dns_ptr_lookup(int at, int ndx) {
 
 static atndx_t *get_qatn(const char* q, int at, int ndx) {
   const char *query[] = { QPTR_AT_NDX(at, ndx)
-#ifdef IPINFO
+#ifdef WITH_IPINFO
    , QTXT_AT_NDX(at, ndx)
 #endif
   };
@@ -348,7 +348,7 @@ static void dns_parse_reply(uint8_t *buf, ssize_t len) {
         answer[0] = 0;
         if      ((an->type == 0) && dns_ptr_handler)
           dns_ptr_handler(an->at, an->ndx, answer);
-#ifdef IPINFO
+#ifdef WITH_IPINFO
         else if ((an->type == 1) && dns_txt_handler)
           dns_txt_handler(an->at, an->ndx, answer);
 #endif
@@ -375,7 +375,7 @@ static void dns_parse_reply(uint8_t *buf, ssize_t len) {
   if (c + 4 > eob)
     LOGRET("Query resource record truncated");
   { int type; GETSHORT(type, c); if (type == T_PTR) dns_replies[1]++; /*summ*/
-#ifdef IPINFO
+#ifdef WITH_IPINFO
     else if (type == T_TXT) dns_replies[2]++;
 #endif
     else LOGRET_("Unknown query type %u in reply", type); }
@@ -415,7 +415,7 @@ static void dns_parse_reply(uint8_t *buf, ssize_t len) {
       LOGMSG_("Answer %.*s", l, answer);
       if      ((an->type == 0) && dns_ptr_handler)
         dns_ptr_handler(an->at, an->ndx, answer);
-#ifdef IPINFO
+#ifdef WITH_IPINFO
       else if ((an->type == 1) && dns_txt_handler)
         dns_txt_handler(an->at, an->ndx, answer);
 #endif

@@ -19,10 +19,9 @@
 #ifndef IPINFO_H
 #define IPINFO_H
 
-void  ipinfo_open(void);
+bool  ipinfo_init(const char *arg);
 void  ipinfo_close(void);
-int   ipinfo_args(char *arg);
-void  ipinfo_action(int action);
+bool  ipinfo_action(int action); // open() if necessary
 void  ipinfo_parse(int sock, int seq);
 bool  ipinfo_ready(void);
 int   ipinfo_width(void);
@@ -34,8 +33,8 @@ char  *fmt_ipinfo(int at, int ndx);
 char  *sep_ipinfo(int at, int ndx, char sep);
 void query_ipinfo(void);
 
-#define ASLOOKUP_DEFAULT	NULL	// cymru
-//#define ASLOOKUP_DEFAULT	"2,2"	// riswhois (with this default: set ipinfo_tcpmode to 'true')
+//#define ASLOOKUP_DEFAULT	"1"    /* cymru dns */
+#define ASLOOKUP_DEFAULT	"2,2"  /* ripe whois */
 extern bool enable_ipinfo;
 extern bool ipinfo_tcpmode;
 extern unsigned ipinfo_queries[];

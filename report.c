@@ -30,10 +30,10 @@
 #include "mtr.h"
 #include "report.h"
 #include "net.h"
-#ifdef DNS
+#ifdef ENABLE_DNS
 #include "dns.h"
 #endif
-#ifdef IPINFO
+#ifdef WITH_IPINFO
 #include "ipinfo.h"
 #endif
 #include "macros.h"
@@ -54,7 +54,7 @@ void report_open(void) {
 
 static size_t snprint_addr(char *dst, size_t len, ip_t *addr) {
   if (addr_exist(addr)) {
-#ifdef DNS
+#ifdef ENABLE_DNS
     struct hostent *host = NULL;
     if (enable_dns) {
 #ifdef ENABLE_IPV6
@@ -76,7 +76,7 @@ static size_t snprint_addr(char *dst, size_t len, ip_t *addr) {
     return snprintf(dst, len, "%s", "???");
 }
 
-#ifdef MPLS
+#ifdef WITH_MPLS
 static void print_mpls(const mpls_data_t *m) {
   for (int i = 0; i < m->n; i++)
     printf("%s\n", mpls2str(&(m->label[i]), 4));
@@ -107,14 +107,14 @@ static void report_addr_extra(int at, char *bufname, char *lbuf, const char *dfm
     if (!addr_exist(addr))
       break; // done
     snprint_addr(bufname, MAXDNAME, addr);
-#ifdef IPINFO
+#ifdef WITH_IPINFO
     if (ipinfo_ready())
       snprintf(lbuf, MAXDNAME, dfmt, fmt_ipinfo(at, i), bufname);
     else
 #endif
       snprintf(lbuf, MAXDNAME, dfmt, bufname);
     printf("%s\n", lbuf);
-#ifdef MPLS
+#ifdef WITH_MPLS
     if (enable_mpls)
       print_mpls(&MPLS_AT_NDX(at, i));
 #endif
@@ -134,7 +134,7 @@ void report_close(bool wide) {
   char dfmt[32];
 
   // header: left
-#ifdef IPINFO
+#ifdef WITH_IPINFO
   if (ipinfo_ready()) {
     snprintf(lfmt, sizeof(lfmt), "%%2d. %%-%ds %%-%ds", ipinfo_width(), len); // "at. IPINFO HOST"
     snprintf(dfmt, sizeof(dfmt), "    %%-%ds %%-%ds",   ipinfo_width(), len);
@@ -172,7 +172,7 @@ void report_close(bool wide) {
     snprint_addr(bufname, MAXDNAME, addr);
 
     // body: left
-#ifdef IPINFO
+#ifdef WITH_IPINFO
     if (ipinfo_ready())
       snprintf(lbuf, MAXDNAME, lfmt, at + 1, fmt_ipinfo(at, host[at].current), bufname);
     else
@@ -194,7 +194,7 @@ void report_close(bool wide) {
         lbuf[LSIDE_LEN] = 0;
     // without space between because all the fields on the right side are with space-indent
     printf("%s%s\n", lbuf, rbuf);
-#ifdef MPLS
+#ifdef WITH_MPLS
     if (enable_mpls)
       print_mpls(&CURRENT_MPLS(at));
 #endif
@@ -247,7 +247,7 @@ void xml_close(void) {
           printf("%*s<%s>%s</%s>\n", XML_MARGIN * 3, "", sf->name, str, sf->name);
       }
     }
-#ifdef IPINFO
+#ifdef WITH_IPINFO
     if (ipinfo_ready())
       printf("%*s<IpInfo>[%s]</IpInfo>\n", XML_MARGIN * 3, "", sep_ipinfo(at, host[at].current, ','));
 #endif
@@ -288,7 +288,7 @@ void json_close(bool notfirst) {
         }
       }
     }
-#ifdef IPINFO
+#ifdef WITH_IPINFO
     if (ipinfo_ready())
       printf(",\"ipinfo\":[%s]", sep_ipinfo(at, host[at].current, ','));
 #endif
@@ -314,7 +314,7 @@ void csv_close(bool notfirst) {
   if (notfirst)
     printf("\n");
   printf("DESTINATION" CSV_DELIMITER "HOP" CSV_DELIMITER "STATUS" CSV_DELIMITER "HOST");
-#ifdef IPINFO
+#ifdef WITH_IPINFO
   if (ipinfo_ready())
     printf(CSV_DELIMITER "INFO");
 #endif
@@ -335,7 +335,7 @@ void csv_close(bool notfirst) {
     printf(CSV_DELIMITER "%d", at + 1);
     printf(CSV_DELIMITER "%s", host[at].up ? "up" : "down");
     printf(CSV_DELIMITER "%s", buf);
-#ifdef IPINFO
+#ifdef WITH_IPINFO
     if (ipinfo_ready())
       printf(CSV_DELIMITER "%s", sep_ipinfo(at, host[at].current, COMA));
 #endif
@@ -359,7 +359,7 @@ void csv_close(bool notfirst) {
 bool enable_raw; // global var
 
 void raw_rawping(int at, int usec) {
-#ifdef DNS
+#ifdef ENABLE_DNS
   static bool raw_printed_name[MAXHOST];
   if (!raw_printed_name[at]) {
     const char *name = dns_ptr_lookup(at, host[at].current);

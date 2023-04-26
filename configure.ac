@@ -22,6 +22,7 @@ AC_SEARCH_LIBS([socket], [socket],, AC_MSG_ERROR(No socket library found))
 AC_ARG_ENABLE(ipv6,
 	AS_HELP_STRING([--disable-ipv6], [do not enable IPv6]),
 	ipv6=$enableval, ipv6=yes)
+AM_CONDITIONAL([IPV6], [test "x$ipv6" = "xyes"])
 AS_IF([test "x$ipv6" = "xyes"], [AC_DEFINE([ENABLE_IPV6], [], [Define to enable IPv6])])
 
 AC_ARG_WITH(splitmode,
@@ -35,7 +36,7 @@ AC_ARG_WITH(curses,
 	[curses=${withval}], [curses=yes])
 AM_CONDITIONAL([CURSES], [test "x$curses" = "xyes"])
 AS_IF([test "x$curses" = "xyes"], [
-	AC_DEFINE(CURSES, 1, Build with curses support)
+	AC_DEFINE(CURSESMODE, 1, Build with curses support)
 	AC_ARG_WITH(unicode,
 		AS_HELP_STRING([--without-unicode], [without Unicode histogram]),
 		[unicode=${withval}], [unicode=yes])
@@ -43,14 +44,14 @@ AS_IF([test "x$curses" = "xyes"], [
 		AC_CHECK_HEADERS([ncursesw/cursesw.h ncursesw/curses.h ncurses/curses.h curses.h], break)
 		AC_CHECK_HEADERS([wchar.h wctype.h locale.h langinfo.h])
 		AC_SEARCH_LIBS([add_wch], [ncursesw curses],	# Ncursesw and X/Open curses provide add_wch()
-			AC_DEFINE([UNICODE], [1], [Define to enable unicode]),
+			AC_DEFINE([WITH_UNICODE], [1], [Define to enable unicode]),
 			AC_MSG_ERROR([Wide-character curses library not found]))
 		AC_SEARCH_LIBS([use_default_colors], [ncursesw curses],
 			AC_DEFINE([HAVE_USE_DEFAULT_COLORS], [1], [Define this if curses library has use_default_colors()]))
 	], [
 		AC_CHECK_HEADERS([ncurses.h ncurses/curses.h curses.h cursesX.h], break)
 		AC_SEARCH_LIBS([initscr], [ncurses curses cursesX],
-			AC_DEFINE(CURSES, 1, Build with curses support),
+			AC_DEFINE(CURSESMODE, 1, Build with curses support),
 			AC_MSG_ERROR([Curses library not found]))
 		AC_SEARCH_LIBS([use_default_colors], [ncurses curses],
 			AC_DEFINE([HAVE_USE_DEFAULT_COLORS], [1], [Define this if curses library has use_default_colors()]))
@@ -61,7 +62,7 @@ AC_ARG_ENABLE(dns,
 	dns=$enableval, dns=yes)
 AM_CONDITIONAL([DNS], [test "x$dns" = "xyes"])
 AS_IF([test "x$dns" = "xyes"], [
-	AC_DEFINE([DNS], [], [Define to enable DNS])
+	AC_DEFINE([ENABLE_DNS], [], [Define to enable DNS])
 	AC_SEARCH_LIBS([gethostbyname], [nsl],, AC_MSG_ERROR(No nameservice library found))
 	AC_SEARCH_LIBS([dn_expand], [resolv],, AC_SEARCH_LIBS([__dn_expand], [resolv],, AC_MSG_ERROR(No resolv found)))
 	AC_SEARCH_LIBS([res_nmkquery], [resolv],
@@ -79,7 +80,8 @@ AM_CONDITIONAL([LIBASAN], [test "x$libasan" = "xyes"])
 AC_ARG_WITH([mpls],
 	AS_HELP_STRING([--with-mpls], [build with MPLS decoding]),
 	[mpls="${withval}"], [mpls=yes])
-AS_IF([test "x$mpls" = "xyes"], [AC_DEFINE([MPLS], [1], [Define to support MPLS decoding])])
+AM_CONDITIONAL([MPLS], [test "x$mpls" = "xyes"])
+AS_IF([test "x$mpls" = "xyes"], [AC_DEFINE([WITH_MPLS], [1], [Define to support MPLS decoding])])
 
 AC_ARG_WITH([libidn],
 	AS_HELP_STRING([--with-libidn], [IDN support (libidn)]),
@@ -90,21 +92,21 @@ AC_ARG_WITH([ipinfo],
 	AS_HELP_STRING([--without-ipinfo], [without IP-info lookup]),
 	[ipinfo="${withval}"], [ipinfo=yes])
 AM_CONDITIONAL([IPINFO], [test "x$ipinfo" = "xyes"])
-AS_IF([test "x$ipinfo" = "xyes"], [AC_DEFINE([IPINFO], [1], [Define to enable ipinfo lookup])])
+AS_IF([test "x$ipinfo" = "xyes"], [AC_DEFINE([WITH_IPINFO], [1], [Define to enable ipinfo lookup])])
 
 AC_ARG_WITH([graphcairo_xcb],
 	AS_HELP_STRING([--with-graphcairo-xcb], [Cairo graph with XCB backend]),
 	[graphcairo_xcb="${withval}"], [graphcairo_xcb=no])
 AS_IF([test "x$curses" = "xno"], [graphcairo_xcb=no])
-AM_CONDITIONAL([GRAPHCAIRO_XCB], [test "x$graphcairo_xcb" = "xyes"])
+AM_CONDITIONAL([GRAPHS_XCB], [test "x$graphcairo_xcb" = "xyes"])
 dnl
 AC_ARG_WITH([graphcairo_xlib],
 	AS_HELP_STRING([--with-graphcairo-xlib], [Cairo graph with Xlib backend]),
 	[graphcairo_xlib="${withval}"], [graphcairo_xlib=no])
 AS_IF([test "x$curses" = "xno"], [graphcairo_xlib=no])
-AM_CONDITIONAL([GRAPHCAIRO_XLIB], [test "x$graphcairo_xlib" = "xyes"])
+AM_CONDITIONAL([GRAPHS_XLIB], [test "x$graphcairo_xlib" = "xyes"])
 dnl
-AM_CONDITIONAL([GRAPHCAIRO], [test "x$graphcairo_xcb" = "xyes" -o "x$graphcairo_xlib" = "xyes"])
+AM_CONDITIONAL([GRAPHS], [test "x$graphcairo_xcb" = "xyes" -o "x$graphcairo_xlib" = "xyes"])
 AS_IF([test "x$graphcairo_xcb" = "xyes" -o "x$graphcairo_xlib" = "xyes"], [
 	AC_SEARCH_LIBS([FcFini], [fontconfig], AC_DEFINE([FC_FINI], 1, [finalize fontconfig library]))
 ])
@@ -136,6 +138,9 @@ AC_ARG_WITH([output_xml],
 	AS_HELP_STRING([--with-output-xml], [XML output format]),
 	[output_xml="${withval}"], [output_xml=no])
 AS_IF([test "x$output_xml" != "xno"], [AC_DEFINE([OUTPUT_FORMAT_XML], 1, [Support XML output format])])
+
+AM_CONDITIONAL([OUTPUTFMT], [test "x$output_raw" = "xyes" -o "x$output_txt" = "xyes" \
+	-o "x$output_csv" = "xyes" -o "x$output_json" = "xyes" -o "x$output_xml" = "xyes"])
 
 # Add some syslog debug: poll, net, dns, ipinfo
 
@@ -179,21 +184,21 @@ AS_IF([test "x$need_pkgconfig" = "xyes"], [
 ])
 
 AS_IF([test "x$graphcairo_xcb" = "xyes"], [
-	AC_DEFINE([GRAPHCAIRO], [1], [Define to enable cairo graph])
+	AC_DEFINE([GRAPHMODE], [1], [Define to enable cairo graph])
 	PKG_CHECK_MODULES([graphcairo], [cairo >= 1.12 pango >= 1.10 pangocairo xcb xcb-keysyms cairo-xcb], [
 		LIBS="$LIBS -lm"
 		AC_SUBST(graphcairo_CFLAGS)
 		AC_SUBST(graphcairo_LIBS)
-		AC_DEFINE([GRAPHCAIRO_XCB], [1], [Define to enable cairo XCB backend])
+		AC_DEFINE([WITH_GRAPHS_XCB], [1], [Define to enable cairo XCB backend])
 	])
 ], [
 AS_IF([test "x$graphcairo_xlib" = "xyes"], [
-	AC_DEFINE([GRAPHCAIRO], [1], [Define to enable cairo graph])
+	AC_DEFINE([GRAPHMODE], [1], [Define to enable cairo graph])
 	PKG_CHECK_MODULES([graphcairo], [cairo pango >= 1.10 pangocairo x11 cairo-xlib], [
 		LIBS="$LIBS -lm"
 		AC_SUBST(graphcairo_CFLAGS)
 		AC_SUBST(graphcairo_LIBS)
-		AC_DEFINE([GRAPHCAIRO_XLIB], [1], [Define to enable cairo Xlib backend])
+		AC_DEFINE([WITH_GRAPHS_XLIB], [1], [Define to enable cairo Xlib backend])
 	])
 ])
 ])

@@ -11,10 +11,10 @@
 #include "mtr-poll.h"
 #include "net.h"
 #include "display.h"
-#ifdef DNS
+#ifdef ENABLE_DNS
 #include "dns.h"
 #endif
-#ifdef IPINFO
+#ifdef WITH_IPINFO
 #include "ipinfo.h"
 #endif
 #include "macros.h"
@@ -27,7 +27,7 @@
 #define STARTSTAT	30
 #endif
 
-#ifdef IPINFO
+#ifdef WITH_IPINFO
 #define HOSTSTAT_LEN (3 * STARTSTAT + SAVED_PINGS)  // hostinfo + statistics
 #else
 #define HOSTSTAT_LEN (STARTSTAT + SAVED_PINGS)      // hostname + statistics
@@ -101,11 +101,11 @@ void gc_parsearg(char* arg) {
 
 static int fill_hostinfo(int at, int ndx, char *buf, int sz) {
   int l = 0;
-#ifdef IPINFO
+#ifdef WITH_IPINFO
   if (ipinfo_ready())
     l += snprintf(buf, sz, "%.*s", 2 * STARTSTAT, fmt_ipinfo(at, ndx));
 #endif
-#ifdef DNS
+#ifdef ENABLE_DNS
   const char *name = dns_ptr_lookup(at, ndx);
   if (name) {
     if (show_ips) {
@@ -141,7 +141,7 @@ int gc_keyaction(void) {
         GCMSG("scroll up\n");
         hostinfo_max = 0;
         return ActionScrollUp;
-#ifdef MPLS
+#ifdef WITH_MPLS
       case 'e':  // MPLS
         GCMSG("toggle MPLS\n");
         return ActionMPLS;
@@ -151,13 +151,13 @@ int gc_keyaction(void) {
         onoff_jitter();
         mc_statf_title(legend_header, sizeof(legend_header));
         return ActionNone;
-#ifdef DNS
+#ifdef ENABLE_DNS
       case 'n':  // DNS
         GCMSG("toggle DNS\n");
         hostinfo_max = 0;
         return ActionDNS;
 #endif
-#ifdef IPINFO
+#ifdef WITH_IPINFO
       case 'y':  // IP Info
         GCMSG("switching IP info\n");
         hostinfo_max = 0;
@@ -192,7 +192,7 @@ int gc_keyaction(void) {
   return ActionNone;
 }
 
-#ifdef MPLS
+#ifdef WITH_MPLS
 static void gc_print_mpls(int i, int d, const mpls_data_t *m, char *buf, int sz) {
   if (!m)
     return;
@@ -251,7 +251,7 @@ void gc_redraw(void) {
         l += 1; // step over 0
         mc_print_at(at, glinebuf + l, sizeof(glinebuf) - l); // statistics
         cr_print_host(i, data[i], glinebuf, glinebuf + l);   // host+stat
-#ifdef MPLS
+#ifdef WITH_MPLS
         if (enable_mpls) // mpls
           gc_print_mpls(i, data[i], &CURRENT_MPLS(at), glinebuf, sizeof(glinebuf));
 #endif
@@ -263,7 +263,7 @@ void gc_redraw(void) {
                 break;
               fill_hostinfo(at, j, glinebuf, sizeof(glinebuf));
               cr_print_host(i, data[i], glinebuf, NULL);
-#ifdef MPLS
+#ifdef WITH_MPLS
               if (enable_mpls) // multipath+mpls
                 gc_print_mpls(i, data[i], &MPLS_AT_NDX(at, j), glinebuf, sizeof(glinebuf));
 #endif

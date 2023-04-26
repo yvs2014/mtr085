@@ -39,7 +39,7 @@
 #define IDN_TO_ASCII_8Z	idna_to_ascii_8z
 #endif
 
-#ifdef UNICODE
+#ifdef WITH_UNICODE
 #ifdef HAVE_WCTYPE_H
 #include <wctype.h>
 #endif
@@ -56,16 +56,16 @@
 #include "net.h"
 #include "display.h"
 #include "report.h"
-#ifdef CURSES
-#include "mtr-curses.h"
-#endif
-#ifdef DNS
+#ifdef ENABLE_DNS
 #include "dns.h"
 #endif
-#ifdef IPINFO
+#ifdef WITH_IPINFO
 #include "ipinfo.h"
 #endif
-#ifdef GRAPHCAIRO
+#ifdef CURSESMODE
+#include "mtr-curses.h"
+#endif
+#ifdef GRAPHMODE
 #include "graphcairo-mtr.h"
 #endif
 #include "macros.h"
@@ -74,7 +74,9 @@
 #define CACHE_TIMEOUT 60
 
 #define FLD_DEFAULT "LS NABWV"
+#ifdef CURSESMODE
 static const char fld_jitter[MAXFLD + 1] = "DR AGJMXI";
+#endif
 static char fld_custom[MAXFLD + 1];
 static unsigned fld_index[256]; // key->index backresolv
 
@@ -83,10 +85,10 @@ pid_t mypid;
 #define ARGS_LEN 64 /* seem to be enough */
 char mtr_args[ARGS_LEN + 1];  // display in curses title
 unsigned iargs;               // args passed interactively
-#ifdef DNS
+#ifdef ENABLE_DNS
 bool show_ips;
 #endif
-#ifdef MPLS
+#ifdef WITH_MPLS
 bool enable_mpls;
 #endif
 bool report_wide;
@@ -105,7 +107,7 @@ int sum_sock[2];              // opened-closed sockets
 //
 int display_offset;
 int curses_mode;      // 1st and 2nd bits
-#if defined(CURSES) || defined(GRAPHCAIRO)
+#if defined(CURSESMODE) || defined(GRAPHMODE)
 int curses_mode_max = 3;
 #endif
 int color_mode;       // 4th bit
@@ -147,26 +149,28 @@ static struct option long_options[] = {
   { "inet6",      0, 0, '6' },  // use IPv6
 #endif
   { "address",    1, 0, 'a' },
-#ifdef DNS
+#ifdef ENABLE_DNS
   { "show-ips",   0, 0, 'b' },
 #endif
   { "bitpattern", 1, 0, 'B' },   // overload b>255, ->rand(0,255)
   { "cycles",     1, 0, 'c' },
-#if defined(CURSES) || defined(GRAPHCAIRO)
+#if defined(CURSESMODE) || defined(GRAPHMODE)
   { "display",    1, 0, 'd' },
 #endif
-#ifdef MPLS
+#ifdef WITH_MPLS
   { "mpls",       0, 0, 'e' },
 #endif
   { "first-ttl",  1, 0, 'f' },   // -f and -m are borrowed from traceroute
+#ifdef CURSESMODE
   { "fields",     1, 0, 'F' },   // fields to display and their order
-#ifdef GRAPHCAIRO
+#endif
+#ifdef GRAPHMODE
   { "graph",      1, 0, 'g' },
 #endif
   { "help",       0, 0, 'h' },
   { "interval",   1, 0, 'i' },
   { "max-ttl",    1, 0, 'm' },
-#ifdef DNS
+#ifdef ENABLE_DNS
   { "no-dns",     0, 0, 'n' },
 #endif
 #ifdef OUTPUT_FORMAT
@@ -185,7 +189,7 @@ static struct option long_options[] = {
   { "version",    0, 0, 'v' },
   { "wide",       0, 0, 'w' },  // wide report (-r)
   { "cache",      1, 0, 'x' },  // enable cache with timeout in seconds (0 means default 60sec)
-#ifdef IPINFO
+#ifdef WITH_IPINFO
   { "ipinfo",     1, 0, 'y' },
   { "aslookup",   0, 0, 'z' },
 #endif
@@ -208,9 +212,13 @@ static char *iface_addr;
 #define FLOAT_UPTO 10 /* values > FLOAT_UPTO in integer format */
 inline int val2len(double v) { return ((v > 0) && (v < FLOAT_UPTO)) ? (v < 0.1 ? 2 : 1) : 0; }
 
-inline void set_fld_active(const char *s) { strncpy(fld_custom, s, MAXFLD); fld_active = fld_custom; }
-inline bool is_custom_fld(void) { return strncmp(fld_active, fld_jitter, MAXFLD) && strncmp(fld_active, FLD_DEFAULT, MAXFLD); }
-inline void onoff_jitter(void) { int cmp = strncmp(fld_active, fld_jitter, MAXFLD); fld_active = cmp ? fld_jitter : fld_custom; }
+void set_fld_active(const char *s) { strncpy(fld_custom, s, MAXFLD); fld_active = fld_custom; }
+#ifdef CURSESMODE
+bool is_custom_fld(void) { return strncmp(fld_active, fld_jitter, MAXFLD) && strncmp(fld_active, FLD_DEFAULT, MAXFLD); }
+#endif
+#if defined(CURSESMODE) || defined(GRAPHMODE)
+void onoff_jitter(void) { int cmp = strncmp(fld_active, fld_jitter, MAXFLD); fld_active = cmp ? fld_jitter : fld_custom; }
+#endif
 
 const struct statf* active_statf(unsigned i) {
   if (i > MAXFLD) return NULL;
@@ -277,7 +285,9 @@ static char *get_opt_desc(char opt) {
     case 'c': return "COUNT";
     case 'd': return "MODE";
     case 's': return "BYTES";
+#ifdef CURSESMODE
     case 'F': return "FIELDS";
+#endif
 #ifdef OUTPUT_FORMAT
     case 'o': return trim(""
 #ifdef OUTPUT_FORMAT_RAW
@@ -297,10 +307,10 @@ static char *get_opt_desc(char opt) {
 #endif
 );
 #endif
-#ifdef IPINFO
+#ifdef WITH_IPINFO
     case 'y': return "ORIGIN,FIELDS";
 #endif
-#ifdef GRAPHCAIRO
+#ifdef GRAPHMODE
     case 'g': return "type,period,legend,multipath,jitter";
 #endif
   }
@@ -363,7 +373,7 @@ static void parse_options(int argc, char **argv) {
     case 'a':
       iface_addr = optarg;
       break;
-#ifdef DNS
+#ifdef ENABLE_DNS
     case 'b':
       show_ips = true;
       break;
@@ -376,7 +386,7 @@ static void parse_options(int argc, char **argv) {
     case 'c':
       max_ping = atol(optarg);
       break;
-#if defined(CURSES) || defined(GRAPHCAIRO)
+#if defined(CURSESMODE) || defined(GRAPHMODE)
     case 'd':
       curses_mode = ((atoi(optarg)) & ~8) % curses_mode_max;
       color_mode = ((atoi(optarg)) & 8) ? 1 : 0;
@@ -385,7 +395,7 @@ static void parse_options(int argc, char **argv) {
       target_bell_only = ((atoi(optarg)) & 64) ? 1 : 0;
       break;
 #endif
-#ifdef MPLS
+#ifdef WITH_MPLS
     case 'e':
       enable_mpls = true;
       break;
@@ -397,6 +407,7 @@ static void parse_options(int argc, char **argv) {
       }
       fstTTL = limit_int(1, maxTTL, atoi(optarg), "First TTL");
       break;
+#ifdef CURSESMODE
     case 'F':
       if (strlen(optarg) >= sizeof(fld_active))
         FAIL_("-F: Too many fields (max=%zd): %s", sizeof(fld_active) - 1, optarg);
@@ -410,7 +421,8 @@ static void parse_options(int argc, char **argv) {
       }
 	  set_fld_active(optarg);
       break;
-#ifdef GRAPHCAIRO
+#endif
+#ifdef GRAPHMODE
     case 'g':
       gc_parsearg(optarg);
       display_mode = DisplayGraphCairo;
@@ -429,7 +441,7 @@ static void parse_options(int argc, char **argv) {
     case 'm':
       maxTTL = limit_int(1, ((MAXHOST - 1) > maxTTL) ? maxTTL : (MAXHOST - 1), atoi(optarg), "Max TTL");
       break;
-#ifdef DNS
+#ifdef ENABLE_DNS
     case 'n':
       enable_dns = false;
       break;
@@ -521,13 +533,13 @@ static void parse_options(int argc, char **argv) {
       else if (cache_timeout == 0)
         cache_timeout = CACHE_TIMEOUT;  // default 60 seconds
       break;
-#ifdef IPINFO
+#ifdef WITH_IPINFO
     case 'y':
-      if (ipinfo_args(optarg) < 0)
-        exit(EXIT_FAILURE);
-      break;
     case 'z':
-      ipinfo_args(ASLOOKUP_DEFAULT);
+      if (!ipinfo_init((opt == 'y') ? optarg : ASLOOKUP_DEFAULT))
+        exit(EXIT_FAILURE);
+      if (!ipinfo_action(ActionNone)) // don't switch at start
+        exit(EXIT_FAILURE);
       break;
 #endif
     case 'Z':
@@ -612,7 +624,7 @@ static bool set_host(struct addrinfo *res) {
   return true;
 }
 
-#ifdef UNICODE
+#ifdef WITH_UNICODE
 void autotest_unicode_print(void) {
 #if defined(HAVE_LOCALE_H) && defined(HAVE_LANGINFO_H)
   setlocale(LC_CTYPE, "");
@@ -645,7 +657,7 @@ int main(int argc, char **argv) {
   for (int i = 0; i < statf_max; i++)
     fld_index[(uint8_t)statf[i].key] = i;
 
-#ifdef UNICODE
+#ifdef WITH_UNICODE
   autotest_unicode_print();
 #endif
   set_fld_active(FLD_DEFAULT);
@@ -659,12 +671,9 @@ int main(int argc, char **argv) {
 #ifdef ENABLE_IPV6
   net_setsocket6();
 #endif
-#ifdef DNS
+#ifdef ENABLE_DNS
   if (enable_dns)
     dns_open();
-#endif
-#ifdef IPINFO
-  ipinfo_open();
 #endif
   if (gethostname(srchost, sizeof(srchost)))
     strncpy(srchost, "UNKNOWN", sizeof(srchost));
@@ -711,10 +720,10 @@ int main(int argc, char **argv) {
   }
 
   display_final();
-#ifdef IPINFO
+#ifdef WITH_IPINFO
   ipinfo_close();
 #endif
-#ifdef DNS
+#ifdef ENABLE_DNS
   dns_close();
 #endif
   net_close();
@@ -724,12 +733,12 @@ int main(int argc, char **argv) {
     printf("NET: %lu queries (%lu icmp, %lu udp, %lu tcp), %lu replies (%lu icmp, %lu udp, %lu tcp)\n",
       net_queries[0], net_queries[1], net_queries[2], net_queries[3],
       net_replies[0], net_replies[1], net_replies[2], net_replies[3]);
-#ifdef DNS
+#ifdef ENABLE_DNS
     printf("DNS: %u queries (%u ptr, %u txt), %u replies (%u ptr, %u txt)\n",
       dns_queries[0], dns_queries[1], dns_queries[2],
       dns_replies[0], dns_replies[1], dns_replies[2]);
 #endif
-#ifdef IPINFO
+#ifdef WITH_IPINFO
     printf("IPINFO: %u queries (%u http, %u whois), %u replies (%u http, %u whois)\n",
       ipinfo_queries[0], ipinfo_queries[1], ipinfo_queries[2],
       ipinfo_replies[0], ipinfo_replies[1], ipinfo_replies[2]);

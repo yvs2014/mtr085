@@ -26,10 +26,10 @@
 #include "mtr-poll.h"
 #include "net.h"
 #include "display.h"
-#ifdef DNS
+#ifdef ENABLE_DNS
 #include "dns.h"
 #endif
-#ifdef IPINFO
+#ifdef WITH_IPINFO
 #include "ipinfo.h"
 #endif
 
@@ -41,7 +41,10 @@
 #endif
 #include "macros.h"
 
+#if defined(CURSESMODE) || defined(SPLITMODE) || defined(GRAPHMODE)
 #define SCROLL_LINES 5
+#endif
+
 #define FD_BATCHMAX 30
 // between poll() calls
 #define MINSLEEP_USEC 10  // minimal pause, in microseconds
@@ -51,7 +54,7 @@ long numpings; // global
 
 // base file descriptors
 enum { FD_STDIN, FD_NET,
-#ifdef DNS
+#ifdef ENABLE_DNS
        FD_DNS,
 #ifdef ENABLE_IPV6
        FD_DNS6,
@@ -64,7 +67,7 @@ static int *tcpseq;           // and corresponding sequence indexes from net.c
 static int maxfd;
 static const struct timespec GRACETIME = { 5, 0 };
 static int prev_mtrtype = IPPROTO_ICMP;
-#ifdef DNS
+#ifdef ENABLE_DNS
 static bool need_dns;
 #endif
 
@@ -77,9 +80,9 @@ static bool need_dns;
 static void set_fds() {
   SET_POLLFD(FD_STDIN, interactive ? 0 : -1);
   SET_POLLFD(FD_NET, net_wait());
-#ifdef DNS
+#ifdef ENABLE_DNS
   need_dns = enable_dns
-#ifdef IPINFO
+#ifdef WITH_IPINFO
           || enable_ipinfo
 #endif
   ;
@@ -163,7 +166,7 @@ static void tcp_timedout(void) {
     int seq = tcpseq[i];
     if (seq >= 0) {
       bool timedout =
-#ifdef IPINFO
+#ifdef WITH_IPINFO
         (seq < MAXSEQ) ? net_timedout(seq) : ipinfo_timedout(seq);
 #else
         net_timedout(seq);
@@ -190,7 +193,7 @@ static void proceed_tcp(void) {
         net_tcp_parse(sock, seq, ev == POLLOUT);
         CLOSE_FD(i);
       }
-#ifdef IPINFO
+#ifdef WITH_IPINFO
       else { // ipinfo tcp-origin
         allfds[i].revents = 0;  // clear trigger
         if (ev == POLLIN)
@@ -258,7 +261,7 @@ static int keyboard_events(int action) {
       LOGMSG("reset network counters");
       net_reset();
       break;
-#if defined(CURSES) || defined(GRAPHCAIRO)
+#if defined(CURSESMODE) || defined(GRAPHMODE)
     case ActionDisplay: {
       int new_mode = (curses_mode + 1) % curses_mode_max;
       LOGMSG_("switch display mode: %d -> %d", curses_mode, new_mode);
@@ -276,7 +279,7 @@ static int keyboard_events(int action) {
     case ActionPauseResume:
       LOGMSG("'pause/resume' pressed");
       break;
-#ifdef MPLS
+#ifdef WITH_MPLS
     case ActionMPLS:
       enable_mpls = !enable_mpls;
       LOGMSG_("toggle MPLS: %d -> %d", !enable_mpls, enable_mpls);
@@ -284,7 +287,7 @@ static int keyboard_events(int action) {
       display_clear();
       break;
 #endif
-#ifdef DNS
+#ifdef ENABLE_DNS
     case ActionDNS:
       enable_dns = !enable_dns;
       LOGMSG_("toggle DNS: %d -> %d", !enable_dns, enable_dns);
@@ -297,7 +300,7 @@ static int keyboard_events(int action) {
       LOGMSG_("toggle cache-mode: %d -> %d", !cache_mode, cache_mode);
       TGLBIT(iargs, 9);	// 9th bit: cache mode
       break;
-#ifdef IPINFO
+#ifdef WITH_IPINFO
     case ActionAS:
     case ActionII:
       LOGMSG("toggle ipinfo-mode");
@@ -307,9 +310,9 @@ static int keyboard_events(int action) {
       CLRBIT(iargs, 4);
       if (enable_ipinfo)
         SETBIT(iargs, (action == ActionAS) ? 3 : 4);
-      ipinfo_open();
       break;
 #endif
+#if defined(CURSESMODE) || defined(SPLITMODE) || defined(GRAPHMODE)
     case ActionScrollDown: {
       LOGMSG_("scroll down %d lines", SCROLL_LINES);
       display_offset += SCROLL_LINES;
@@ -324,6 +327,7 @@ static int keyboard_events(int action) {
       if (display_offset < 0)
         display_offset = 0;
     } break;
+#endif
     case ActionUDP:
     case ActionTCP: {
       int asked = (action == ActionUDP) ? IPPROTO_UDP : IPPROTO_TCP;
@@ -345,7 +349,7 @@ static int keyboard_events(int action) {
   return action;
 }
 
-#ifdef IPINFO
+#ifdef WITH_IPINFO
 static void proceed_ipinfo() {
   switch (display_mode) {
     case DisplayReport:
@@ -370,7 +374,7 @@ static void proceed_ipinfo() {
 static inline bool tcpish(void) {
   return ((maxfd > FD_MAX) && (
     (mtrtype == IPPROTO_TCP)
-#ifdef IPINFO
+#ifdef WITH_IPINFO
     || ipinfo_tcpmode
 #endif
   ));
@@ -394,7 +398,7 @@ static int conclude(void) {
     LOGMSG("got icmp or udp response");
     net_icmp_parse();
   }
-#ifdef DNS
+#ifdef ENABLE_DNS
   if (need_dns) { // dns lookup
     if (IN_ISSET(FD_DNS)) {
       LOGMSG("got dns response");
@@ -471,7 +475,7 @@ void poll_loop(void) {
       else {
         if (interactive || (display_mode == DisplaySplit))
           display_redraw();
-#ifdef IPINFO
+#ifdef WITH_IPINFO
         if (ipinfo_ready())
           proceed_ipinfo();
 #endif
@@ -502,11 +506,10 @@ void poll_loop(void) {
         paused = !paused;
     } else if (tcpish())
       tcp_timedout(); // not waiting for TCP ETIMEDOUT
-#ifdef GRAPHCAIRO
+#ifdef GRAPHMODE
 	{ // external triggers
       int ev = display_extra_action();
       if (ev != ActionNone) {
-//LOGMSG_("extra=%d", ev);
         ev = keyboard_events(ev);
         if (ev == ActionQuit)
           break;

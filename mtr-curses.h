@@ -21,7 +21,7 @@
 
 #include "config.h"
 
-#ifdef UNICODE
+#ifdef WITH_UNICODE
 #ifdef HAVE_WCHAR_H
 #include <wchar.h>
 #endif
@@ -34,7 +34,7 @@ int mc_keyaction(void);
 void mc_clear(void);
 
 #define STARTSTAT	30
-#ifdef GRAPHCAIRO
+#ifdef GRAPHMODE
 void mc_init(void);
 int mc_statf_title(char *buf, int sz);
 int mc_print_at(int at, char *buf, int sz);

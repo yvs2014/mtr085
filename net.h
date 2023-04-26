@@ -47,7 +47,7 @@
 #define MAXPACKET 4470		// largest test packet size
 #define MINPACKET 28		// 20 bytes IP and 8 bytes ICMP or UDP
 
-#ifdef CURSES
+#ifdef CURSESMODE
 #define SAVED_PINGS 200
 #define CT_UNKN   -1
 #define CT_UNSENT -2
@@ -64,7 +64,7 @@ extern void* (*addr_copy)(void *a, const void *b);
 extern unsigned long net_queries[];
 extern unsigned long net_replies[];
 
-#ifdef IPINFO
+#ifdef WITH_IPINFO
 #define MAX_TXT_ITEMS 25
 #endif
 
@@ -77,7 +77,7 @@ typedef struct timemsec {
   long frac;  // in nanoseconds
 } timemsec_t;
 
-#ifdef MPLS
+#ifdef WITH_MPLS
 typedef union mpls_label { // RFC4950
   struct {
 #if BYTE_ORDER == LITTLE_ENDIAN
@@ -106,12 +106,12 @@ typedef struct mpls_data {
 // Address(es) plus associated data
 typedef struct eaddr {
   ip_t ip;
-#ifdef MPLS
+#ifdef WITH_MPLS
   mpls_data_t mpls;
 #endif
   char *q_ptr, *r_ptr; // t_ptr query, reply
   time_t q_ptr_ts;     // timestamp when 'q_ptr' is sent
-#ifdef IPINFO
+#ifdef WITH_IPINFO
   char *q_txt;                // t_txt query
   char *r_txt[MAX_TXT_ITEMS]; // t_txt parsed reply
   time_t q_txt_ts;            // timestamp when 'q_txt' is sent
@@ -130,7 +130,7 @@ struct nethost {
   double jitter, javg, jworst, jinta; // jitters
   long double var;        // variance as base for std deviance: sqrt(var/(recv-1))
   bool transit, up;       // states: ping in transit, host alive
-#ifdef CURSES
+#ifdef CURSESMODE
   int saved[SAVED_PINGS]; // map for display mode: <0 " ?" chars, >=0 pong in usec
   int saved_seq_offset;
 #endif
@@ -142,14 +142,14 @@ typedef struct atndx { int at, ndx, type; } atndx_t;
 // helpful macros
 #define CURRENT_IP(at)   (host[at].eaddr[host[at].current].ip)
 #define IP_AT_NDX(at, ndx)   (host[at].eaddr[ndx].ip)
-#ifdef MPLS
+#ifdef WITH_MPLS
 #define CURRENT_MPLS(at) (host[at].eaddr[host[at].current].mpls)
 #define MPLS_AT_NDX(at, ndx) (host[at].eaddr[ndx].mpls)
 #endif
 #define QPTR_AT_NDX(at, ndx) (host[at].eaddr[ndx].q_ptr)
 #define RPTR_AT_NDX(at, ndx) (host[at].eaddr[ndx].r_ptr)
 #define QPTR_TS_AT_NDX(at, ndx) (host[at].eaddr[ndx].q_ptr_ts)
-#ifdef IPINFO
+#ifdef WITH_IPINFO
 #define QTXT_AT_NDX(at, ndx) (host[at].eaddr[ndx].q_txt)
 #define RTXT_AT_NDX(at, ndx, num) (host[at].eaddr[ndx].r_txt[num])
 #define QTXT_TS_AT_NDX(at, ndx) (host[at].eaddr[ndx].q_txt_ts)
@@ -183,7 +183,7 @@ bool addr6equal(const void *a, const void *b);
 void* addr6copy(void *a, const void *b);
 void net_setsocket6(void);
 #endif
-#ifdef MPLS
+#ifdef WITH_MPLS
 const char *mpls2str(const mpls_label_t *label, int indent);
 #endif
 uint16_t str2hint(const char* s, uint16_t at, uint16_t ndx);

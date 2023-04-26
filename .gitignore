@@ -2,7 +2,7 @@
 *.o
 *.a
 
-Makefile
+/Makefile
 Makefile.in
 aclocal.m4
 confdefs.h
@@ -23,6 +23,7 @@ ar-lib
 **/.deps/
 **/.dirstamp
 /mtr
+/mtr.8
 /version.h
 /version.h.tmp
 .*.swp

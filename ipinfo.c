@@ -29,7 +29,7 @@
 #include "mtr-poll.h"
 #include "net.h"
 #include "display.h"
-#ifdef DNS
+#ifdef ENABLE_DNS
 #include "dns.h"
 #endif
 #include "ipinfo.h"
@@ -65,9 +65,9 @@ unsigned ipinfo_queries[3];  // number of queries (sum, http, whois)
 unsigned ipinfo_replies[3];  // number of replies (sum, http, whois)
 //
 
-static bool ii_initiated;
-static int origin_no;     // set once at start
-static int itemname_max;  // set once at start
+static bool ii_ready;
+static int origin_no;     // set once at init
+static int itemname_max;  // set once at init
 
 static int ipinfo_syn_timeout = 3;     // in seconds
 static struct ipitseq *ipitseq;        // for tcp-origins
@@ -108,13 +108,13 @@ static origin_t origins[] = {
   },
 // 2
   { .host  =
-#ifdef DNS
+#ifdef ENABLE_DNS
       "riswhois.ripe.net",
 #else
       "193.0.11.5",
 #endif
     .host6 =
-#ifdef DNS
+#ifdef ENABLE_DNS
       "riswhois.ripe.net",
 #else
       "2001:67c:2e8:25::c100:b05",
@@ -134,7 +134,7 @@ static origin_t origins[] = {
   },
 // 5
   { .host  =
-#ifdef DNS
+#ifdef ENABLE_DNS
       "ip-api.com",
 #else
       "208.95.112.1",
@@ -548,7 +548,7 @@ static int ipinfo_lookup(int at, int ndx, const char *qstr) {
   }
 
   return
-#ifdef DNS
+#ifdef ENABLE_DNS
     (ORIG_TYPE == OT_DNS) ? dns_send_query(at, ndx, qstr, T_TXT) :
 #endif
    	send_tcp_query(ipitseq[seq].sock, qstr);
@@ -578,7 +578,7 @@ static char *get_ipinfo(int at, int ndx, int nd) {
     case OT_WHOIS:
       ipinfo_lookup(at, ndx, make_tcp_qstr(ip));
       break;
-#ifdef DNS
+#ifdef ENABLE_DNS
     default:  // dns
       ipinfo_lookup(at, ndx, ip2arpa(ip, ORIG_HOST, origins[origin_no].host6));
 #endif
@@ -641,77 +641,77 @@ static char *fill_ipinfo(int at, int ndx, char sep) {
 inline char *fmt_ipinfo(int at, int ndx) { return fill_ipinfo(at, ndx, 0); }
 inline char *sep_ipinfo(int at, int ndx, char sep) { return fill_ipinfo(at, ndx, sep); }
 
-bool ipinfo_ready(void) { return (enable_ipinfo && ii_initiated); }
+bool ipinfo_ready(void) { return (enable_ipinfo && ii_ready); }
 
-void ipinfo_open(void) {
-  if (!enable_ipinfo)
-    return;
-  if (!ii_initiated) {
-    if (ORIG_TYPE != OT_DNS) { // i.e. tcp (http or whois)
-      size_t sz = MAXHOST * MAXPATH * sizeof(struct ipitseq);
-      ipitseq = malloc(sz);
-      if (!ipitseq) {
-        WARN_("tcpseq malloc(%zd)", sz);
-        return;
-      }
-      memset(ipitseq, -1, sz);
-      LOGMSG_("allocated %zd bytes for tcp-sockets", sz);
-    } else
-#ifdef DNS
-      if (!dns_open())
-#endif
-      return;
-    itemname_max = 0;
-    for (int i = 0; i < MAX_TXT_ITEMS; i++, itemname_max++) {
-      if (!ORIG_NAME(i))
-        break;
-      ORIG_WIDTH(i) = strnlen(ORIG_NAME(i), NAMELEN);
-    }
-#ifdef DNS
-    dns_txt_handler = save_txt_answer; // no checks, handler for ipinfo only
-#endif
-    ii_initiated = true;
+static bool alloc_ipitseq(void) {
+  size_t sz = MAXHOST * MAXPATH * sizeof(struct ipitseq);
+  ipitseq = malloc(sz);
+  if (!ipitseq) {
+    WARN_("tcpseq malloc(%zd)", sz);
+    return false;
   }
-  LOGMSG_("%s", ii_initiated ? "ok" : "failed");
+  memset(ipitseq, -1, sz);
+  LOGMSG_("allocated %zd bytes for tcp-sockets", sz);
+  return true;
+}
+
+static void ipinfo_open(void) {
+  if (ii_ready)
+    return;
+  ii_ready = true;
+  if (ORIG_TYPE != OT_DNS) { // i.e. tcp (http or whois)
+    if (!ipitseq && !alloc_ipitseq())
+      ii_ready = false;
+  } else
+#ifdef ENABLE_DNS
+    if (!dns_open())
+#endif
+    ii_ready = false;
+#ifdef ENABLE_DNS
+  dns_txt_handler = save_txt_answer; // handler is used in ipinfo only
+#endif
+  LOGMSG_("%s", ii_ready ? "ok" : "failed");
 }
 
 void ipinfo_close(void) {
-  if (ii_initiated) {
+  if (ii_ready) {
     if (ipitseq) {
       for (int i = 0; i < MAXHOST * MAXPATH; i++)
         close_ipitseq(i);
       free(ipitseq);
       LOGMSG("free tcp-sockets memory");
     }
-    ii_initiated = false;
+    ii_ready = false;
     LOGMSG("ok");
   }
-#ifdef DNS
+#ifdef ENABLE_DNS
   if (ORIG_TYPE == OT_DNS)
     dns_close();
 #endif
 }
 
-int ipinfo_args(char *arg) {
+bool ipinfo_init(const char *arg) {
   char* args[MAX_TXT_ITEMS + 1];
   memset(args, 0, sizeof(args));
   if (arg) {
     args[0] = strdup(arg);
     if (!args[0]) {
       WARN_("strdup(%s)", arg);
-      return -1;
+      return false;
     }
     split_with_sep(args, MAX_TXT_ITEMS + 1, COMMA, 0);
-    int no = atoi(args[0]), max = sizeof(origins) / sizeof(origins[0]);
+    int max = sizeof(origins) / sizeof(origins[0]);
+    int no = (args[0] && *args[0]) ? atoi(args[0]) : 1;
     if ((no > 0) && (no <= max)) {
       origin_no = no - 1;
       ipinfo_tcpmode = (ORIG_TYPE != OT_DNS);
     } else {
       free(args[0]);
       WARNX_("Out of source range[1..%d]: %d", max, no);
-      return -1;
+      return false;
     }
-  }
+  } else
+    return false;
 
   int j = 0;
   for (int i = 1; (j < MAX_TXT_ITEMS) && (i <= MAX_TXT_ITEMS); i++)
@@ -727,18 +727,29 @@ int ipinfo_args(char *arg) {
 
   if (args[0])
     free(args[0]);
+  itemname_max = 0;
+  for (int i = 0; i < MAX_TXT_ITEMS; i++, itemname_max++) {
+    if (!ORIG_NAME(i))
+      break;
+    ORIG_WIDTH(i) = strnlen(ORIG_NAME(i), NAMELEN);
+  }
+
   LOGMSG_("Source: %s%s%s", ORIG_HOST, origins[origin_no].host6 ? ", " : "",
     origins[origin_no].host6 ? origins[origin_no].host6 : "");
-
-  enable_ipinfo = true;
-  return 0;
+  return true;
 }
 
 
-void ipinfo_action(int action) {
-  if (ipinfo_no[0] < 0) // init
-    ipinfo_args(ASLOOKUP_DEFAULT);
-  else switch (action) {
+bool ipinfo_action(int action) {
+  if (ipinfo_no[0] < 0) { // not at start, set default
+    if (!ipinfo_init(ASLOOKUP_DEFAULT))
+      return false;
+  };
+  if (!ii_ready)
+    ipinfo_open();
+  if (!ii_ready)
+    return false;
+  switch (action) {
     case ActionAS: // `z'
       enable_ipinfo = !enable_ipinfo;
       break;
@@ -751,8 +762,11 @@ void ipinfo_action(int action) {
         if (ipinfo_no[i] == itemname_max)
           enable_ipinfo = false;
       }
+      break;
+    case ActionNone: // first time
+      enable_ipinfo = true;
   }
-  ipinfo_open();  // just in case
+  return true;
 }
 
 static void query_iiaddr(int at, int ndx) {
@@ -761,7 +775,7 @@ static void query_iiaddr(int at, int ndx) {
 }
 
 void query_ipinfo(void) {
-  if (!ii_initiated)
+  if (!ii_ready)
       return;
   int max = net_max();
   for (int at = net_min(); at < max; at++) {

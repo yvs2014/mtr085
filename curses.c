@@ -23,7 +23,7 @@
 
 #include "config.h"
 
-#ifdef UNICODE
+#ifdef WITH_UNICODE
 
 #define _XOPEN_SOURCE_EXTENDED
 #ifdef HAVE_NCURSESW_NCURSES_H
@@ -72,10 +72,10 @@
 #include "display.h"
 #include "mtr-curses.h"
 #include "net.h"
-#ifdef DNS
+#ifdef ENABLE_DNS
 #include "dns.h"
 #endif
-#ifdef IPINFO
+#ifdef WITH_IPINFO
 #include "ipinfo.h"
 #endif
 #include "macros.h"
@@ -91,7 +91,7 @@ const char CMODE_HINTS[] =
 "  j        toggle lattency/jitter stats (default latency)\n"
 "  f <int>  set min TTL (default 1)\n"
 "  m <int>  set max TTL (default 30)\n"
-#ifdef DNS
+#ifdef ENABLE_DNS
 "  n        toggle DNS (default on)\n"
 #endif
 "  p        pause/resume\n"
@@ -101,10 +101,10 @@ const char CMODE_HINTS[] =
 "  t        toggle TCP pings\n"
 "  u        toggle UDP pings\n"
 "  x        toggle cache mode (default off)\n"
-#ifdef MPLS
+#ifdef WITH_MPLS
 "  e        toggle MPLS info (default off)\n"
 #endif
-#ifdef IPINFO
+#ifdef WITH_IPINFO
 "  y        switching IP info\n"
 "  z        toggle ASN Lookup (default off)\n"
 #endif
@@ -169,7 +169,7 @@ int mc_keyaction(void) {
         bitpattern = limit_int(-1, 0xff, atoi((char*)entered), "Bit Pattern");
       return ActionNone;
     case 'd': return ActionDisplay;
-#ifdef MPLS
+#ifdef WITH_MPLS
     case 'e': return ActionMPLS;
 #endif
     case 'f':
@@ -198,7 +198,7 @@ int mc_keyaction(void) {
       if (enter_smth(9))
         maxTTL = limit_int(1, ((MAXHOST - 1) > maxTTL) ? maxTTL : (MAXHOST - 1), atoi((char*)entered), "Max TTL");
       return ActionNone;
-#ifdef DNS
+#ifdef ENABLE_DNS
     case 'n': return ActionDNS;
 #endif
     case 'o':  // fields to display and their ordering
@@ -230,7 +230,7 @@ int mc_keyaction(void) {
     case 't': return ActionTCP;
     case 'u': return ActionUDP;
     case 'x': return ActionCache;
-#ifdef IPINFO
+#ifdef WITH_IPINFO
     case 'y': return ActionII;
     case 'z': return ActionAS;
 #endif
@@ -251,7 +251,7 @@ int mc_print_at(int at, char *buf, int sz) {
   return l;
 }
 
-#ifdef MPLS
+#ifdef WITH_MPLS
 static int printw_mpls(const mpls_data_t *m) {
   for (int i = 0; i < m->n; i++) {
     int y;
@@ -266,13 +266,13 @@ static int printw_mpls(const mpls_data_t *m) {
 
 static void printw_addr(int at, int ndx, int up) {
   ip_t *addr = &IP_AT_NDX(at, ndx);
-#ifdef IPINFO
+#ifdef WITH_IPINFO
   if (ipinfo_ready())
     printw("%s", fmt_ipinfo(at, ndx));
 #endif
   if (!up)
     attron(A_BOLD);
-#ifdef DNS
+#ifdef ENABLE_DNS
   const char *name = dns_ptr_lookup(at, ndx);
   if (name) {
     printw("%s", name);
@@ -318,7 +318,7 @@ static void print_addr_extra(int at, int y) { // mpls + multipath
     getyx(stdscr, y, __unused_int);
     if (move(y + 1, 0) == ERR)
         break;
-#ifdef MPLS
+#ifdef WITH_MPLS
     if (enable_mpls)
       if (printw_mpls(&MPLS_AT_NDX(at, ndx)) == ERR)
         break;
@@ -346,7 +346,7 @@ static void print_hops(int statx) {
       printw_addr(at, host[at].current, host[at].up);
       if (print_stat(at, y, statx, max) == ERR)
         break;
-#ifdef MPLS
+#ifdef WITH_MPLS
       if (enable_mpls)
         printw_mpls(&CURRENT_MPLS(at));
 #endif
@@ -363,7 +363,7 @@ static double factors2[NUM_FACTORS2];
 static int scale2[NUM_FACTORS2];
 static int dm2_color_base;
 static chtype map_na2[] = { ' ', '?', '>' | A_BOLD};
-#ifdef UNICODE
+#ifdef WITH_UNICODE
 #define NUM_FACTORS3_MONO	7	// without trailing char
 #define NUM_FACTORS3		22
 static cchar_t map3[NUM_FACTORS3];
@@ -396,7 +396,7 @@ static void scale_map(int *scale, double *factors, int num) {
 }
 
 static void dmode_scale_map(void) {
-#ifdef UNICODE
+#ifdef WITH_UNICODE
   if (curses_mode == 3)
     scale_map(scale3, factors3, color_mode ? NUM_FACTORS3 : (NUM_FACTORS3_MONO + 1));
   else
@@ -415,7 +415,7 @@ static inline void dmode_init(double *factors, int num) {
 void mc_init(void) {
   // display mode 2
   dmode_init(factors2, NUM_FACTORS2);
-#ifdef UNICODE
+#ifdef WITH_UNICODE
   // display mode 3
   dmode_init(factors3, color_mode ? NUM_FACTORS3 : (NUM_FACTORS3_MONO + 1));
 #endif
@@ -437,7 +437,7 @@ void mc_init(void) {
 
   map_na2[1] |= color_mode ? (map2[NUM_FACTORS2 - 1] & A_ATTRIBUTES) : A_BOLD;
 
-#ifdef UNICODE
+#ifdef WITH_UNICODE
   for (int i = 0; i < NUM_FACTORS3_MONO; i++)
     map3[i].CCHAR_chars[0] = L'▁' + i;
 
@@ -478,7 +478,7 @@ static chtype get_saved_ch(int saved_int) {
   return map_na2[2]; // UNKN
 }
 
-#ifdef UNICODE
+#ifdef WITH_UNICODE
 static cchar_t* mtr_saved_cc(int saved_int) {
   NA_MAP(&map_na3);
   int num = color_mode ? NUM_FACTORS3 : (NUM_FACTORS3_MONO + 1);
@@ -501,11 +501,11 @@ static void histogram(int statx, int cols) {
 		if (addr_exist(addr)) {
 			if (!host[at].up)
 				attron(A_BOLD);
-#ifdef IPINFO
+#ifdef WITH_IPINFO
 			if (ipinfo_ready())
 				printw("%s", fmt_ipinfo(at, host[at].current));
 #endif
-#ifdef DNS
+#ifdef ENABLE_DNS
 			const char *name = dns_ptr_lookup(at, host[at].current);
 			printw("%s", name ? name : strlongip(addr));
 #else
@@ -514,7 +514,7 @@ static void histogram(int statx, int cols) {
 			if (!host[at].up)
 				attroff(A_BOLD);
 			mvprintw(y, statx, " ");
-#ifdef UNICODE
+#ifdef WITH_UNICODE
 			if (curses_mode == 3)
 				for (int i = SAVED_PINGS - cols; i < SAVED_PINGS; i++)
 					add_wch(mtr_saved_cc(host[at].saved[i]));
@@ -542,7 +542,7 @@ int mc_statf_title(char *buf, int sz) {
   return l;
 }
 
-#ifdef UNICODE
+#ifdef WITH_UNICODE
 static void mtr_print_scale3(int min, int max, int step) {
   for (int i = min; i < max; i += step) {
     addstr("  ");
@@ -598,7 +598,7 @@ static void print_scale(void) {
       printw("  %c", map2[NUM_FACTORS2 - 1] & A_CHARTEXT);
     }
   }
-#ifdef UNICODE
+#ifdef WITH_UNICODE
   else if (curses_mode == 3) {
     if (color_mode)
       mtr_print_scale3(1, NUM_FACTORS3 - 1, 2);
@@ -612,14 +612,14 @@ int mc_snprint_args(char *buf, int sz) {
   int l = snprintf(buf, sz, " (");
   l += snprint_iarg(0, buf + l, sz - l, "UDP-pings");  // udp mode
   l += snprint_iarg(1, buf + l, sz - l, "TCP-pings");  // tcp mode
-#ifdef MPLS
+#ifdef WITH_MPLS
   l += snprint_iarg(2, buf + l, sz - l, "MPLS");       // mpls
 #endif
-#ifdef IPINFO
+#ifdef WITH_IPINFO
   l += snprint_iarg(3, buf + l, sz - l, "ASN-Lookup"); // asn lookup
   l += snprint_iarg(4, buf + l, sz - l, "IP-Info");    // ip info
 #endif
-#ifdef DNS
+#ifdef ENABLE_DNS
   l += snprint_iarg(5, buf + l, sz - l, "DNS-off");    // dns
 #endif
   l += snprint_iarg(6, buf + l, sz - l, "Jitter");     // jitter
@@ -664,7 +664,7 @@ void mc_redraw(void) {
     statx = 4;	// indent: "NN. "
     int tlen = mc_statf_title(linebuf, sizeof(linebuf));
     attron(A_BOLD);
-#ifdef IPINFO
+#ifdef WITH_IPINFO
     if (ipinfo_ready()) {
       char *header = ipinfo_header();
       if (header)
@@ -688,7 +688,7 @@ void mc_redraw(void) {
 
   } else {
     statx = STARTSTAT;
-#ifdef IPINFO
+#ifdef WITH_IPINFO
     if (ipinfo_ready())
       statx += ipinfo_width();
 #endif
@@ -743,7 +743,7 @@ bool mc_open(void) {
     init_pair(i++, COLOR_YELLOW, bg_col);
     init_pair(i++, COLOR_MAGENTA, bg_col);
     init_pair(i++, COLOR_RED, bg_col);
-#ifdef UNICODE
+#ifdef WITH_UNICODE
     // display mode 3
     dm3_color_base = i;
     init_pair(i++, COLOR_GREEN, bg_col);

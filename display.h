@@ -24,18 +24,18 @@
 enum { ActionNone, ActionQuit, ActionReset, ActionDisplay,
   ActionClear, ActionPauseResume, ActionScrollDown, ActionScrollUp,
   ActionUDP, ActionTCP, ActionCache
-#ifdef MPLS
+#ifdef WITH_MPLS
   , ActionMPLS
 #endif
-#ifdef DNS
+#ifdef ENABLE_DNS
   , ActionDNS
 #endif
-#ifdef IPINFO
+#ifdef WITH_IPINFO
   , ActionAS, ActionII
 #endif
 };
 enum { DisplayReport, DisplayCurses, DisplaySplit
-#ifdef GRAPHCAIRO
+#ifdef GRAPHMODE
   , DisplayGraphCairo
 #endif
 #ifdef OUTPUT_FORMAT_RAW

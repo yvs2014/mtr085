@@ -29,10 +29,10 @@
 #include "mtr.h"
 #include "net.h"
 #include "display.h"
-#ifdef DNS
+#ifdef ENABLE_DNS
 #include "dns.h"
 #endif
-#ifdef IPINFO
+#ifdef WITH_IPINFO
 #include "ipinfo.h"
 #endif
 #include "split.h"
@@ -47,7 +47,7 @@ void split_redraw(void) {
     ip_t *addr = &CURRENT_IP(at);
     printf("%2d", at + 1);
     if (addr_exist(addr)) {
-#ifdef DNS
+#ifdef ENABLE_DNS
       const char *name = dns_ptr_lookup(at, host[at].current);
       printf("%c%s", SPLIT_SEP, name ? name : strlongip(addr));
       if (show_ips)
@@ -57,7 +57,7 @@ void split_redraw(void) {
         const char *str = net_elem(at, fields[i]);
         if (str) printf("%c%s", SPLIT_SEP, str);
       }
-#ifdef IPINFO
+#ifdef WITH_IPINFO
       if (ipinfo_ready())
         printf("%c%s", SPLIT_SEP, sep_ipinfo(at, host[at].current, SPLIT_SEP));
 #endif
@@ -70,13 +70,13 @@ void split_redraw(void) {
         if (!addr_exist(ip))
           break;
         printf("%2d:%d", at + 1, ndx);
-#ifdef DNS
+#ifdef ENABLE_DNS
         name = dns_ptr_lookup(at, ndx);
         printf("%c%s", SPLIT_SEP, name ? name : strlongip(ip));
         if (show_ips)
 #endif
         printf("%c%s", SPLIT_SEP, strlongip(ip));
-#ifdef IPINFO
+#ifdef WITH_IPINFO
         if (ipinfo_ready())
           printf("%c%s", SPLIT_SEP, sep_ipinfo(at, ndx, SPLIT_SEP));
 #endif
@@ -122,7 +122,7 @@ void split_close(void) {
 const char SMODE_HINTS[] =
 "Command:\n"
 "  h   help\n"
-#ifdef DNS
+#ifdef ENABLE_DNS
 "  n   toggle DNS\n"
 #endif
 "  p   pause/resume\n"
@@ -130,7 +130,7 @@ const char SMODE_HINTS[] =
 "  r   reset all counters\n"
 "  t   toggle TCP pings\n"
 "  u   toggle UDP pings\n"
-#ifdef IPINFO
+#ifdef WITH_IPINFO
 "  y   switching IP info\n"
 "  z   toggle ASN lookup\n"
 #endif
@@ -150,7 +150,7 @@ int split_keyaction(void) {
       printf("%s", SMODE_HINTS);
       fflush(stdout);
       return ActionPauseResume;
-#ifdef DNS
+#ifdef ENABLE_DNS
     case 'n': return ActionDNS;
 #endif
     case 'p': return ActionPauseResume;
@@ -159,7 +159,7 @@ int split_keyaction(void) {
     case 'r': return ActionReset;
     case 't': return ActionTCP;
     case 'u': return ActionUDP;
-#ifdef IPINFO
+#ifdef WITH_IPINFO
     case 'y': return ActionII;
     case 'z': return ActionAS;
 #endif

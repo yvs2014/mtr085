@@ -1,12 +1,19 @@
+.ds o6 "46
+.ds oe "e
+.ds og "g
+.ds on "\\$1
+.ds oo "o
+.ds op "p
+.ds oy "yz
 .Dd $Mdocdate$
-.Dt MTR 8
+.Dt MTR 8 SMM
 .Os
 .Sh NAME
 .Nm mtr
 .Nd a network diagnostic tool
 .Sh SYNOPSIS
 .Nm
-.Op Fl abBcdefFgimnopPqrsStuvwxyzZ46
+.Op Fl a\*[on b]Bcd\*[oe]fF\*[og]im\*[on n]\*[oo]\*[op]PqrsStuvwx\*[oy]Z\*[o6]
 HOSTNAME ...
 .Sh DESCRIPTION
 .Nm
@@ -36,12 +43,14 @@ The results are usually reported as round-trip-response times in miliseconds and
 Use this option to bind outgoing packets' socket to specific interface, so that any packet will be sent through this interface.
 .Sy Note
 that this option doesn't apply to DNS requests (which could be and could not be what you want).
+.ie "b"\*[on b]" \{\
 .It Fl b, Fl -show-ips
 Use this option to tell
 .Sy Nm
 to display both the host names and numeric IP numbers.  In split mode this adds an extra field to the output.  In report mode, there is usually too little space to add the IPs, and they will be truncated.  Use the wide report mode
 .Fl w
 to see the IPs in report mode.
+.\}
 .It Fl B, Fl -bitpattern Ar NUM
 Specifies bit pattern to use in payload.
 .br
@@ -77,10 +86,12 @@ visible bell (flash), on/off
 .It Cm 7th bit
 bell for target host only, on/off
 .El
+.ie "e"\*[oe]" \{\
 .It Fl e, Fl -mpls
 Use this option to tell
 .Sy Nm
 to display information from ICMP extensions for MPLS (RFC 4950) that are encoded in the response packets
+.\}
 .It Fl f, Fl -first-ttl Ar NUM
 Specifies with what TTL to start.  Default is 1, `a' means auto (corresponding to TTL of the destination host).
 .It Fl F, Fl -fields Ar DISPLAY-FIELDS
@@ -111,6 +122,7 @@ Examples:
 .Cm -F 'LSD NBAW'
 .br
 .Cm -F 'DR AGJMXI'
+.ie "g"\*[og]" \{\
 .It Fl g, Fl -graph Ar ARGUMENTS
 Use this option to use the cairo based graph drawing (if available)
 .Pp
@@ -139,21 +151,28 @@ line, default, default, default, default
 .It Cm -g,30,,0
 default, 5min, default, disable, default
 .El
+.\}
 .It Fl i, Fl -interval Ar SECONDS
 Use this option to specify the positive number of seconds between ICMP ECHO requests.  The default value for this parameter is one second.  The root user may choose values between zero and one.
 .It Fl m, Fl -max-ttl Ar NUM
 Specifies the maximum number of hops (max time-to-live value) traceroute will probe.  Default is 30.
+.ie "n"\*[on n]" \{\
 .It Fl n, Fl -no-dns
 Use this option to force
 .Sy Nm
 to display numeric IP numbers and not try to resolve the host names
+.\}
+.ie "o"\*[oo]" \{\
 .It Fl o, Fl -output Ar raw,txt,csv,json,xml
 .RS
 Use these suboptions for automated processing
+.\}
+.ie "o"\*[op]" \{\
 .It Fl p, Fl -split
 Use this option to set
 .Sy Nm
-to spit out a format that is suitable for a split-user interface
+to split out a format that is suitable for a split-user interface
+.\}
 .It Fl P, Fl -port Ar PORT
 The target port number for TCP traces
 .It Fl Q, Fl -tos Ar NUM
@@ -198,6 +217,7 @@ into wide report mode.  When in this mode,
 will not cut hostnames in the report.
 .It Fl x, Fl -cache Ar SECONDS
 Cache mode. Don't ping known hops during cache-timeout period (0 means default 60 seconds).
+.ie "yz"\*[oy]" \{\
 .It Fl y, Fl -ipinfo Ar ORIGIN,FIELDS
 Use this option to specify the IP info origin and its fields
 .Pp
@@ -240,12 +260,15 @@ origin.asn.cymru.com: ASN
 .It Fl z, Fl -aslookup
 Turn on ASN lookups. The data source is
 .Lk riswhois.ripe.net
+.\}
 .It Fl Z, Fl -timeout Ar SECONDS
 The number of seconds to keep the TCP socket open before giving up on the connection.  This will only affect the final hop.  Using large values for this, especially combined with a short interval, will use up a lot of file descriptors.
+.ie "46"\*[o6]" \{\
 .It Fl 4
 Use IPv4 only
 .It Fl 6
 Use IPv6 only
+.\}
 
 .Sh BUGS
 Some modern routers give a lower priority to ICMP ECHO packets than to other network traffic.  Consequently, the reliability of these routers reported by

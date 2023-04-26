@@ -77,11 +77,11 @@ extern unsigned iargs;     // args passed interactively (used to display hints)
   //   8 [d]: -//-
   //   9 [x]: cache mode
 extern int mtrtype;        // default packet type
-#ifdef MPLS
+#ifdef WITH_MPLS
 extern bool enable_mpls;
 #endif
 extern bool report_wide;
-#ifdef DNS
+#ifdef ENABLE_DNS
 extern bool show_ips;
 #endif
 extern bool hinit;         // make sure that a hashtable already exists or not
@@ -97,8 +97,10 @@ extern int cpacketsize;    // default packet size, or user-defined
 extern int syn_timeout;    // timeout for TCP connections
 extern int sum_sock[];     // opened-closed sockets
 //
+#if defined(CURSESMODE) || defined(SPLITMODE) || defined(GRAPHMODE)
 extern int display_offset;
-#if defined(CURSES) || defined(GRAPHCAIRO)
+#endif
+#if defined(CURSESMODE) || defined(GRAPHMODE)
 extern int curses_mode;
 extern int curses_mode_max;
 extern int color_mode;
@@ -117,15 +119,18 @@ extern int display_mode;
 extern double wait_time;
 extern bool interactive;
 extern long max_ping;
-extern bool alter_ping;
 //
 
 char *trim(char *s);
 int val2len(double v);
+#ifdef CURSESMODE
 void set_fld_active(const char *s);
 bool is_custom_fld(void);
-void onoff_jitter(void);
-const struct statf* active_statf(unsigned i);
 int limit_int(const int v0, const int v1, const int v, const char *it);
+#endif
+#if defined(CURSESMODE) || defined(GRAPHMODE)
+void onoff_jitter(void);
+#endif
+const struct statf* active_statf(unsigned i);
 
 #endif

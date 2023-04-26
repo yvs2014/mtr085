@@ -17,8 +17,8 @@
 #include "macros.h"
 
 // Cairo backends: XCB or Xlib
-#ifndef GRAPHCAIRO_XCB
-#ifndef GRAPHCAIRO_XLIB
+#ifndef WITH_GRAPHS_XCB
+#ifndef WITH_GRAPHS_XLIB
 #error "No cairo backend defined"
 #endif
 #endif
