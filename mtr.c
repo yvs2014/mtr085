@@ -161,9 +161,7 @@ static struct option long_options[] = {
   { "mpls",       0, 0, 'e' },
 #endif
   { "first-ttl",  1, 0, 'f' },   // -f and -m are borrowed from traceroute
-#ifdef CURSESMODE
   { "fields",     1, 0, 'F' },   // fields to display and their order
-#endif
 #ifdef GRAPHMODE
   { "graph",      1, 0, 'g' },
 #endif
@@ -285,9 +283,7 @@ static char *get_opt_desc(char opt) {
     case 'c': return "COUNT";
     case 'd': return "MODE";
     case 's': return "BYTES";
-#ifdef CURSESMODE
     case 'F': return "FIELDS";
-#endif
 #ifdef OUTPUT_FORMAT
     case 'o': return trim(""
 #ifdef OUTPUT_FORMAT_RAW
@@ -407,7 +403,6 @@ static void parse_options(int argc, char **argv) {
       }
       fstTTL = limit_int(1, maxTTL, atoi(optarg), "First TTL");
       break;
-#ifdef CURSESMODE
     case 'F':
       if (strlen(optarg) >= sizeof(fld_active))
         FAIL_("-F: Too many fields (max=%zd): %s", sizeof(fld_active) - 1, optarg);
@@ -421,7 +416,6 @@ static void parse_options(int argc, char **argv) {
       }
 	  set_fld_active(optarg);
       break;
-#endif
 #ifdef GRAPHMODE
     case 'g':
       gc_parsearg(optarg);

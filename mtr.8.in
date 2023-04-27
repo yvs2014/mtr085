@@ -3,6 +3,11 @@
 .ds og "g
 .ds on "\\$1
 .ds oo "o
+.ds oor "r
+.ds oot "t
+.ds ooc "c
+.ds ooj "j
+.ds oox "x
 .ds op "p
 .ds oy "yz
 .Dd $Mdocdate$
@@ -163,9 +168,15 @@ Use this option to force
 to display numeric IP numbers and not try to resolve the host names
 .\}
 .ie "o"\*[oo]" \{\
-.It Fl o, Fl -output Ar raw,txt,csv,json,xml
+.It Fl o, Fl -output Ar \*[oor] \*[oot] \*[ooc] \*[ooj] \*[oox]
 .RS
-Use these suboptions for automated processing
+Use one of these suboptions to get
+.ie "r"\*[oor]" \{RAW\}
+.ie "t"\*[oot]" \{TXT\}
+.ie "c"\*[ooc]" \{CSV\}
+.ie "j"\*[ooj]" \{JSON\}
+.ie "x"\*[oox]" \{XML\}
+formatted output respectively
 .\}
 .ie "o"\*[op]" \{\
 .It Fl p, Fl -split

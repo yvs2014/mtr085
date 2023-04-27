@@ -117,26 +117,31 @@ AS_IF([test "x$graphcairo_xcb" = "xyes" -o "x$graphcairo_xlib" = "xyes"], [
 AC_ARG_WITH([output_raw],
 	AS_HELP_STRING([--with-output-raw], [RAW output format]),
 	[output_raw="${withval}"], [output_raw=no])
+AM_CONDITIONAL([OUTPUT_RAW], [test "x$output_raw" = "xyes"])
 AS_IF([test "x$output_raw" != "xno"], [AC_DEFINE([OUTPUT_FORMAT_RAW], 1, [Support RAW output format])])
 
 AC_ARG_WITH([output_txt],
 	AS_HELP_STRING([--with-output-txt], [TXT output format]),
 	[output_txt="${withval}"], [output_txt=yes])
+AM_CONDITIONAL([OUTPUT_TXT], [test "x$output_txt" = "xyes"])
 AS_IF([test "x$output_txt" != "xno"], [AC_DEFINE([OUTPUT_FORMAT_TXT], 1, [Support TXT output format])])
 
 AC_ARG_WITH([output_csv],
 	AS_HELP_STRING([--with-output-csv], [CSV output format]),
 	[output_csv="${withval}"], [output_csv=yes])
+AM_CONDITIONAL([OUTPUT_CSV], [test "x$output_csv" = "xyes"])
 AS_IF([test "x$output_csv" != "xno"], [AC_DEFINE([OUTPUT_FORMAT_CSV], 1, [Support CSV output format])])
 
 AC_ARG_WITH([output_json],
 	AS_HELP_STRING([--with-output-json], [JSON output format]),
 	[output_json="${withval}"], [output_json=yes])
+AM_CONDITIONAL([OUTPUT_JSON], [test "x$output_json" = "xyes"])
 AS_IF([test "x$output_json" != "xno"], [AC_DEFINE([OUTPUT_FORMAT_JSON], 1, [Support JSON output format])])
 
 AC_ARG_WITH([output_xml],
 	AS_HELP_STRING([--with-output-xml], [XML output format]),
 	[output_xml="${withval}"], [output_xml=no])
+AM_CONDITIONAL([OUTPUT_XML], [test "x$output_xml" = "xyes"])
 AS_IF([test "x$output_xml" != "xno"], [AC_DEFINE([OUTPUT_FORMAT_XML], 1, [Support XML output format])])
 
 AM_CONDITIONAL([OUTPUTFMT], [test "x$output_raw" = "xyes" -o "x$output_txt" = "xyes" \

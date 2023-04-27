@@ -92,6 +92,21 @@ endif
 if !OUTPUTFMT
 EXCLOPTS += o
 endif
+if !OUTPUT_RAW
+EXCLOPTS += or
+endif
+if !OUTPUT_TXT
+EXCLOPTS += ot
+endif
+if !OUTPUT_CSV
+EXCLOPTS += oc
+endif
+if !OUTPUT_JSON
+EXCLOPTS += oj
+endif
+if !OUTPUT_XML
+EXCLOPTS += ox
+endif
 if !SPLITMODE
 EXCLOPTS += p
 endif
