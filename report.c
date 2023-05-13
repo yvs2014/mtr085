@@ -24,6 +24,7 @@
 #include <assert.h>
 #include <sys/types.h>
 #include <time.h>
+#include <netinet/in_systm.h>
 #include <arpa/nameser.h>
 
 #include "config.h"

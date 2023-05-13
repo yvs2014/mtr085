@@ -43,7 +43,14 @@
 #else
 #define NSSOCKADDR6(i) (&(myres._u._ext.ext->nsaddrs[i].sin6))
 #endif
-#if defined(__FreeBSD__) || defined(__NetBSD__) || (__sun)
+#if defined(__FreeBSD__) || defined(__NetBSD__) || defined(__sun) || defined(__HAIKU__)
+#ifdef __HAIKU__
+union res_sockaddr_union {
+  struct sockaddr_in sin;
+  struct sockaddr_in6 sin6;
+  char __space[128];
+};
+#endif
 struct __res_state_ext {
   union res_sockaddr_union nsaddrs[MAXNS];
   struct sort_list {

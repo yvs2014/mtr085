@@ -137,6 +137,11 @@ static const int mplsmin = 120; // min after: [ip] icmp ip
 #endif
 #elif __OpenBSD__
 #define IPLEN_RAW(sz) htons(sz)
+#elif __HAIKU__
+#define IPLEN_RAW(sz) htons(sz)
+#ifndef IPV6_CHECKSUM
+#define IPV6_CHECKSUM 7
+#endif
 #else
 #define IPLEN_RAW(sz) sz
 #endif

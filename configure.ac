@@ -17,7 +17,8 @@ AC_CHECK_HEADERS([sys/param.h], AC_DEFINE(HAVE_SYS_PARAM_H, 1))
 dnl AC_CHECK_HEADERS([netinet/in_systm.h], AC_DEFINE(HAVE_NETINET_IN_SYSTM_H, 1))
 
 AC_SEARCH_LIBS([pow], [m],, AC_MSG_ERROR(No math library found))
-AC_SEARCH_LIBS([socket], [socket],, AC_MSG_ERROR(No socket library found))
+AC_SEARCH_LIBS([warnx], [bsd],, AC_MSG_ERROR(No bsd err/warn library found))
+AC_SEARCH_LIBS([socket], [socket network],, AC_MSG_ERROR(No socket library found))
 
 AC_ARG_ENABLE(ipv6,
 	AS_HELP_STRING([--disable-ipv6], [do not enable IPv6]),

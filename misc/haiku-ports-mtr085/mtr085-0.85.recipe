@@ -1,0 +1,61 @@
+SUMMARY="Network diagnostic tool"
+DESCRIPTION="\
+  mtr combines the functionality of the 'traceroute' and 'ping' programs\
+  in a single network diagnostic tool.\
+\
+  As mtr starts, it investigates the network connection between the host\
+  mtr runs on and a user-specified destination host.  After it\
+  determines the address of each network hop between the machines,\
+  it sends a sequence ICMP ECHO requests to each one to determine the\
+  quality of the link to each machine.  As it does this, it prints\
+  running statistics about each machine.\
+"
+
+HOMEPAGE="http://www.bitwizard.nl/mtr"
+COPYRIGHT="Matt Kimball, Roger Wolff"
+LICENSE="GNU GPL v2"
+REVISION="<REVISION>"
+GITHASH="<GITHASH>"
+SOURCE_URI="https://github.com/yvs2014/mtr085/tarball/$GITHASH"
+SOURCE_DIR="yvs2014-mtr085-$GITHASH"
+CHECKSUM_SHA256="<SUM256>"
+
+ARCHITECTURES="!x86_gcc2 x86 x86_64"
+SECONDARY_ARCHITECTURES="!x86"
+
+PROVIDES="
+	mtr$secondaryArchSuffix = $portVersion
+	cmd:mtr
+"
+REQUIRES="
+	haiku$secondaryArchSuffix
+	lib:libncursesw$secondaryArchSuffix
+	lib:libidn2$secondaryArchSuffix
+"
+
+BUILD_REQUIRES="
+	haiku${secondaryArchSuffix}_devel
+	devel:libncurses$secondaryArchSuffix
+	devel:libidn2$secondaryArchSuffix
+	pkgconfig
+"
+BUILD_PREREQUIRES="
+	cmd:autoconf
+	cmd:automake
+	cmd:make
+	cmd:pkg_config
+	cmd:gcc$secondaryArchSuffix
+	cmd:strip$secondaryArchSuffix
+"
+
+BUILD() {
+	runConfigure ./bootstrap.sh
+	runConfigure ./configure --with-libidn
+	make
+}
+
+INSTALL() {
+	make install
+	strip $prefix/bin/mtr
+}
+
