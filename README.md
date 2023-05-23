@@ -20,10 +20,10 @@ The results are usually reported as round-trip-response times in miliseconds and
 EXTRA
 -------
 
-- IDN (Internationalized Domain Names)
-- Unicode (histograms)
-- Ipinfo (additional information about hopes)
-- Graphcairo (XCB/Xlib graphs)
+- Internationalized Domain Names
+- Unicode histograms
+- Additional IP address information
+- Graphs with Cairo library
 
 DETAILS
 -------

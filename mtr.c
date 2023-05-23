@@ -19,6 +19,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <libgen.h>
 #include <getopt.h>
 #include <string.h>
 #include <ctype.h>
@@ -28,6 +29,11 @@
 #include <sys/stat.h>
 
 #include "config.h"
+
+#if defined(LOG_DNS) || defined(LOG_IPINFO) || defined(LOG_NET) || defined(LOG_POLL)
+#define WITH_SYSLOG 1
+#include <syslog.h>
+#endif
 
 #ifdef HAVE_LIBIDN2
 #include <idn2.h>
@@ -98,12 +104,12 @@ int cache_timeout = CACHE_TIMEOUT;  // cache timeout in seconds
 bool enable_stat_at_exit;
 int fstTTL = 1;	              // default start at first hop
 int maxTTL = 30;              // enough?
-int bitpattern;               // packet bit pattern used by ping
 int remoteport = -1;          // target port
 int tos;                      // type of service set in ping packet
+int cbitpattern;              // payload bit pattern
 int cpacketsize = 64;         // default packet size
 int syn_timeout = MIL;        // for TCP tracing (1sec in msec)
-int sum_sock[2];              // opened-closed sockets
+int sum_sock[2];              // socket summary: open()/close() calls
 //
 int display_offset;
 int curses_mode;      // 1st and 2nd bits
@@ -152,7 +158,7 @@ static struct option long_options[] = {
 #ifdef ENABLE_DNS
   { "show-ips",   0, 0, 'b' },
 #endif
-  { "bitpattern", 1, 0, 'B' },   // overload b>255, ->rand(0,255)
+  { "bitpattern", 1, 0, 'B' },   // in range 0-255, or -1 for random
   { "cycles",     1, 0, 'c' },
 #if defined(CURSESMODE) || defined(GRAPHMODE)
   { "display",    1, 0, 'd' },
@@ -314,7 +320,8 @@ static char *get_opt_desc(char opt) {
 }
 
 static void usage(char *name) {
-  printf("Usage: %s [-", name);
+  char *bname = strdup(name);
+  printf("Usage: %s [-", basename(bname));
   int l = strlen(short_options);
   for (int i = 0; i < l; i++)
     if (short_options[i] != ':')
@@ -326,22 +333,20 @@ static void usage(char *name) {
     if (c)
       printf("-%c|", c);
     printf("--%s", long_options[i].name);
-//    if (!c) // LATER: do it in more common way
-//      if (!strncmp(long_options[i].name, SOME_LONG_OPTION, sizeof(SOME_LOG_OPTION)))
-//        c = 'i'; // seconds
     char *desc = long_options[i].has_arg ? get_opt_desc(c) : NULL;
     if (desc)
       printf(" %s", desc);
     printf("]\n");
   }
+  free(bname);
 }
 
 int limit_int(const int v0, const int v1, const int v, const char *it) {
-  if ((v0 >= 0) && (v < v0)) {
+  if (v < v0) {
     WARNX_("'%s' is less than %d: %d -> %d", it, v0, v, v0);
     return v0;
   }
-  if ((v1 >= 0) && (v > v1)) {
+  if (v > v1) {
     WARNX_("'%s' is greater than %d: %d -> %d", it, v1, v, v1);
     return v1;
   }
@@ -375,9 +380,7 @@ static void parse_options(int argc, char **argv) {
       break;
 #endif
     case 'B':
-      bitpattern = atoi(optarg);
-      if (bitpattern > 255)
-        bitpattern = -1;
+      cbitpattern = limit_int(-1, 255, atoi(optarg), "Bit Pattern");
       break;
     case 'c':
       max_ping = atol(optarg);
@@ -495,9 +498,12 @@ static void parse_options(int argc, char **argv) {
       display_mode = DisplayReport;
       max_ping = REPORT_PINGS;
       break;
-    case 's':
-      cpacketsize = atoi(optarg);
-      break;
+    case 's': {
+      int s_val = atoi(optarg);
+      cpacketsize = limit_int(MINPACKET, MAXPACKET, abs(s_val), "Packet size");
+      if (s_val < 0)
+        cpacketsize = -cpacketsize;
+      } break;
     case 'S':
       enable_stat_at_exit = true;
       break;
@@ -644,7 +650,9 @@ int main(int argc, char **argv) {
     FAIL("Unable to drop permissions");
 
   mypid = getpid();
+#ifndef HAVE_ARC4RANDOM_UNIFORM
   srand(mypid); // reset the random seed
+#endif
 
   // initialiaze fld_index
   memset(fld_index, -1, sizeof(fld_index)); // any value > statf_max
@@ -662,6 +670,9 @@ int main(int argc, char **argv) {
     exit(EXIT_SUCCESS);
   }
 
+#ifdef WITH_SYSLOG
+  openlog(PACKAGE_NAME, LOG_PID, LOG_USER);
+#endif
 #ifdef ENABLE_IPV6
   net_setsocket6();
 #endif
@@ -721,6 +732,9 @@ int main(int argc, char **argv) {
   dns_close();
 #endif
   net_close();
+#ifdef WITH_SYSLOG
+  closelog();
+#endif
 
   if (enable_stat_at_exit) {
     printf("SOCKET: %u opened, %u closed\n", sum_sock[0], sum_sock[1]);

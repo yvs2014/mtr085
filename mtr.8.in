@@ -57,9 +57,7 @@ to display both the host names and numeric IP numbers.  In split mode this adds 
 to see the IPs in report mode.
 .\}
 .It Fl B, Fl -bitpattern Ar NUM
-Specifies bit pattern to use in payload.
-.br
-Should be within range 0 - 255.
+Specifies bit pattern to use in payload.  Should be either within range 0-255, or -1 for random sampling.
 .It Fl c, Fl -cycles Ar COUNT
 Use this option to set the number of pings sent to determine both the machines on the network and the reliability of those machines.  Each cycle lasts one second.
 .It Fl d, Fl -display Ar MODE
@@ -187,9 +185,7 @@ to split out a format that is suitable for a split-user interface
 .It Fl P, Fl -port Ar PORT
 The target port number for TCP traces
 .It Fl Q, Fl -tos Ar NUM
-Specifies value for type of service field in IP header.
-.br
-Should be within range 0 - 255.
+Specifies value for type of service (ToS) field in IP header.  Should be within range 0-255.
 .It Fl r, Fl -report
 This option puts
 .Sy Nm
@@ -209,7 +205,7 @@ to measure the quality of your network may result in decreased network performan
 .It Fl s, Fl -psize Ar BYTES
 This option sets the packet size used for probing.  It is in bytes inclusive IP and ICMP headers.
 
-If set to a negative number, every iteration will use a different, random packet size upto that number.
+Set it to a negative VALUE to random in range [28, -VALUE].
 .It Fl S, Fl -summary
 Print send/receive summary at exit
 .It Fl t, Fl -tcp

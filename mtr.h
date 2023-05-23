@@ -87,15 +87,15 @@ extern bool show_ips;
 extern bool hinit;         // make sure that a hashtable already exists or not
 extern int fstTTL;
 extern int maxTTL;
-extern int bitpattern;     // packet bit pattern used by ping
 extern int remoteport;     // target port
 extern int tos;            // type of service set in ping packet
 extern bool endpoint_mode; // -fa option
 extern bool cache_mode;    // don't ping known hops
 extern int cache_timeout;  // cache timeout in seconds
-extern int cpacketsize;    // default packet size, or user-defined
+extern int cbitpattern;    // payload bit pattern
+extern int cpacketsize;    // default packet size, or user defined
 extern int syn_timeout;    // timeout for TCP connections
-extern int sum_sock[];     // opened-closed sockets
+extern int sum_sock[];     // summary open()/close() calls for sockets
 //
 #if defined(CURSESMODE) || defined(SPLITMODE) || defined(GRAPHMODE)
 extern int display_offset;

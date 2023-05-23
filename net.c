@@ -17,6 +17,7 @@
 */
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <errno.h>
 #include <limits.h>
@@ -48,6 +49,15 @@
 #undef LOGMOD
 #endif
 #include "macros.h"
+
+#ifdef HAVE_ARC4RANDOM_UNIFORM
+#ifdef ARC4_IN_BSD_STDLIB_H
+#include <bsd/stdlib.h>
+#endif
+#define RANDUNIFORM(base) arc4random_uniform(base)
+#else // original version
+#define RANDUNIFORM(base) ((base - 1) * (rand() / (RAND_MAX + 0.1)))
+#endif
 
 // no common field names
 struct _iphdr {
@@ -190,6 +200,7 @@ enum { QR_SUM = 0 /*sure*/, QR_ICMP, QR_UDP, QR_TCP };
  */
 #define MAX_UNKNOWN_HOSTS 10
 
+static int bitpattern;
 static int packetsize;
 static struct sequence seqlist[MAXSEQ];
 static struct timespec reset;
@@ -267,7 +278,7 @@ static uint16_t sum16(const void *data, int sz) {
 static uint16_t udpsum16(void *ph, void *udata, int psize, int dsize) {
   unsigned tsize = psize + dsize;
   char csumpacket[tsize];
-  memset(csumpacket, abs(bitpattern), tsize);
+  memset(csumpacket, bitpattern, tsize);
   struct udp_ph *prepend = (struct udp_ph *)csumpacket;
   struct udp_ph *uh      = (struct udp_ph *)ph;
   prepend->saddr = uh->saddr;
@@ -402,7 +413,7 @@ static bool net_send(int at) {
 
   if (packetsize < MINPACKET) packetsize = MINPACKET;
   else if (packetsize > MAXPACKET) packetsize = MAXPACKET;
-  memset(packet, abs(bitpattern), packetsize);
+  memset(packet, bitpattern, packetsize);
 
   int iphsize = 0, echotype = 0, salen = 0;
   struct _iphdr *ip = (struct _iphdr *)packet;
@@ -696,12 +707,12 @@ static mpls_data_t *decodempls(const uint8_t *data, int sz) {
   LOGRET_("icmp: unknown id=%u type=%d seq=%d", icmp->id, icmp->type, seq); \
 }
 
-static int offsets(uint8_t *packet, int iph, uint8_t **icmp, uint8_t **data) {
-  int offset = iph;
-  *icmp = packet + offset;
-  offset += sizeof(struct _icmphdr) + iph;
-  *data = packet + offset;
-  return offset + proto_hdrsz(mtrtype);
+static int offsets(uint8_t *packet, int iph, uint8_t **icmp, uint8_t **data, int *failre) {
+  int minre = iph + proto_hdrsz(mtrtype), ipicmphdr = iph + sizeof(struct _icmphdr);
+  *icmp = packet + iph;
+  *data = *icmp + ipicmphdr;
+  *failre = minre + ipicmphdr;
+  return minre;
 }
 
 #ifdef WITH_MPLS
@@ -731,7 +742,7 @@ void net_icmp_parse(void) {
 
   ssize_t sz = recvfrom(recvsock, packet, MAXPACKET, 0, fromsockaddr, &fromsockaddrsize);
   LOGMSG_("got %zd bytes", sz);
-  int minsz =
+  int minfailsz, minsz =
 #ifdef ENABLE_IPV6
     (af == AF_INET6) ? sizeof(struct ip6_hdr) :
 #endif
@@ -739,7 +750,7 @@ void net_icmp_parse(void) {
 
   uint8_t *data;
   struct _icmphdr *icmp;
-  minsz = offsets(packet, minsz, (uint8_t**)&icmp, &data);
+  minsz = offsets(packet, minsz, (uint8_t**)&icmp, &data, &minfailsz);
   if (sz < minsz)
     LOGRET_("incorrect packet size %zd [af=%d proto=%d minsz=%d]", sz, af, mtrtype, minsz);
 
@@ -753,6 +764,8 @@ void net_icmp_parse(void) {
         reason = RE_PONG;
         ICMPSEQID;
       } else if ((icmp->type == timeexceededtype) || (icmp->type == unreachabletype)) {
+        if (sz < minfailsz)
+          LOGRET_("incorrect packet size %zd [af=%d proto=%d expect>=%d]", sz, af, mtrtype, minfailsz);
         reason = (icmp->type == timeexceededtype) ? RE_EXCEED : RE_UNREACH;
         icmp = (struct _icmphdr *)data;
         ICMPSEQID;
@@ -882,11 +895,14 @@ inline int net_min(void) { return (fstTTL - 1); }
 inline void net_end_transit(void) { for (int at = 0; at < MAXHOST; at++) host[at].transit = false; }
 
 int net_send_batch(void) {
-  // Randomize packetsize and bitpattern if they are less than 0
   if (batch_at < fstTTL) {
-    packetsize = (cpacketsize >= 0) ? cpacketsize : (MINPACKET + rand() % (-cpacketsize - MINPACKET));
-    if (bitpattern < 0)
-      bitpattern = - (int)(256 + 255 * (rand() / (RAND_MAX + 0.1)));
+    // [every cycle] Randomize bit-pattern and packet-size if they are less than 0
+    bitpattern = (cbitpattern < 0) ? RANDUNIFORM(256) : cbitpattern;
+    if (cpacketsize < 0) {
+      int base = -cpacketsize - MINPACKET;
+      packetsize = base ? (MINPACKET + RANDUNIFORM(base)) : MINPACKET;
+    } else
+      packetsize = cpacketsize;
   }
 
   bool ping = true;

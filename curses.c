@@ -163,10 +163,10 @@ int mc_keyaction(void) {
       getch();
       return ActionNone;
     case 'b':
-      mvprintw(2, 0, "Ping Bit Pattern: %d\n", bitpattern);
-      mvprintw(3, 0, "Pattern Range: 0(0x00)-255(0xff), <0 random.\n");
+      mvprintw(2, 0, "Ping Bit Pattern: %d\n", cbitpattern);
+      mvprintw(3, 0, "Pattern Range: 0-255, -1 random.\n");
       if (enter_smth(18))
-        bitpattern = limit_int(-1, 0xff, atoi((char*)entered), "Bit Pattern");
+        cbitpattern = limit_int(-1, 255, atoi((char*)entered), "Bit Pattern");
       return ActionNone;
     case 'd': return ActionDisplay;
 #ifdef WITH_MPLS
@@ -218,14 +218,18 @@ int mc_keyaction(void) {
       mvprintw(2, 0, "ToS (Type of Service): %d\n", tos);
       mvprintw(3, 0, "Bits: 1st lowcost, 2nd reliability, 3rd throughput, 4th lowdelay\n");
       if (enter_smth(23))
-        tos = limit_int(0, 0xff, atoi((char*)entered), "Type of Service (ToS)");
+        tos = limit_int(0, 255, atoi((char*)entered), "Type of Service (ToS)");
       return ActionNone;
     case 'r': return ActionReset;
     case 's':
       mvprintw(2, 0, "Change Packet Size: %d\n", cpacketsize);
       mvprintw(3, 0, "Size Range: %d-%d, < 0:random.\n", MINPACKET, MAXPACKET);
-      if (enter_smth(20))
-        cpacketsize = atoi((char*)entered);
+      if (enter_smth(20)) {
+        int s_val = atoi((char*)entered);
+        cpacketsize = limit_int(MINPACKET, MAXPACKET, abs(s_val), "Packet size");
+        if (s_val < 0)
+          cpacketsize = -cpacketsize;
+      }
       return ActionNone;
     case 't': return ActionTCP;
     case 'u': return ActionUDP;

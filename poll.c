@@ -214,7 +214,7 @@ enum { NO_GRACE, GRACE_START, GRACE_FINISH }; // state of grace period
 static bool svc(struct timespec *last, const struct timespec *interval, int *timeout) {
   static int grace = NO_GRACE;
   static struct timespec grace_started;
-  // set last,start and timeout(msec), return false it is necessary to stop
+  // set 'last' and 'timeout [msec]', return false if it neeeds to stop
   struct timespec now, tv;
   clock_gettime(CLOCK_MONOTONIC, &now);
   timespecadd(last, interval, &tv);
@@ -231,7 +231,7 @@ static bool svc(struct timespec *last, const struct timespec *interval, int *tim
         if (re > 0) {
           numpings++;
           LOGMSG_("cycle=%ld", numpings);
-		} else if (re < 0)
+        } else if (re < 0) // fail
           return false;
       }
     }
@@ -507,7 +507,7 @@ void poll_loop(void) {
     } else if (tcpish())
       tcp_timedout(); // not waiting for TCP ETIMEDOUT
 #ifdef GRAPHMODE
-	{ // external triggers
+    { // external triggers
       int ev = display_extra_action();
       if (ev != ActionNone) {
         ev = keyboard_events(ev);

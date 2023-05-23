@@ -87,3 +87,8 @@ Examples:
 
 work-in-progress BSD port templates are located in 'misc/' folder
 
+
+>>> Linux note
+on older systems arc4random functions are in a separate libbsd package,
+and in libc on newer ones
+
