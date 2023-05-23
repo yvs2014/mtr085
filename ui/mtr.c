@@ -441,6 +441,11 @@ static void parse_arg(
         case 's':
             ctl->cpacketsize =
                 strtonum_or_err(optarg, "invalid argument", STRTO_INT);
+            if (abs(ctl->cpacketsize) <= MINPACKET) {
+                ctl->cpacketsize = (ctl->cpacketsize > 0) ? (MINPACKET + 1) : -(MINPACKET + 1);
+			} else if (abs(ctl->cpacketsize) > MAXPACKET) {
+                ctl->cpacketsize = (ctl->cpacketsize > 0) ? MAXPACKET : -MAXPACKET;
+            }
             break;
         case 'I':
             ctl->InterfaceName = optarg;
