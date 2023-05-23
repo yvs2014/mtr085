@@ -84,7 +84,7 @@ int strtonum_or_err(
         if (errno == 0 && str != end && end != NULL && *end == '\0') {
             switch (type) {
             case STRTO_INT:
-                if (num < INT_MAX)
+                if (((long)num) < INT_MAX)
                     return num;
                 break;
             case STRTO_U32INT:
