@@ -29,20 +29,19 @@ and
 programs in a single network diagnostic tool.
 .Pp
 As
-.Sy Nm
+.Nm
 starts, it investigates the network connection between the host
-.Sy Nm
+.Nm
 runs on and
-.Sy Ns HOSTNAME
+.Sy HOSTNAME
 by sending packets with purposely low TTLs.  It continues to send packets with low TTL, noting the response time of the intervening routers.  This allows
-.Sy Nm
+.Nm
 to print the response percentage and response times of the internet route to
-.Sy Ns HOSTNAME.
+.Sy HOSTNAME.
 A sudden increase in packet loss or response time is often an indication of a bad (or simply overloaded) link.
 .Pp
 The results are usually reported as round-trip-response times in miliseconds and the percentage of packetloss.
 .Sh OPTIONS
-
 .Bl -tag -width Ds
 .It Fl a, Fl -address Ar IP.ADD.RE.SS
 Use this option to bind outgoing packets' socket to specific interface, so that any packet will be sent through this interface.
@@ -51,7 +50,7 @@ that this option doesn't apply to DNS requests (which could be and could not be 
 .ie "b"\*[on b]" \{\
 .It Fl b, Fl -show-ips
 Use this option to tell
-.Sy Nm
+.Nm
 to display both the host names and numeric IP numbers.  In split mode this adds an extra field to the output.  In report mode, there is usually too little space to add the IPs, and they will be truncated.  Use the wide report mode
 .Fl w
 to see the IPs in report mode.
@@ -92,7 +91,7 @@ bell for target host only, on/off
 .ie "e"\*[oe]" \{\
 .It Fl e, Fl -mpls
 Use this option to tell
-.Sy Nm
+.Nm
 to display information from ICMP extensions for MPLS (RFC 4950) that are encoded in the response packets
 .\}
 .It Fl f, Fl -first-ttl Ar NUM
@@ -101,30 +100,42 @@ Specifies with what TTL to start.  Default is 1, `a' means auto (corresponding t
 Use this option to specify the fields to display and their order
 .Pp
 Available fields:
-.TS
-allbox tab(%);
-ll.
-L%Loss ratio
-D%Dropped packets
-R%Received packets
-S%Sent Packets
-N%Newest RTT(ms)
-B%Min/Best RTT(ms)
-A%Average RTT(ms)
-W%Max/Worst RTT(ms)
-V%Standard Deviation
-G%Geometric Mean
-J%Current Jitter
-M%Jitter Mean/Avg.
-X%Worst Jitter
-I%Interarrival Jitter
-.TE
-
+.Bl -tag -offset Ds -compact
+.It Cm L
+Loss ratio, %
+.It Cm D
+Dropped packets
+.It Cm R
+Received packets
+.It Cm S
+Sent Packets
+.It Cm N
+Newest RTT, msec
+.It Cm B
+Min/Best RTT, msec
+.It Cm A
+Average RTT, msec
+.It Cm W
+Max/Worst RTT, msec
+.It Cm V
+Standard Deviation
+.It Cm G
+Geometric Mean
+.It Cm J
+Current Jitter
+.It Cm M
+Jitter Mean/Average
+.It Cm X
+Worst Jitter
+.It Cm I
+Interarrival Jitter
+.El
+.sp 2
 Examples:
-.br
-.Cm -F 'LSD NBAW'
-.br
-.Cm -F 'DR AGJMXI'
+.Bl -tag -offset Ds -compact
+.It Cm -F 'LSD NBAW'
+.It Cm -F 'DR AGJMXI'
+.El
 .ie "g"\*[og]" \{\
 .It Fl g, Fl -graph Ar ARGUMENTS
 Use this option to use the cairo based graph drawing (if available)
@@ -142,9 +153,9 @@ in 10sec ticks (default 6, i.e. 60sec)
 .It Cm 5th arg: latency or jitter graph
 0=latency 1=jitter (default 0, latency)
 .El
-
+.sp
 Use `,' (comma) as argument separator
-
+.sp
 Examples:
 .Bl -tag -width indent-two -offset Ds -compact
 .It Cm -g,
@@ -162,12 +173,11 @@ Specifies the maximum number of hops (max time-to-live value) traceroute will pr
 .ie "n"\*[on n]" \{\
 .It Fl n, Fl -no-dns
 Use this option to force
-.Sy Nm
+.Nm
 to display numeric IP numbers and not try to resolve the host names
 .\}
 .ie "o"\*[oo]" \{\
 .It Fl o, Fl -output Ar \*[oor] \*[oot] \*[ooc] \*[ooj] \*[oox]
-.RS
 Use one of these suboptions to get
 .ie "r"\*[oor]" \{RAW\}
 .ie "t"\*[oot]" \{TXT\}
@@ -188,24 +198,24 @@ The target port number for TCP traces
 Specifies value for type of service (ToS) field in IP header.  Should be within range 0-255.
 .It Fl r, Fl -report
 This option puts
-.Sy Nm
+.Nm
 into report mode.  When in this mode,
-.Sy Nm
+.Nm
 will run for the number of cycles specified by the
 .Fl c
 option, and then print statistics and exit.
-
+.sp
 This mode is useful for generating statistics about network quality.
-
+.sp
 Note that each running instance of
-.Sy Nm
+.Nm
 generates a significant amount of network traffic.  Using
-.Sy Nm
+.Nm
 to measure the quality of your network may result in decreased network performance.
 .It Fl s, Fl -psize Ar BYTES
 This option sets the packet size used for probing.  It is in bytes inclusive IP and ICMP headers.
-
-Set it to a negative VALUE to random in range [28, -VALUE].
+.sp
+Set it to a negative VALUE to randomize in a range of [28, -VALUE].
 .It Fl S, Fl -summary
 Print send/receive summary at exit
 .It Fl t, Fl -tcp
@@ -218,9 +228,9 @@ Print the installed version of
 .Nm
 .It Fl w, Fl -wide
 This option puts
-.Sy Nm
+.Nm
 into wide report mode.  When in this mode,
-.Sy Nm
+.Nm
 will not cut hostnames in the report.
 .It Fl x, Fl -cache Ar SECONDS
 Cache mode. Don't ping known hops during cache-timeout period (0 means default 60 seconds).
@@ -243,7 +253,7 @@ Country, CC, RC, Region, City, Zip, Lat, Long, TZ, ISP, Org, AS Name
 .It Cm 6 - asn.routeviews.org
 ASN
 .El
-
+.sp
 Abbreviations:
 .Bl -tag -width indent-two -offset Ds -compact
 .It Cm TZ
@@ -255,6 +265,7 @@ Designated Market Area
 .It Cm CC/RC/MC/LC
 Country/Region/Metro/Local Code
 .El
+.sp
 Examples:
 .Bl -tag -width indent-two -offset Ds -compact
 .It Cm -y5,2,5,7,8
@@ -276,16 +287,16 @@ Use IPv4 only
 .It Fl 6
 Use IPv6 only
 .\}
-
+.El
 .Sh BUGS
 Some modern routers give a lower priority to ICMP ECHO packets than to other network traffic.  Consequently, the reliability of these routers reported by
-.Sy Nm
+.Nm
 will be significantly lower than the actual reliability of these routers.
 .Sh CONTACT INFORMATION
 .Pp
 .Pp
 For more information about
-.Sy Ns Nm
+.Nm
 diagnostic tool, see web page at
 .Lk http://www.bitwizard.nl/mtr
 .Pp
