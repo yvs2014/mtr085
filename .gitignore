@@ -28,6 +28,9 @@ ar-lib
 /version.h.tmp
 .*.swp
 *~
-
+**/changelog
+/debs/
+/build/
 /build-aux/
-mtr-packet*
+/mtr-packet*
+

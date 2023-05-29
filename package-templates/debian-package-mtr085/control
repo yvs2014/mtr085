@@ -1,0 +1,20 @@
+Source: mtr085
+Section: net
+Priority: optional
+Maintainer: mantainer <e@mail>
+Rules-Requires-Root: no
+Build-Depends: automake, autoconf, libncurses-dev, libidn2-dev
+Standards-Version: 4.6.2
+Homepage: https://github.com/yvs2014/mtr085
+
+Package: mtr085
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, libncursesw6, libidn2-0
+Breaks: mtr, mtr-tiny
+Replaces: mtr, mtr-tiny
+Conflicts: mtr, mtr-tiny
+Description: Full screen ncurses traceroute tool
+ mtr combines the functionality of the 'traceroute' and 'ping' programs
+ in a single network diagnostic tool.
+ .
+ This version is built from https://github.com/yvs2014/mtr085 fork
