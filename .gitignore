@@ -29,6 +29,7 @@ ar-lib
 .*.swp
 *~
 **/changelog
+*.snap
 /debs/
 /build/
 /build-aux/
