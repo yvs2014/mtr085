@@ -83,10 +83,14 @@ bool gc_open(void) {
 
 void gc_close(void) { if (data) free(data); cr_close(); }
 
-void gc_parsearg(char* arg) {
+bool gc_parsearg(char* arg) {
   int i = 0;
   if (arg) {
     char *n, *p, *h = strdup(arg);
+    if (!h) {
+      WARN("strdup()");
+      return false;
+    }
     for (p = h; (n = strchr(p, GC_ARGS_SEP)) && (i < GC_ARGS_MAX); i++, p = n) {
       *n++ = 0;
       args[i] = (*p) ? atoi(p) : -1;
@@ -97,6 +101,7 @@ void gc_parsearg(char* arg) {
   }
   for (int j = i; j < GC_ARGS_MAX; j++)
     args[j] = -1;
+  return true;
 }
 
 static int fill_hostinfo(int at, int ndx, char *buf, int sz) {

@@ -77,8 +77,19 @@ typedef struct timemsec {
   long frac;  // in nanoseconds
 } timemsec_t;
 
+// wrapper: __has_attribute
+#ifndef __has_attribute
+#define __has_attribute(attr)  0
+#endif
+// attribute: __packed__
+#if __has_attribute(__packed__)
+#define PACKIT __attribute__((__packed__))
+#else
+#define PACKIT
+#endif
+
 #ifdef WITH_MPLS
-typedef union mpls_label { // RFC4950
+typedef union PACKIT mpls_label { // RFC4950
   struct {
 #if BYTE_ORDER == LITTLE_ENDIAN
   uint32_t ttl:8;
@@ -159,6 +170,7 @@ extern char localaddr[];
 
 void net_init(int ipv6);
 bool net_open(void);
+void net_assert(void);
 bool net_set_host(struct hostent *h);
 bool net_set_ifaddr(char *ifaddr);
 void net_reset(void);

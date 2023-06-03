@@ -31,6 +31,7 @@
 #include <netinet/ip_icmp.h>
 #include <netinet/tcp.h>
 #include <netinet/udp.h>
+#include <assert.h>
 
 #include "config.h"
 #include "mtr.h"
@@ -60,7 +61,7 @@
 #endif
 
 // no common field names
-struct _iphdr {
+struct PACKIT _iphdr {
 #if BYTE_ORDER == LITTLE_ENDIAN
   uint8_t ihl:4;
   uint8_t ver:4;
@@ -78,7 +79,7 @@ struct _iphdr {
 }; /* must be 20 bytes */
 
 // no common field names
-struct _icmphdr {
+struct PACKIT _icmphdr {
   uint8_t type, code;
   uint16_t sum, id, seq;
 }; /* must be 8 bytes */
@@ -91,7 +92,7 @@ struct _icmphdr {
 // struct udphdr /* common because RFC768 */
 
 // udp4 pseudoheader
-struct udp_ph {
+struct PACKIT udp_ph {
   uint32_t saddr, daddr;
   uint8_t zero, proto;
   uint16_t len;
@@ -99,7 +100,7 @@ struct udp_ph {
 
 
 #ifdef WITH_MPLS
-struct icmpext_struct { // RFC4884
+struct PACKIT icmpext_struct { // RFC4884
 #if BYTE_ORDER == LITTLE_ENDIAN
   uint8_t res:4;
   uint8_t ver:4;
@@ -113,7 +114,7 @@ struct icmpext_struct { // RFC4884
   uint16_t sum;
 }; /* must be 4 bytes */
 
-struct icmpext_object { // RFC4884
+struct PACKIT icmpext_object { // RFC4884
   uint16_t len;
   uint8_t class;
   uint8_t type;
@@ -275,18 +276,17 @@ static uint16_t sum16(const void *data, int sz) {
 }
 
 // Prepend pseudoheader to the udp datagram and calculate checksum
-static uint16_t udpsum16(void *ph, void *udata, int psize, int dsize) {
-  unsigned tsize = psize + dsize;
+static uint16_t udpsum16(struct _iphdr *ip, void *udata, int udata_len, int dsize) {
+  unsigned tsize = sizeof(struct udp_ph) + dsize;
   char csumpacket[tsize];
   memset(csumpacket, bitpattern, tsize);
   struct udp_ph *prepend = (struct udp_ph *)csumpacket;
-  struct udp_ph *uh      = (struct udp_ph *)ph;
-  prepend->saddr = uh->saddr;
-  prepend->daddr = uh->daddr;
+  prepend->saddr = ip->saddr;
+  prepend->daddr = ip->daddr;
   prepend->zero  = 0;
-  prepend->proto = uh->proto;
-  prepend->len   = uh->len;
-  struct udphdr *content = (struct udphdr *)(csumpacket + psize);
+  prepend->proto = ip->proto;
+  prepend->len   = udata_len;
+  struct udphdr *content = (struct udphdr *)(csumpacket + sizeof(struct udp_ph));
   struct udphdr *data = (struct udphdr *)udata;
   content->uh_sport = data->uh_sport;
   content->uh_dport = data->uh_dport;
@@ -472,17 +472,9 @@ static bool net_send(int at) {
     else
       SET_UDP_UH_PORTS(udp, LO_UDPPORT + seq, remoteport);
     LOGMSG_("udp: at=%d seq=%d port=%u", at, seq, ntohs(udp->uh_dport));
-    if (af == AF_INET) {
-      if (ip->saddr) { // checksum is not mandatory, calculate if ip->saddr is known
-        struct udp_ph *uph = (struct udp_ph *)(malloc(sizeof(struct udp_ph)));
-        uph->saddr  = ip->saddr;
-        uph->daddr  = ip->daddr;
-        uph->proto  = ip->proto;
-        uph->len    = udp->uh_ulen;
-        udp->uh_sum = udpsum16(uph, udp, sizeof(struct udp_ph), packetsize - iphsize);
-        if (!udp->uh_sum)
-          udp->uh_sum = 0xffff;
-      }
+    if ((af == AF_INET) && ip->saddr) { // checksum is not mandatory, calculate if ip->saddr is known
+      uint16_t sum = udpsum16(ip, udp, udp->uh_ulen, packetsize - iphsize);
+      udp->uh_sum = sum ? sum : 0xffff;
     }
 #ifdef ENABLE_IPV6
     else if (af == AF_INET6) { // kernel checksum calculation
@@ -654,15 +646,13 @@ static inline int proto_hdrsz(int type) {
 #ifdef WITH_MPLS
 static mpls_data_t *decodempls(const uint8_t *data, int sz) {
   static mpls_data_t mplsdata;
-  static int ext_sz = ies_sz + ieo_sz + lab_sz;
 // given: icmpext_struct(4) icmpext_object(4) label(4) [label(4) ...]
-  static const int mplsoff = mplsmin - ies_sz - ieo_sz - lab_sz;
-  int off = mplsoff;
-  // at least 12bytes ahead: icmp_ext_struct(4) icmp_ext_object(4) label(4) [label(4) ...]
-  if ((off + ext_sz) < sz) {
-    LOGMSG_("got offset(%d+%d) < size(%d), expected >=", off, ext_sz, sz);
+  static const int mplsoff = mplsmin - (ies_sz + ieo_sz + lab_sz);
+  if (sz < mplsmin) {
+    LOGMSG_("got %d bytes of data, whereas mplsmin = %d", sz, mplsmin);
     return NULL;
   }
+  int off = mplsoff; // at least 12bytes ahead: icmp_ext_struct(4) icmp_ext_object(4) label(4) [label(4) ...]
   // icmp extension structure
   struct icmpext_struct *ies = (struct icmpext_struct *)&data[off];
   if ((ies->ver != ICMP_EXT_VER) || ies->res || !ies->sum) {
@@ -950,7 +940,7 @@ static void net_sock_close(void) {
 bool net_open(void) { // optional IPv6: no error
   net_init(0);  // no IPv6 by default
   sendsock4 = socket(AF_INET, SOCK_RAW, IPPROTO_RAW);
-  if (sendsock4 < 0) socket(AF_INET, SOCK_RAW, IPPROTO_ICMP); // backup
+  if (sendsock4 < 0) sendsock4 = socket(AF_INET, SOCK_RAW, IPPROTO_ICMP); // backup
   WARNCLRE(sendsock4, "send socket");
   recvsock4 = socket(AF_INET, SOCK_RAW, IPPROTO_ICMP);
   WARNCLRE(recvsock4, "recv socket");
@@ -1192,6 +1182,17 @@ static void save_ptr_answer(int at, int ndx, const char* answer) {
     WARN_("[%d:%d] strndup()", at, ndx);
 }
 #endif
+
+void net_assert(void) { // to be sure
+  assert(sizeof(struct _iphdr) == 20);
+  assert(sizeof(struct _icmphdr) == 8);
+  assert(sizeof(struct udp_ph) == 12);
+#ifdef WITH_MPLS
+  assert(ies_sz == 4);
+  assert(ieo_sz == 4);
+  assert(lab_sz == 4);
+#endif
+}
 
 void net_init(int ipv6) {
 #ifdef ENABLE_DNS

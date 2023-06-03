@@ -325,7 +325,7 @@ static void draw_grid(void) {
 	double coef1 = (double)datamax / cell.x / MIL;
 	for (int i = 0, a = vp.height; i <= cell.x; i++, a -= cell.height) {
 		cairo_move_to(cr, 0, a);
-		sprintf(buf, "%*.1f", TICKLABEL_LEN, coef1 * i);
+		snprintf(buf, sizeof(buf), "%*.1f", TICKLABEL_LEN, coef1 * i);
 		pango_layout_set_text(pl, buf, -1);
 		pango_cairo_show_layout(cr, pl);
 	}
@@ -609,7 +609,7 @@ void cr_print_hop(int at) {
 	// hop
 	cairo_set_source_rgb(cr, 0, 0, 0);
 	char buf[8];
-	sprintf(buf, "%2d.", first_hop + 1 + at);
+	snprintf(buf, sizeof(buf), "%2d.", first_hop + 1 + at);
 	cairo_move_to(cr, coords.hop_x, coords.text_y);
 	pango_layout_set_text(pl, buf, -1);
 	pango_cairo_show_layout(cr, pl);
@@ -796,7 +796,7 @@ void cr_redraw(int *data) {
 			} else
 				lp = rp = 0;
 			char buf[8];
-			sprintf(buf, "%02d:%02d", lp, rp);
+			snprintf(buf, sizeof(buf), "%02d:%02d", lp, rp);
 			cairo_set_source_rgb(cr, 1, 1, 1);
 			cairo_rectangle(cr, a, label_y, coords.label_w, 2 * font_size);
 			cairo_fill(cr);

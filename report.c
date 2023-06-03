@@ -226,7 +226,7 @@ void xml_head(void) {
   printf("<MTR SRC=\"%s\"", srchost);
   printf(" TOS=\"0x%X\"", tos);
   printf(" PSIZE=\"%d\"", cpacketsize);
-  printf(" BITPATTERN=\"0x%02X\"", abs(bitpattern));
+  printf(" BITPATTERN=\"0x%02X\"", abs(cbitpattern));
   printf(" TESTS=\"%ld\">\n", max_ping);
 }
 

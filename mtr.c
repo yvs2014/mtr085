@@ -275,7 +275,7 @@ static int my_getopt_long(int argc, char *argv[], int *opt_ndx) {
   return getopt_long(argc, argv, short_options, long_options, opt_ndx);
 }
 
-static char *get_opt_desc(char opt) {
+static const char *get_opt_desc(char opt) {
   switch (opt) {
     case 'm':
     case 'f':
@@ -291,7 +291,7 @@ static char *get_opt_desc(char opt) {
     case 's': return "BYTES";
     case 'F': return "FIELDS";
 #ifdef OUTPUT_FORMAT
-    case 'o': return trim(""
+    case 'o': { char _oopt[] =
 #ifdef OUTPUT_FORMAT_RAW
 " RAW"
 #endif
@@ -307,7 +307,7 @@ static char *get_opt_desc(char opt) {
 #ifdef OUTPUT_FORMAT_XML
 " XML"
 #endif
-);
+    ; return trim(_oopt); }
 #endif
 #ifdef WITH_IPINFO
     case 'y': return "ORIGIN,FIELDS";
@@ -319,7 +319,7 @@ static char *get_opt_desc(char opt) {
   return NULL;
 }
 
-static void usage(char *name) {
+static void usage(const char *name) {
   char *bname = strdup(name);
   printf("Usage: %s [-", basename(bname));
   int l = strlen(short_options);
@@ -333,7 +333,7 @@ static void usage(char *name) {
     if (c)
       printf("-%c|", c);
     printf("--%s", long_options[i].name);
-    char *desc = long_options[i].has_arg ? get_opt_desc(c) : NULL;
+    const char *desc = long_options[i].has_arg ? get_opt_desc(c) : NULL;
     if (desc)
       printf(" %s", desc);
     printf("]\n");
@@ -421,7 +421,8 @@ static void parse_options(int argc, char **argv) {
       break;
 #ifdef GRAPHMODE
     case 'g':
-      gc_parsearg(optarg);
+      if (!gc_parsearg(optarg))
+        exit(EXIT_FAILURE);
       display_mode = DisplayGraphCairo;
       break;
 #endif
@@ -589,7 +590,7 @@ static bool set_host(struct addrinfo *res) {
   for (ai = res; ai; ai = ai->ai_next)
     if (af == ai->ai_family)  // use only the desired AF
       break;
-  if (af != ai->ai_family) {  // not found
+  if (!ai || (af != ai->ai_family)) {  // not found
     WARNX_("Desired address family %d not found", af);
     return false;
   }
@@ -648,6 +649,7 @@ int main(int argc, char **argv) {
     ERRR(EXIT_FAILURE, "Unable to drop permissions");
   if ((geteuid() != getuid()) || (getegid() != getgid())) // Double check, just in case
     FAIL("Unable to drop permissions");
+  net_assert();
 
   mypid = getpid();
 #ifndef HAVE_ARC4RANDOM_UNIFORM
