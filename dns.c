@@ -374,7 +374,7 @@ static void dns_parse_reply(uint8_t *buf, ssize_t len) {
     LOGRET("Reply too short");
 
   memset(answer, 0, sizeof(answer));
-  if (!(an = expand_query(buf, len, c, answer, sizeof(answer) - 1, hp->id, &l)))
+  if (!expand_query(buf, len, c, answer, sizeof(answer) - 1, hp->id, &l))
     return;
   LOGMSG_("Response for %s", answer);
 
@@ -393,7 +393,7 @@ static void dns_parse_reply(uint8_t *buf, ssize_t len) {
     if (c > eob)
       LOGRET("Packet does not contain all specified records");
     memset(answer, 0, sizeof(answer));
-    an = expand_query(buf, len, c, answer, sizeof(answer) - 1, hp->id, &l);
+    atndx_t *atndx = expand_query(buf, len, c, answer, sizeof(answer) - 1, hp->id, &l);
     c += l;
     if (c + 10 > eob)
       LOGRET("Truncated record");
@@ -408,7 +408,7 @@ static void dns_parse_reply(uint8_t *buf, ssize_t len) {
     if (c + size > eob)
       LOGRET("Specified rdata length exceeds packet size");
 
-    if (an && ((type == T_PTR) || (type == T_TXT))) { // answer to us
+    if (atndx && ((type == T_PTR) || (type == T_TXT))) { // answer to us
       memset(answer, 0, sizeof(answer));
       if (type == T_TXT) {
         l = *c;
@@ -420,11 +420,11 @@ static void dns_parse_reply(uint8_t *buf, ssize_t len) {
 	  } else if ((l = dn_expand(buf, buf + len, c, answer, sizeof(answer) - 1)) < 0)
         LOGRET("dn_expand() failed while expanding domain");
       LOGMSG_("Answer %.*s", l, answer);
-      if      ((an->type == 0) && dns_ptr_handler)
-        dns_ptr_handler(an->at, an->ndx, answer);
+      if      ((atndx->type == 0) && dns_ptr_handler)
+        dns_ptr_handler(atndx->at, atndx->ndx, answer);
 #ifdef WITH_IPINFO
-      else if ((an->type == 1) && dns_txt_handler)
-        dns_txt_handler(an->at, an->ndx, answer);
+      else if ((atndx->type == 1) && dns_txt_handler)
+        dns_txt_handler(atndx->at, atndx->ndx, answer);
 #endif
       return; // let's take the first answer
     }

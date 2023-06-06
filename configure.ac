@@ -152,7 +152,13 @@ AS_IF([test "x$output_xml" != "xno"], [AC_DEFINE([OUTPUT_FORMAT_XML], 1, [Suppor
 AM_CONDITIONAL([OUTPUTFMT], [test "x$output_raw" = "xyes" -o "x$output_txt" = "xyes" \
 	-o "x$output_csv" = "xyes" -o "x$output_json" = "xyes" -o "x$output_xml" = "xyes"])
 
-# Add some syslog debug: poll, net, dns, ipinfo
+# Add some development options:
+#   syslog debug: poll, net, dns, ipinfo
+#   gcc static analyzer [clang note: scan-build can be used as an option]
+
+AC_ARG_ENABLE([analyzer],
+	AS_HELP_STRING([--enable-analyzer], [Enable static analyzer]),
+	[analyzer="${withval}"], [analyzer=no])
 
 AC_ARG_WITH([syslog_poll],
 	AS_HELP_STRING([--with-syslog-poll], [Enable debug: poll syslog]),
@@ -231,7 +237,7 @@ AS_IF([test "x$libidn" = "xyes"], [
 # note: AX_CHECK_COMPILE_FLAG comes from autoconf-archive
 m4_ifdef([AX_CHECK_COMPILE_FLAG], [
 	AX_CHECK_COMPILE_FLAG([-Wall], [CFLAGS="$CFLAGS -Wall"])
-	AX_CHECK_COMPILE_FLAG([-fanalyzer], [CFLAGS="$CFLAGS -fanalyzer"])
+	AS_IF([test "x$analyzer" != "xno"], AX_CHECK_COMPILE_FLAG([-fanalyzer], [CFLAGS="$CFLAGS -fanalyzer"]))
 ], [ # at least check GNU C compat for -Wall option
 	AC_MSG_CHECKING([for C flags to get more warnings])
 	AS_IF([test "x$ac_cv_c_compiler_gnu" = "xyes"], [

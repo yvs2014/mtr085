@@ -76,11 +76,17 @@ bool backend_create_window(cairo_rectangle_int_t *rectangle, frontend_resize_t f
 
 	const xcb_setup_t *setup = xcb_get_setup(connection);
 	screen = NULL;
-	for (xcb_screen_iterator_t i = xcb_setup_roots_iterator(setup); i.rem; --screen_no, xcb_screen_next(&i))
+	for (xcb_screen_iterator_t i = xcb_setup_roots_iterator(setup); i.rem; --screen_no, xcb_screen_next(&i)) {
 		if (screen_no == 0) {
 			screen = i.data;
 			break;
 		}
+	}
+	if (!screen) {
+		WARNX("No screen found");
+		xcb_disconnect(connection);
+		return false;
+	}
 
 	window = xcb_generate_id(connection);
 	uint32_t mask = XCB_CW_BACK_PIXEL | XCB_CW_EVENT_MASK;

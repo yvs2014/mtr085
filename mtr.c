@@ -291,7 +291,7 @@ static const char *get_opt_desc(char opt) {
     case 's': return "BYTES";
     case 'F': return "FIELDS";
 #ifdef OUTPUT_FORMAT
-    case 'o': { char _oopt[] =
+    case 'o': { static char _oopt[] =
 #ifdef OUTPUT_FORMAT_RAW
 " RAW"
 #endif
