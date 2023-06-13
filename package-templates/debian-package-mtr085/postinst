@@ -1,2 +1,2 @@
 #!/bin/sh
-setcap cap_net_raw+ep /usr/sbin/mtr
+command -v setcap >/dev/null && setcap cap_net_raw+ep /usr/sbin/mtr || chmod u+s /usr/sbin/mtr
