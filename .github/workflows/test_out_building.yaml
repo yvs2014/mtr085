@@ -1,0 +1,31 @@
+name: test_out_building
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+  workflow_dispatch:
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  build_debs:
+    name: Test mtr085 .deb building on ${{matrix.os}} with ${{matrix.compiler}}
+    runs-on: ${{matrix.os}}
+    strategy:
+      matrix:
+        os: [ubuntu-latest]
+        compiler: [gcc, clang]
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+          ref: dev
+      - name: Install mandatory packages for building
+        run: sudo apt install -y devscripts debhelper libidn2-dev
+      - name: Create deb package on ${{matrix.os}} with ${{matrix.compiler}}
+        run: CC=${{matrix.compiler}} ./build-deb.sh
+
