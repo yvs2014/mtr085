@@ -13,7 +13,7 @@ defaults:
 
 jobs:
   build_debs:
-    name: Test mtr085 .deb building on ${{matrix.os}} with ${{matrix.compiler}}
+    name: Test ${{matrix.os}}.${{matrix.compiler}} building of deb-package
     runs-on: ${{matrix.os}}
     strategy:
       matrix:
@@ -27,5 +27,5 @@ jobs:
       - name: Install mandatory packages for building
         run: sudo apt install -y devscripts debhelper libidn2-dev
       - name: Create deb package on ${{matrix.os}} with ${{matrix.compiler}}
-        run: CC=${{matrix.compiler}} ./build-deb.sh
+        run: CC=${{matrix.compiler}} DEB_CFLAGS_STRIP=-ffat-lto-objects DEB_LDFLAGS_STRIP=-ffat-lto-objects ./build-deb.sh
 
