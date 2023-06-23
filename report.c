@@ -320,7 +320,7 @@ void csv_close(bool notfirst) {
 #endif
   for (int i = 0; i < MAXFLD; i++) {
     const struct statf *sf = active_statf(i);
-    if (sf) {
+    if (sf && sf->key != ' ') {
       printf(CSV_DELIMITER);
       prupper(sf->name);
     }
