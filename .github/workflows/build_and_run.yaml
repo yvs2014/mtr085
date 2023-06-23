@@ -1,4 +1,4 @@
-name: test_out_building
+name: build_and_run
 
 on:
   push:
@@ -12,8 +12,8 @@ defaults:
     shell: bash
 
 jobs:
-  build_debs_on_ubuntu:
-    name: Test ${{matrix.os}}.${{matrix.compiler}} building of deb-package
+  build_debs_on_ubuntu_and_run:
+    name: Build-n-Run on ${{matrix.os}} with ${{matrix.compiler}}
     runs-on: ${{matrix.os}}
     strategy:
       matrix:
@@ -26,15 +26,19 @@ jobs:
           ref: dev
       - name: Install mandatory packages for building
         run: sudo apt install -y devscripts debhelper libidn2-dev
-      - name: Create deb package on ${{matrix.os}} with ${{matrix.compiler}}
+      - name: Create deb package with ${{matrix.compiler}}
         env:
           CC: ${{matrix.compiler}}
           DEB_CFLAGS_STRIP: -ffat-lto-objects
           DEB_LDFLAGS_STRIP: -ffat-lto-objects
         run: ./build-deb.sh
+      - name: Install deb package built with ${{matrix.compiler}}
+        run: sudo dpkg -i debs/mtr085_*.deb
+      - name: Run on ${{matrix.os}}
+        run: mtr -r localhost
 
-  build_exec_on_macos:
-    name: Test ${{matrix.os}}.${{matrix.compiler}} building of deb-package
+  build_exec_on_macos_and_run:
+    name: Build-n-Run on ${{matrix.os}} with ${{matrix.compiler}}
     runs-on: ${{matrix.os}}
     strategy:
       matrix:
@@ -48,9 +52,11 @@ jobs:
       - name: Install mandatory packages for building
 #gc#        run: brew install automake pango xcb-util-keysyms
         run: brew install automake
-      - name: Create executable on ${{matrix.os}} with ${{matrix.compiler}}
+      - name: Create executable with ${{matrix.compiler}}
         env:
           CC: ${{matrix.compiler}}
 #gc#        run: ./bootstrap.sh && ./configure --with-libidn --with-graphcairo-xcb && make
         run: ./bootstrap.sh && ./configure --with-libidn && make
+      - name: Run on ${{matrix.os}}
+        run: sudo ./mtr -r localhost
 
