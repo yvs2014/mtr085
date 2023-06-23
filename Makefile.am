@@ -65,6 +65,13 @@ AM_CFLAGS	+= -fsanitize=undefined
 AM_CFLAGS	+= -fsanitize=address
 endif
 
+if DNS
+if EXTRESOLV
+AM_CPPFLAGS += -DBIND_8_COMPAT
+mtr_LDADD += -lresolv
+endif
+endif
+
 CLEANFILES = version.h mtr.8
 BUILT_SOURCES = version.h
 

@@ -66,15 +66,23 @@ AC_ARG_ENABLE(dns,
 	AS_HELP_STRING([--disable-dns], [do not enable DNS]),
 	dns=$enableval, dns=yes)
 AM_CONDITIONAL([DNS], [test "x$dns" = "xyes"])
+
+AC_CANONICAL_HOST
+AS_CASE([$host_os], [darwin*], [macos=yes])
+AM_CONDITIONAL([EXTRESOLV], [test "x$macos" = "xyes"])
+
 AS_IF([test "x$dns" = "xyes"], [
 	AC_DEFINE([ENABLE_DNS], [], [Define to enable DNS])
+	AC_HEADER_RESOLV
 	AC_SEARCH_LIBS([gethostbyname], [nsl],, AC_MSG_ERROR(No nameservice library found))
 	AC_SEARCH_LIBS([dn_expand], [resolv],, AC_SEARCH_LIBS([__dn_expand], [resolv],, AC_MSG_ERROR(No resolv found)))
+	AS_IF([test "x$macos" = "xyes"], [m4_pushdef([AC_LANG_CALL(C)], [AC_LANG_PROGRAM([$1 @%:@include <resolv.h>])])])
 	AC_SEARCH_LIBS([res_nmkquery], [resolv],
 		AC_DEFINE([HAVE_RES_NMKQUERY], [1], [Define this if res_nmkquery() is present]),
 		AC_SEARCH_LIBS([__res_nmkquery], [resolv],
 			AC_DEFINE([HAVE_RES_NMKQUERY], [1], [Define this if res_nmkquery() is present]),
 			AC_SEARCH_LIBS([res_mkquery], [resolv],, AC_MSG_ERROR(No resolv found))))
+	AS_IF([test "x$macos" = "xyes"], [m4_popdef([AC_LANG_CALL(C)])])
 ])
 
 AC_ARG_WITH([libasan],
@@ -259,7 +267,6 @@ dnl AC_CONFIG_FILES([Makefile img/Makefile])
 AC_CONFIG_FILES([Makefile])
 
 # fix mandir
-AC_CANONICAL_HOST
 AS_CASE([$host_os], [freebsd*|openbsd*], [fixmandir=/usr/local], [netbsd*], [fixmandir=/usr/pkg])
 AS_IF([test "x$fixmandir" != "x"], [
 	AS_IF([test "x$prefix" = "xNONE"], [chkprefix=${ac_default_prefix}], [chkprefix=${prefix}])

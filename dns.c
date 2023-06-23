@@ -18,9 +18,6 @@
 
 #include <string.h>
 #include <errno.h>
-#include <netinet/in.h>
-#include <arpa/nameser.h>
-#include <resolv.h>
 
 #include "config.h"
 #include "mtr.h"
@@ -43,7 +40,7 @@
 #else
 #define NSSOCKADDR6(i) (&(myres._u._ext.ext->nsaddrs[i].sin6))
 #endif
-#if defined(__FreeBSD__) || defined(__NetBSD__) || defined(__sun) || defined(__HAIKU__)
+#if defined(__FreeBSD__) || defined(__NetBSD__) || defined(__sun) || defined(__HAIKU__) || defined(__APPLE__)
 #ifdef __HAIKU__
 union res_sockaddr_union {
   struct sockaddr_in sin;

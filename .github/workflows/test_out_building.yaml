@@ -12,7 +12,7 @@ defaults:
     shell: bash
 
 jobs:
-  build_debs:
+  build_debs_on_ubuntu:
     name: Test ${{matrix.os}}.${{matrix.compiler}} building of deb-package
     runs-on: ${{matrix.os}}
     strategy:
@@ -27,5 +27,28 @@ jobs:
       - name: Install mandatory packages for building
         run: sudo apt install -y devscripts debhelper libidn2-dev
       - name: Create deb package on ${{matrix.os}} with ${{matrix.compiler}}
-        run: CC=${{matrix.compiler}} DEB_CFLAGS_STRIP=-ffat-lto-objects DEB_LDFLAGS_STRIP=-ffat-lto-objects ./build-deb.sh
+        env:
+          CC: ${{matrix.compiler}}
+          DEB_CFLAGS_STRIP: -ffat-lto-objects
+          DEB_LDFLAGS_STRIP: -ffat-lto-objects
+        run: ./build-deb.sh
+
+  build_exec_on_macos:
+    name: Test ${{matrix.os}}.${{matrix.compiler}} building of deb-package
+    runs-on: ${{matrix.os}}
+    strategy:
+      matrix:
+        os: [macos-latest]
+        compiler: [gcc, clang]
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+          ref: dev
+      - name: Install mandatory packages for building
+        run: brew install automake ncurses pkg-config libidn2
+      - name: Create executable on ${{matrix.os}} with ${{matrix.compiler}}
+        env:
+          CC: ${{matrix.compiler}}
+        run: ./bootstrap.sh && ./configure --with-libidn && make
 

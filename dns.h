@@ -34,4 +34,19 @@ char* ip2arpa(ip_t *ip, const char *suff4, const char *suff6);
 extern void (*dns_ptr_handler)(int at, int ndx, const char* answer);
 extern void (*dns_txt_handler)(int at, int ndx, const char* answer);
 
+// taken from autoconf manual
+#ifdef HAVE_SYS_TYPES_H
+#include <sys/types.h>
+#endif
+#ifdef HAVE_NETINET_IN_H
+#include <netinet/in.h>
+#endif
+#ifdef HAVE_ARPA_NAMESER_H
+#include <arpa/nameser.h>
+#endif
+#ifdef HAVE_NETDB_H
+#include <netdb.h>
+#endif
+#include <resolv.h>
+
 #endif

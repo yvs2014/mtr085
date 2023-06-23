@@ -20,9 +20,6 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <poll.h>
-#include <netinet/in.h>
-#include <arpa/nameser.h>
-#include <resolv.h>
 
 #include "config.h"
 #include "mtr.h"
