@@ -58,6 +58,8 @@ NetBSD packages:
 OpenIndiana packages:
   XCB:  cairo pango libxcb
   Xlib: cairo pango libx11
+MacOS packages:
+  XCB:  cairo pango xcb-util-keysym # cairo libxcb
 
 
 Build and run:

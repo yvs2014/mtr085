@@ -46,9 +46,11 @@ jobs:
           fetch-depth: 0
           ref: dev
       - name: Install mandatory packages for building
-        run: brew install automake ncurses pkg-config libidn2
+#gc#        run: brew install automake pango xcb-util-keysyms
+        run: brew install automake
       - name: Create executable on ${{matrix.os}} with ${{matrix.compiler}}
         env:
           CC: ${{matrix.compiler}}
+#gc#        run: ./bootstrap.sh && ./configure --with-libidn --with-graphcairo-xcb && make
         run: ./bootstrap.sh && ./configure --with-libidn && make
 
