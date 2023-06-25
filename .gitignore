@@ -30,8 +30,10 @@ ar-lib
 *~
 **/changelog
 *.snap
+/.flatpak-builder/
 /debs/
 /build/
+/build-dir/
 /build-aux/
 /mtr-packet*
 

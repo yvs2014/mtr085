@@ -1,0 +1,21 @@
+
+app-id: org.flatpak.mtr085
+runtime: org.freedesktop.Platform
+runtime-version: '22.08'
+sdk: org.freedesktop.Sdk
+command: mtr
+finish-args:
+  - --share=network
+modules:
+  - name: mtr
+    buildsystem: autotools
+    config-opts:
+      - --sbindir=${FLATPAK_DEST}/bin
+      - --with-libidn
+    build-options:
+      ldflags: "-Wl,--copy-dt-needed-entries"
+    sources:
+      - type: git
+        url: https://github.com/yvs2014/mtr085
+#        commit: "2e705e4"
+
