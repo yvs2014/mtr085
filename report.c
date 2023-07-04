@@ -284,7 +284,10 @@ void json_close(bool notfirst) {
         const char *str = net_elem(at, sf->key);
         if (str) {
           int l = strnlen(str, MAXDNAME); // for trimming '%' at the end
-          printf(",\"%*s\":%s", (sf->name[l] == '%') ? (l - 1) : l, sf->name, str);
+          if ((l > 0) && (str[l - 1] == '%'))
+            printf(",\"%s%%\":%.*s", sf->name, l - 1, str);
+          else
+            printf(",\"%s\":%s", sf->name, str);
         }
       }
     }
