@@ -1,1 +1,43 @@
-package-templates/linux-snap-mtr085/snapcraft.yaml
+name: mtr085
+adopt-info: mtr
+base: core22
+version: '142-git'
+summary: Full screen ncurses traceroute tool
+description: |
+  mtr combines the functionality of the 'traceroute' and 'ping' programs
+  in a single network diagnostic tool
+    
+  This version is built from https://github.com/yvs2014/mtr085 fork
+  with IDN support, Unicode histograms, extra IP address info
+
+grade: devel # must be 'stable' to release into candidate/stable channels
+confinement: strict
+
+apps:
+  mtr085:
+    command: usr/sbin/mtr
+    plugs:
+      - network
+      - network-control
+
+parts:
+  mtr:
+    plugin: autotools
+    autotools-configure-parameters:
+      - --prefix=/usr
+      - --with-libidn
+    source-type: git
+    source-depth: 1
+    source: https://github.com/yvs2014/mtr085.git
+    build-packages:
+      - build-essential
+      - libncurses-dev
+      - pkg-config
+      - libidn2-dev
+    stage-packages:
+      - libncursesw6
+      - libidn2-0
+    prime:
+      - usr/sbin/mtr
+      - usr/share/man/man8/mtr.8
+
