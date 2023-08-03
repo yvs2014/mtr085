@@ -552,8 +552,8 @@ static void parse_options(int argc, char **argv) {
     }
   }
 
-  for (int i = 1, l = 0; (i < argc) && (l < ARGS_LEN); i++)
-    l += snprintf(mtr_args + l, ARGS_LEN - l, " %s", argv[i]);
+  for (int i = 1, l = 0; (i < optind) && (l < ARGS_LEN); i++)
+    l += snprintf(mtr_args + l, ARGS_LEN - l, (i != 1) ? " %s" : "%s" , argv[i]);
 
   switch (display_mode) {
     case DisplayReport:
@@ -713,7 +713,7 @@ int main(int argc, char **argv) {
     } else {
       if (set_host(res)) {
         locker(stdout, F_WRLCK);
-        if (display_open())
+        if (display_open(notfirst))
           display_loop();
         else
           WARNX("Unable to open display");

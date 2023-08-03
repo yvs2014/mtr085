@@ -57,7 +57,7 @@ enum { DisplayReport, DisplayCurses, DisplaySplit
 
 void display_start(void);
 void display_final(void);
-bool display_open(void);
+bool display_open(bool notfirst);
 void display_close(bool notfirst);
 
 void display_redraw(void);

@@ -41,15 +41,17 @@
 #define HOSTTITLE	"Host"	// report mode
 #define LSIDE_LEN	40	// non-wide report mode: left side of output
 
-static char *get_time_string(time_t now) {
-  char *t = ctime(&now);
-  t[strnlen(t, 26) - 1] = 0; // remove the trailing newline
-  return t;
+static char *get_now_str(void) {
+  static char now_str[32];
+  time_t now = time(NULL);
+  strftime(now_str, sizeof(now_str), "%F %T %z", localtime(&now));
+  return now_str;
 }
 
-void report_open(void) {
-  printf("Local host: %s\n", srchost);
-  printf("Start time: %s\n", get_time_string(time(NULL)));
+void report_open(bool notfirst) {
+  if (notfirst)
+    printf("\n");
+  printf("[%s] %s: %s-%s %s %s\n", get_now_str(), srchost, PACKAGE_NAME, MTR_VERSION, mtr_args, dsthost);
 }
 
 static size_t snprint_addr(char *dst, size_t len, ip_t *addr) {
@@ -263,15 +265,15 @@ void xml_close(void) {
 
 #define JSON_MARGIN 4
 
-void json_head(void) { printf("["); }
-void json_tail(void) { printf("\n]\n"); }
+void json_head(void) { printf("{\"source\":\"%s\",\"args\":\"%s\",\"targets\":[", srchost, mtr_args); }
+void json_tail(void) { printf("\n]}\n"); }
 
 void json_close(bool notfirst) {
   char *buf = malloc(MAXDNAME);
   assert(buf);
   if (notfirst)
     printf(",");
-  printf("\n%*s{\"destination\":\"%s\",\"data\":[", JSON_MARGIN, "", dsthost);
+  printf("\n%*s{\"destination\":\"%s\",\"datetime\":\"%s\",\"data\":[", JSON_MARGIN, "", dsthost, get_now_str());
   int min = net_min(), max = net_max();
   for (int at = min; at < max; at++) {
     ip_t *addr = &CURRENT_IP(at);

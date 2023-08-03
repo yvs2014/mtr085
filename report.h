@@ -21,7 +21,7 @@
 
 #include "config.h"
 
-void report_open(void);
+void report_open(bool notfirst);
 void report_close(bool wide);
 #ifdef OUTPUT_FORMAT_RAW
 extern bool enable_raw;

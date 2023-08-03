@@ -647,7 +647,7 @@ void mc_redraw(void) {
   // title
   move(0, 0);
   attron(A_BOLD);
-  int l = snprintf(linebuf, sizeof(linebuf), "%s-%s%s", PACKAGE_NAME, MTR_VERSION, mtr_args);
+  int l = snprintf(linebuf, sizeof(linebuf), "%s-%s %s %s", PACKAGE_NAME, MTR_VERSION, mtr_args, dsthost);
   if (iargs)
     l += mc_snprint_args(linebuf + l, sizeof(linebuf) - l);
   printw("%*s", (maxx + l) / 2, linebuf);

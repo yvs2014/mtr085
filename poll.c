@@ -62,6 +62,10 @@ enum { FD_STDIN, FD_NET,
 #endif
 FD_MAX };
 
+enum { NO_GRACE, GRACE_START, GRACE_FINISH }; // state of grace period
+static int grace;
+static struct timespec grace_started;
+
 static struct pollfd *allfds; // FDs
 static int *tcpseq;           // and corresponding sequence indexes from net.c
 static int maxfd;
@@ -209,11 +213,7 @@ static void proceed_tcp(void) {
   }
 }
 
-enum { NO_GRACE, GRACE_START, GRACE_FINISH }; // state of grace period
-
 static bool svc(struct timespec *last, const struct timespec *interval, int *timeout) {
-  static int grace = NO_GRACE;
-  static struct timespec grace_started;
   // set 'last' and 'timeout [msec]', return false if it neeeds to stop
   struct timespec now, tv;
   clock_gettime(CLOCK_MONOTONIC, &now);
@@ -457,6 +457,8 @@ void poll_loop(void) {
     return;
   bool anyset = false, paused = false;
   numpings = 0;
+  grace = NO_GRACE;
+  memset(&grace_started, 0, sizeof(grace_started));
 
   struct timespec lasttime;
   clock_gettime(CLOCK_MONOTONIC, &lasttime);

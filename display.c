@@ -34,9 +34,9 @@
 #include "ipinfo.h"
 #endif
 
-bool display_open(void) {
+bool display_open(bool notfirst) {
   switch (display_mode) {
-    case DisplayReport: report_open(); break;
+    case DisplayReport: report_open(notfirst); break;
 #ifdef CURSESMODE
     case DisplayCurses: return mc_open();
 #endif
