@@ -168,9 +168,10 @@ static const int mplsmin = 120; // min after: [ip] icmp ip
 
 #define CLOSE(fd) if ((fd) >= 0) { close(fd); fd = -1; /*summ*/ sum_sock[1]++; }
 
-#define WARNRE0(fd, fmt, ...) { int e = errno; display_clear(); CLOSE(fd); \
-  WARNX_(fmt ": %s", __VA_ARGS__, strerror(e)); \
-  LOG_RE_(false, fmt ": %s", __VA_ARGS__, strerror(e)); \
+#define WARNRE0(fd, fmt, ...) { last_neterr = errno; display_clear(); CLOSE(fd); \
+  WARNX_(fmt ": %s", __VA_ARGS__, strerror(last_neterr)); \
+  snprintf(neterr_txt, ERRBYFN_SZ, fmt ": %s", __VA_ARGS__, strerror(last_neterr)); \
+  LOG_RE_(false, fmt ": %s", __VA_ARGS__, strerror(last_neterr)); \
 }
 
 struct sequence {

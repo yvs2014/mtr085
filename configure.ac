@@ -32,7 +32,7 @@ AS_IF([test "x$ipv6" = "xyes"], [AC_DEFINE([ENABLE_IPV6], [], [Define to enable 
 
 AC_ARG_WITH(splitmode,
 	AS_HELP_STRING([--without-splitmode], [without split-mode]),
-	splitmode=${withval}], [splitmode=yes])
+	splitmode=${withval}, [splitmode=yes])
 AM_CONDITIONAL([SPLITMODE], [test "x$splitmode" = "xyes"])
 AS_IF([test "x$splitmode" = "xyes"], [AC_DEFINE([SPLITMODE], [1], [Define to enable split-mode])])
 

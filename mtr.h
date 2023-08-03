@@ -97,6 +97,10 @@ extern int cpacketsize;    // default packet size, or user defined
 extern int syn_timeout;    // timeout for TCP connections
 extern int sum_sock[];     // summary open()/close() calls for sockets
 //
+#define ERRBYFN_SZ 80
+extern int last_neterr;    // last known network error ...
+extern char neterr_txt[];  // ... with this text
+//
 #if defined(CURSESMODE) || defined(SPLITMODE) || defined(GRAPHMODE)
 extern int display_offset;
 #endif

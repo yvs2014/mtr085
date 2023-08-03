@@ -125,6 +125,9 @@ static void report_addr_extra(int at, char *bufname, char *lbuf, const char *dfm
 
 
 void report_close(bool wide) {
+  if (last_neterr != 0)
+    return;
+
   assert(LSIDE_LEN < MAXDNAME);
   char *lbuf = calloc(1, MAXDNAME);	// left side
   assert(lbuf);
@@ -255,6 +258,8 @@ void xml_close(void) {
 #endif
     printf("%*s</HOP>\n", XML_MARGIN * 2, "");
   }
+  if (last_neterr != 0)
+    printf("%*s<ERROR>%s</ERROR>\n", XML_MARGIN * 2, "", neterr_txt);
   printf("%*s</DST>\n", XML_MARGIN, "");
   free(buf);
 }
@@ -299,7 +304,10 @@ void json_close(bool notfirst) {
 #endif
     printf("}");
   }
-  printf("\n%*s]}", JSON_MARGIN, "");
+  printf("\n%*s]", JSON_MARGIN, "");
+  if (last_neterr != 0)
+    printf(",\"error\":\"%s\"", neterr_txt);
+  printf("}");
   free(buf);
 }
 #endif
@@ -313,6 +321,8 @@ void json_close(bool notfirst) {
 static inline void prupper(const char *s) { while (*s) putchar(toupper((int)*s++)); }
 
 void csv_close(bool notfirst) {
+  if (last_neterr != 0)
+    return;
   char *buf = calloc(1, MAXDNAME);
   assert(buf);
 

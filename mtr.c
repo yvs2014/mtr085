@@ -110,6 +110,8 @@ int cbitpattern;              // payload bit pattern
 int cpacketsize = 64;         // default packet size
 int syn_timeout = MIL;        // for TCP tracing (1sec in msec)
 int sum_sock[2];              // socket summary: open()/close() calls
+int last_neterr;              // last known network error ...
+char neterr_txt[ERRBYFN_SZ];  // ... with this message
 //
 int display_offset;
 int curses_mode;      // 1st and 2nd bits
@@ -754,6 +756,9 @@ int main(int argc, char **argv) {
       ipinfo_replies[0], ipinfo_replies[1], ipinfo_replies[2]);
 #endif
   }
-  return 0;
+
+  if ((display_mode == DisplayCurses) && (last_neterr != 0))
+    warnx("%s", neterr_txt); // duplicate an error cleaned by ncurses' clear screen
+  return last_neterr;
 }
 
