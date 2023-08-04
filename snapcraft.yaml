@@ -34,6 +34,9 @@ parts:
       - libncurses-dev
       - pkg-config
       - libidn2-dev
+    override-build: |
+      sed -i '/install-exec-hook:/,+1d' Makefile.am
+      craftctl default
     stage-packages:
       - libncursesw6
       - libidn2-0

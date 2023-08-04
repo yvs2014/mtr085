@@ -1,3 +1,6 @@
+Note1:
 Snap 'mtr' needs ':network-control' plug to work wth raw-sockets (like 'ping') and it's not connected automatically.
-So that run once 'snap connect mtr085:network-control :network-control' after installation.
-(and optionally 'sudo snap alias mtr085 mtr' to call it with 'mtr' alias)
+(type 'snap connect mtr085:network-control :network-control' to connect the plug)
+
+Note2:
+With snap it's installed without 'setcap cap_net_raw+ep' permisions
