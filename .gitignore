@@ -31,8 +31,8 @@ ar-lib
 *.snap
 /.flatpak-builder/
 /debs/
+**/.debhelper
 /build/
 /build-dir/
 /build-aux/
-/mtr-packet*
 

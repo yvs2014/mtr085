@@ -1,7 +1,5 @@
-mtr085 (144) lunar mantic; urgency=low
+mtr085 (145) lunar mantic; urgency=low
 
-  * add deb-version-changelog miniscript
+  * mtr085 with IDN support, Unicode histograms, extra IP address info
 
-  * add debhelper scripts to deb/control
-
- -- maintainer <VSYakovetsky@gmail.com>  Fri, 04 Aug 2023 22:26:12 +0300
+ -- mantainer <VSYakovetsky@gmail.com>  Sat, 05 Aug 2023 01:04:20 +0300

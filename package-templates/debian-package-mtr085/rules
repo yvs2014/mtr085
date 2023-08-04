@@ -1,7 +1,5 @@
 #!/usr/bin/make -f
 
-DEBDIR=debs
-
 %:
 	dh_update_autotools_config
 	dh $@ --with autoreconf
@@ -10,5 +8,5 @@ override_dh_auto_configure:
 	dh_auto_configure -- --with-libidn
 
 override_dh_builddeb:
-	dh_builddeb $@ --destdir="$(DEBDIR)"
+	dh_builddeb $@ $(DEBDIR)
 
