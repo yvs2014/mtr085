@@ -25,13 +25,13 @@ jobs:
           fetch-depth: 0
           ref: master
       - name: Install mandatory packages for building
-        run: sudo apt install -y devscripts debhelper libidn2-dev
+        run: sudo apt install -y devscripts debhelper libidn2-dev pkgconf
       - name: Create deb package with ${{matrix.compiler}}
         env:
           CC: ${{matrix.compiler}}
           DEB_CFLAGS_STRIP: -ffat-lto-objects
           DEB_LDFLAGS_STRIP: -ffat-lto-objects
-        run: ./build-deb.sh
+        run: ./misc/build-deb.sh
       - name: Install deb package built with ${{matrix.compiler}}
         run: sudo dpkg -i debs/mtr085_*.deb
       - name: Run on ${{matrix.os}}

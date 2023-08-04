@@ -28,7 +28,6 @@ ar-lib
 /version.h.tmp
 .*.swp
 *~
-**/changelog
 *.snap
 /.flatpak-builder/
 /debs/

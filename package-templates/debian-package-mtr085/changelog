@@ -1,0 +1,7 @@
+mtr085 (144) lunar mantic; urgency=low
+
+  * add deb-version-changelog miniscript
+
+  * add debhelper scripts to deb/control
+
+ -- maintainer <VSYakovetsky@gmail.com>  Fri, 04 Aug 2023 22:26:12 +0300
