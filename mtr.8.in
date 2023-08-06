@@ -307,6 +307,4 @@ This version is built from
 .Lk https://github.com/yvs2014/mtr085
 fork
 .Sh "SEE ALSO"
-traceroute(8),
-ping(8),
-TCP/IP Illustrated (Stevens, ISBN 0201633469)
+ping(8), traceroute(8)

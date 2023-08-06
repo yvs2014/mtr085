@@ -1,14 +1,16 @@
 name: mtr085
 adopt-info: mtr
 base: core22
-version: '145'
+version: '146'
 summary: Full screen ncurses traceroute tool
 description: |
   mtr combines the functionality of the 'traceroute' and 'ping' programs
   in a single network diagnostic tool
     
   This version is built from https://github.com/yvs2014/mtr085 fork
-  with IDN support, Unicode histograms, extra IP address info
+  with IDN support, Unicode histograms, extra IP address info, etc.
+
+  Main project's location is https://github.com/traviscross/mtr
 
 grade: devel # must be 'stable' to release into candidate/stable channels
 confinement: strict
@@ -27,7 +29,6 @@ parts:
       - --prefix=/usr
       - --with-libidn
     source-type: git
-    source-depth: 1
     source: https://github.com/yvs2014/mtr085.git
     build-packages:
       - build-essential

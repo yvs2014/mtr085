@@ -82,37 +82,40 @@
 
 const char CMODE_HINTS[] =
 "Commands:\n"
-"  h        this help\n"
-"  b <int>  set ping bit pattern [0..255], or random (if < 0)\n"
-"  c <int>  number of cycles to run (default infinite)\n"
+"  b <int>  set bit pattern in range 0..255, or random (<0)\n"
+"  c <int>  set number of cycles to run, or unlimit (<1)\n"
 "  d        switch display mode\n"
-"  o <str>  set fields to display (default 'LRS N BAWV')\n"
+#ifdef WITH_MPLS
+"  e        toggle MPLS info\n"
+#endif
+"  f <int>  set first TTL (default 1)\n"
 "  i <int>  set interval in seconds (default 1)\n"
 "  j        toggle lattency/jitter stats (default latency)\n"
-"  f <int>  set min TTL (default 1)\n"
 "  m <int>  set max TTL (default 30)\n"
 #ifdef ENABLE_DNS
-"  n        toggle DNS (default on)\n"
+"  n        toggle DNS\n"
 #endif
+"  o <str>  set fields to display (default 'LRS N BAWV')\n"
 "  p        pause/resume\n"
-"  q <int>  set ToS (default 0)\n"
-"  r        reset all counters\n"
-"  s <int>  set packet size (default 64), or random (if < 0)\n"
+"  q        quit\n"
+"  Q <int>  set ToS/QoS\n"
+"  r        reset statistics\n"
+"  s <int>  set packet size (default 64), or random (<0)\n"
 "  t        toggle TCP pings\n"
 "  u        toggle UDP pings\n"
-"  x        toggle cache mode (default off)\n"
-#ifdef WITH_MPLS
-"  e        toggle MPLS info (default off)\n"
-#endif
+"  x        toggle cache mode\n"
 #ifdef WITH_IPINFO
-"  y        switching IP info\n"
-"  z        toggle ASN Lookup (default off)\n"
+"  y        switch IP info\n"
+"  z        toggle ASN lookup\n"
 #endif
+"  +-       scroll up/down\n"
+"  hH?      this help page\n"
 "\n"
 "Press any key to resume ...";
 
 static int __unused_int;
 static char entered[MAXFLD + 1]; // enough?
+static char mc_title[256]; // basename-version arguments destination
 
 static int enter_smth(int y) {
   move(2, y);
@@ -168,6 +171,11 @@ int mc_keyaction(void) {
       if (enter_smth(18))
         cbitpattern = limit_int(-1, 255, atoi((char*)entered), "Bit Pattern");
       return ActionNone;
+    case 'c':
+      mvprintw(2, 0, "Number (unlimit < 1) of cycles: %ld\n\n", max_ping);
+      if (enter_smth(32))
+        max_ping = atol((char*)entered);
+      return ActionNone;
     case 'd': return ActionDisplay;
 #ifdef WITH_MPLS
     case 'e': return ActionMPLS;
@@ -212,7 +220,7 @@ int mc_keyaction(void) {
       enter_stat_fields();
       return ActionNone;
     case 'p': return ActionPauseResume;
-	case  3 : // ^C
+    case  3 : // ^C
     case 'q': return ActionQuit;
     case 'Q':
       mvprintw(2, 0, "ToS (Type of Service): %d\n", tos);
@@ -640,30 +648,25 @@ int mc_snprint_args(char *buf, int sz) {
 void mc_redraw(void) {
   static char linebuf[1024];  // seems enough for one line
   int maxx, maxy;
-  int statx, staty = 5;
+  int statx, staty = 4;
   erase();
   getmaxyx(stdscr, maxy, maxx);
 
   // title
-  move(0, 0);
-  attron(A_BOLD);
-  int l = snprintf(linebuf, sizeof(linebuf), "%s-%s %s %s", PACKAGE_NAME, MTR_VERSION, mtr_args, dsthost);
+  int l = snprintf(linebuf, sizeof(linebuf), "%s", mc_title);
   if (iargs)
     l += mc_snprint_args(linebuf + l, sizeof(linebuf) - l);
-  printw("%*s", (maxx + l) / 2, linebuf);
-  attroff(A_BOLD);
+  mvprintw(0, 0, "%*s", (maxx + l) / 2, linebuf);
 
-  mvprintw(1, 0, "%s (%s)", srchost, localaddr);
-  time_t t = time(NULL);
-  mvprintw(1, maxx - 25, "%s", ctime(&t));
-
-  printw("Keys:  ");
-  attron(A_BOLD); addch('H'); attroff(A_BOLD); printw("elp   ");
-  attron(A_BOLD); addch('D'); attroff(A_BOLD); printw("isplay mode   ");
-  attron(A_BOLD); addch('O'); attroff(A_BOLD); printw("rder fields   ");
-  attron(A_BOLD); addch('R'); attroff(A_BOLD); printw("estart   ");
+  // hints and time
+  mvprintw(1, 0, "Keys: ");
+  attron(A_BOLD); addch('h'); attroff(A_BOLD); printw("ints ");
   attron(A_BOLD); addch('q'); attroff(A_BOLD); printw("uit\n");
+  time_t t = time(NULL);
+  int hlen = strnlen(srchost, 20);
+  mvprintw(1, maxx - (hlen + 27), "%.*s: %s", hlen, srchost, ctime(&t));
 
+  // main body
   if (curses_mode == 0) {
     statx = 4;	// indent: "NN. "
     int tlen = mc_statf_title(linebuf, sizeof(linebuf));
@@ -758,6 +761,11 @@ bool mc_open(void) {
     init_pair(i++, COLOR_RED, bg_col);
 #endif
   }
+
+  // init title
+  int l = snprintf(mc_title, sizeof(mc_title), "%s-%s", PACKAGE_NAME, MTR_VERSION);
+  if (mtr_args[0]) l += snprintf(mc_title + l, sizeof(mc_title) - l, " %s", mtr_args);
+  l += snprintf(mc_title + l, sizeof(mc_title) - l, " %s", dsthost);
 
   mc_init();
   mc_redraw();

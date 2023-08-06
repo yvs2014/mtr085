@@ -1,5 +1,5 @@
-mtr085 (145) lunar mantic; urgency=low
+mtr085 (146) lunar mantic; urgency=low
 
-  * mtr085 with IDN support, Unicode histograms, extra IP address info
+  * mtr085 with IDN support, Unicode histograms, extra IP address info, etc.
 
- -- mantainer <VSYakovetsky@gmail.com>  Sat, 05 Aug 2023 01:04:20 +0300
+ -- yvs <VSYakovetsky@gmail.com>  Sun, 06 Aug 2023 13:42:50 +0300
