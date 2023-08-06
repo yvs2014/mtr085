@@ -162,7 +162,12 @@ int poll_reg_fd(int sock, int seq) {
 }
 
 void poll_dereg_fd(int slot) { if ((slot >=0) && (slot < maxfd)) CLOSE_FD(slot); }
-void poll_close_tcpfds(void) { if (maxfd > FD_MAX) for (int i = FD_MAX; i < maxfd; i++) if (allfds[i].fd >= 0) CLOSE_FD(i); }
+
+void poll_close_tcpfds(void) {
+  if ((maxfd > FD_MAX) && allfds)
+    for (int i = FD_MAX; i < maxfd; i++)
+      if (allfds[i].fd >= 0) CLOSE_FD(i);
+}
 
 // not relying on ETIMEDOUT close stalled TCP connections
 static void tcp_timedout(void) {
@@ -448,11 +453,12 @@ static void seqfd_free(void) {
   allfds = NULL;
   free(tcpseq);
   tcpseq = NULL;
+  maxfd = 0;
 }
 
 // main loop
 void poll_loop(void) {
-  LOGMSG("in");
+  LOGMSG("start");
   if (!seqfd_init())
     return;
   bool anyset = false, paused = false;
@@ -483,7 +489,7 @@ void poll_loop(void) {
 #endif
         if (!svc(&lasttime, &interval, &timeout)) {
           seqfd_free();
-          LOGMSG_("out by '%s'", "done all pings");
+          LOGMSG("done all pings");
           return;
         }
       }
@@ -523,5 +529,6 @@ void poll_loop(void) {
   }
 
   seqfd_free();
+  LOGMSG("finish");
 }
 
