@@ -198,7 +198,7 @@ int mc_keyaction(void) {
       }
       return ActionNone;
     case 'j':
-      TGLBIT(iargs, 6);	// 6th bit: latency(default) / jitter
+      TGLBIT(run_args, RA_JITTER);	// latency OR jitter
       onoff_jitter();
       return ActionNone;
     case 'm':
@@ -301,11 +301,11 @@ static void printw_addr(int at, int ndx, int up) {
 static void seal_n_bell(int at, int max) {
   if (host[at].saved[BELL_AT] == CT_UNKN) {
     host[at].saved[BELL_AT] = CT_SEAL; // sealed
-    if (target_bell_only)
+    if (bell_target)
       if (at != (max - 1))
         return;
-    if (audible_bell) beep();
-    if (visible_bell) flash();
+    if (bell_audible) beep();
+    if (bell_visible) flash();
   }
 }
 
@@ -313,7 +313,7 @@ static int print_stat(int at, int y, int start, int max) { // statistics
   static char statbuf[1024];
   mc_print_at(at, statbuf, sizeof(statbuf));
   mvprintw(y, start, "%s", statbuf);
-  if (audible_bell || visible_bell)
+  if (bell_audible || bell_visible)
     seal_n_bell(at, max);
   return move(y + 1, 0);
 }
@@ -410,7 +410,7 @@ static void scale_map(int *scale, double *factors, int num) {
 static void dmode_scale_map(void) {
 #ifdef WITH_UNICODE
   if (curses_mode == 3)
-    scale_map(scale3, factors3, color_mode ? NUM_FACTORS3 : (NUM_FACTORS3_MONO + 1));
+    scale_map(scale3, factors3, enable_color ? NUM_FACTORS3 : (NUM_FACTORS3_MONO + 1));
   else
 #endif
     scale_map(scale2, factors2, NUM_FACTORS2);
@@ -429,7 +429,7 @@ void mc_init(void) {
   dmode_init(factors2, NUM_FACTORS2);
 #ifdef WITH_UNICODE
   // display mode 3
-  dmode_init(factors3, color_mode ? NUM_FACTORS3 : (NUM_FACTORS3_MONO + 1));
+  dmode_init(factors3, enable_color ? NUM_FACTORS3 : (NUM_FACTORS3_MONO + 1));
 #endif
 
   // Initialize block_map
@@ -447,13 +447,13 @@ void mc_init(void) {
   map2[NUM_FACTORS2 - 1] = map1[1] & A_CHARTEXT;
   map2[NUM_FACTORS2 - 1] |= (map2[NUM_FACTORS2 - 2] & A_ATTRIBUTES) | A_BOLD;
 
-  map_na2[1] |= color_mode ? (map2[NUM_FACTORS2 - 1] & A_ATTRIBUTES) : A_BOLD;
+  map_na2[1] |= enable_color ? (map2[NUM_FACTORS2 - 1] & A_ATTRIBUTES) : A_BOLD;
 
 #ifdef WITH_UNICODE
   for (int i = 0; i < NUM_FACTORS3_MONO; i++)
     map3[i].CCHAR_chars[0] = L'▁' + i;
 
-  if (color_mode) {
+  if (enable_color) {
     for (int i = 0; i < NUM_FACTORS3 - 1; i++) {
       int base = i / NUM_FACTORS3_MONO;
       map3[i].CCHAR_attr = COLOR_PAIR(dm3_color_base + base);
@@ -467,7 +467,7 @@ void mc_init(void) {
 
   for (int i = 0; i < (sizeof(map_na2) / sizeof(map_na2[0])); i++)
     map_na3[i].CCHAR_chars[0] = map_na2[i] & A_CHARTEXT;
-  map_na3[1].CCHAR_attr = color_mode ? map3[NUM_FACTORS3 - 1].CCHAR_attr : A_BOLD;
+  map_na3[1].CCHAR_attr = enable_color ? map3[NUM_FACTORS3 - 1].CCHAR_attr : A_BOLD;
   map_na3[2].CCHAR_attr = A_BOLD;
 #endif
 }
@@ -493,7 +493,7 @@ static chtype get_saved_ch(int saved_int) {
 #ifdef WITH_UNICODE
 static cchar_t* mtr_saved_cc(int saved_int) {
   NA_MAP(&map_na3);
-  int num = color_mode ? NUM_FACTORS3 : (NUM_FACTORS3_MONO + 1);
+  int num = enable_color ? NUM_FACTORS3 : (NUM_FACTORS3_MONO + 1);
   for (int i = 0; i < num; i++)
     if (saved_int <= scale3[i])
       return &map3[i];
@@ -534,7 +534,7 @@ static void histogram(int statx, int cols) {
 #endif
 				for (int i = SAVED_PINGS - cols; i < SAVED_PINGS; i++)
 					addch(get_saved_ch(host[at].saved[i]));
-			if (audible_bell || visible_bell)
+			if (bell_audible || bell_visible)
 				seal_n_bell(at, max);
 		} else
 			printw("%s", UNKN_ITEM);
@@ -567,16 +567,6 @@ static void mtr_print_scale3(int min, int max, int step) {
 }
 #endif
 
-static int snprint_iarg(int bit, char *buf, int sz, const char *msg) {
-  int l = 0;
-  if (CHKBIT(iargs, bit)) {
-    if (iargs & ((1 << bit) - 1))	// is there smth before?
-      l = snprintf(buf, sz, ", ");
-    l += snprintf(buf + l, sz - l, "%s", msg);
-  }
-  return l;
-}
-
 static void print_scale(void) {
   attron(A_BOLD);
   printw("Scale:");
@@ -586,14 +576,14 @@ static void print_scale(void) {
     addch(map1[0] | A_BOLD);
     LENVALMIL(scale2[NUM_FACTORS2 - 2]);
     printw(" less than %.*fms   ", _l, _v);
-    addch(map1[1] | (color_mode ? 0 : A_BOLD));
+    addch(map1[1] | (enable_color ? 0 : A_BOLD));
     addstr(" greater than ");
     addch(map1[0] | A_BOLD);
     addstr("   ");
-    addch('?' | (color_mode ? (map2[NUM_FACTORS2 - 1] & A_ATTRIBUTES) : A_BOLD));
+    addch('?' | (enable_color ? (map2[NUM_FACTORS2 - 1] & A_ATTRIBUTES) : A_BOLD));
     addstr(" Unknown");
   } else if (curses_mode == 2) {
-    if (color_mode) {
+    if (enable_color) {
       for (int i = 0; i < NUM_FACTORS2 - 1; i++) {
         addstr("  ");
         addch(map2[i]);
@@ -612,7 +602,7 @@ static void print_scale(void) {
   }
 #ifdef WITH_UNICODE
   else if (curses_mode == 3) {
-    if (color_mode)
+    if (enable_color)
       mtr_print_scale3(1, NUM_FACTORS3 - 1, 2);
     else
       mtr_print_scale3(0, NUM_FACTORS3_MONO, 1);
@@ -620,27 +610,39 @@ static void print_scale(void) {
 #endif
 }
 
+static bool iargs_sp;
+static int snprint_iarg(int bit, char *buf, int sz, const char *msg) {
+  int l = snprintf(buf, sz, "%s%s%c", iargs_sp ? " " : "", msg, CHKBIT(run_args, bit) ? '+' : '-');
+  if (!iargs_sp) iargs_sp = true;
+  return l;
+}
+#define ADD_NTH_BIT_INFO(bit, what) { \
+  if (NEQBIT(run_args, kept_args, (bit))) l += snprint_iarg((bit), buf + l, sz - l, (what)); }
+
 int mc_snprint_args(char *buf, int sz) {
+  iargs_sp = false;
   int l = snprintf(buf, sz, " (");
-  l += snprint_iarg(0, buf + l, sz - l, "UDP-pings");  // udp mode
-  l += snprint_iarg(1, buf + l, sz - l, "TCP-pings");  // tcp mode
+  ADD_NTH_BIT_INFO(RA_UDP, "udp");
+  ADD_NTH_BIT_INFO(RA_TCP, "tcp");
 #ifdef WITH_MPLS
-  l += snprint_iarg(2, buf + l, sz - l, "MPLS");       // mpls
+  ADD_NTH_BIT_INFO(RA_MPLS, "mpls");
 #endif
 #ifdef WITH_IPINFO
-  l += snprint_iarg(3, buf + l, sz - l, "ASN-Lookup"); // asn lookup
-  l += snprint_iarg(4, buf + l, sz - l, "IP-Info");    // ip info
+  ADD_NTH_BIT_INFO(RA_ASN, "asn");
+  ADD_NTH_BIT_INFO(RA_IPINFO, "ipinfo");
 #endif
 #ifdef ENABLE_DNS
-  l += snprint_iarg(5, buf + l, sz - l, "DNS-off");    // dns
+  ADD_NTH_BIT_INFO(RA_DNS, "dns");
 #endif
-  l += snprint_iarg(6, buf + l, sz - l, "Jitter");     // jitter
-  if ((iargs >> 7) & 3) {        // 7,8 bits: display type
-    if (iargs & ((1 << 7) - 1))
-      l += snprintf(buf + l, sz - l, ", ");
-    l += snprintf(buf + l, sz - l, "Display-Type: %d", (iargs >> 7) & 3);
+  ADD_NTH_BIT_INFO(RA_JITTER, "jitter");
+  int chart = 0;
+  if (CHKBIT(run_args, RA_DM0)) chart |= 1;
+  if (CHKBIT(run_args, RA_DM1)) chart |= 2;
+  if (chart) {
+    l += snprintf(buf + l, sz - l, "%schart=%u", iargs_sp ? " " : "", chart);
+    if (!iargs_sp) iargs_sp = true;
   }
-  l += snprint_iarg(9, buf + l, sz - l, "Cache-mode");  // cache mode
+  ADD_NTH_BIT_INFO(RA_CACHE, "cache");
   l += snprintf(buf + l, sz - l, ")");
   return l;
 }
@@ -654,7 +656,7 @@ void mc_redraw(void) {
 
   // title
   int l = snprintf(linebuf, sizeof(linebuf), "%s", mc_title);
-  if (iargs)
+  if (run_args != kept_args)
     l += mc_snprint_args(linebuf + l, sizeof(linebuf) - l);
   mvprintw(0, 0, "%*s", (maxx + l) / 2, linebuf);
 
@@ -727,11 +729,11 @@ bool mc_open(void) {
   raw();
   noecho();
 
-  if (color_mode)
+  if (enable_color)
     if (!has_colors())
-      color_mode = 0;
+      enable_color = false;
 
-  if (color_mode) {
+  if (enable_color) {
     start_color();
     int bg_col = 0;
 #ifdef HAVE_USE_DEFAULT_COLORS

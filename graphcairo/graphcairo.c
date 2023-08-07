@@ -758,7 +758,7 @@ void cr_redraw(int *data) {
 		time_t t = time(NULL);
 		int l = snprintf(buf, sizeof(buf), "%s", ctime(&t));
 		buf[--l] = 0; // '\n' from ctime
-		if (iargs)
+		if (run_args != kept_args)
 			mc_snprint_args(buf + l, sizeof(buf) - l);
 		pango_layout_set_text(pl, buf, -1);
 		pango_cairo_show_layout(cr, pl);

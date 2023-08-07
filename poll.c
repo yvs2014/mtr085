@@ -70,7 +70,6 @@ static struct pollfd *allfds; // FDs
 static int *tcpseq;           // and corresponding sequence indexes from net.c
 static int maxfd;
 static const struct timespec GRACETIME = { 5, 0 };
-static int prev_mtrtype = IPPROTO_ICMP;
 #ifdef ENABLE_DNS
 static bool need_dns;
 #endif
@@ -268,14 +267,16 @@ static int keyboard_events(int action) {
       break;
 #if defined(CURSESMODE) || defined(GRAPHMODE)
     case ActionDisplay: {
-      int new_mode = (curses_mode + 1) % curses_mode_max;
-      LOGMSG_("switch display mode: %d -> %d", curses_mode, new_mode);
-      curses_mode = new_mode;
-      // bits 7,8: display-type
-      CLRBIT(iargs, 7);
-      CLRBIT(iargs, 8);
-      iargs |= (curses_mode & 3) << 7;
-    } // no break, next clear
+      int cm = (curses_mode + 1) % curses_mode_max;
+      LOGMSG_("switch display mode: %d -> %d", curses_mode, cm);
+      curses_mode = cm;
+      // chart bits
+      CLRBIT(run_args, RA_DM0);
+      CLRBIT(run_args, RA_DM1);
+      if (curses_mode & 1) SETBIT(run_args, RA_DM0);
+      if (curses_mode & 2) SETBIT(run_args, RA_DM1);
+      display_clear();
+    } break;
 #endif
     case ActionClear:
       LOGMSG("clear display");
@@ -288,7 +289,7 @@ static int keyboard_events(int action) {
     case ActionMPLS:
       enable_mpls = !enable_mpls;
       LOGMSG_("toggle MPLS: %d -> %d", !enable_mpls, enable_mpls);
-      TGLBIT(iargs, 2);	// 2nd bit: MPLS on/off
+      TGLBIT(run_args, RA_MPLS);
       display_clear();
       break;
 #endif
@@ -296,25 +297,24 @@ static int keyboard_events(int action) {
     case ActionDNS:
       enable_dns = !enable_dns;
       LOGMSG_("toggle DNS: %d -> %d", !enable_dns, enable_dns);
-      TGLBIT(iargs, 5);	// 5th bit: DNS on/off
+      TGLBIT(run_args, RA_DNS);
       dns_open();
       break;
 #endif
     case ActionCache:
       cache_mode = !cache_mode;
       LOGMSG_("toggle cache-mode: %d -> %d", !cache_mode, cache_mode);
-      TGLBIT(iargs, 9);	// 9th bit: cache mode
+      TGLBIT(run_args, RA_CACHE);
       break;
 #ifdef WITH_IPINFO
     case ActionAS:
     case ActionII:
       LOGMSG("toggle ipinfo-mode");
       ipinfo_action(action);
-      // 3,4 bits: ASN Lookup, IPInfo
-      CLRBIT(iargs, 3);
-      CLRBIT(iargs, 4);
+      CLRBIT(run_args, RA_ASN);
+      CLRBIT(run_args, RA_IPINFO);
       if (enable_ipinfo)
-        SETBIT(iargs, (action == ActionAS) ? 3 : 4);
+        SETBIT(run_args, (action == ActionAS) ? RA_ASN : RA_IPINFO);
       break;
 #endif
 #if defined(CURSESMODE) || defined(SPLITMODE) || defined(GRAPHMODE)
@@ -334,21 +334,18 @@ static int keyboard_events(int action) {
     } break;
 #endif
     case ActionUDP:
-    case ActionTCP: {
-      int asked = (action == ActionUDP) ? IPPROTO_UDP : IPPROTO_TCP;
-      int curr = mtrtype;
-      mtrtype = (mtrtype != asked) ? asked : prev_mtrtype;
-      prev_mtrtype = curr;
-      LOGMSG_("toggle IP protocol: %d -> %d", prev_mtrtype, mtrtype);
-      iargs &= ~3;	// CLR bit#0 udp and bit#1 tcp
-      if (mtrtype == IPPROTO_UDP)
-        SETBIT(iargs, 0)
-      else if (mtrtype == IPPROTO_TCP)
-        SETBIT(iargs, 1);
+    case ActionTCP:
+      CLRBIT(run_args, RA_UDP); CLRBIT(run_args, RA_TCP);
+      if (mtrtype != IPPROTO_ICMP) mtrtype = IPPROTO_ICMP;
+      else {
+        mtrtype = (action == ActionUDP) ? IPPROTO_UDP : IPPROTO_TCP;
+        SETBIT(run_args, (action == ActionUDP) ? RA_UDP : RA_TCP);
+      }
+      LOGMSG_("set IP protocol: %d", mtrtype);
 #ifdef ENABLE_IPV6
       net_setsocket6();
 #endif
-    } break;
+      break;
     default: action = ActionNone;
   }
   return action;

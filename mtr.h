@@ -46,10 +46,11 @@ typedef struct in_addr ip_t;
 #define MAXLABELS 8
 #define MAXFLD   20  // max fields in custom set to display stats
 
-#define SETBIT(n, x) { n |= 1 << (x);}
-#define CLRBIT(n, x) { n &= ~(1 << (x));}
-#define TGLBIT(n, x) { n ^= 1 << (x);}
-#define CHKBIT(n, x) ((n >> (x)) & 1)
+#define SETBIT(a, n) { a |= 1 << (n);}
+#define CLRBIT(a, n) { a &= ~(1 << (n));}
+#define TGLBIT(a, n) { a ^= 1 << (n);}
+#define CHKBIT(a, n) (((a) >> (n)) & 1)
+#define NEQBIT(a, b, n) (((a) ^ (b)) & (1 << (n)))
 
 #define LENVALMIL(val) double _v = (val) / (double)MIL; int _l = val2len(_v);
 
@@ -64,7 +65,10 @@ struct statf {
 //
 extern pid_t mypid;
 extern char mtr_args[];
-extern unsigned iargs;     // args passed interactively (used to display hints)
+// runtime args' bits
+enum RUN_ARG { RA_UDP, RA_TCP, RA_MPLS, RA_ASN, RA_IPINFO, RA_DNS, RA_JITTER, RA_DM0, RA_DM1, RA_CACHE };
+extern unsigned run_args;   // runtime args to display hints
+extern unsigned kept_args;  // kept args mapped in bits
   // bits:
   //   0 [u]: UDP mode
   //   1 [t]: TCP mode
@@ -107,10 +111,10 @@ extern int display_offset;
 #if defined(CURSESMODE) || defined(GRAPHMODE)
 extern int curses_mode;
 extern int curses_mode_max;
-extern int color_mode;
-extern int audible_bell;
-extern int visible_bell;
-extern int target_bell_only;
+extern bool enable_color;
+extern bool bell_audible;
+extern bool bell_visible;
+extern bool bell_target;
 #endif
 // keys: the value in the array is the index number in statf[]
 extern const char *fld_active;

@@ -87,10 +87,13 @@ static char fld_custom[MAXFLD + 1];
 static unsigned fld_index[256]; // key->index backresolv
 
 //// global vars
+int mtrtype = IPPROTO_ICMP;   // ICMP as default packet type
 pid_t mypid;
 #define ARGS_LEN 64 /* seem to be enough */
 char mtr_args[ARGS_LEN + 1];  // display in curses title
-unsigned iargs;               // args passed interactively
+unsigned run_args;            // runtime args to display hints
+unsigned kept_args;           // kept args mapped in bits
+
 #ifdef ENABLE_DNS
 bool show_ips;
 #endif
@@ -112,17 +115,17 @@ int syn_timeout = MIL;        // for TCP tracing (1sec in msec)
 int sum_sock[2];              // socket summary: open()/close() calls
 int last_neterr;              // last known network error ...
 char neterr_txt[ERRBYFN_SZ];  // ... with this message
-//
+// chart related
 int display_offset;
-int curses_mode;      // 1st and 2nd bits
+int curses_mode;              // 1st and 2nd bits, 3rd is reserved
 #if defined(CURSESMODE) || defined(GRAPHMODE)
 int curses_mode_max = 3;
 #endif
-int color_mode;       // 4th bit
-int audible_bell;     // 5th bit
-int visible_bell;     // 6th bit
-int target_bell_only; // 7th bit
-int mtrtype = IPPROTO_ICMP;	// Use ICMP as default packet type
+bool enable_color;            // 4th bit
+bool bell_audible;            // 5th bit
+bool bell_visible;            // 6th bit
+bool bell_target;             // 7th bit
+//
 const char *fld_active;
 //
 const struct statf statf[] = {
@@ -356,6 +359,8 @@ int limit_int(const int v0, const int v1, const int v, const char *it) {
 }
  
 static void parse_options(int argc, char **argv) {
+  SETBIT(kept_args, RA_DNS); // dns is on by default
+
   while (1) {
     int opt = my_getopt_long(argc, argv, NULL);
     if (opt == -1)
@@ -388,17 +393,22 @@ static void parse_options(int argc, char **argv) {
       max_ping = atol(optarg);
       break;
 #if defined(CURSESMODE) || defined(GRAPHMODE)
-    case 'd':
-      curses_mode = ((atoi(optarg)) & ~8) % curses_mode_max;
-      color_mode = ((atoi(optarg)) & 8) ? 1 : 0;
-      audible_bell = ((atoi(optarg)) & 16) ? 1 : 0;
-      visible_bell = ((atoi(optarg)) & 32) ? 1 : 0;
-      target_bell_only = ((atoi(optarg)) & 64) ? 1 : 0;
-      break;
+    case 'd': {
+      int v = atoi(optarg);
+      curses_mode = (v & ~8) % curses_mode_max;
+      enable_color = v & 8;
+      bell_audible = v & 16;
+      bell_visible = v & 32;
+      bell_target  = v & 64;
+      // chart mode bits
+      if (v & 1) kept_args |= RA_DM0;
+      if (v & 2) kept_args |= RA_DM1;
+      } break;
 #endif
 #ifdef WITH_MPLS
     case 'e':
       enable_mpls = true;
+      SETBIT(kept_args, RA_MPLS)
       break;
 #endif
     case 'f':
@@ -444,6 +454,7 @@ static void parse_options(int argc, char **argv) {
 #ifdef ENABLE_DNS
     case 'n':
       enable_dns = false;
+      CLRBIT(kept_args, RA_DNS);
       break;
 #endif
 #ifdef OUTPUT_FORMAT
@@ -514,11 +525,13 @@ static void parse_options(int argc, char **argv) {
       if (mtrtype == IPPROTO_UDP)
         FAIL("-t and -u are mutually exclusive");
       mtrtype = IPPROTO_TCP;
+      SETBIT(kept_args, RA_TCP)
       break;
     case 'u':
       if (mtrtype == IPPROTO_TCP)
         FAIL("-u and -t are mutually exclusive");
       mtrtype = IPPROTO_UDP;
+      SETBIT(kept_args, RA_UDP)
       break;
     case 'v':
       printf("%s-%s\n", argv[0], MTR_VERSION);
@@ -535,10 +548,13 @@ static void parse_options(int argc, char **argv) {
         FAIL_("-x: Cache timeout %d must be positive", cache_timeout);
       else if (cache_timeout == 0)
         cache_timeout = CACHE_TIMEOUT;  // default 60 seconds
+      SETBIT(kept_args, RA_CACHE)
       break;
 #ifdef WITH_IPINFO
     case 'y':
+      SETBIT(kept_args, RA_IPINFO)
     case 'z':
+      SETBIT(kept_args, RA_ASN)
       if (!ipinfo_init((opt == 'y') ? optarg : ASLOOKUP_DEFAULT))
         exit(EXIT_FAILURE);
       if (!ipinfo_action(ActionNone)) // don't switch at start
@@ -553,6 +569,7 @@ static void parse_options(int argc, char **argv) {
       exit(EXIT_FAILURE);
     }
   }
+  run_args = kept_args; // for displaying runtime changes
 
   for (int i = 1, l = 0; (i < optind) && (l < ARGS_LEN); i++)
     l += snprintf(mtr_args + l, ARGS_LEN - l, (i != 1) ? " %s" : "%s" , argv[i]);
