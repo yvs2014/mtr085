@@ -283,6 +283,7 @@ static int keyboard_events(int action) {
       display_clear();
       break;
     case ActionPauseResume:
+      TGLBIT(run_args, RA_PAUSE);
       LOGMSG("'pause/resume' pressed");
       break;
 #ifdef WITH_MPLS
@@ -477,6 +478,8 @@ void poll_loop(void) {
     do {
       if (anyset || paused)
         timeout = paused ? PAUSE_MSEC : 0;
+        if (paused && interactive)
+          display_redraw();
       else {
         if (interactive || (display_mode == DisplaySplit))
           display_redraw();

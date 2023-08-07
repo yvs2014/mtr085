@@ -66,20 +66,21 @@ struct statf {
 extern pid_t mypid;
 extern char mtr_args[];
 // runtime args' bits
-enum RUN_ARG { RA_UDP, RA_TCP, RA_MPLS, RA_ASN, RA_IPINFO, RA_DNS, RA_JITTER, RA_DM0, RA_DM1, RA_CACHE };
+enum RUN_ARG { RA_UDP, RA_TCP, RA_MPLS, RA_ASN, RA_IPINFO, RA_DNS, RA_JITTER, RA_DM0, RA_DM1, RA_CACHE, RA_PAUSE };
 extern unsigned run_args;   // runtime args to display hints
 extern unsigned kept_args;  // kept args mapped in bits
   // bits:
-  //   0 [u]: UDP mode
-  //   1 [t]: TCP mode
-  //   2 [e]: MPLS on/off
-  //   3 [z]: ASN lookup
-  //   4 [y]: IP Info (ASN, etc)
-  //   5 [n]: DNS on/off
-  //   6 [j]: latency / jitter
-  //   7 [d]: display types (4 modes: 2bits)
+  //   0 [u]: udp
+  //   1 [t]: tcp
+  //   2 [e]: mpls
+  //   3 [z]: asn
+  //   4 [y]: ipinfo
+  //   5 [n]: dns
+  //   6 [j]: jitter
+  //   7 [d]: chart (4 modes: 2bits)
   //   8 [d]: -//-
-  //   9 [x]: cache mode
+  //   9 [x]: cache
+  //  10 [p]: pause
 extern int mtrtype;        // default packet type
 #ifdef WITH_MPLS
 extern bool enable_mpls;

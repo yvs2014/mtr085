@@ -82,34 +82,34 @@
 
 const char CMODE_HINTS[] =
 "Commands:\n"
-"  b <int>  set bit pattern in range 0..255, or random (<0)\n"
-"  c <int>  set number of cycles to run, or unlimit (<1)\n"
-"  d        switch display mode\n"
+"  b <int>    set bit pattern in range 0..255, or random (<0)\n"
+"  c <int>    set number of cycles to run, or unlimit (<1)\n"
+"  d          switch display mode\n"
 #ifdef WITH_MPLS
-"  e        toggle MPLS info\n"
+"  e          toggle MPLS info\n"
 #endif
-"  f <int>  set first TTL (default 1)\n"
-"  i <int>  set interval in seconds (default 1)\n"
-"  j        toggle lattency/jitter stats (default latency)\n"
-"  m <int>  set max TTL (default 30)\n"
+"  f <int>    set first TTL (default 1)\n"
+"  i <int>    set interval in seconds (default 1)\n"
+"  j          toggle lattency/jitter stats (default latency)\n"
+"  m <int>    set max TTL (default 30)\n"
 #ifdef ENABLE_DNS
-"  n        toggle DNS\n"
+"  n          toggle DNS\n"
 #endif
-"  o <str>  set fields to display (default 'LRS N BAWV')\n"
-"  p        pause/resume\n"
-"  q        quit\n"
-"  Q <int>  set ToS/QoS\n"
-"  r        reset statistics\n"
-"  s <int>  set packet size (default 64), or random (<0)\n"
-"  t        toggle TCP pings\n"
-"  u        toggle UDP pings\n"
-"  x        toggle cache mode\n"
+"  o <str>    set fields to display (default 'LRS N BAWV')\n"
+"  p|<space>  pause and resume\n"
+"  q          quit\n"
+"  Q <int>    set ToS/QoS\n"
+"  r          reset statistics\n"
+"  s <int>    set packet size (default 64), or random (<0)\n"
+"  t          toggle TCP pings\n"
+"  u          toggle UDP pings\n"
+"  x          toggle cache mode\n"
 #ifdef WITH_IPINFO
-"  y        switch IP info\n"
-"  z        toggle ASN lookup\n"
+"  y          switch IP info\n"
+"  z          toggle ASN lookup\n"
 #endif
-"  +-       scroll up/down\n"
-"  hH?      this help page\n"
+"  +-         scroll up/down\n"
+"  hH?        this help page\n"
 "\n"
 "Press any key to resume ...";
 
@@ -219,6 +219,7 @@ int mc_keyaction(void) {
       refresh();
       enter_stat_fields();
       return ActionNone;
+    case ' ':
     case 'p': return ActionPauseResume;
     case  3 : // ^C
     case 'q': return ActionQuit;
@@ -610,14 +611,16 @@ static void print_scale(void) {
 #endif
 }
 
-static bool iargs_sp;
-static int snprint_iarg(int bit, char *buf, int sz, const char *msg) {
-  int l = snprintf(buf, sz, "%s%s%c", iargs_sp ? " " : "", msg, CHKBIT(run_args, bit) ? '+' : '-');
-  if (!iargs_sp) iargs_sp = true;
-  return l;
-}
+#define SET_IASP { if (!iargs_sp) iargs_sp = true; }
+#define IASP (iargs_sp ? " " : "")
 #define ADD_NTH_BIT_INFO(bit, what) { \
   if (NEQBIT(run_args, kept_args, (bit))) l += snprint_iarg((bit), buf + l, sz - l, (what)); }
+static bool iargs_sp;
+static int snprint_iarg(int bit, char *buf, int sz, const char *msg) {
+  int l = snprintf(buf, sz, "%s%s%c", IASP, msg, CHKBIT(run_args, bit) ? '+' : '-');
+  SET_IASP;
+  return l;
+}
 
 int mc_snprint_args(char *buf, int sz) {
   iargs_sp = false;
@@ -638,12 +641,11 @@ int mc_snprint_args(char *buf, int sz) {
   int chart = 0;
   if (CHKBIT(run_args, RA_DM0)) chart |= 1;
   if (CHKBIT(run_args, RA_DM1)) chart |= 2;
-  if (chart) {
-    l += snprintf(buf + l, sz - l, "%schart=%u", iargs_sp ? " " : "", chart);
-    if (!iargs_sp) iargs_sp = true;
-  }
+  if (chart) { l += snprintf(buf + l, sz - l, "%schart%u", IASP, chart); SET_IASP; }
   ADD_NTH_BIT_INFO(RA_CACHE, "cache");
   l += snprintf(buf + l, sz - l, ")");
+  if (strnlen(buf, sizeof(buf)) == 3 /*" ()"*/) l = 0;
+  if (NEQBIT(run_args, kept_args, RA_PAUSE)) l += snprintf(buf + l, sz - l, ": in pause");
   return l;
 }
 

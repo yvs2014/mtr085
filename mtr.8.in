@@ -186,7 +186,7 @@ Use one of these suboptions to get
 .ie "x"\*[oox]" \{XML\}
 formatted output respectively
 .\}
-.ie "o"\*[op]" \{\
+.ie "p"\*[op]" \{\
 .It Fl p, Fl -split
 Use this option to set
 .Sy Nm
