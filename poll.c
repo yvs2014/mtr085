@@ -476,11 +476,11 @@ void poll_loop(void) {
     int rv;
 
     do {
-      if (anyset || paused)
+      if (anyset || paused) {
         timeout = paused ? PAUSE_MSEC : 0;
         if (paused && interactive)
           display_redraw();
-      else {
+      } else {
         if (interactive || (display_mode == DisplaySplit))
           display_redraw();
 #ifdef WITH_IPINFO
