@@ -1,7 +1,7 @@
 name: mtr085
 adopt-info: mtr
 base: core22
-version: '150'
+version: '151'
 summary: Full screen ncurses traceroute tool
 description: |
   mtr combines the functionality of the 'traceroute' and 'ping' programs
