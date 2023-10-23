@@ -1,5 +1,9 @@
 #!/usr/bin/make -f
 
+GCC_ONLY=-flto=auto -ffat-lto-objects -fstack-clash-protection -ffat-lto-objects
+export DEB_CFLAGS_MAINT_STRIP=$(GCC_ONLY)
+export DEB_LDFLAGS_MAINT_STRIP=$(GCC_ONLY)
+
 %:
 	dh_update_autotools_config
 	dh $@ --with autoreconf

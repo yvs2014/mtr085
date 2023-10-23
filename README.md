@@ -29,6 +29,10 @@ DETAILS
 -------
 ... *see mtr.8 page*
 
+DEB PACKAGES
+-----------
+Built at [Launchpad](https://ppa.launchpadcontent.net/lrou2014/mtr085/ubuntu/pool/main/m/mtr085/)
+
 ------------------------------------------------------------------------
 SCREENSHOTS
 -----------
