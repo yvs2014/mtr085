@@ -48,6 +48,7 @@ AS_IF([test "x$curses" = "xyes"], [
 	AS_IF([test "x$unicode" = "xyes"], [
 		AC_CHECK_HEADERS([ncursesw/cursesw.h ncursesw/curses.h ncurses/curses.h curses.h], break)
 		AC_CHECK_HEADERS([wchar.h wctype.h locale.h langinfo.h])
+		AC_SEARCH_LIBS([stdscr], [ncursesw curses tinfo],, AC_MSG_ERROR(No library with stdscr found))
 		AC_SEARCH_LIBS([add_wch], [ncursesw curses],	# Ncursesw and X/Open curses provide add_wch()
 			AC_DEFINE([WITH_UNICODE], [1], [Define to enable unicode]),
 			AC_MSG_ERROR([Wide-character curses library not found]))
@@ -55,6 +56,7 @@ AS_IF([test "x$curses" = "xyes"], [
 			AC_DEFINE([HAVE_USE_DEFAULT_COLORS], [1], [Define this if curses library has use_default_colors()]))
 	], [
 		AC_CHECK_HEADERS([ncurses.h ncurses/curses.h curses.h cursesX.h], break)
+		AC_SEARCH_LIBS([stdscr], [ncurses curses cursesX tinfo],, AC_MSG_ERROR(No library with stdscr found))
 		AC_SEARCH_LIBS([initscr], [ncurses curses cursesX],
 			AC_DEFINE(CURSESMODE, 1, Build with curses support),
 			AC_MSG_ERROR([Curses library not found]))
