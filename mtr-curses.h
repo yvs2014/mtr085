@@ -19,7 +19,7 @@
 #ifndef MTR_CURSES_H
 #define MTR_CURSES_H
 
-#include "config.h"
+#include "common.h"
 
 #ifdef WITH_UNICODE
 #ifdef HAVE_WCHAR_H

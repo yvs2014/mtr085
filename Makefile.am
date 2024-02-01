@@ -5,12 +5,12 @@ man_MANS = mtr.8
 install-exec-hook:
 	test "`uname -s`" = "Linux" && `setcap cap_net_raw+ep $(DESTDIR)$(sbindir)/mtr` || chmod u+s $(DESTDIR)$(sbindir)/mtr
 
-mtr_SOURCES = mtr.c mtr.h \
-              macros.h \
+mtr_SOURCES = mtr.c common.h \
               net.c net.h \
               display.c display.h \
               report.c report.h \
-              poll.c mtr-poll.h
+              poll.c mtr-poll.h \
+              aux.c aux.h
 
 nodist_mtr_SOURCES = version.h
 

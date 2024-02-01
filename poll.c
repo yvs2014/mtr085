@@ -21,8 +21,6 @@
 #include <string.h>
 #include <errno.h>
 
-#include "config.h"
-#include "mtr.h"
 #include "mtr-poll.h"
 #include "net.h"
 #include "display.h"
@@ -39,7 +37,6 @@
 #if !defined(LOG_POLL) && defined(LOGMOD)
 #undef LOGMOD
 #endif
-#include "macros.h"
 
 #if defined(CURSESMODE) || defined(SPLITMODE) || defined(GRAPHMODE)
 #define SCROLL_LINES 5

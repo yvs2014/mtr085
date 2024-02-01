@@ -35,4 +35,5 @@ ar-lib
 /build/
 /build-dir/
 /build-aux/
-
+/.cache/
+compile_commands.json

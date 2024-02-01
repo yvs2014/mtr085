@@ -19,7 +19,7 @@
 #ifndef DISPLAY_H
 #define DISPLAY_H
 
-#include "config.h"
+#include "common.h"
 
 enum { ActionNone, ActionQuit, ActionReset, ActionDisplay,
   ActionClear, ActionPauseResume, ActionScrollDown, ActionScrollUp,

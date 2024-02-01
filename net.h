@@ -25,7 +25,8 @@
 #include <netinet/in.h>
 #include <netdb.h>
 
-#include "config.h"
+#include "common.h"
+
 #ifdef ENABLE_IPV6
 #include <netinet/ip6.h>
 #include <netinet/icmp6.h>

@@ -16,8 +16,6 @@
     Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 */
 
-#include "config.h"
-#include "mtr.h"
 #include "mtr-poll.h"
 #include "report.h"
 #include "display.h"

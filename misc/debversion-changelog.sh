@@ -6,7 +6,7 @@ LANG=C
 NAME='mtr085'
 TAG0='97af563'
 BACKUP=yes
-DISTS='lunar mantic'
+DISTS='mantic noble'
 META='urgency=low'
 EMAIL='yvs <VSYakovetsky@gmail.com>'
 

@@ -3,18 +3,16 @@
 #include <cairo.h>
 #include <pango/pangocairo.h>
 
-#include "config.h"
+#include "graphcairo.h"
+#include "graphcairo-backend.h"
 
 #ifdef FC_FINI
 #include <fontconfig/fontconfig.h>
 #endif
 
-#include "mtr.h"
 #include "mtr-curses.h"
 #include "net.h"
-#include "graphcairo.h"
-#include "graphcairo-backend.h"
-#include "macros.h"
+#include "aux.h"
 
 // Cairo backends: XCB or Xlib
 #ifndef WITH_GRAPHS_XCB
@@ -345,7 +343,7 @@ static void draw_grid(void) {
 	pango_layout_set_text(pl, (tm_fmt == TM_HHMM) ? "HH:MM" : "Time", -1);
 	pango_cairo_show_layout(cr, pl);
 
-	cairo_move_to(cr, vp.x + tick_size, grid.y - font_size * 3 / 2);
+	cairo_move_to(cr, vp.x + tick_size, grid.y - font_size * 1.5);
 	cairo_set_source_rgb(cr, 1, 1, 1);
 	int yl_y = grid.y - font_size * 3 / 2;
 	cairo_rectangle(cr, 0, yl_y, vp.x + coords.label_w, font_size);
@@ -750,10 +748,10 @@ void cr_redraw(int *data) {
 		pango_layout_set_width(pl, vp.width * PANGO_SCALE);
 		pango_layout_set_alignment(pl, PANGO_ALIGN_CENTER);
 		cairo_set_source_rgb(cr, 1, 1, 1);
-		cairo_rectangle(cr, vp.x + coords.label_w, (vp.y - 3 * font_size / 2) / 2, vp.width - coords.label_w, 2 * font_size);
+		cairo_rectangle(cr, vp.x + coords.label_w, (vp.y - font_size * 1.5) / 2, vp.width - coords.label_w, 2 * font_size);
 		cairo_fill(cr);
 		cairo_set_source_rgb(cr, 0, 0, 0);
-		cairo_move_to(cr, vp.x, (vp.y - font_size) / 2);
+		cairo_move_to(cr, vp.x, (vp.y - font_size) * 0.5);
 		char buf[256];
 		time_t t = time(NULL);
 		int l = snprintf(buf, sizeof(buf), "%s", ctime(&t));
@@ -775,7 +773,7 @@ void cr_redraw(int *data) {
 		PangoLayout *pl = skins[BASE].pango;
 
 		cairo_set_source_rgb(cr, 1, 1, 1);
-		cairo_rectangle(cr, vp.x - coords.label_w / 2, vp.y + vp.height, vp.width + coords.label_w, 3 * font_size);
+		cairo_rectangle(cr, vp.x - coords.label_w * 0.5, vp.y + vp.height, vp.width + coords.label_w, 3 * font_size);
 		cairo_fill(cr);
 
 		time_t actual_sec = now.tv_sec - POS_ROUND(wait_time * MIL) / MIL;

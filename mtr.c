@@ -17,18 +17,16 @@
 */
 
 #include <stdio.h>
-#include <stdlib.h>
 #include <unistd.h>
 #include <libgen.h>
 #include <getopt.h>
 #include <string.h>
 #include <ctype.h>
-#include <assert.h>
 #include <fcntl.h>
 #include <limits.h>
 #include <sys/stat.h>
 
-#include "config.h"
+#include "common.h"
 
 #if defined(LOG_DNS) || defined(LOG_IPINFO) || defined(LOG_NET) || defined(LOG_POLL)
 #define WITH_SYSLOG 1
@@ -57,34 +55,21 @@
 #endif
 #endif
 
-#include "mtr.h"
-#include "mtr-poll.h"
+#include "aux.h"
 #include "net.h"
 #include "display.h"
-#include "report.h"
 #ifdef ENABLE_DNS
 #include "dns.h"
 #endif
 #ifdef WITH_IPINFO
 #include "ipinfo.h"
 #endif
-#ifdef CURSESMODE
-#include "mtr-curses.h"
-#endif
 #ifdef GRAPHMODE
 #include "graphcairo-mtr.h"
 #endif
-#include "macros.h"
 
 #define REPORT_PINGS 10
 #define CACHE_TIMEOUT 60
-
-#define FLD_DEFAULT "LS NABWV"
-#ifdef CURSESMODE
-static const char fld_jitter[MAXFLD + 1] = "DR AGJMXI";
-#endif
-static char fld_custom[MAXFLD + 1];
-static unsigned fld_index[256]; // key->index backresolv
 
 //// global vars
 int mtrtype = IPPROTO_ICMP;   // ICMP as default packet type
@@ -113,8 +98,8 @@ int cbitpattern;              // payload bit pattern
 int cpacketsize = 64;         // default packet size
 int syn_timeout = MIL;        // for TCP tracing (1sec in msec)
 int sum_sock[2];              // socket summary: open()/close() calls
-int last_neterr;              // last known network error ...
-char neterr_txt[ERRBYFN_SZ];  // ... with this message
+int last_neterr;              // last known network error
+char neterr_txt[ERRBYFN_SZ];  // buff for 'last_neterr'
 // chart related
 int display_offset;
 int curses_mode;              // 1st and 2nd bits, 3rd is reserved
@@ -125,8 +110,6 @@ bool enable_color;            // 4th bit
 bool bell_audible;            // 5th bit
 bool bell_visible;            // 6th bit
 bool bell_target;             // 7th bit
-//
-const char *fld_active;
 //
 const struct statf statf[] = {
 // Key, Remark, Header, Width
@@ -217,33 +200,6 @@ long max_ping;
 
 static char *iface_addr;
 //
-
-#define FLOAT_UPTO 10 /* values > FLOAT_UPTO in integer format */
-inline int val2len(double v) { return ((v > 0) && (v < FLOAT_UPTO)) ? (v < 0.1 ? 2 : 1) : 0; }
-
-void set_fld_active(const char *s) { strncpy(fld_custom, s, MAXFLD); fld_active = fld_custom; }
-#ifdef CURSESMODE
-bool is_custom_fld(void) { return strncmp(fld_active, fld_jitter, MAXFLD) && strncmp(fld_active, FLD_DEFAULT, MAXFLD); }
-#endif
-#if defined(CURSESMODE) || defined(GRAPHMODE)
-void onoff_jitter(void) { int cmp = strncmp(fld_active, fld_jitter, MAXFLD); fld_active = cmp ? fld_jitter : fld_custom; }
-#endif
-
-const struct statf* active_statf(unsigned i) {
-  if (i > MAXFLD) return NULL;
-  unsigned n = fld_index[(uint8_t)fld_active[i]];
-  return ((n >= 0) && (n < statf_max)) ? &statf[n] : NULL;
-}
-
-char* trim(char *s) {
-  char *p = s;
-  int l = strlen(p);
-  while (l && isspace((int)p[l-1])) // order matters
-    p[--l] = 0;
-  while (isspace((int)*p))
-    p++;
-  return p;
-}
 
 // If the file stream is associated with a regular file, lock/unlock the file
 // in order coordinate writes to a common file from multiple mtr instances
@@ -544,7 +500,7 @@ static void parse_options(int argc, char **argv) {
     case 'x':
       cache_mode = true;
       cache_timeout = atoi(optarg);
-	  if (cache_timeout < 0)
+      if (cache_timeout < 0)
         FAIL_("-x: Cache timeout %d must be positive", cache_timeout);
       else if (cache_timeout == 0)
         cache_timeout = CACHE_TIMEOUT;  // default 60 seconds
@@ -675,8 +631,6 @@ int main(int argc, char **argv) {
   srand(mypid); // reset the random seed
 #endif
 
-  // initialiaze fld_index
-  memset(fld_index, -1, sizeof(fld_index)); // any value > statf_max
   for (int i = 0; i < statf_max; i++)
     fld_index[(uint8_t)statf[i].key] = i;
 

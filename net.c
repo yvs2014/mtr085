@@ -17,7 +17,7 @@
 */
 
 #include <stdio.h>
-#include <stdlib.h>
+#include <unistd.h>
 #include <string.h>
 #include <errno.h>
 #include <limits.h>
@@ -33,10 +33,9 @@
 #include <netinet/udp.h>
 #include <assert.h>
 
-#include "config.h"
-#include "mtr.h"
-#include "mtr-poll.h"
 #include "net.h"
+#include "aux.h"
+#include "mtr-poll.h"
 #include "display.h"
 #include "report.h"
 #ifdef ENABLE_DNS
@@ -49,7 +48,6 @@
 #if !defined(LOG_NET) && defined(LOGMOD)
 #undef LOGMOD
 #endif
-#include "macros.h"
 
 #ifdef HAVE_ARC4RANDOM_UNIFORM
 #ifdef ARC4_IN_BSD_STDLIB_H
@@ -396,7 +394,7 @@ static bool net_send_tcp(int at) {
   if (poll_reg_fd(sock, seq) < 0)
     WARNRE0(sock, "no place in pool for sockets (at=%d)", at);
   save_sequence(seq, at);
-  connect(sock, (struct sockaddr *) &remote, addrlen);
+  connect(sock, (struct sockaddr *) &remote, addrlen); // NOLINT(bugprone-unused-return-value)
 #ifdef LOGMOD
   struct timespec now;
   clock_gettime(CLOCK_MONOTONIC, &now);

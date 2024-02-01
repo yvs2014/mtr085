@@ -21,12 +21,11 @@
 */
 
 #include <stdio.h>
+#include <unistd.h>
 #include <ctype.h>
 #include <termios.h>
 #include <math.h>
 
-#include "config.h"
-#include "mtr.h"
 #include "net.h"
 #include "display.h"
 #ifdef ENABLE_DNS
@@ -36,7 +35,6 @@
 #include "ipinfo.h"
 #endif
 #include "split.h"
-#include "macros.h"
 
 #define SPLIT_SEP	'\t'
 
@@ -52,7 +50,7 @@ void split_redraw(void) {
       printf("%c%s", SPLIT_SEP, name ? name : strlongip(addr));
       if (show_ips)
 #endif
-      printf("%c%s", SPLIT_SEP, strlongip(addr));
+        printf("%c%s", SPLIT_SEP, strlongip(addr));
       for (int i = 0; i < sizeof(fields); i++) {
         const char *str = net_elem(at, fields[i]);
         if (str) printf("%c%s", SPLIT_SEP, str);
@@ -75,7 +73,7 @@ void split_redraw(void) {
         printf("%c%s", SPLIT_SEP, name ? name : strlongip(ip));
         if (show_ips)
 #endif
-        printf("%c%s", SPLIT_SEP, strlongip(ip));
+          printf("%c%s", SPLIT_SEP, strlongip(ip));
 #ifdef WITH_IPINFO
         if (ipinfo_ready())
           printf("%c%s", SPLIT_SEP, sep_ipinfo(at, ndx, SPLIT_SEP));

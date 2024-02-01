@@ -1,7 +1,5 @@
 
 #include <stdio.h>
-#include <stdlib.h>
-#include <stdbool.h>
 #include <ctype.h>
 #include <xcb/xcb.h>
 #include <xcb/xcb_keysyms.h>
@@ -11,7 +9,6 @@
 #include <cairo/cairo-xcb.h>
 
 #include "graphcairo-backend.h"
-#include "macros.h"
 
 static xcb_connection_t *connection;
 static xcb_window_t window;

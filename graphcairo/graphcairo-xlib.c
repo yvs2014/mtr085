@@ -1,6 +1,5 @@
 
 #include <stdio.h>
-#include <stdbool.h>
 #include <ctype.h>
 #include <X11/Xlib.h>
 #define XK_LATIN1
@@ -9,7 +8,6 @@
 #include <cairo/cairo-xlib.h>
 
 #include "graphcairo-backend.h"
-#include "macros.h"
 
 static Display *display;
 static Window window;

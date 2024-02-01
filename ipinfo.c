@@ -16,20 +16,20 @@
     Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 */
 
+#include <unistd.h>
 #include <string.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <poll.h>
 
-#include "config.h"
-#include "mtr.h"
+#include "ipinfo.h"
 #include "mtr-poll.h"
 #include "net.h"
 #include "display.h"
 #ifdef ENABLE_DNS
 #include "dns.h"
 #endif
-#include "ipinfo.h"
+#include "aux.h"
 
 #if defined(LOG_IPINFO) && !defined(LOGMOD)
 #define LOGMOD
@@ -37,7 +37,6 @@
 #if !defined(LOG_IPINFO) && defined(LOGMOD)
 #undef LOGMOD
 #endif
-#include "macros.h"
 
 #define COMMA  ','
 #define VSLASH '|'
@@ -450,27 +449,30 @@ static int create_tcpsock(int seq) {
     LOG_RE_(-1, "getaddrinfo(%s): %s", ORIG_HOST, gai_strerror(e));
   int rc = -1;
   int sock = socket(rp->ai_family, rp->ai_socktype, rp->ai_protocol);
-  if (sock >= 0) {
+  if (sock < 0) {
+    LOGMSG_("%s: socket: %s", ORIG_HOST, strerror(errno));
+  } else {
     LOGMSG_("socket=%d open", sock);
     /*summ*/ sum_sock[0]++;
-    if (fcntl(sock, F_SETFL, O_NONBLOCK) >= 0) {
+    if (fcntl(sock, F_SETFL, O_NONBLOCK) < 0) {
+      LOGMSG_("%s: fcntl: %s", ORIG_HOST, strerror(errno));
+    } else {
       int slot = poll_reg_fd(sock, seq + MAXSEQ);
-      if (slot >= 0) {
+      if (slot < 0) {
+        LOGMSG_("no place in pool for sockets (host=%s)", ORIG_HOST);
+      } else {
         ipitseq[seq] = (struct ipitseq) { .sock = sock, .slot = slot, .state = TSEQ_CREATED };
-        connect(sock, rp->ai_addr, rp->ai_addrlen);
+        connect(sock, rp->ai_addr, rp->ai_addrlen); // NOLINT(bugprone-unused-return-value)
         LOGMSG_("send non-blocking connect via sock=%d", sock);
         rc = 0;
-      } else
-        LOGMSG_("no place in pool for sockets (host=%s)", ORIG_HOST);
-    } else
-      LOGMSG_("%s: fcntl", ORIG_HOST);
+      }
+    }
     if (rc != 0) {
       LOGMSG_("socket=%d close", sock);
       close(sock);
       /*summ*/ sum_sock[1]++;
     }
-  } else
-    LOGMSG_("%s: socket", ORIG_HOST);
+  }
   freeaddrinfo(rp);
   return rc;
 }
@@ -568,7 +570,7 @@ static char *get_ipinfo(int at, int ndx, int nd) {
 #ifdef ENABLE_IPV6
   if ((af == AF_INET6) && !origins[origin_no].host6) return NULL; else
 #endif
-  if (!ORIG_HOST) return NULL;
+    if (!ORIG_HOST) return NULL;
   ip_t *ip = &IP_AT_NDX(at, ndx);
   switch (ORIG_TYPE) {
     case OT_HTTP:

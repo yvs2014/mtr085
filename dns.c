@@ -16,13 +16,12 @@
     Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 */
 
+#include <unistd.h>
 #include <string.h>
 #include <errno.h>
 
-#include "config.h"
-#include "mtr.h"
-#include "net.h"
 #include "dns.h"
+#include "net.h"
 
 #if defined(LOG_DNS) && !defined(LOGMOD)
 #define LOGMOD
@@ -30,7 +29,6 @@
 #if !defined(LOG_DNS) && defined(LOGMOD)
 #undef LOGMOD
 #endif
-#include "macros.h"
 
 #ifdef ENABLE_IPV6
 #ifdef __GLIBC__
@@ -212,7 +210,7 @@ char* ip2arpa(ip_t *ip, const char *suff4, const char *suff6) {
 #ifdef ENABLE_IPV6
   if (af == AF_INET6) ip2arpa6(p, lqbuf, sizeof(lqbuf), suff6 ? suff6 : ARPA6_SUFFIX); else
 #endif
-  snprintf(lqbuf, sizeof(lqbuf), "%d.%d.%d.%d.%s", p[3], p[2], p[1], p[0], suff4 ? suff4 : ARPA4_SUFFIX);
+    snprintf(lqbuf, sizeof(lqbuf), "%d.%d.%d.%d.%s", p[3], p[2], p[1], p[0], suff4 ? suff4 : ARPA4_SUFFIX);
   return lqbuf;
 }
 
@@ -378,7 +376,8 @@ static void dns_parse_reply(uint8_t *buf, ssize_t len) {
   c += l;
   if (c + 4 > eob)
     LOGRET("Query resource record truncated");
-  { int type; GETSHORT(type, c); if (type == T_PTR) dns_replies[1]++; /*summ*/
+  { int type; GETSHORT(type, c);
+    if (type == T_PTR) dns_replies[1]++; /*summ*/
 #ifdef WITH_IPINFO
     else if (type == T_TXT) dns_replies[2]++;
 #endif

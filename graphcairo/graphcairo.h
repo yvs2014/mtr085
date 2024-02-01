@@ -1,6 +1,8 @@
 #ifndef GRAPHCAIRO_H
 #define GRAPHCAIRO_H
 
+#include "../common.h"
+
 // two sets to not detect ##/VA_OPT
 #ifdef GCDEBUG
 #define GCMSG(lit)       printf(lit)

@@ -4,9 +4,8 @@
 #include <strings.h>
 #include <ctype.h>
 
-#include "config.h"
+#include "graphcairo.h"
 
-#include "mtr.h"
 #include "mtr-curses.h"
 #include "mtr-poll.h"
 #include "net.h"
@@ -17,8 +16,7 @@
 #ifdef WITH_IPINFO
 #include "ipinfo.h"
 #endif
-#include "macros.h"
-#include "graphcairo.h"
+#include "aux.h"
 
 #define GC_ARGS_SEP	','
 #define GC_ARGS_MAX	5
@@ -120,7 +118,7 @@ static int fill_hostinfo(int at, int ndx, char *buf, int sz) {
       l += snprintf(buf + l, sz - l, "%.*s", STARTSTAT, name);
   } else
 #endif
-  l += snprintf(buf + l, sz - l, "%.*s", STARTSTAT, strlongip(&IP_AT_NDX(at, ndx)));
+    l += snprintf(buf + l, sz - l, "%.*s", STARTSTAT, strlongip(&IP_AT_NDX(at, ndx)));
   if (((at + 1) >= display_offset) && (l > hostinfo_max))
     hostinfo_max = l;
   return l;

@@ -19,6 +19,8 @@
 #ifndef DNS_H
 #define DNS_H
 
+#include "common.h"
+
 extern bool enable_dns;
 extern unsigned dns_queries[];
 extern unsigned dns_replies[];

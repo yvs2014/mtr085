@@ -19,6 +19,8 @@
 #ifndef IPINFO_H
 #define IPINFO_H
 
+#include "common.h"
+
 bool  ipinfo_init(const char *arg);
 void  ipinfo_close(void);
 bool  ipinfo_action(int action); // open() if necessary

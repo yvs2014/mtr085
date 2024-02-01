@@ -17,17 +17,14 @@
 */
 
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 #include <strings.h>
 #include <ctype.h>
 #include <assert.h>
 #include <sys/types.h>
-#include <time.h>
 #include <netinet/in_systm.h>
 
-#include "config.h"
-#include "mtr.h"
+#include "aux.h"
 #include "report.h"
 #include "net.h"
 #ifdef ENABLE_DNS
@@ -36,7 +33,6 @@
 #ifdef WITH_IPINFO
 #include "ipinfo.h"
 #endif
-#include "macros.h"
 
 #define HOSTTITLE	"Host"	// report mode
 #define LSIDE_LEN	40	// non-wide report mode: left side of output

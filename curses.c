@@ -17,11 +17,12 @@
 */
 
 #include <string.h>
+#include <unistd.h>
 #include <strings.h>
 #include <ctype.h>
 #include <limits.h>
 
-#include "config.h"
+#include "mtr-curses.h"
 
 #ifdef WITH_UNICODE
 
@@ -68,9 +69,8 @@
 
 #endif // UNICODE endif
 
-#include "mtr.h"
+#include "aux.h"
 #include "display.h"
-#include "mtr-curses.h"
 #include "net.h"
 #ifdef ENABLE_DNS
 #include "dns.h"
@@ -78,7 +78,6 @@
 #ifdef WITH_IPINFO
 #include "ipinfo.h"
 #endif
-#include "macros.h"
 
 const char CMODE_HINTS[] =
 "Commands:\n"
@@ -293,7 +292,7 @@ static void printw_addr(int at, int ndx, int up) {
       printw(" (%s)", strlongip(addr));
   } else
 #endif
-  printw("%s", strlongip(addr));
+    printw("%s", strlongip(addr));
   if (!up)
     attroff(A_BOLD);
 }

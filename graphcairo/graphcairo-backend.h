@@ -2,6 +2,7 @@
 #define GRAPHCAIRO_BACKEND_H
 
 #include <cairo.h>
+#include "../common.h"
 
 #if CAIRO_VERSION < CAIRO_VERSION_ENCODE(1, 10, 0)
 typedef struct {
