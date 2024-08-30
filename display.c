@@ -17,6 +17,7 @@
 */
 
 #include "mtr-poll.h"
+#include "common.h"
 #include "report.h"
 #include "display.h"
 #ifdef CURSESMODE
@@ -27,9 +28,6 @@
 #endif
 #ifdef GRAPHMODE
 #include "graphcairo-mtr.h"
-#endif
-#ifdef WITH_IPINFO
-#include "ipinfo.h"
 #endif
 
 bool display_open(bool notfirst) {

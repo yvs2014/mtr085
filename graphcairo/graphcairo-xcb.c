@@ -9,6 +9,7 @@
 #include <cairo/cairo-xcb.h>
 
 #include "graphcairo-backend.h"
+#include "common.h"
 
 static xcb_connection_t *connection;
 static xcb_window_t window;

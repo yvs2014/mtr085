@@ -19,7 +19,7 @@
 #ifndef REPORT_H
 #define REPORT_H
 
-#include "common.h"
+#include <stdbool.h>
 
 void report_open(bool notfirst);
 void report_close(bool wide);

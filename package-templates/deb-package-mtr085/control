@@ -3,13 +3,13 @@ Section: net
 Priority: optional
 Maintainer: mantainer <e@mail>
 Rules-Requires-Root: no
-Build-Depends: libncurses-dev, libidn2-dev, debhelper, dpkg-dev, devscripts, automake, autoconf, pkgconf, libcap2-bin
+Build-Depends: libncurses-dev, libidn2-dev, libcap-dev, debhelper, dpkg-dev, devscripts, automake, autoconf, pkgconf, libcap2-bin
 Standards-Version: 4.6.2
 Homepage: https://github.com/yvs2014/mtr085
 
 Package: mtr085
 Architecture: any
-Depends: ${shlibs:Depends}, ${misc:Depends}, libncursesw6, libidn2-0
+Depends: ${shlibs:Depends}, ${misc:Depends}, libncursesw6
 Breaks: mtr, mtr-tiny
 Replaces: mtr, mtr-tiny
 Conflicts: mtr, mtr-tiny

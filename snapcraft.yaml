@@ -1,10 +1,10 @@
 name: mtr085
 adopt-info: mtr
-base: core22
-version: '154'
-summary: Full screen ncurses traceroute tool
+base: core24
+version: 0.85
+summary: Full screen ncurses traceroute tool (mtr v0.85 fork)
 description: |
-  mtr combines the functionality of the 'traceroute' and 'ping' programs
+  mtr combines the functionality of the traceroute and ping programs
   in a single network diagnostic tool
     
   This version is built from https://github.com/yvs2014/mtr085 fork
@@ -12,15 +12,23 @@ description: |
 
   Main project's location is https://github.com/traviscross/mtr
 
-grade: devel # must be 'stable' to release into candidate/stable channels
+platforms:
+  amd64:
+  arm64:
+  armhf:
+  ppc64el:
+  s390x:
+
+grade: devel
 confinement: strict
 
 apps:
   mtr085:
-    command: usr/sbin/mtr
+    command: usr/bin/mtr
     plugs:
       - network
-      - network-control
+      - network-status
+      - network-observe
 
 parts:
   mtr:
@@ -28,20 +36,23 @@ parts:
     autotools-configure-parameters:
       - --prefix=/usr
       - --with-libidn
-    source-type: git
+#    source: .
     source: https://github.com/yvs2014/mtr085.git
+    override-pull: |
+      craftctl default
+      craftctl set version="$(craftctl get version).$(git rev-list --count 97af563..HEAD)"
     build-packages:
       - build-essential
-      - libncurses-dev
       - pkg-config
+      - libncurses-dev
       - libidn2-dev
-    override-build: |
-      sed -i '/install-exec-hook:/,+1d' Makefile.am
-      craftctl default
+      - libcap-dev
+      - libcap2-bin
     stage-packages:
       - libncursesw6
       - libidn2-0
+      - libcap2
     prime:
-      - usr/sbin/mtr
+      - usr/bin/mtr
       - usr/share/man/man8/mtr.8
 

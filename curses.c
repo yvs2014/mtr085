@@ -19,25 +19,14 @@
 #include <string.h>
 #include <unistd.h>
 #include <strings.h>
-#include <ctype.h>
 #include <limits.h>
+#include <time.h>
 
 #include "mtr-curses.h"
+#include "config.h"
 
 #ifdef WITH_UNICODE
-
 #define _XOPEN_SOURCE_EXTENDED
-#ifdef HAVE_NCURSESW_NCURSES_H
-#  include <ncursesw/ncurses.h>
-#elif defined HAVE_NCURSESW_CURSES_H
-#  include <ncursesw/curses.h>
-#elif defined HAVE_NCURSES_CURSES_H
-#  include <ncurses/curses.h>
-#elif defined HAVE_CURSES_H
-#  include <curses.h>
-#else
-#  error No ncursesw header file available
-#endif
 #ifdef HAVE_WCHAR_H
 #  include <wchar.h>
 #endif
@@ -53,12 +42,16 @@
 #define CCHAR_attr attr
 #define CCHAR_chars chars
 #endif
-#else
+#endif // WITH_UNICODE
 
-#ifdef HAVE_NCURSES_H
-#  include <ncurses.h>
+#if   defined HAVE_NCURSESW_CURSESW_H
+#  include <ncursesw/cursesw.h>
+#elif defined HAVE_NCURSESW_CURSES_H
+#  include <ncursesw/curses.h>
 #elif defined HAVE_NCURSES_CURSES_H
 #  include <ncurses/curses.h>
+#elif defined HAVE_NCURSES_H
+#  include <ncurses.h>
 #elif defined HAVE_CURSES_H
 #  include <curses.h>
 #elif defined HAVE_CURSESX_H
@@ -66,8 +59,6 @@
 #else
 #  error No curses header file available
 #endif
-
-#endif // UNICODE endif
 
 #include "aux.h"
 #include "display.h"
@@ -567,6 +558,8 @@ static void mtr_print_scale3(int min, int max, int step) {
 }
 #endif
 
+static inline int map2ch(int i) { return map2[i] & A_CHARTEXT; }
+
 static void print_scale(void) {
   attron(A_BOLD);
   printw("Scale:");
@@ -595,9 +588,9 @@ static void print_scale(void) {
     } else {
       for (int i = 0; i < NUM_FACTORS2 - 1; i++) {
         LENVALMIL(scale2[i]);
-        printw("  %c:%.*fms", map2[i] & A_CHARTEXT, _l, _v);
+        printw("  %c:%.*fms", map2ch(i), _l, _v);
       }
-      printw("  %c", map2[NUM_FACTORS2 - 1] & A_CHARTEXT);
+      printw("  %c", map2ch(NUM_FACTORS2 - 1));
     }
   }
 #ifdef WITH_UNICODE

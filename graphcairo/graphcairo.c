@@ -11,7 +11,6 @@
 #endif
 
 #include "mtr-curses.h"
-#include "net.h"
 #include "aux.h"
 
 // Cairo backends: XCB or Xlib

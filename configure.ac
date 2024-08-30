@@ -5,6 +5,7 @@ AC_PROG_RANLIB
 
 dnl AM_INIT_AUTOMAKE([foreign nostdinc subdir-objects -Wall -Werror silent-rules -Wno-extra-portability])
 AM_INIT_AUTOMAKE([foreign nostdinc subdir-objects -Wall -Werror silent-rules])
+AM_SILENT_RULES([yes])
 m4_ifdef([AM_PROG_AR], [AM_PROG_AR])
 
 # don't complain on AC_PROG_CC_C99 with autoconf newer than 2.70
@@ -24,9 +25,9 @@ AC_CHECK_FUNC([arc4random_uniform], AC_DEFINE(HAVE_ARC4RANDOM_UNIFORM, 1, [Defin
 		AC_CHECK_HEADERS([bsd/stdlib.h], AC_DEFINE(ARC4_IN_BSD_STDLIB_H, 1, [Define if arc4 funcs in bsd/stdlib.h]))
 ]))
 
-AC_ARG_ENABLE(ipv6,
+AC_ARG_ENABLE([ipv6],
 	AS_HELP_STRING([--disable-ipv6], [do not enable IPv6]),
-	ipv6=$enableval, ipv6=yes)
+	[ipv6=${enableval}], [ipv6=yes])
 AM_CONDITIONAL([IPV6], [test "x$ipv6" = "xyes"])
 AS_IF([test "x$ipv6" = "xyes"], [AC_DEFINE([ENABLE_IPV6], [], [Define to enable IPv6])])
 
@@ -48,7 +49,7 @@ AS_IF([test "x$curses" = "xyes"], [
 	AS_IF([test "x$unicode" = "xyes"], [
 		AC_CHECK_HEADERS([ncursesw/cursesw.h ncursesw/curses.h ncurses/curses.h curses.h], break)
 		AC_CHECK_HEADERS([wchar.h wctype.h locale.h langinfo.h])
-		AC_SEARCH_LIBS([stdscr], [ncursesw curses tinfo],, AC_MSG_ERROR(No library with stdscr found))
+		AC_SEARCH_LIBS([initscr], [ncursesw curses tinfo],, AC_MSG_ERROR(No library with stdscr found))
 		AC_SEARCH_LIBS([add_wch], [ncursesw curses],	# Ncursesw and X/Open curses provide add_wch()
 			AC_DEFINE([WITH_UNICODE], [1], [Define to enable unicode]),
 			AC_MSG_ERROR([Wide-character curses library not found]))
@@ -56,17 +57,16 @@ AS_IF([test "x$curses" = "xyes"], [
 			AC_DEFINE([HAVE_USE_DEFAULT_COLORS], [1], [Define this if curses library has use_default_colors()]))
 	], [
 		AC_CHECK_HEADERS([ncurses.h ncurses/curses.h curses.h cursesX.h], break)
-		AC_SEARCH_LIBS([stdscr], [ncurses curses cursesX tinfo],, AC_MSG_ERROR(No library with stdscr found))
-		AC_SEARCH_LIBS([initscr], [ncurses curses cursesX],
+		AC_SEARCH_LIBS([initscr], [ncurses curses cursesX tinfo],
 			AC_DEFINE(CURSESMODE, 1, Build with curses support),
 			AC_MSG_ERROR([Curses library not found]))
 		AC_SEARCH_LIBS([use_default_colors], [ncurses curses],
 			AC_DEFINE([HAVE_USE_DEFAULT_COLORS], [1], [Define this if curses library has use_default_colors()]))
 	])
 ])
-AC_ARG_ENABLE(dns,
+AC_ARG_ENABLE([dns],
 	AS_HELP_STRING([--disable-dns], [do not enable DNS]),
-	dns=$enableval, dns=yes)
+	[dns=${enableval}], [dns=yes])
 AM_CONDITIONAL([DNS], [test "x$dns" = "xyes"])
 
 AC_CANONICAL_HOST
@@ -92,6 +92,20 @@ AC_ARG_WITH([libasan],
 	AS_HELP_STRING([--with-libasan], [build with AddressSanitizer]),
 	[libasan="${withval}"], [libasan=no])
 AM_CONDITIONAL([LIBASAN], [test "x$libasan" = "xyes"])
+
+AC_ARG_WITH(libcap,
+	AS_HELP_STRING([--without-libcap], [without Linux capabilities]),
+	[libcap=${withval}], [libcap=yes])
+AS_IF([test "x$libcap" = "xyes"], [
+	AC_SEARCH_LIBS([cap_set_flag], [cap],
+		AC_DEFINE(LIBCAP, 1, [Build with linux capabilities]),
+		AC_MSG_ERROR(Linux capability library not found))
+	])
+
+AC_ARG_ENABLE([suid_last_resort],
+	AS_HELP_STRING([--enable-suid-last-resort], [install with suid bit unless setcap is present]),
+	[suid_last_resort="${enableval}"], [suid_last_resort=no])
+AM_CONDITIONAL([SUID_LAST_RESORT], [test "x$suid_last_resort" = "xyes"])
 
 AC_ARG_WITH([mpls],
 	AS_HELP_STRING([--with-mpls], [build with MPLS decoding]),
@@ -168,7 +182,7 @@ AM_CONDITIONAL([OUTPUTFMT], [test "x$output_raw" = "xyes" -o "x$output_txt" = "x
 #   gcc static analyzer [clang note: scan-build can be used as an option]
 
 AC_ARG_ENABLE([analyzer],
-	AS_HELP_STRING([--enable-analyzer], [Enable static analyzer]),
+	AS_HELP_STRING([--enable-analyzer], [enable static analyzer]),
 	[analyzer="${withval}"], [analyzer=no])
 
 AC_ARG_WITH([syslog_poll],

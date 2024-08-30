@@ -1,7 +1,7 @@
 #ifndef GRAPHCAIRO_MTR_H
 #define GRAPHCAIRO_MTR_H
 
-#include "../common.h"
+#include <stdbool.h>
 
 bool gc_open(void);
 void gc_close(void);

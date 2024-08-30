@@ -1,7 +1,7 @@
 #ifndef GRAPHCAIRO_H
 #define GRAPHCAIRO_H
 
-#include "../common.h"
+#include "common.h"
 
 // two sets to not detect ##/VA_OPT
 #ifdef GCDEBUG

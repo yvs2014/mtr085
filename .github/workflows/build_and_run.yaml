@@ -22,14 +22,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 1
           ref: master
       - name: Install mandatory packages for building
-        run: sudo apt install -y devscripts debhelper libidn2-dev pkgconf
+        run: sudo apt install -y devscripts debhelper libidn2-dev libcap-dev pkgconf libcap2-bin
       - name: Create deb package with ${{matrix.compiler}}
         env:
           CC: ${{matrix.compiler}}
-        run: ./misc/build-deb.sh
+        run: ./misc/build_deb.sh
       - name: Install deb package built with ${{matrix.compiler}}
         run: sudo dpkg -i debs/mtr085_*.deb
       - name: Run on ${{matrix.os}}
@@ -49,16 +48,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 1
           ref: master
       - name: Install mandatory packages for building
-#gc#        run: brew install automake pango xcb-util-keysyms
         run: brew install automake
       - name: Create executable with ${{matrix.compiler}}
         env:
           CC: ${{matrix.compiler}}
-#gc#        run: ./bootstrap.sh && ./configure --with-libidn --with-graphcairo-xcb && make
-        run: ./bootstrap.sh && ./configure --with-libidn && make
+        run: ./bootstrap.sh && ./configure --with-libidn --without-libcap --enable-suid-last-resort && make
       - name: Run on ${{matrix.os}}
         run: sudo ./mtr -r localhost
 

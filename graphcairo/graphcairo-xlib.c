@@ -8,6 +8,7 @@
 #include <cairo/cairo-xlib.h>
 
 #include "graphcairo-backend.h"
+#include "common.h"
 
 static Display *display;
 static Window window;

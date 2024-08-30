@@ -1,9 +1,24 @@
 # SUBDIRS = img
 
-sbin_PROGRAMS = mtr
-man_MANS = mtr.8
+NAME = mtr
+
+man_MANS = $(NAME).8
+
+if SUID_LAST_RESORT
+sbin_PROGRAMS = $(NAME)
+PROGRAM = $(DESTDIR)$(sbindir)/$(NAME)
+endif
+if !SUID_LAST_RESORT
+bin_PROGRAMS = $(NAME)
+PROGRAM = $(DESTDIR)$(bindir)/$(NAME)
+endif
+
+POSTINST_HOOK = test "`uname -s`" = "Linux" && `setcap cap_net_raw+ep $(PROGRAM)`
+if SUID_LAST_RESORT
+POSTINST_HOOK += || chmod u+s $(PROGRAM)
+endif
 install-exec-hook:
-	test "`uname -s`" = "Linux" && `setcap cap_net_raw+ep $(DESTDIR)$(sbindir)/mtr` || chmod u+s $(DESTDIR)$(sbindir)/mtr
+	@if test `id -u` -eq 0; then $(POSTINST_HOOK); fi
 
 mtr_SOURCES = mtr.c common.h \
               net.c net.h \
@@ -36,20 +51,19 @@ endif
 if GRAPHS
 mtr_LDADD += libgraphcairo.a
 noinst_LIBRARIES = libgraphcairo.a
-libgraphcairo_a_SOURCES = \
+mtr_SOURCES += \
 	graphcairo/graphcairo.c graphcairo/graphcairo.h \
 	graphcairo/graphcairo-mtr.c graphcairo/graphcairo-mtr.h \
 	graphcairo/graphcairo-backend.h
 if GRAPHS_XCB
-libgraphcairo_a_SOURCES += graphcairo/graphcairo-xcb.c
+mtr_SOURCES += graphcairo/graphcairo-xcb.c
 endif
 if GRAPHS_XLIB
-libgraphcairo_a_SOURCES += graphcairo/graphcairo-xlib.c
+mtr_SOURCES += graphcairo/graphcairo-xlib.c
 endif
 libgraphcairo_a_CPPFLAGS = @graphcairo_CFLAGS@ -I.
 AM_CPPFLAGS += -Igraphcairo
 mtr_LDADD += @graphcairo_LIBS@
-mtr_SOURCES += $(graphcairo_a_SOURCES)
 endif
 
 if LIBIDN
@@ -72,14 +86,14 @@ mtr_LDADD += -lresolv
 endif
 endif
 
-CLEANFILES = version.h mtr.8
+CLEANFILES = version.h $(man_MANS)
 BUILT_SOURCES = version.h
 
 version.h: version.h.tmp Makefile $(mtr_SOURCES)
 	@cat version.h.tmp > $@; \
 	if [ -d .git ] && [ -n "$$(which git)" ]; then \
-	  xver=".$$(git rev-list HEAD | sed '/^97af563/q' | sed -n '$$=')"; \
-	  sed -e "/#define *MTR_VERSION */{s/\"\([^\"]*\)\"/\"\1$$xver\"/;}" \
+	  _ver=".$$(git rev-list --count 97af563..HEAD)"; \
+	  sed -e "/#define *MTR_VERSION */{s/\"\([^\"]*\)\"/\"\1$$_ver\"/;}" \
 	    version.h.tmp > $@; \
 	fi;
 
@@ -121,10 +135,10 @@ if !IPINFO
 EXCLOPTS += y
 endif
 
-mtr.8: mtr.8.in config.h
-	@cat mtr.8.in > $@
+$(man_MANS): $(man_MANS).in config.h
+	@cat $(man_MANS).in > $@
 	@for opt in $(EXCLOPTS); do sed -i.bak "s/^\(\.ds o$$opt \"\).*/\1/" $@ ; done; rm -f $@.bak
 
-EXTRA_DIST = SECURITY mtr.8.in Makefile Makefile.dist
+EXTRA_DIST = SECURITY $(man_MANS).in Makefile Makefile.dist
 DISTCLEANFILES = *~
 

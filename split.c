@@ -22,9 +22,7 @@
 
 #include <stdio.h>
 #include <unistd.h>
-#include <ctype.h>
 #include <termios.h>
-#include <math.h>
 
 #include "net.h"
 #include "display.h"

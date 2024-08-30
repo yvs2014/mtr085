@@ -23,6 +23,7 @@
 #include <limits.h>
 #include <math.h>
 #include <fcntl.h>
+#include <time.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in_systm.h>
@@ -33,20 +34,25 @@
 #include <netinet/udp.h>
 #include <assert.h>
 
-#include "net.h"
-#include "aux.h"
-#include "mtr-poll.h"
-#include "display.h"
-#include "report.h"
-#ifdef ENABLE_DNS
-#include "dns.h"
-#endif
-
+#include "config.h"
 #if defined(LOG_NET) && !defined(LOGMOD)
 #define LOGMOD
 #endif
 #if !defined(LOG_NET) && defined(LOGMOD)
 #undef LOGMOD
+#endif
+#include "common.h"
+
+#ifdef LIBCAP
+#include <sys/capability.h>
+#endif
+
+#include "net.h"
+#include "aux.h"
+#include "mtr-poll.h"
+#include "display.h"
+#ifdef ENABLE_DNS
+#include "dns.h"
 #endif
 
 #ifdef HAVE_ARC4RANDOM_UNIFORM
@@ -328,17 +334,29 @@ static int new_sequence(int at) {
   return seq;
 }
 
-static inline bool settosttl(int sock, int ttl) {
-#ifdef IP_TTL
-  if (setsockopt(sock, IPPROTO_IP, IP_TTL, &ttl, sizeof(ttl)))
+static bool settosttl(int sock, int ttl) {
+  if (setsockopt(sock, IPPROTO_IP, IP_TTL, &ttl, sizeof(ttl)) < 0)
     WARNRE0(sock, "setsockopt(TTL=%d)", ttl);
-#endif
 #ifdef IP_TOS
-  if (setsockopt(sock, IPPROTO_IP, IP_TOS, &tos, sizeof(tos)))
-    WARNRE0(sock, "setsockopt(TOS=%d)", tos);
+  if (tos)
+    if (setsockopt(sock, IPPROTO_IP, IP_TOS, &tos, sizeof(tos)) < 0)
+      WARNRE0(sock, "setsockopt(TOS=%d)", tos);
 #endif
   return true;
 }
+
+#ifdef ENABLE_IPV6
+static bool settosttl6(int sock, int ttl) {
+  if (setsockopt(sendsock, IPPROTO_IPV6, IPV6_UNICAST_HOPS, &ttl, sizeof(ttl)) < 0)
+    WARNRE0(sock, "setsockopt6(TTL=%d)", ttl);
+#ifdef IPV6_TCLASS
+  if (tos)
+    if (setsockopt(sendsock, IPPROTO_IPV6, IPV6_TCLASS, &tos, sizeof(tos)) < 0)
+      WARNRE0(sock, "setsockopt6(TOS=%d)", tos);
+#endif
+  return true;
+}
+#endif
 
 // Create TCP socket for hop 'at', and try to connect (poll results later)
 static bool net_send_tcp(int at) {
@@ -380,13 +398,12 @@ static bool net_send_tcp(int at) {
   int port;
 #ifdef ENABLE_IPV6
   if (af == AF_INET6) {
-    if (setsockopt(sock, IPPROTO_IPV6, IPV6_UNICAST_HOPS, &ttl, sizeof(ttl)))
-      WARNRE0(sock, "setsockopt6(TTL) at=%d", at);
+    if (!settosttl6(sock, ttl)) return false;
     port = ntohs(local6->sin6_port);
   } else
 #endif
   {
-    settosttl(sock, ttl);
+    if (!settosttl(sock, ttl)) return false;
     port = ntohs(local4->sin_port);
   }
 
@@ -415,15 +432,14 @@ static bool net_send(int at) {
   memset(packet, bitpattern, packetsize);
 
   int iphsize = 0, echotype = 0, salen = 0;
+#ifdef IP_HDRINCL
   struct _iphdr *ip = (struct _iphdr *)packet;
+#endif
   int ttl = at + 1;
 
   switch (af) {
   case AF_INET:
-#ifndef IP_HDRINCL
-    iphsize = 0;
-    settosttl(sendsock, ttl);
-#else
+#ifdef IP_HDRINCL
     iphsize = sizeof(struct _iphdr);
     ip->ver   = 4;
     ip->ihl   = 5;
@@ -437,15 +453,17 @@ static bool net_send(int at) {
     // BSD needs the source address here
     addr_copy(&(ip->saddr), &(ssa4->sin_addr));
     addr_copy(&(ip->daddr), remoteaddress);
+#else
+    if (!settosttl(sendsock, ttl)) return false;
+    iphsize = 0;
 #endif
     echotype = ICMP_ECHO;
     salen = sizeof(struct sockaddr_in);
     break;
 #ifdef ENABLE_IPV6
   case AF_INET6:
+    if (!settosttl6(sendsock, ttl)) return false;
     iphsize = 0;
-    if (setsockopt(sendsock, IPPROTO_IPV6, IPV6_UNICAST_HOPS, &ttl, sizeof ttl))
-      WARNRE0(sendsock, "setsockopt6(TTL) at=%d", at);
     echotype = ICMP6_ECHO_REQUEST;
     salen = sizeof(struct sockaddr_in6);
     break;
@@ -482,7 +500,7 @@ static bool net_send(int at) {
         WARNRE0(sendsock, "setsockopt6(CHECKSUM) at=%d", at);
     }
 #endif
-  }
+  } else WARNRE0(sendsock, "unsupported proto %d", mtrtype);
 
   if (sendto(sendsock, packet, packetsize, 0, remotesockaddr, salen) < 0)
     WARNRE0(sendsock, "sendto at=%d: ttl=%d", at, ttl);
@@ -791,7 +809,7 @@ void net_icmp_parse(void) {
       /*summ*/ net_replies[QR_SUM]++; net_replies[QR_UDP]++;
     } break;
 
-	case IPPROTO_TCP: {
+    case IPPROTO_TCP: {
       struct tcphdr *th = (struct tcphdr *)data;
       seq = ntohs(th->th_sport);
 #ifdef WITH_MPLS
@@ -802,6 +820,7 @@ void net_icmp_parse(void) {
 #endif
       /*summ*/ net_replies[QR_SUM]++; net_replies[QR_TCP]++;
     } break;
+    default: LOGRET_("unsupported proto %d", mtrtype);
   } /*end of switch*/
 
   if (seq >= 0)
@@ -934,27 +953,58 @@ static void net_sock_close(void) {
 #endif
 }
 
-#define WARNCLRE(sock, msg) { if ((sock) < 0) { WARN(msg); net_sock_close(); return false; }; /*summ*/ sum_sock[0]++; }
+#ifdef LIBCAP
+#include <sys/capability.h>
+void set_rawcap_flag(cap_flag_value_t flag) {
+  static const cap_value_t cap_net_raw = CAP_NET_RAW;
+  cap_t proc = cap_get_proc();
+  if (proc) {
+    cap_flag_value_t perm = flag;
+    cap_get_flag(proc, cap_net_raw, CAP_PERMITTED, &perm);
+    if (perm == flag) {
+      if (cap_set_flag(proc, CAP_EFFECTIVE, 1, &cap_net_raw, flag) < 0) WARN("cap_set_flag");
+      else if (cap_set_proc(proc) < 0) WARN("cap_set_proc");
+    }
+    cap_free(proc);
+  } else WARN("cap_get_proc");
+}
+#define RAWCAP_ON  set_rawcap_flag(CAP_SET)
+#define RAWCAP_OFF set_rawcap_flag(CAP_CLEAR)
+#else
+#define RAWCAP_ON
+#define RAWCAP_OFF
+#endif
+
+static int net_socket(int domain, int type, int proto, const char *what) {
+  RAWCAP_ON;
+  int sock = socket(domain, type, proto);
+  if (sock < 0) warn("%s: %s", __func__, what); else /*summ*/ sum_sock[0]++;
+  RAWCAP_OFF;
+  if (sock < 0) net_sock_close();
+  return sock;
+}
 
 bool net_open(void) { // optional IPv6: no error
   net_init(0);  // no IPv6 by default
+  RAWCAP_ON;
   sendsock4 = socket(AF_INET, SOCK_RAW, IPPROTO_RAW);
-  if (sendsock4 < 0) sendsock4 = socket(AF_INET, SOCK_RAW, IPPROTO_ICMP); // backup
-  WARNCLRE(sendsock4, "send socket");
-  recvsock4 = socket(AF_INET, SOCK_RAW, IPPROTO_ICMP);
-  WARNCLRE(recvsock4, "recv socket");
+  RAWCAP_OFF;
+  if (sendsock4 < 0) // backup
+    if ((sendsock4 = net_socket(AF_INET, SOCK_RAW, IPPROTO_ICMP, "send socket")) < 0)
+      return false;
+  if ((recvsock4 = net_socket(AF_INET, SOCK_RAW, IPPROTO_ICMP, "recv socket")) < 0)
+    return false;
 #ifdef ENABLE_IPV6
-  sendsock6_icmp = socket(AF_INET6, SOCK_RAW, IPPROTO_ICMPV6);
-  WARNCLRE(sendsock6_icmp, "send ICMP socket6");
-  sendsock6_udp = socket(AF_INET6, SOCK_RAW, IPPROTO_UDP);
-  WARNCLRE(sendsock6_udp, "send UDP socket6");
-  recvsock6 = socket(AF_INET6, SOCK_RAW, IPPROTO_ICMPV6);
-  WARNCLRE(recvsock6, "recv socket6");
+  if ((recvsock6 = net_socket(AF_INET6, SOCK_RAW, IPPROTO_ICMPV6, "recv ICMP socket6")) < 0)
+    return false;
+  if ((sendsock6_icmp = net_socket(AF_INET6, SOCK_RAW, IPPROTO_ICMPV6, "send ICMP socket6")) < 0)
+    return false;
+  if ((sendsock6_udp = net_socket(AF_INET6, SOCK_RAW, IPPROTO_UDP, "send UDP socket6")) < 0)
+    return false;
 #endif
 #ifdef IP_HDRINCL
-  // FreeBSD wants this to avoid sending out packets with protocol type RAW to the network
-  int trueopt = 1;
-  if (setsockopt(sendsock4, 0, IP_HDRINCL, &trueopt, sizeof(trueopt))) {
+  int trueopt = 1; // tell that we provide IP header
+  if (setsockopt(sendsock4, 0, IP_HDRINCL, &trueopt, sizeof(trueopt)) < 0) {
     WARN("setsockopt(IP_HDRINCL)");
     net_sock_close();
     return false;

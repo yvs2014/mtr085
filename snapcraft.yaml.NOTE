@@ -1,6 +1,2 @@
-Note1:
-Snap 'mtr' needs ':network-control' plug to work wth raw-sockets (like 'ping') and it's not connected automatically.
-(type 'snap connect mtr085:network-control :network-control' to connect the plug)
-
-Note2:
-With snap it's installed without 'setcap cap_net_raw+ep' permisions
+# to work with raw-sockets like 'ping'
+snap connect mtr085:network-observe :network-observe

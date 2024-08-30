@@ -20,6 +20,16 @@
 #include <unistd.h>
 #include <string.h>
 #include <errno.h>
+#include <time.h>
+
+#include "config.h"
+#if defined(LOG_POLL) && !defined(LOGMOD)
+#define LOGMOD
+#endif
+#if !defined(LOG_POLL) && defined(LOGMOD)
+#undef LOGMOD
+#endif
+#include "common.h"
 
 #include "mtr-poll.h"
 #include "net.h"
@@ -29,13 +39,6 @@
 #endif
 #ifdef WITH_IPINFO
 #include "ipinfo.h"
-#endif
-
-#if defined(LOG_POLL) && !defined(LOGMOD)
-#define LOGMOD
-#endif
-#if !defined(LOG_POLL) && defined(LOGMOD)
-#undef LOGMOD
 #endif
 
 #if defined(CURSESMODE) || defined(SPLITMODE) || defined(GRAPHMODE)

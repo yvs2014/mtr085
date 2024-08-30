@@ -18,9 +18,18 @@
 
 #include <unistd.h>
 #include <string.h>
-#include <errno.h>
 #include <fcntl.h>
 #include <poll.h>
+#include <time.h>
+
+#include "config.h"
+#if defined(LOG_IPINFO) && !defined(LOGMOD)
+#define LOGMOD
+#endif
+#if !defined(LOG_IPINFO) && defined(LOGMOD)
+#undef LOGMOD
+#endif
+#include "common.h"
 
 #include "ipinfo.h"
 #include "mtr-poll.h"
@@ -30,13 +39,6 @@
 #include "dns.h"
 #endif
 #include "aux.h"
-
-#if defined(LOG_IPINFO) && !defined(LOGMOD)
-#define LOGMOD
-#endif
-#if !defined(LOG_IPINFO) && defined(LOGMOD)
-#undef LOGMOD
-#endif
 
 #define COMMA  ','
 #define VSLASH '|'

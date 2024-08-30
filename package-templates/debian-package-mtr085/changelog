@@ -1,5 +1,0 @@
-mtr085 (154) mantic noble; urgency=low
-
-  * mtr085 with IDN support, Unicode histograms, extra IP address info, etc.
-
- -- yvs <VSYakovetsky@gmail.com>  Thu, 01 Feb 2024 21:36:03 +0200

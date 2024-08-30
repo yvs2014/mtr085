@@ -28,6 +28,10 @@
 
 #include "common.h"
 
+#ifdef LIBCAP
+#include <sys/capability.h>
+#endif
+
 #if defined(LOG_DNS) || defined(LOG_IPINFO) || defined(LOG_NET) || defined(LOG_POLL)
 #define WITH_SYSLOG 1
 #include <syslog.h>
@@ -616,14 +620,30 @@ void autotest_unicode_print(void) {
 }
 #endif
 
+#ifdef LIBCAP
+static bool reset_caps(void) {
+  bool re = false;
+  cap_t cap = cap_init();
+  if (cap) {
+    re = cap_set_proc(cap) == 0;
+    if (!re) WARN("cap_set_proc");
+    cap_free(cap);
+  } else WARN("cap_init");
+  return re;
+}
+#endif
 
 int main(int argc, char **argv) {
-  if (!net_open())  // Get the raw sockets first thing, so we can drop to user euid immediately
+  if (!net_open()) // get raw sockets
     FAIL("Unable to get raw sockets");
-  if (setgid(getgid()) || setuid(getuid()))  // Now drop to user permissions
+  if (setgid(getgid()) || setuid(getuid())) // drop permissions if that's set
     ERRR(EXIT_FAILURE, "Unable to drop permissions");
-  if ((geteuid() != getuid()) || (getegid() != getgid())) // Double check, just in case
+  if ((geteuid() != getuid()) || (getegid() != getgid())) // just in case
     FAIL("Unable to drop permissions");
+#ifdef LIBCAP
+  if (!reset_caps())
+    FAIL("Unable to reset capabilities");
+#endif
   net_assert();
 
   mypid = getpid();

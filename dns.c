@@ -18,17 +18,19 @@
 
 #include <unistd.h>
 #include <string.h>
-#include <errno.h>
+#include <time.h>
 
-#include "dns.h"
-#include "net.h"
-
+#include "config.h"
 #if defined(LOG_DNS) && !defined(LOGMOD)
 #define LOGMOD
 #endif
 #if !defined(LOG_DNS) && defined(LOGMOD)
 #undef LOGMOD
 #endif
+#include "common.h"
+
+#include "dns.h"
+#include "net.h"
 
 #ifdef ENABLE_IPV6
 #ifdef __GLIBC__

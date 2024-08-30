@@ -21,6 +21,7 @@
 #include <strings.h>
 #include <ctype.h>
 #include <assert.h>
+#include <time.h>
 #include <sys/types.h>
 #include <netinet/in_systm.h>
 

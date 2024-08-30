@@ -19,7 +19,7 @@
 #ifndef IPINFO_H
 #define IPINFO_H
 
-#include "common.h"
+#include <stdbool.h>
 
 bool  ipinfo_init(const char *arg);
 void  ipinfo_close(void);
