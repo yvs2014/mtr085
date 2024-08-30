@@ -1,23 +1,27 @@
 # $FreeBSD$
 
+# sample: set GIT_COMMIT_NUMBER and GIT_HASH
+
 PORTNAME=	mtr085
-PORTVERSION=	<GITVERSION>
+PORTVERSION=	GIT_COMMIT_NUMBER
 PORTREVISION=	${GITVERSION}
-PORTEPOCH=	<PKGREVISION>
+PORTEPOCH=	1
 CATEGORIES=	net
 MASTER_SITES=	https://github.com/${GITHUB_USER}/${PORTNAME}/tarball/${GITVERSION}/ \
 		${MASTER_SITE_LOCAL}
 DISTNAME=	${PORTNAME}-${GITVERSION}
 
 MAINTAINER=	e@mail
-COMMENT=	mtr085 plus extensions
+COMMENT=	mtr v0.85 fork with IDN, Unicode, extra IP-address info
 
 LICENSE=	GPLv2
+
+CONFLICTS_INSTALL?=	mtr mtr-nox11
 
 PATCH_DEPENDS=	${AUTOCONF_DEPENDS} ${AUTOMAKE_DEPENDS}
 
 GITHUB_USER=	yvs2014
-GITVERSION=	<GITHASH>
+GITVERSION=	GIT_HASH
 WRKSRC=		${WRKDIR}/${GITHUB_USER}-${PORTNAME}-${GITVERSION}
 FETCH_ARGS=	-Fpr
 
@@ -31,13 +35,17 @@ GRAPHCAIRO_XCB_DESC=	graphcairo X11 XCB backend
 GRAPHCAIRO_XLIB_DESC=	graphcairo X11 Xlib backend
 
 GNU_CONFIGURE=	yes
-USES=		autoreconf gmake
+USES=		autoreconf
+USES+=		gmake
 
-PLIST_FILES=	man/man8/mtr.8.gz \
-		sbin/mtr
+PLIST_FILES=	sbin/mtr
+PLIST_FILES+=	man/man8/mtr.8
 
 .include <bsd.port.options.mk>
 .include "${USESDIR}/autoreconf.mk"
+
+CONFIGURE_ARGS+=--without-libcap
+CONFIGURE_ARGS+=--enable-suid-last-resort
 
 .if empty(PORT_OPTIONS:MIPINFO)
 CONFIGURE_ARGS+=--without-ipinfo

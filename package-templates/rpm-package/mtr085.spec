@@ -25,7 +25,8 @@ Conflicts: mtr, mtr-gtk
 
 %description
 mtr combines the functionality of the traceroute and ping programs in a single network diagnostic tool.
-This version is built from https://github.com/yvs2014/mtr085 fork.
+This version is built from https://github.com/yvs2014/mtr085 fork with IDN support, Unicode histograms, extra IP address info, etc.
+Main project's location is https://github.com/traviscross/mtr
 
 %define binname mtr
 %define srcdir %{name}
@@ -40,7 +41,7 @@ git clone https://github.com/yvs2014/%{name}
 %build
 cd %{srcdir}
 autoreconf -fi
-./configure --prefix=/usr --with-libidn
+./configure --prefix=%{prefix} --with-libidn
 make
 
 %install
@@ -48,7 +49,7 @@ cd %{srcdir}
 DESTDIR=%{buildroot} make install
 
 %post
-setcap cap_net_raw+ep /usr/bin/%{binname}
+setcap cap_net_raw+ep %{bindir}/%{binname}
 
 %files
 %defattr(-,root,root,-)

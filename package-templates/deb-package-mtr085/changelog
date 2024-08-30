@@ -1,5 +1,0 @@
-mtr085 (154) noble; urgency=low
-
-  * mtr085 with IDN support, Unicode histograms, extra IP address info, etc.
-
- -- yvs <VSYakovetsky@gmail.com>  Fri, 30 Aug 2024 04:54:57 +0300

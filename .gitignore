@@ -33,6 +33,9 @@ ar-lib
 /.flatpak-builder/
 /debs/
 **/.debhelper
+/aur/
+/package-templates/aur-archlinux/mtr085/
+/rpms/
 /build/
 /build-dir/
 /build-aux/

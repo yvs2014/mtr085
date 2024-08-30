@@ -1,2 +1,2 @@
-# to work with raw-sockets like 'ping'
+# like 'ping' with raw-sockets
 snap connect mtr085:network-observe :network-observe
