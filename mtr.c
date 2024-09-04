@@ -328,11 +328,14 @@ static void parse_options(int argc, char **argv) {
 
     switch (opt) {
     case '4':
-      net_init(0);
-      break;
+      net_settings(
+#ifdef ENABLE_IPV6
+        IPV6_DISABLED
+#endif
+      ); break;
 #ifdef ENABLE_IPV6
     case '6':
-      net_init(1);
+      net_settings(IPV6_ENABLED);
       break;
 #endif
     case '?':
@@ -484,13 +487,13 @@ static void parse_options(int argc, char **argv) {
     case 't':
       if (mtrtype == IPPROTO_UDP)
         FAIL("-t and -u are mutually exclusive");
-      mtrtype = IPPROTO_TCP;
+      net_set_type(IPPROTO_TCP);
       SETBIT(kept_args, RA_TCP)
       break;
     case 'u':
       if (mtrtype == IPPROTO_TCP)
         FAIL("-u and -t are mutually exclusive");
-      mtrtype = IPPROTO_UDP;
+      net_set_type(IPPROTO_UDP);
       SETBIT(kept_args, RA_UDP)
       break;
     case 'v':
@@ -748,8 +751,8 @@ int main(int argc, char **argv) {
 #endif
   }
 
-  if ((display_mode == DisplayCurses) && (last_neterr != 0))
-    warnx("%s", neterr_txt); // duplicate an error cleaned by ncurses' clear screen
+  if (last_neterr && (display_mode == DisplayCurses))
+    warnx("%s", neterr_txt); // duplicate an error cleaned by ncurses
   return last_neterr;
 }
 

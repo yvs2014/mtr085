@@ -658,7 +658,9 @@ void cr_redraw(int *data) {
 
 	// timing
 	struct timespec now, tv;
-	clock_gettime(CLOCK_MONOTONIC, &now);
+	if (clock_gettime(CLOCK_MONOTONIC, &now) < 0) {
+		WARN("clock_gettime()"); return;
+	}
 	timespecsub(&now, &last, &tv);
 	time_t dt = time2msec(tv);
 	time_t unclosed_dt = dt + remaining_time;
@@ -823,7 +825,9 @@ void cr_net_reset(int paused) {
     horizontal(skins[WORK].cairo, 0, vp.width, NULL, 0);
   else {
     struct timespec now;
-    clock_gettime(CLOCK_MONOTONIC, &now);
+    if (clock_gettime(CLOCK_MONOTONIC, &now) < 0) {
+      WARN("clock_gettime()"); return;
+    }
     if ((now.tv_sec - last.tv_sec) < params->period) { // more precisely
       struct timespec tv;
       timespecsub(&now, &last, &tv);
@@ -1019,7 +1023,9 @@ bool cr_open(cr_params_t *cr_params) {
 	draw_grid();
 	paint();
 
-	clock_gettime(CLOCK_MONOTONIC, &last);
+	if (clock_gettime(CLOCK_MONOTONIC, &last) < 0) {
+		WARN("clock_gettime()"); return false; // fail
+	}
 	return true;
 }
 

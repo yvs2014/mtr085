@@ -188,7 +188,7 @@ static void tcp_timedout(void) {
   }
 }
 
-static void proceed_tcp(void) {
+static void proceed_tcp(struct timespec *polled_at) {
   for (int i = FD_MAX; i < maxfd; i++) {
     int sock = allfds[i].fd;
     short ev = allfds[i].revents;
@@ -198,7 +198,7 @@ static void proceed_tcp(void) {
     int seq = tcpseq[i];
     if (seq >= 0) {
       if (seq < MAXSEQ) { // ping tcp-mode
-        net_tcp_parse(sock, seq, ev == POLLOUT);
+        net_tcp_parse(sock, seq, ev == POLLOUT, polled_at);
         CLOSE_FD(i);
       }
 #ifdef WITH_IPINFO
@@ -220,7 +220,8 @@ static void proceed_tcp(void) {
 static bool svc(struct timespec *last, const struct timespec *interval, int *timeout) {
   // set 'last' and 'timeout [msec]', return false if it neeeds to stop
   struct timespec now, tv;
-  clock_gettime(CLOCK_MONOTONIC, &now);
+  if (clock_gettime(CLOCK_MONOTONIC, &now) < 0)
+    FAIL_CLOCK_GETTIME;
   timespecadd(last, interval, &tv);
 
   if (timespeccmp(&now, &tv, >)) {
@@ -337,12 +338,11 @@ static int keyboard_events(int action) {
     case ActionUDP:
     case ActionTCP:
       CLRBIT(run_args, RA_UDP); CLRBIT(run_args, RA_TCP);
-      if (mtrtype != IPPROTO_ICMP) mtrtype = IPPROTO_ICMP;
+      if (mtrtype != IPPROTO_ICMP) net_set_type(IPPROTO_ICMP);
       else {
-        mtrtype = (action == ActionUDP) ? IPPROTO_UDP : IPPROTO_TCP;
+        net_set_type((action == ActionUDP) ? IPPROTO_UDP : IPPROTO_TCP);
         SETBIT(run_args, (action == ActionUDP) ? RA_UDP : RA_TCP);
       }
-      LOGMSG_("set IP protocol: %d", mtrtype);
 #ifdef ENABLE_IPV6
       net_setsocket6();
 #endif
@@ -384,7 +384,7 @@ static inline bool tcpish(void) {
 }
 
 // work out events
-static int conclude(void) {
+static int conclude(struct timespec *polled_at) {
   int rc = ActionNone;
   if (IN_ISSET(FD_STDIN)) { // check keyboard events
     LOGMSG("got stdin event");
@@ -399,7 +399,7 @@ static int conclude(void) {
   }
   if (IN_ISSET(FD_NET)) { // net packet
     LOGMSG("got icmp or udp response");
-    net_icmp_parse();
+    net_icmp_parse(polled_at);
   }
 #ifdef ENABLE_DNS
   if (need_dns) { // dns lookup
@@ -416,7 +416,7 @@ static int conclude(void) {
   }
 #endif
   if (tcpish())
-    proceed_tcp();
+    proceed_tcp(polled_at);
   return rc;
 }
 
@@ -455,17 +455,18 @@ static void seqfd_free(void) {
 }
 
 // main loop
-void poll_loop(void) {
+int poll_loop(void) {
   LOGMSG("start");
   if (!seqfd_init())
-    return;
+    return false;
   bool anyset = false, paused = false;
   numpings = 0;
   grace = NO_GRACE;
   memset(&grace_started, 0, sizeof(grace_started));
 
   struct timespec lasttime;
-  clock_gettime(CLOCK_MONOTONIC, &lasttime);
+  if (clock_gettime(CLOCK_MONOTONIC, &lasttime) < 0)
+    FAIL_CLOCK_GETTIME;
 
   while (1) {
     set_fds();
@@ -490,13 +491,17 @@ void poll_loop(void) {
         if (!svc(&lasttime, &interval, &timeout)) {
           seqfd_free();
           LOGMSG("done all pings");
-          return;
+          return true;
         }
       }
       if (!timeout)
         usleep(MINSLEEP_USEC);
       rv = poll(allfds, maxfd, timeout);
     } while ((rv < 0) && (errno == EINTR));
+
+    static struct timespec polled_now;
+    if (clock_gettime(CLOCK_MONOTONIC, &polled_now) < 0)
+      FAIL_CLOCK_GETTIME; // break;
 
     if (rv < 0) {
       int e = errno;
@@ -507,7 +512,7 @@ void poll_loop(void) {
     }
     anyset = rv ? true : false; // something triggered, or not
     if (anyset) {
-      int rc = conclude();
+      int rc = conclude(&polled_now);
       if (rc == ActionQuit)
         break;
       else if (rc == ActionPauseResume)
@@ -530,5 +535,6 @@ void poll_loop(void) {
 
   seqfd_free();
   LOGMSG("finish");
+  return true;
 }
 

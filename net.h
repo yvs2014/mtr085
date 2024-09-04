@@ -151,6 +151,8 @@ struct nethost {
 extern struct nethost host[];
 typedef struct atndx { int at, ndx, type; } atndx_t;
 
+extern char localaddr[];
+
 // helpful macros
 #define CURRENT_IP(at)   (host[at].eaddr[host[at].current].ip)
 #define IP_AT_NDX(at, ndx)   (host[at].eaddr[ndx].ip)
@@ -167,18 +169,33 @@ typedef struct atndx { int at, ndx, type; } atndx_t;
 #define QTXT_TS_AT_NDX(at, ndx) (host[at].eaddr[ndx].q_txt_ts)
 #endif
 
-extern char localaddr[];
+#define FAIL_POSTPONE(rcode, fmt, ...) { last_neterr = rcode; \
+  WARNX_(fmt ": %s", __VA_ARGS__, strerror(last_neterr)); \
+  snprintf(neterr_txt, ERRBYFN_SZ, fmt ": %s", __VA_ARGS__, strerror(last_neterr)); \
+  LOG_RE_(false, fmt ": %s", __VA_ARGS__, strerror(last_neterr)); \
+}
 
-void net_init(int ipv6);
+#define FAIL_CLOCK_GETTIME FAIL_POSTPONE(errno, "%s", "clock_gettime()");
+
+enum { IPV6_DISABLED = false, IPV6_ENABLED = true };
+
+void net_settings(
+#ifdef ENABLE_IPV6
+bool ipv6_enabled
+#else
+void
+#endif
+);
 bool net_open(void);
 void net_assert(void);
+void net_set_type(int type);
 bool net_set_host(struct hostent *h);
 bool net_set_ifaddr(char *ifaddr);
 void net_reset(void);
 void net_close(void);
 int net_wait(void);
-void net_icmp_parse(void);
-void net_tcp_parse(int sock, int seq, int noerr);
+void net_icmp_parse(struct timespec *recv_at);
+void net_tcp_parse(int sock, int seq, int noerr, struct timespec *recv_at);
 bool net_timedout(int seq);
 int net_min(void);
 int net_max(void);
