@@ -965,7 +965,8 @@ static int net_socket(int domain, int type, int proto, const char *what) {
   return sock;
 }
 
-bool net_open(void) { // optional IPv6: no error
+bool net_open(void) {
+  // mandatory ipv4
   RAWCAP_ON;
   sendsock4 = socket(AF_INET, SOCK_RAW, IPPROTO_RAW);
   RAWCAP_OFF;
@@ -975,12 +976,12 @@ bool net_open(void) { // optional IPv6: no error
   if ((recvsock4 = net_socket(AF_INET, SOCK_RAW, IPPROTO_ICMP, "recv socket")) < 0)
     return false;
 #ifdef ENABLE_IPV6
-  if ((recvsock6 = net_socket(AF_INET6, SOCK_RAW, IPPROTO_ICMPV6, "recv ICMP socket6")) < 0)
-    return false;
-  if ((sendsock6_icmp = net_socket(AF_INET6, SOCK_RAW, IPPROTO_ICMPV6, "send ICMP socket6")) < 0)
-    return false;
-  if ((sendsock6_udp = net_socket(AF_INET6, SOCK_RAW, IPPROTO_UDP, "send UDP socket6")) < 0)
-    return false;
+  // optional ipv6: to not fail
+  RAWCAP_ON;
+  recvsock6 = socket(AF_INET6, SOCK_RAW, IPPROTO_ICMPV6);
+  sendsock6_icmp = socket(AF_INET6, SOCK_RAW, IPPROTO_ICMPV6);
+  sendsock6_udp = socket(AF_INET6, SOCK_RAW, IPPROTO_UDP);
+  RAWCAP_OFF;
 #endif
 #ifdef IP_HDRINCL
   int trueopt = 1; // tell that we provide IP header

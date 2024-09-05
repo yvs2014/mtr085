@@ -82,6 +82,7 @@ pid_t mypid;
 char mtr_args[ARGS_LEN + 1];  // display in curses title
 unsigned run_args;            // runtime args to display hints
 unsigned kept_args;           // kept args mapped in bits
+bool af_specified;            // autodetect address family if unspecified
 
 #ifdef ENABLE_DNS
 bool show_ips;
@@ -332,10 +333,13 @@ static void parse_options(int argc, char **argv) {
 #ifdef ENABLE_IPV6
         IPV6_DISABLED
 #endif
-      ); break;
+      );
+      af_specified = true;
+      break;
 #ifdef ENABLE_IPV6
     case '6':
       net_settings(IPV6_ENABLED);
+      af_specified = true;
       break;
 #endif
     case '?':
@@ -567,15 +571,33 @@ static void parse_options(int argc, char **argv) {
 }
 
 
-static bool set_host(struct addrinfo *res) {
+static bool set_target(struct addrinfo *res) {
   struct addrinfo *ai;
-  for (ai = res; ai; ai = ai->ai_next)
-    if (af == ai->ai_family)  // use only the desired AF
-      break;
-  if (!ai || (af != ai->ai_family)) {  // not found
-    WARNX_("Desired address family %d not found", af);
-    return false;
+#ifdef ENABLE_IPV6
+  if (af_specified) {
+#endif
+    for (ai = res; ai; ai = ai->ai_next)
+      if (af == ai->ai_family)  // use only the desired AF
+        break;
+    if (!ai || (af != ai->ai_family)) {  // not found
+      warnx("target(%s): No address found for IPv%c (AF %d)", dsthost, af == AF_INET ? '4' : '6', af);
+      return false;
+    }
+#ifdef ENABLE_IPV6
+  } else { // preference: first ipv4, second ipv6
+    for (ai = res; ai; ai = ai->ai_next) if (af == AF_INET) break;
+    if (!ai)
+      for (ai = res; ai; ai = ai->ai_next) if (af == AF_INET6) break;
+    if (!ai) {
+      warnx("target(%s): No address found", dsthost);
+      return false;
+    }
+    if (af != ai->ai_family) {
+      af = ai->ai_family;
+      net_settings((af == AF_INET6) ? IPV6_ENABLED : IPV6_DISABLED);
+    }
   }
+#endif
 
   char* alptr[2] = { NULL, NULL };
   if (af == AF_INET)
@@ -689,7 +711,7 @@ int main(int argc, char **argv) {
 
     struct addrinfo hints, *res;
     memset(&hints, 0, sizeof(hints));
-    hints.ai_family = af;
+    hints.ai_family = AF_UNSPEC;
     hints.ai_socktype = SOCK_DGRAM;
     int rc = getaddrinfo(dsthost, NULL, &hints, &res);
     const char *rc_msg = NULL;
@@ -707,7 +729,7 @@ int main(int argc, char **argv) {
       else
         WARNX_("Failed to resolve \"%s\": %s", dsthost, rc_msg ? rc_msg : gai_strerror(rc));
     } else {
-      if (set_host(res)) {
+      if (set_target(res)) {
         locker(stdout, F_WRLCK);
         if (display_open(notfirst))
           display_loop();
