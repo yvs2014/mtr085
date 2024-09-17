@@ -13,13 +13,6 @@
 #include "mtr-curses.h"
 #include "aux.h"
 
-// Cairo backends: XCB or Xlib
-#ifndef WITH_GRAPHS_XCB
-#ifndef WITH_GRAPHS_XLIB
-#error "No cairo backend defined"
-#endif
-#endif
-
 enum { BASE, WORK, GRID, LEGEND, LAYER, TEMP };
 #define SKINS	6
 

@@ -8,6 +8,7 @@ Makefile.dist
 aclocal.m4
 confdefs.h
 config.*
+!config.h.cmake
 configure
 configure.lineno
 confinc
@@ -25,8 +26,6 @@ ar-lib
 **/.dirstamp
 /mtr
 /mtr.8
-/version.h
-/version.h.tmp
 .*.swp
 *~
 *.snap
@@ -36,6 +35,7 @@ ar-lib
 /aur/
 /package-templates/aur-archlinux/mtr085/
 /rpms/
+/_build/
 /build/
 /build-dir/
 /build-aux/

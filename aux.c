@@ -7,7 +7,7 @@
 
 #define FLOAT_UPTO 10 /* values > FLOAT_UPTO in integer format */
 
-#ifdef CURSESMODE
+#if defined(CURSESMODE) || defined(GRAPHMODE)
 static const char fld_jitter[MAXFLD + 1] = "DR AGJMXI";
 #endif
 static char fld_custom[MAXFLD + 1];

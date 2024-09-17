@@ -1,9 +1,10 @@
 AC_INIT([mtr], [0.85])
 AC_CONFIG_SRCDIR([mtr.c])
-AC_CONFIG_FILES([version.h.tmp:version.h.in])
 AC_PROG_RANLIB
+AC_CHECK_PROG(GIT, [git], [yes])
+AS_IF([test "x$GIT" = "xyes"], AC_DEFINE([GITREV],
+	["m4_esyscmd_s([git rev-list --count 97af563..HEAD])"], [git revision number]))
 
-dnl AM_INIT_AUTOMAKE([foreign nostdinc subdir-objects -Wall -Werror silent-rules -Wno-extra-portability])
 AM_INIT_AUTOMAKE([foreign nostdinc subdir-objects -Wall -Werror silent-rules])
 AM_SILENT_RULES([yes])
 m4_ifdef([AM_PROG_AR], [AM_PROG_AR])
@@ -11,6 +12,17 @@ m4_ifdef([AM_PROG_AR], [AM_PROG_AR])
 # don't complain on AC_PROG_CC_C99 with autoconf newer than 2.70
 m4_version_prereq([2.70],, [AC_PROG_CC_C99])
 AM_PROG_CC_C_O
+
+m4_ifdef([AX_CHECK_COMPILE_FLAG],
+	[AX_CHECK_COMPILE_FLAG([-std=gnu2x], [AX_APPEND_FLAG([-std=gnu2x])],
+	[AX_CHECK_COMPILE_FLAG([-std=gnu17], [AX_APPEND_FLAG([-std=gnu17])],
+	[AX_CHECK_COMPILE_FLAG([-std=gnu11], [AX_APPEND_FLAG([-std=gnu11])],
+	[AX_CHECK_COMPILE_FLAG([-std=gnu99], [AX_APPEND_FLAG([-std=gnu99])],
+	)]
+	)]
+	)]
+	)]
+)
 
 # common Unix parameters
 AC_CHECK_HEADERS([sys/param.h], AC_DEFINE(HAVE_SYS_PARAM_H, 1))
@@ -41,29 +53,25 @@ AC_ARG_WITH(curses,
 	AS_HELP_STRING([--without-curses], [without Curses library]),
 	[curses=${withval}], [curses=yes])
 AM_CONDITIONAL([CURSES], [test "x$curses" = "xyes"])
+_unicode="no"
 AS_IF([test "x$curses" = "xyes"], [
 	AC_DEFINE(CURSESMODE, 1, Build with curses support)
+	AC_CHECK_HEADERS([ncursesw/ncurses.h ncursesw/curses.h ncurses/ncurses.h ncurses/curses.h ncurses.h curses.h], break)
+	_curses_libs="ncursesw ncurses curses tinfo"
+	AC_SEARCH_LIBS([use_default_colors], [$_curses_libs],
+		AC_DEFINE([HAVE_USE_DEFAULT_COLORS], [1], [Define this if curses library has use_default_colors()]))
 	AC_ARG_WITH(unicode,
 		AS_HELP_STRING([--without-unicode], [without Unicode histogram]),
 		[unicode=${withval}], [unicode=yes])
 	AS_IF([test "x$unicode" = "xyes"], [
-		AC_CHECK_HEADERS([ncursesw/cursesw.h ncursesw/curses.h ncurses/curses.h curses.h], break)
 		AC_CHECK_HEADERS([wchar.h wctype.h locale.h langinfo.h])
-		AC_SEARCH_LIBS([initscr], [ncursesw curses tinfo],, AC_MSG_ERROR(No library with stdscr found))
-		AC_SEARCH_LIBS([add_wch], [ncursesw curses],	# Ncursesw and X/Open curses provide add_wch()
-			AC_DEFINE([WITH_UNICODE], [1], [Define to enable unicode]),
-			AC_MSG_ERROR([Wide-character curses library not found]))
-		AC_SEARCH_LIBS([use_default_colors], [ncursesw curses],
-			AC_DEFINE([HAVE_USE_DEFAULT_COLORS], [1], [Define this if curses library has use_default_colors()]))
-	], [
-		AC_CHECK_HEADERS([ncurses.h ncurses/curses.h curses.h cursesX.h], break)
-		AC_SEARCH_LIBS([initscr], [ncurses curses cursesX tinfo],
-			AC_DEFINE(CURSESMODE, 1, Build with curses support),
-			AC_MSG_ERROR([Curses library not found]))
-		AC_SEARCH_LIBS([use_default_colors], [ncurses curses],
-			AC_DEFINE([HAVE_USE_DEFAULT_COLORS], [1], [Define this if curses library has use_default_colors()]))
+		AC_SEARCH_LIBS([add_wch], [$_curses_libs], [
+			AC_DEFINE([WITH_UNICODE], [1], [Define to enable unicode])
+			_unicode="yes"],
+		AC_MSG_ERROR([Wide-character curses library not found]))
 	])
 ])
+
 AC_ARG_ENABLE([dns],
 	AS_HELP_STRING([--disable-dns], [do not enable DNS]),
 	[dns=${enableval}], [dns=yes])
@@ -76,7 +84,7 @@ AM_CONDITIONAL([EXTRESOLV], [test "x$macos" = "xyes"])
 AS_IF([test "x$dns" = "xyes"], [
 	AC_DEFINE([ENABLE_DNS], [], [Define to enable DNS])
 	AC_HEADER_RESOLV
-	AC_SEARCH_LIBS([gethostbyname], [nsl],, AC_MSG_ERROR(No nameservice library found))
+	AC_SEARCH_LIBS([gethostbyaddr], [nsl],, AC_MSG_ERROR(No nameservice library found))
 	AC_SEARCH_LIBS([dn_expand], [resolv],, AC_SEARCH_LIBS([__dn_expand], [resolv],, AC_MSG_ERROR(No resolv found)))
 	dnl res_xxx is resolved via macros on MacOS, so let's suggest some mkquery() is present there unconditionaly
 	AS_IF([test "x$macos" = "xyes"], [AC_DEFINE([HAVE_RES_NMKQUERY], [1], [Define this if res_nmkquery() is present])], true, [
@@ -230,7 +238,6 @@ AS_IF([test "x$graphcairo_xcb" = "xyes"], [
 		LIBS="$LIBS -lm"
 		AC_SUBST(graphcairo_CFLAGS)
 		AC_SUBST(graphcairo_LIBS)
-		AC_DEFINE([WITH_GRAPHS_XCB], [1], [Define to enable cairo XCB backend])
 	])
 ], [
 AS_IF([test "x$graphcairo_xlib" = "xyes"], [
@@ -239,7 +246,6 @@ AS_IF([test "x$graphcairo_xlib" = "xyes"], [
 		LIBS="$LIBS -lm"
 		AC_SUBST(graphcairo_CFLAGS)
 		AC_SUBST(graphcairo_LIBS)
-		AC_DEFINE([WITH_GRAPHS_XLIB], [1], [Define to enable cairo Xlib backend])
 	])
 ])
 ])
@@ -248,12 +254,12 @@ AS_IF([test "x$libidn" = "xyes"], [
 	PKG_CHECK_MODULES([libidn2], [libidn2], [
 		AC_SUBST(libidn2_CFLAGS)
 		AC_SUBST(libidn2_LIBS)
-		AC_DEFINE([HAVE_LIBIDN2], [1], [Define to enable libidn2])
+		AC_DEFINE([LIBIDN2], [1], [Define to enable libidn2])
 	], [
 	PKG_CHECK_MODULES([libidn], [libidn], [
 		AC_SUBST(libidn_CFLAGS)
 		AC_SUBST(libidn_LIBS)
-		AC_DEFINE([HAVE_LIBIDN], [1], [Define to enable libidn])
+		AC_DEFINE([LIBIDN], [1], [Define to enable libidn])
 	])
 	])
 ])
@@ -270,6 +276,33 @@ m4_ifdef([AX_CHECK_COMPILE_FLAG], [
 		AC_MSG_RESULT([-Wall])
 	], [AC_MSG_RESULT([none])])
 ])
+
+_option_list=""
+AS_IF([test "x$libcap" = "xyes"],    [_option_list="$_option_list +CAP"],     [_option_list="$_option_list -CAP"])
+AS_IF([test "x$curses" = "xyes"],    [_option_list="$_option_list +CURSES"],  [_option_list="$_option_list -CURSES"])
+AS_IF([test "x$_unicode" = "xyes"],  [_option_list="$_option_list +UNICODE"], [_option_list="$_option_list -UNICODE"])
+AS_IF([test "x$dns" = "xyes"],       [_option_list="$_option_list +DNS"],     [_option_list="$_option_list -DNS"])
+AS_IF([test "x$libidn" = "xyes"],    [_option_list="$_option_list +IDN"],     [_option_list="$_option_list -IDN"])
+AS_IF([test "x$ipinfo" = "xyes"],    [_option_list="$_option_list +IPINFO"],  [_option_list="$_option_list -IPINFO"])
+AS_IF([test "x$splitmode" = "xyes"], [_option_list="$_option_list +SPLIT"],   [_option_list="$_option_list -SPLIT"])
+AS_IF([test "x$graphcairo_xcb" = "xyes" -o "x$graphcairo_xlib" = "yes"],
+	[_option_list="$_option_list +GRAPH"], [_option_list="$_option_list -GRAPH"])
+AS_IF([test "x$ipv6" = "xyes"],      [_option_list="$_option_list +IPV6"],    [_option_list="$_option_list -IPV6"])
+AS_IF([test "x$mpls" = "xyes"],      [_option_list="$_option_list +MPLS"],    [_option_list="$_option_list -MPLS"])
+_option_output=""
+AS_IF([test "x$output_txt" = "xyes"],  [_option_output="${_option_output}T"])
+AS_IF([test "x$output_csv" = "xyes"],  [_option_output="${_option_output}C"])
+AS_IF([test "x$output_json" = "xyes"], [_option_output="${_option_output}J"])
+AS_IF([test "x$output_raw" = "xyes"],  [_option_output="${_option_output}R"])
+AS_IF([test "x$output_xml" = "xyes"],  [_option_output="${_option_output}X"])
+AS_IF([test "x$_option_output" = "x"], [_option_list="$_option_list -OUTFMT"], [_option_list="$_option_list OUTFMT=$_option_output"])
+_option_syslog=""
+AS_IF([test "x$syslog_poll" = "xyes"],   [_option_syslog="${_option_syslog}P"])
+AS_IF([test "x$syslog_net" = "xyes"],    [_option_syslog="${_option_syslog}N"])
+AS_IF([test "x$syslog_dns" = "xyes"],    [_option_syslog="${_option_syslog}D"])
+AS_IF([test "x$syslog_ipinfo" = "xyes"], [_option_syslog="${_option_syslog}I"])
+AS_IF([test "x$_option_syslog" = "x"], [_option_list="$_option_list -DEBLOG"], [_option_list="$_option_list DEBLOG=$_option_syslog"])
+AC_DEFINE_UNQUOTED([BUILD_OPTIONS], ["$(echo $_option_list)"], [Build options])
 
 AC_CONFIG_HEADERS([config.h])
 AH_TOP([

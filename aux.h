@@ -3,14 +3,24 @@
 
 #include "common.h"
 
+#ifdef VERSION
+#ifdef GITREV
+#define FULLNAME PACKAGE_NAME "-" VERSION "." GITREV
+#else
+#define FULLNAME PACKAGE_NAME "-" VERSION
+#endif
+#else
+#define FULLNAME PACKAGE_NAME
+#endif
+
 #define FLD_DEFAULT "LS NABWV"
 #define LENVALMIL(val) double _v = (val) / (double)MIL; int _l = val2len(_v);
 
 char *trim(char *s);
 int val2len(double v);
 
-#ifdef CURSESMODE
 void set_fld_active(const char *s);
+#ifdef CURSESMODE
 bool is_custom_fld(void);
 int limit_int(const int v0, const int v1, const int v, const char *it);
 #endif

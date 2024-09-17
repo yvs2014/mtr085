@@ -24,7 +24,7 @@ jobs:
         with:
           ref: master
       - name: Install mandatory packages for building
-        run: sudo apt install -y devscripts debhelper libidn2-dev libcap-dev pkgconf libcap2-bin
+        run: sudo apt install -y devscripts debhelper libidn2-dev libcap-dev cmake pkgconf libcap2-bin
       - name: Create deb package with ${{matrix.compiler}}
         env:
           CC: ${{matrix.compiler}}
@@ -50,11 +50,13 @@ jobs:
         with:
           ref: master
       - name: Install mandatory packages for building
-        run: brew install automake
+        run: brew install cmake
       - name: Create executable with ${{matrix.compiler}}
         env:
           CC: ${{matrix.compiler}}
-        run: ./bootstrap.sh && ./configure --with-libidn --without-libcap --enable-suid-last-resort && make
+        run: |
+          cmake -B_build -S${{github.workspace}} -DCAP=OFF
+          cmake --build _build
       - name: Run on ${{matrix.os}}
-        run: sudo ./mtr -r localhost
+        run: sudo ./_build/mtr -r localhost
 

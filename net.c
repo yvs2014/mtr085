@@ -35,7 +35,7 @@
 #include <netinet/udp.h>
 #include <assert.h>
 
-#include "config.h"
+#include "config.h" // IWYU pragma: keep
 #if defined(LOG_NET) && !defined(LOGMOD)
 #define LOGMOD
 #endif
@@ -43,7 +43,6 @@
 #undef LOGMOD
 #endif
 #include "common.h"
-
 #ifdef LIBCAP
 #include <sys/capability.h>
 #endif
@@ -129,10 +128,10 @@ struct PACKIT icmpext_object { // RFC4884
 #define ICMP_EXT_CLASS_MPLS 1
 #define ICMP_EXT_TYPE_MPLS  1
 
-static const size_t ies_sz = sizeof(struct icmpext_struct);
-static const size_t ieo_sz = sizeof(struct icmpext_object);
-static const size_t lab_sz = sizeof(mpls_label_t);
-static const size_t mplsmin = 120; // min after: [ip] icmp ip
+#define IES_SZ sizeof(struct icmpext_struct)
+#define IEO_SZ sizeof(struct icmpext_object)
+#define LAB_SZ sizeof(mpls_label_t)
+#define MPLSMIN 120 // min after: [ip] icmp ip
 
 #define MPLSFNTAIL(arg) , arg
 #else
@@ -147,13 +146,13 @@ static const size_t mplsmin = 120; // min after: [ip] icmp ip
 #define SET_UDP_UH_PORTS(uh, s, d) { (uh)->uh_sport = htons(s); (uh)->uh_dport = htons(d); }
 
 // NOTE: don't forget to include sys/param.h
-#ifdef __FreeBSD_version
+#if   defined(__FreeBSD_version)
 #if __FreeBSD_version >= 1100000
 #define IPLEN_RAW(sz) htons(sz)
 #endif
-#elif __OpenBSD__
+#elif defined(__OpenBSD__)
 #define IPLEN_RAW(sz) htons(sz)
-#elif __HAIKU__
+#elif defined(__HAIKU__)
 #define IPLEN_RAW(sz) htons(sz)
 #ifndef IPV6_CHECKSUM
 #define IPV6_CHECKSUM 7
@@ -680,14 +679,15 @@ static int net_stat(unsigned port, const void *addr, struct timespec *recv_at, i
 }
 
 #ifdef WITH_MPLS
-static inline bool mplslike(int psize, int hsize) { return enable_mpls & ((psize - hsize) >= mplsmin); }
+static inline bool mplslike(int psize, int hsize) { return enable_mpls & ((psize - hsize) >= MPLSMIN); }
 
 static mpls_data_t *decodempls(const uint8_t *data, int sz) {
   static mpls_data_t mplsdata;
   // given: icmpext_struct(4) icmpext_object(4) label(4) [label(4) ...]
-  static const size_t mplsoff = mplsmin - (ies_sz + ieo_sz + lab_sz);
-  if (sz < mplsmin) {
-    LOGMSG_("got %d bytes of data, whereas mplsmin = %zd", sz, mplsmin);
+  static const size_t mplsoff = MPLSMIN - (IES_SZ + IEO_SZ + LAB_SZ);
+  static const size_t ieomin = IEO_SZ + LAB_SZ;
+  if (sz < MPLSMIN) {
+    LOGMSG_("got %d bytes of data, whereas mpls min is %d", sz, MPLSMIN);
     return NULL;
   }
   int off = mplsoff; // at least 12bytes ahead: icmp_ext_struct(4) icmp_ext_object(4) label(4) [label(4) ...]
@@ -697,17 +697,17 @@ static mpls_data_t *decodempls(const uint8_t *data, int sz) {
     LOGMSG_("got ver=%d res=%d sum=%d, expected ver=%d res=0 sum!=0", ies->ver, ies->res, ies->sum, ICMP_EXT_VER);
     return NULL;
   }
-  off += ies_sz;
+  off += IES_SZ;
   // icmp extension object
   struct icmpext_object *ieo = (struct icmpext_object *)&data[off];
   ieo->len = ntohs(ieo->len);
-  if ((ieo->len < (ieo_sz + lab_sz)) || (ieo->class != ICMP_EXT_CLASS_MPLS) || (ieo->type != ICMP_EXT_TYPE_MPLS)) {
+  if ((ieo->len < ieomin) || (ieo->class != ICMP_EXT_CLASS_MPLS) || (ieo->type != ICMP_EXT_TYPE_MPLS)) {
     LOGMSG_("got len=%d class=%d type=%d, expected len>=%zd class=%d type=%d",
-      ieo->len, ieo->class, ieo->type, ieo_sz + lab_sz, ICMP_EXT_CLASS_MPLS, ICMP_EXT_TYPE_MPLS);
+      ieo->len, ieo->class, ieo->type, ieomin, ICMP_EXT_CLASS_MPLS, ICMP_EXT_TYPE_MPLS);
     return NULL;
   }
-  uint8_t n = (ieo->len - ieo_sz) / lab_sz;
-  off += ieo_sz;
+  uint8_t n = (ieo->len - IEO_SZ) / LAB_SZ;
+  off += IEO_SZ;
   // limit number of MPLS labels
   if (n > MAXLABELS) {
     LOGMSG_("got %d MPLS labels, limit=%d", n, MAXLABELS);
@@ -715,9 +715,9 @@ static mpls_data_t *decodempls(const uint8_t *data, int sz) {
   }
   memset(&mplsdata, 0, sizeof(mplsdata));
   // mpls labels
-  while ((mplsdata.n < n) && ((off + lab_sz) <= sz)) {
+  while ((mplsdata.n < n) && ((off + LAB_SZ) <= sz)) {
     mplsdata.label[mplsdata.n++].u32 = ntohl(*(uint32_t*)&data[off]);
-    off += lab_sz;
+    off += LAB_SZ;
   }
   return &mplsdata;
 }
@@ -1216,9 +1216,9 @@ void net_assert(void) { // to be sure
   assert(sizeof(struct _udpph)   == 12);
   assert(sizeof(struct _icmphdr) == 8);
 #ifdef WITH_MPLS
-  assert(ies_sz == 4);
-  assert(ieo_sz == 4);
-  assert(lab_sz == 4);
+  assert(IES_SZ == 4);
+  assert(IEO_SZ == 4);
+  assert(LAB_SZ == 4);
 #endif
   net_settings(
 #ifdef ENABLE_IPV6

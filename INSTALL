@@ -1,0 +1,17 @@
+
+Basic Installation
+------------------
+
+preferred way: cmake
+
+1) autotools+make
+autoreconf -fi
+./configure
+make
+#sudo make install
+
+2) cmake
+cmake -B _build -S $(pwd)
+cmake --build _build
+#sudo cmake --install _build --strip
+

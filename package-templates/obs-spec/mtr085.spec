@@ -11,7 +11,7 @@ URL:        https://github.com/yvs2014/%{name}
 Source0:    %{name}-%{version}.tar.gz
 
 Requires: ncurses
-BuildRequires: make, automake, autoconf, pkgconf, ncurses-devel, libidn2-devel, libcap-devel
+BuildRequires: cmake, pkgconf, ncurses-devel, libidn2-devel, libcap-devel
 BuildRequires: (gcc or clang)
 %if 0%{?fedora}
 BuildRequires: glibc-langpack-en
@@ -32,15 +32,14 @@ Main project's location is https://github.com/traviscross/mtr
 %define mandir %{prefix}/share/man/man8
 
 %prep
-%setup -q
+%autosetup
 
 %build
-autoreconf -fi
-./configure --prefix=%{prefix} --with-libidn
-make
+%cmake
+%cmake_build
 
 %install
-DESTDIR=%{buildroot} make install
+%cmake_install
 
 %post
 setcap cap_net_raw+ep %{bindir}/%{binname}
@@ -48,7 +47,7 @@ setcap cap_net_raw+ep %{bindir}/%{binname}
 %files
 %defattr(-,root,root,-)
 %{bindir}/%{binname}
-%{mandir}/%{binname}.8.gz
+%{mandir}/%{binname}.8*
 
 %changelog
 

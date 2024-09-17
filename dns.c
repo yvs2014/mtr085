@@ -16,6 +16,7 @@
     Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 */
 
+#include <stdio.h>
 #include <unistd.h>
 #include <string.h>
 #include <time.h>
@@ -33,7 +34,7 @@
 #include "net.h"
 
 #ifdef ENABLE_IPV6
-#ifdef __GLIBC__
+#if defined(__GLIBC__) || defined(__linux__)
 #define NSSOCKADDR6(i) (myres._u._ext.nsaddrs[i])
 #elif defined(__OpenBSD__)
 #define NSSOCKADDR6(i) ((struct sockaddr_in6 *) &(_res_ext.nsaddr_list[i]))

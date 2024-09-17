@@ -2,11 +2,11 @@
 #define COMMON_H
 
 #include <stdbool.h>
+#include <unistd.h>
 #include <err.h>
 #include <stdlib.h>
 #include <sys/time.h>
 
-#include "version.h"
 #include "config.h"
 
 #ifdef HAVE_SYS_PARAM_H

@@ -27,8 +27,6 @@ mtr_SOURCES = mtr.c common.h \
               poll.c mtr-poll.h \
               aux.c aux.h
 
-nodist_mtr_SOURCES = version.h
-
 AM_CPPFLAGS =
 mtr_LDADD = $(RESOLV_LIBS)
 
@@ -51,19 +49,20 @@ endif
 if GRAPHS
 mtr_LDADD += libgraphcairo.a
 noinst_LIBRARIES = libgraphcairo.a
-mtr_SOURCES += \
+libgraphcairo_a_SOURCES = \
 	graphcairo/graphcairo.c graphcairo/graphcairo.h \
 	graphcairo/graphcairo-mtr.c graphcairo/graphcairo-mtr.h \
 	graphcairo/graphcairo-backend.h
 if GRAPHS_XCB
-mtr_SOURCES += graphcairo/graphcairo-xcb.c
+libgraphcairo_a_SOURCES += graphcairo/graphcairo-xcb.c
 endif
 if GRAPHS_XLIB
-mtr_SOURCES += graphcairo/graphcairo-xlib.c
+libgraphcairo_a_SOURCES += graphcairo/graphcairo-xlib.c
 endif
 libgraphcairo_a_CPPFLAGS = @graphcairo_CFLAGS@ -I.
 AM_CPPFLAGS += -Igraphcairo
 mtr_LDADD += @graphcairo_LIBS@
+mtr_SOURCES += $(graphcairo_a_SOURCES)
 endif
 
 if LIBIDN
@@ -86,19 +85,11 @@ mtr_LDADD += -lresolv
 endif
 endif
 
-CLEANFILES = version.h $(man_MANS)
-BUILT_SOURCES = version.h
-
-version.h: version.h.tmp Makefile $(mtr_SOURCES)
-	@cat version.h.tmp > $@; \
-	if [ -d .git ] && [ -n "$$(which git)" ]; then \
-	  _ver=".$$(git rev-list --count 97af563..HEAD)"; \
-	  sed -e "/#define *MTR_VERSION */{s/\"\([^\"]*\)\"/\"\1$$_ver\"/;}" \
-	    version.h.tmp > $@; \
-	fi;
+CLEANFILES = $(man_MANS)
 
 EXCLOPTS=
 if !IPV6
+EXCLOPTS += 4
 EXCLOPTS += 6
 endif
 if !MPLS

@@ -19,7 +19,6 @@
 #include <stdio.h>
 #include <string.h>
 #include <strings.h>
-#include <ctype.h>
 #include <assert.h>
 #include <time.h>
 #include <sys/types.h>
@@ -35,6 +34,15 @@
 #include "ipinfo.h"
 #endif
 
+#include "config.h"
+#ifdef OUTPUT_FORMAT_CSV
+#include <ctype.h>
+#endif
+
+#ifndef MAXDNAME
+#define MAXDNAME 1025
+#endif
+
 #define HOSTTITLE	"Host"	// report mode
 #define LSIDE_LEN	40	// non-wide report mode: left side of output
 
@@ -48,7 +56,7 @@ static char *get_now_str(void) {
 void report_open(bool notfirst) {
   if (notfirst)
     printf("\n");
-  printf("[%s] %s: %s-%s %s %s\n", get_now_str(), srchost, PACKAGE_NAME, MTR_VERSION, mtr_args, dsthost);
+  printf("[%s] %s: %s %s %s\n", get_now_str(), srchost, FULLNAME, mtr_args, dsthost);
 }
 
 static size_t snprint_addr(char *dst, size_t len, ip_t *addr) {

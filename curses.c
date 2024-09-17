@@ -34,7 +34,7 @@
 #define CCHAR_attr attributes
 #define CCHAR_chars vals
 /*
-#elif defined OPENSOLARIS_CURSES
+#elif defined(OPENSOLARIS_CURSES)
 #define CCHAR_attr _at
 #define CCHAR_chars _wc
 */
@@ -44,18 +44,18 @@
 #endif
 #endif // WITH_UNICODE
 
-#if   defined HAVE_NCURSESW_CURSESW_H
-#  include <ncursesw/cursesw.h>
-#elif defined HAVE_NCURSESW_CURSES_H
+#if   defined(HAVE_NCURSESW_NCURSES_H)
+#  include <ncursesw/ncurses.h>
+#elif defined(HAVE_NCURSESW_CURSES_H)
 #  include <ncursesw/curses.h>
-#elif defined HAVE_NCURSES_CURSES_H
+#elif defined(HAVE_NCURSES_NCURSES_H)
+#  include <ncurses/ncurses.h>
+#elif defined(HAVE_NCURSES_CURSES_H)
 #  include <ncurses/curses.h>
-#elif defined HAVE_NCURSES_H
+#elif defined(HAVE_NCURSES_H)
 #  include <ncurses.h>
-#elif defined HAVE_CURSES_H
+#elif defined(HAVE_CURSES_H)
 #  include <curses.h>
-#elif defined HAVE_CURSESX_H
-#  include <cursesX.h>
 #else
 #  error No curses header file available
 #endif
@@ -759,7 +759,7 @@ bool mc_open(void) {
   }
 
   // init title
-  int l = snprintf(mc_title, sizeof(mc_title), "%s-%s", PACKAGE_NAME, MTR_VERSION);
+  int l = snprintf(mc_title, sizeof(mc_title), "%s", FULLNAME);
   if (mtr_args[0]) l += snprintf(mc_title + l, sizeof(mc_title) - l, " %s", mtr_args);
   l += snprintf(mc_title + l, sizeof(mc_title) - l, " %s", dsthost);
 

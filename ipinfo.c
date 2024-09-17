@@ -16,6 +16,7 @@
     Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 */
 
+#include <stdio.h>
 #include <unistd.h>
 #include <string.h>
 #include <fcntl.h>
@@ -50,7 +51,7 @@
 #define TCP_CONN_TIMEOUT  3
 #define WHOIS_COMMENT    '%'
 #define WHOIS_LAST_NDX 2
-#define HTTP_GET "GET %s HTTP/1.1\r\nHost: %s\r\nUser-Agent: mtr/%s\r\nAccept: */*\r\n\r\n"
+#define HTTP_GET "GET %s HTTP/1.1\r\nHost: %s\r\nUser-Agent: %s\r\nAccept: */*\r\n\r\n"
 #define IPINFO_TCP_TIMEOUT 10 /* in seconds */
 
 struct ipitseq { int sock, state, slot; };
@@ -482,7 +483,7 @@ static int create_tcpsock(int seq) {
 static int send_tcp_query(int sock, const char *q) {
   (ORIG_TYPE == OT_WHOIS) ?
     snprintf(exchbuf, NETDATA_MAXSIZE, "%s\r\n", q) :
-    snprintf(exchbuf, NETDATA_MAXSIZE, HTTP_GET, q, ORIG_HOST, MTR_VERSION);
+    snprintf(exchbuf, NETDATA_MAXSIZE, HTTP_GET, q, ORIG_HOST, FULLNAME);
   int len = strnlen(exchbuf, NETDATA_MAXSIZE);
   int rc = send(sock, exchbuf, len, 0);
   if (rc >= 0) {
@@ -572,7 +573,7 @@ static char *get_ipinfo(int at, int ndx, int nd) {
 #ifdef ENABLE_IPV6
   if ((af == AF_INET6) && !origins[origin_no].host6) return NULL; else
 #endif
-    if (!ORIG_HOST) return NULL;
+    if (!ORIG_HOST) return NULL; // NOLINT(readability-misleading-indentation)
   ip_t *ip = &IP_AT_NDX(at, ndx);
   switch (ORIG_TYPE) {
     case OT_HTTP:

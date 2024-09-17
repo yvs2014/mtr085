@@ -21,7 +21,6 @@
 #include <libgen.h>
 #include <getopt.h>
 #include <string.h>
-#include <ctype.h>
 #include <fcntl.h>
 #include <limits.h>
 #include <sys/stat.h>
@@ -37,11 +36,11 @@
 #include <syslog.h>
 #endif
 
-#ifdef HAVE_LIBIDN2
+#if   defined(LIBIDN2)
 #include <idn2.h>
 #define IDN_TO_ASCII_LZ	idn2_to_ascii_lz
 #define IDN_TO_ASCII_8Z	idn2_to_ascii_8z
-#elif HAVE_LIBIDN
+#elif defined(LIBIDN)
 #include <idna.h>
 #define IDN_TO_ASCII_LZ	idna_to_ascii_lz
 #define IDN_TO_ASCII_8Z	idna_to_ascii_8z
@@ -57,6 +56,11 @@
 #ifdef HAVE_LANGINFO_H
 #include <langinfo.h>
 #endif
+#endif
+
+#if defined(OUTPUT_FORMAT_RAW) || defined(OUTPUT_FORMAT_TXT) || defined(OUTPUT_FORMAT_CSV) || defined(OUTPUT_FORMAT_JSON) || defined(OUTPUT_FORMAT_XML)
+#define OUTPUT_FORMAT
+#include <ctype.h>
 #endif
 
 #include "aux.h"
@@ -105,6 +109,7 @@ int syn_timeout = MIL;        // for TCP tracing (1sec in msec)
 int sum_sock[2];              // socket summary: open()/close() calls
 int last_neterr;              // last known network error
 char neterr_txt[ERRBYFN_SZ];  // buff for 'last_neterr'
+static bool set_target_success;
 // chart related
 int display_offset;
 int curses_mode;              // 1st and 2nd bits, 3rd is reserved
@@ -137,14 +142,10 @@ const struct statf statf[] = {
 const int statf_max = sizeof(statf) / sizeof(statf[0]);
 //// end-of-global
 
-#if defined(OUTPUT_FORMAT_RAW) || defined(OUTPUT_FORMAT_TXT) || defined(OUTPUT_FORMAT_CSV) || defined(OUTPUT_FORMAT_JSON) || defined(OUTPUT_FORMAT_XML)
-#define OUTPUT_FORMAT
-#endif
-
 static struct option long_options[] = {
   // Long, HasArgs, Flag, Short
-  { "inet",       0, 0, '4' },  // use IPv4
 #ifdef ENABLE_IPV6
+  { "inet",       0, 0, '4' },  // use IPv4
   { "inet6",      0, 0, '6' },  // use IPv6
 #endif
   { "address",    1, 0, 'a' },
@@ -200,7 +201,11 @@ const char *dsthost;
 int display_mode = -1;
 double wait_time = 1;
 bool interactive = true;
-long max_ping;
+long max_ping
+#if !defined(CURSESMODE) && !defined(GRAPHMODE)
+= 100
+#endif
+;
 //
 
 static char *iface_addr;
@@ -328,15 +333,11 @@ static void parse_options(int argc, char **argv) {
       break;
 
     switch (opt) {
-    case '4':
-      net_settings(
 #ifdef ENABLE_IPV6
-        IPV6_DISABLED
-#endif
-      );
+    case '4':
+      net_settings(IPV6_DISABLED);
       af_specified = true;
       break;
-#ifdef ENABLE_IPV6
     case '6':
       net_settings(IPV6_ENABLED);
       af_specified = true;
@@ -396,7 +397,7 @@ static void parse_options(int argc, char **argv) {
         if (j >= statf_max)
           FAIL_("-F: Unknown field identifier '%c'", optarg[i]);
       }
-	  set_fld_active(optarg);
+      set_fld_active(optarg);
       break;
 #ifdef GRAPHMODE
     case 'g':
@@ -501,7 +502,11 @@ static void parse_options(int argc, char **argv) {
       SETBIT(kept_args, RA_UDP)
       break;
     case 'v':
-      printf("%s-%s\n", argv[0], MTR_VERSION);
+#ifdef BUILD_OPTIONS
+      printf("%s: %s\n", FULLNAME, BUILD_OPTIONS);
+#else
+      printf("%s\n", FULLNAME);
+#endif
       exit(EXIT_SUCCESS);
     case 'w':
       display_mode = DisplayReport;
@@ -715,26 +720,21 @@ int main(int argc, char **argv) {
     hints.ai_socktype = SOCK_DGRAM;
     int rc = getaddrinfo(dsthost, NULL, &hints, &res);
     const char *rc_msg = NULL;
-#if defined(HAVE_LIBIDN) || defined(HAVE_LIBIDN2)
+#if defined(LIBIDN2) || defined(LIBIDN)
     if (rc) {
       char *hostname = NULL;
       IDNA_RESOLV(IDN_TO_ASCII_LZ);
-      if (rc)
-        IDNA_RESOLV(IDN_TO_ASCII_8Z);
+      if (rc) IDNA_RESOLV(IDN_TO_ASCII_8Z);
     }
 #endif
     if (rc) {
-      if (rc == EAI_SYSTEM)
-        WARN_("getaddrinfo(%s)", dsthost);
-      else
-        WARNX_("Failed to resolve \"%s\": %s", dsthost, rc_msg ? rc_msg : gai_strerror(rc));
+      if (rc == EAI_SYSTEM) WARN_("getaddrinfo(%s)", dsthost);
+      else WARNX_("Failed to resolve \"%s\": %s", dsthost, rc_msg ? rc_msg : gai_strerror(rc));
     } else {
-      if (set_target(res)) {
+      if ((set_target_success = set_target(res))) {
         locker(stdout, F_WRLCK);
-        if (display_open(notfirst))
-          display_loop();
-        else
-          WARNX("Unable to open display");
+        if (display_open(notfirst)) display_loop();
+        else WARNX("Unable to open display");
         net_end_transit();
         display_close(notfirst);
         locker(stdout, F_UNLCK);
@@ -775,6 +775,6 @@ int main(int argc, char **argv) {
 
   if (last_neterr && (display_mode == DisplayCurses))
     warnx("%s", neterr_txt); // duplicate an error cleaned by ncurses
-  return last_neterr;
+  return last_neterr || !set_target_success;
 }
 

@@ -2,10 +2,10 @@
 # rpmbuild -ba mtr085.spec
 
 %define gtag 97af563
-%define gver %(echo "$(git rev-list --count %{gtag}..HEAD)_$(git rev-parse --short HEAD)")
+%define gver .%(echo "$(git rev-list --count %{gtag}..HEAD)_$(git rev-parse --short HEAD)")
 
 Name:       mtr085
-Version:    0.85.%{gver}
+Version:    0.85%{gver}
 Release:    1
 Summary:    Full screen ncurses traceroute tool
 License:    GPL-2.0
@@ -13,7 +13,7 @@ Group:      Productivity/Networking/Other
 URL:        https://github.com/yvs2014/%{name}
 
 Requires: ncurses, libidn2
-BuildRequires: make, automake, autoconf, pkgconf, ncurses-devel, libidn2-devel, libcap-devel
+BuildRequires: cmake, pkgconf, ncurses-devel, libidn2-devel, libcap-devel
 BuildRequires: (gcc or clang)
 %if 0%{?fedora}
 Requires: libcap
@@ -35,18 +35,14 @@ Main project's location is https://github.com/traviscross/mtr
 %define mandir %{prefix}/share/man/man8
 
 %prep
-rm -rf %{srcdir}
-git clone https://github.com/yvs2014/%{name}
+%autosetup
 
 %build
-cd %{srcdir}
-autoreconf -fi
-./configure --prefix=%{prefix} --with-libidn
-make
+%cmake
+%cmake_build
 
 %install
-cd %{srcdir}
-DESTDIR=%{buildroot} make install
+%cmake_install
 
 %post
 setcap cap_net_raw+ep %{bindir}/%{binname}
@@ -54,7 +50,7 @@ setcap cap_net_raw+ep %{bindir}/%{binname}
 %files
 %defattr(-,root,root,-)
 %{bindir}/%{binname}
-%{mandir}/%{binname}.8.gz
+%{mandir}/%{binname}.8*
 
 %changelog
 

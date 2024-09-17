@@ -32,18 +32,19 @@ apps:
 
 parts:
   mtr:
-    plugin: autotools
-    autotools-configure-parameters:
-      - --prefix=/usr
-      - --with-libidn
+    plugin: cmake
+    cmake-parameters:
+      - -DCMAKE_BUILD_TYPE=Release
+      - -DCMAKE_INSTALL_PREFIX=/usr
 #    source: .
     source: https://github.com/yvs2014/mtr085.git
     override-pull: |
       craftctl default
       craftctl set version="$(craftctl get version).$(git rev-list --count 97af563..HEAD)"
     build-packages:
+      - git
       - build-essential
-      - pkg-config
+      - pkgconf
       - libncurses-dev
       - libidn2-dev
       - libcap-dev

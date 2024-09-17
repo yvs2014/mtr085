@@ -21,12 +21,6 @@
 
 #include <stdbool.h>
 
-#ifdef WITH_UNICODE
-#ifdef HAVE_WCHAR_H
-#include <wchar.h>
-#endif
-#endif
-
 bool mc_open(void);
 void mc_close(void);
 void mc_redraw(void);

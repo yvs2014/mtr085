@@ -22,7 +22,7 @@
 #include <errno.h>
 #include <time.h>
 
-#include "config.h"
+#include "config.h" // IWYU pragma: keep
 #if defined(LOG_POLL) && !defined(LOGMOD)
 #define LOGMOD
 #endif

@@ -3,7 +3,7 @@ Section: net
 Priority: optional
 Maintainer: mantainer <e@mail>
 Rules-Requires-Root: no
-Build-Depends: libncurses-dev, libidn2-dev, libcap-dev, debhelper, dpkg-dev, devscripts, automake, autoconf, pkgconf | pkg-config, libcap2-bin
+Build-Depends: libncurses-dev, libidn2-dev, libcap-dev, debhelper, dpkg-dev, devscripts, cmake, pkgconf | pkg-config, libcap2-bin
 Standards-Version: 4.6.2
 Homepage: https://github.com/yvs2014/mtr085
 
