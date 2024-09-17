@@ -20,6 +20,10 @@ install-sh
 missing
 stamp-h1*
 ar-lib
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+man8/
 
 /autom4te.cache/
 **/.deps/
@@ -34,6 +38,8 @@ ar-lib
 **/.debhelper
 /aur/
 /package-templates/aur-archlinux/mtr085/
+.SRCINFO
+*.zst
 /rpms/
 /_build/
 /build/

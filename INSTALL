@@ -4,7 +4,7 @@ Basic Installation
 
 preferred way: cmake
 
-1) autotools+make
+1) autotools
 autoreconf -fi
 ./configure
 make

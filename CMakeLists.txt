@@ -3,16 +3,18 @@ cmake_minimum_required(VERSION 3.12)
 project(mtr085 C)
 set(NAME "mtr")
 set(PACKAGE_NAME "${NAME}")
-
 set(VERSION "0.85")
-find_package(Git)
-if(GIT_EXECUTABLE)
-  execute_process(
-    COMMAND ${GIT_EXECUTABLE} rev-list --count 97af563..HEAD
-    OUTPUT_STRIP_TRAILING_WHITESPACE
-    RESULT_VARIABLE ERROR_CODE
-    OUTPUT_VARIABLE GITREV
-  )
+
+if(EXISTS .git)
+  find_package(Git)
+  if(GIT_EXECUTABLE)
+    execute_process(
+      COMMAND ${GIT_EXECUTABLE} rev-list --count 97af563..HEAD
+      OUTPUT_STRIP_TRAILING_WHITESPACE
+      RESULT_VARIABLE ERROR_CODE
+      OUTPUT_VARIABLE GITREV
+    )
+  endif()
 endif()
 
 #set(CMAKE_C_STANDARD 23) # compat test
@@ -130,7 +132,8 @@ if(DNS)
         set(_res_lib network)
         check_library_exists("${_res_lib}" "__${_res_fn}" "${CMAKE_LIBRARY_PATH}" HAVE___RES_IN_NET)
         if(NOT HAVE___RES_IN_NET)
-          message(FATAL_ERROR "DNS is enabled, but resolver not found")
+          message(WARNING "DNS is enabled, but resolver is not detected: suppose it's present in libc")
+          set(_res_lib c)
         endif()
       endif()
     endif()
@@ -379,9 +382,13 @@ set(EXECDIR "${CMAKE_INSTALL_BINDIR}") # with cap_net_raw
 if(SBINDIR)
   set(EXECDIR "${CMAKE_INSTALL_SBINDIR}")
 endif()
-
 install(TARGETS "${NAME}" DESTINATION "${EXECDIR}")
-install(DIRECTORY "${MAN_PATH}" TYPE MAN)
+
+if(CMAKE_VERSION VERSION_GREATER_EQUAL "3.14.0")
+  install(DIRECTORY "${MAN_PATH}" TYPE MAN)
+else()
+  install(DIRECTORY "${MAN_PATH}" DESTINATION ${CMAKE_INSTALL_MANDIR})
+endif()
 
 if(CAP)
   find_program(SETCAP setcap)
