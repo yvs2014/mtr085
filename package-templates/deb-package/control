@@ -1,7 +1,7 @@
 Source: mtr085
 Section: net
 Priority: optional
-Maintainer: mantainer <e@mail>
+Maintainer: yvs <VSYakovetsky@gmail.com>
 Rules-Requires-Root: no
 Build-Depends: libncurses-dev, libidn2-dev, libcap-dev, debhelper, dpkg-dev, devscripts, cmake, pkgconf | pkg-config, libcap2-bin
 Standards-Version: 4.6.2

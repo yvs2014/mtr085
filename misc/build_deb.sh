@@ -22,7 +22,7 @@ chf="debian/changelog"
 mkdir -p "$ddir"
 rm -f "$chf.tmp"
 dch --create -c "$chf.tmp" --package="$name" -v "$rev" -D "$dist" -u "low" -M \
-  "$name with IDN support, Unicode histograms, extra IP address info, etc."
+  "$name fork with whois info, IDN, unicode, etc."
 
 mv "$chf.tmp" "$chf"
 
