@@ -7,8 +7,8 @@ Makefile.in
 Makefile.dist
 aclocal.m4
 confdefs.h
-config.*
-!config.h.cmake
+config.h
+config.h.in
 configure
 configure.lineno
 confinc

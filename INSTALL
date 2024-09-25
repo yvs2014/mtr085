@@ -2,18 +2,23 @@
 Basic Build
 ------------------
 
-It can be built with autotools or cmake
+It can be built with autotools, cmake, or meson
 
 1) autotools
 autoreconf -fi
 ./configure
 make
-#sudo make install
+# make install
 
 2) cmake
 cmake -B _build -S $(pwd)
 cmake --build _build
-#sudo cmake --install _build --strip
+# cmake --install _build
+
+3) meson
+meson setup _build
+meson compile -C _build    #meson<0.55: ninja -C _build
+# meson install -C _build
 
 
 Packaging

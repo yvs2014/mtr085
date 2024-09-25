@@ -1,0 +1,84 @@
+#ifndef CONFIG_H
+#define CONFIG_H
+
+#mesondefine PACKAGE_NAME
+#mesondefine VERSION
+#mesondefine GITREV
+#mesondefine BUILD_OPTIONS
+
+/* Linux capabilities */
+#mesondefine LIBCAP
+
+/* Curses support */
+#mesondefine CURSESMODE
+#mesondefine HAVE_NCURSESW_NCURSES_H
+#mesondefine HAVE_NCURSESW_CURSES_H
+#mesondefine HAVE_NCURSES_NCURSES_H
+#mesondefine HAVE_NCURSES_CURSES_H
+#mesondefine HAVE_NCURSES_H
+#mesondefine HAVE_CURSES_H
+#mesondefine HAVE_USE_DEFAULT_COLORS
+
+/* Unicode related */
+#mesondefine WITH_UNICODE
+#mesondefine HAVE_WCHAR_H
+#mesondefine HAVE_WCTYPE_H
+#mesondefine HAVE_LOCALE_H
+#mesondefine HAVE_LANGINFO_H
+
+/* DNS stuff */
+#mesondefine ENABLE_DNS
+#mesondefine HAVE_RES_NMKQUERY
+#mesondefine HAVE_SYS_TYPES_H
+#mesondefine HAVE_NETDB_H
+#mesondefine HAVE_NETINET_IN_H
+#mesondefine HAVE_ARPA_NAMESER_H
+
+/* IDN capabilities */
+#mesondefine LIBIDN
+#mesondefine LIBIDN2
+
+/* IP-info lookup */
+#mesondefine WITH_IPINFO
+
+/* split-mode */
+#mesondefine SPLITMODE
+
+/* XCB/Xlib cairo graphs */
+#mesondefine GRAPHMODE
+#mesondefine WITH_XCB_GRAPHS
+#mesondefine WITH_X11_GRAPHS
+#mesondefine FC_FINI
+
+/* IPv6 */
+#mesondefine ENABLE_IPV6
+
+/* MPLS decoding */
+#mesondefine WITH_MPLS
+
+/* output formats */
+#mesondefine OUTPUT_FORMAT_RAW
+#mesondefine OUTPUT_FORMAT_TXT
+#mesondefine OUTPUT_FORMAT_CSV
+#mesondefine OUTPUT_FORMAT_JSON
+#mesondefine OUTPUT_FORMAT_XML
+
+/* debug via syslog */
+#mesondefine LOG_POLL
+#mesondefine LOG_NET
+#mesondefine LOG_DNS
+#mesondefine LOG_IPINFO
+
+
+/*
+ aux settings
+*/
+
+/* arc4 functions */
+#mesondefine HAVE_ARC4RANDOM_UNIFORM
+#mesondefine HAVE_BSD_STDLIB_H
+
+/* sys/param.h header */
+#mesondefine HAVE_SYS_PARAM_H
+
+#endif

@@ -37,7 +37,11 @@
 #endif
 
 #if   defined(LIBIDN2)
+#if   defined(HAVE_IDN2_IDN2_H)
+#include <idn2/idn2.h>
+#else
 #include <idn2.h>
+#endif
 #define IDN_TO_ASCII_LZ	idn2_to_ascii_lz
 #define IDN_TO_ASCII_8Z	idn2_to_ascii_8z
 #elif defined(LIBIDN)

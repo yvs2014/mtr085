@@ -56,7 +56,7 @@
 #endif
 
 #ifdef HAVE_ARC4RANDOM_UNIFORM
-#ifdef ARC4_IN_BSD_STDLIB_H
+#ifdef HAVE_BSD_STDLIB_H
 #include <bsd/stdlib.h>
 #endif
 #define RANDUNIFORM(base) arc4random_uniform(base)

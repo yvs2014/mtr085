@@ -1,4 +1,3 @@
-
 #ifndef CONFIG_H
 #define CONFIG_H
 
@@ -77,11 +76,9 @@
 
 /* arc4 functions */
 #cmakedefine HAVE_ARC4RANDOM_UNIFORM
-#cmakedefine ARC4_IN_BSD_STDLIB_H
+#cmakedefine HAVE_BSD_STDLIB_H
 
 /* sys/param.h header */
 #cmakedefine HAVE_SYS_PARAM_H
 
-
 #endif
-

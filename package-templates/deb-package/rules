@@ -3,10 +3,10 @@
 GCC_ONLY=-flto=auto -ffat-lto-objects -fstack-clash-protection -ffat-lto-objects
 export DEB_CFLAGS_MAINT_STRIP=$(GCC_ONLY)
 export DEB_LDFLAGS_MAINT_STRIP=$(GCC_ONLY)
-export DH_QUIET=1 # quiet cmake
+export DH_QUIET=1
 
 %:
-	dh $@ --buildsystem=cmake
+	dh $@ --buildsystem=meson
 
 override_dh_builddeb:
 	dh_builddeb $@ $(DEBDIR)

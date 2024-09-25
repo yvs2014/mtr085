@@ -3,7 +3,7 @@ Section: net
 Priority: optional
 Maintainer: yvs <VSYakovetsky@gmail.com>
 Rules-Requires-Root: no
-Build-Depends: libncurses-dev, libidn2-dev, libcap-dev, debhelper, dpkg-dev, devscripts, cmake, pkgconf | pkg-config, libcap2-bin
+Build-Depends: libncurses-dev, libidn2-dev, libcap-dev, debhelper, dpkg-dev, devscripts, meson, git, sed, pkgconf | pkg-config, libcap2-bin, libbsd-dev
 Standards-Version: 4.6.2
 Homepage: https://github.com/yvs2014/mtr085
 
@@ -17,4 +17,4 @@ Description: Full screen ncurses traceroute tool
  mtr combines the functionality of the 'traceroute' and 'ping' programs
  in a single network diagnostic tool.
  .
- This version is built from https://github.com/yvs2014/mtr085 fork
+ Built from https://github.com/yvs2014/mtr085 fork

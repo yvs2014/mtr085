@@ -8,10 +8,10 @@ finish-args:
   - --share=network
 modules:
   - name: mtr
-    buildsystem: autotools
+    buildsystem: meson
     config-opts:
-      - --sbindir=${FLATPAK_DEST}/bin
-      - --with-libidn
+      - --bindir=${FLATPAK_DEST}/bin
+      - --buildtype=release
     build-options:
       ldflags: "-Wl,--copy-dt-needed-entries"
     sources:

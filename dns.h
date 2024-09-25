@@ -44,6 +44,9 @@ extern void (*dns_txt_handler)(int at, int ndx, const char* answer);
 #include <netinet/in.h>
 #endif
 #ifdef HAVE_ARPA_NAMESER_H
+#ifndef BIND_8_COMPAT
+#define BIND_8_COMPAT
+#endif
 #include <arpa/nameser.h>
 #endif
 #ifdef HAVE_NETDB_H

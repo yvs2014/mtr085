@@ -38,24 +38,24 @@ BUILD_REQUIRES="
 	devel:libncurses$secondaryArchSuffix
 	devel:libidn2$secondaryArchSuffix
 	pkgconfig
+	meson
+	git
+	sed
 "
 BUILD_PREREQUIRES="
-	cmd:autoconf
-	cmd:automake
-	cmd:make
+	cmd:meson
 	cmd:pkg_config
 	cmd:gcc$secondaryArchSuffix
 	cmd:strip$secondaryArchSuffix
 "
 
 BUILD() {
-	runConfigure ./bootstrap.sh
-	runConfigure ./configure --with-libidn
-	make
+	meson setup _build
+	meson compile -C _build
 }
 
 INSTALL() {
-	make install
+	meson install -C _build
 	strip $prefix/bin/mtr
 }
 

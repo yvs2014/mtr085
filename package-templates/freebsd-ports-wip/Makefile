@@ -29,7 +29,9 @@ IPINFO_DESC=	Extended information like ASN, etc.
 GRAPH_DESC=	Graphs with X11 XCB backend
 SETUID_DESC=	Install with setuid root
 
-USES+=	cmake:noninja
+USES+=	meson
+USES+=	git
+USES+=	sed
 USES+=	pkgconfig
 
 .include <bsd.port.options.mk>
@@ -41,31 +43,30 @@ PLIST_FILES=	sbin/mtr
 .endif
 PLIST_FILES+=	man/man8/mtr.8.gz
 
-CMAKE_ARGS+=	-DCAP=OFF
-CMAKE_ARGS+=	-DSBINDIR=ON
-CMAKE_ARGS+=	-DCMAKE_INSTALL_MANDIR=man
+MESON_ARGS+=	-DCAP=false
+MESON_ARGS+=	-DSBIN=true
 
 .if empty(PORT_OPTIONS:MIPINFO)
-CMAKE_ARGS+=	-DIPINFO=OFF
+MESON_ARGS+=	-DIPINFO=false
 .endif
 
 .if empty(PORT_OPTIONS:MIDN)
-CMAKE_ARGS+=	-DIDN=OFF
+MESON_ARGS+=	-DIDN=false
 .else
 LIB_DEPENDS+=	libidn2.so:dns/libidn2
 .endif
 
 .if empty(PORT_OPTIONS:MUNICODE)
-CMAKE_ARGS+=	-DUNICODE=OFF
+MESON_ARGS+=	-DUNICODE=false
 .endif
 
 .if empty(PORT_OPTIONS:MIPV6)
-CMAKE_ARGS+=	-DIPV6=OFF
+MESON_ARGS+=	-DIPV6=false
 .endif
 
 .if ${PORT_OPTIONS:MGRAPH}
 USE_XORG=	xcb
-CMAKE_ARGS+=	-DGRAPH=ON
+MESON_ARGS+=	-DGRAPH=true
 GRAPH_LIB_DEPENDS+=	libcairo.so:graphics/cairo \
 		libpango-1.0.so:x11-toolkits/pango \
 		libxcb-keysyms.so:x11/xcb-util-keysyms
