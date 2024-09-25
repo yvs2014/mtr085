@@ -23,7 +23,7 @@ USE_LANGUAGES=	c
 CONFLICTS=	mtr-[0-9]*
 
 GNU_CONFIGURE=		YES
-USE_TOOLS+=		meson git sed pkg-config
+USE_TOOLS+=		meson pkg-config
 INSTALLATION_DIRS=	${PKGMANDIR}/man8 sbin share/doc/mtr
 
 MESON_ARGS+=	-DCAP=false

@@ -28,6 +28,7 @@ echo "$NAME ($next) $DISTS; $META\n\n$deb_comments\n\n -- $EMAIL  $(date -R)" > 
 echo "Keep in mind to do:"
 echo "	git diff"
 echo "	git status"
+echo "	meson setup _build && meson compile -C _build && rm -rf _build"
 echo "	git add ."
 echo "	git commit $git_comments"
 echo "	git push"

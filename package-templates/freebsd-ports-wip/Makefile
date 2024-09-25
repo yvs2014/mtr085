@@ -30,8 +30,6 @@ GRAPH_DESC=	Graphs with X11 XCB backend
 SETUID_DESC=	Install with setuid root
 
 USES+=	meson
-USES+=	git
-USES+=	sed
 USES+=	pkgconfig
 
 .include <bsd.port.options.mk>
@@ -41,7 +39,7 @@ PLIST_FILES=	"@(,,4555) sbin/mtr"
 .else
 PLIST_FILES=	sbin/mtr
 .endif
-PLIST_FILES+=	man/man8/mtr.8.gz
+PLIST_FILES+=	share/man/man8/mtr.8.gz
 
 MESON_ARGS+=	-DCAP=false
 MESON_ARGS+=	-DSBIN=true

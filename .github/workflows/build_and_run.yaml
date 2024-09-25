@@ -52,7 +52,7 @@ jobs:
         with:
           ref: master
       - name: Install mandatory packages for building
-        run: brew install meson git pkg-config
+        run: brew install meson
       - name: Create executable with ${{matrix.compiler}}
         env:
           CC: ${{matrix.compiler}}

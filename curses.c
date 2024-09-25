@@ -26,7 +26,9 @@
 #include "config.h"
 
 #ifdef WITH_UNICODE
+#ifndef _XOPEN_SOURCE_EXTENDED
 #define _XOPEN_SOURCE_EXTENDED
+#endif
 #ifdef HAVE_WCHAR_H
 #  include <wchar.h>
 #endif

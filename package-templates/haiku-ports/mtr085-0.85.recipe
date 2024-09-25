@@ -39,8 +39,6 @@ BUILD_REQUIRES="
 	devel:libidn2$secondaryArchSuffix
 	pkgconfig
 	meson
-	git
-	sed
 "
 BUILD_PREREQUIRES="
 	cmd:meson
@@ -50,12 +48,15 @@ BUILD_PREREQUIRES="
 "
 
 BUILD() {
-	meson setup _build
+	mkdir -p _build
+	meson _build -DCAP=false --buildtype=release \
+--prefix=$prefix --libdir=$libDir --includedir=$includeDir
 	meson compile -C _build
+	ninja -C _build
 }
 
 INSTALL() {
-	meson install -C _build
+	ninja -C _build install
 	strip $prefix/bin/mtr
 }
 
