@@ -20,7 +20,6 @@
 #include <unistd.h>
 #include <libgen.h>
 #include <getopt.h>
-#include <string.h>
 #include <fcntl.h>
 #include <limits.h>
 #include <sys/stat.h>
@@ -90,7 +89,6 @@ pid_t mypid;
 char mtr_args[ARGS_LEN + 1];  // display in curses title
 unsigned run_args;            // runtime args to display hints
 unsigned kept_args;           // kept args mapped in bits
-bool af_specified;            // autodetect address family if unspecified
 
 #ifdef ENABLE_DNS
 bool show_ips;
@@ -212,7 +210,7 @@ long max_ping
 ;
 //
 
-static char *iface_addr;
+static const char *iface_addr;
 //
 
 // If the file stream is associated with a regular file, lock/unlock the file
@@ -327,7 +325,7 @@ int limit_int(const int v0, const int v1, const int v, const char *it) {
   }
   return v;
 }
- 
+
 static void parse_options(int argc, char **argv) {
   SETBIT(kept_args, RA_DNS); // dns is on by default
 
@@ -619,8 +617,7 @@ static bool set_target(struct addrinfo *res) {
     WARNX_("Unknown address family %d", af);
     return false;
   }
-  static struct hostent h;
-  memset(&h, 0, sizeof(h));
+  static struct hostent h = {0};
   h.h_name = ai->ai_canonname;
   h.h_aliases = NULL;
   h.h_addrtype = ai->ai_family;
@@ -718,8 +715,7 @@ int main(int argc, char **argv) {
     if (!(dsthost = argv[optind]))
       continue;
 
-    struct addrinfo hints, *res;
-    memset(&hints, 0, sizeof(hints));
+    struct addrinfo hints = {0}, *res;
     hints.ai_family = AF_UNSPEC;
     hints.ai_socktype = SOCK_DGRAM;
     int rc = getaddrinfo(dsthost, NULL, &hints, &res);

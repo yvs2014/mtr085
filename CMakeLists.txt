@@ -18,6 +18,7 @@ if(EXISTS .git)
 endif()
 
 #set(CMAKE_C_STANDARD 23) # compat test
+#set(CMAKE_EXPORT_COMPILE_COMMANDS ON) # compile_commands.json
 include(GNUInstallDirs)
 include(CheckIncludeFile)
 include(CheckFunctionExists)

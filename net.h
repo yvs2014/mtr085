@@ -57,6 +57,9 @@
 #endif
 
 extern int af;
+#ifdef ENABLE_IPV6
+extern bool af_specified;
+#endif
 extern ip_t unspec_addr;
 
 extern bool (*addr_exist)(const void *); // true if specified
@@ -191,7 +194,7 @@ bool net_open(void);
 void net_assert(void);
 void net_set_type(int type);
 bool net_set_host(struct hostent *h);
-bool net_set_ifaddr(char *ifaddr);
+bool net_set_ifaddr(const char *ifaddr);
 void net_reset(void);
 void net_close(void);
 int net_wait(void);
@@ -207,9 +210,11 @@ int net_duplicate(int at, int seq);
 
 void sockaddrtop(struct sockaddr *saddr, char *strptr, size_t len);
 const char *strlongip(ip_t *ip);
+bool addr4exist(const void *a);
 bool addr4equal(const void *a, const void *b);
 void* addr4copy(void *a, const void *b);
 #ifdef ENABLE_IPV6
+bool addr6exist(const void *a);
 bool addr6equal(const void *a, const void *b);
 void* addr6copy(void *a, const void *b);
 void net_setsocket6(void);

@@ -51,7 +51,6 @@ BUILD() {
 	mkdir -p _build
 	meson _build -DCAP=false --buildtype=release \
 --prefix=$prefix --libdir=$libDir --includedir=$includeDir
-	meson compile -C _build
 	ninja -C _build
 }
 

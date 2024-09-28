@@ -191,11 +191,14 @@ struct sequence {
 };
 
 // global vars
-ip_t unspec_addr;	// zero by definition
+ip_t unspec_addr; // 0 by definition
 bool (*addr_exist)(const void *); // true if address is specified
 bool (*addr_equal)(const void *, const void *); // equal
 void* (*addr_copy)(void *, const void *);
-int af;	// address family
+int af = AF_INET; // address family
+#ifdef ENABLE_IPV6
+bool af_specified; // set by options (-4 -6)
+#endif
 struct nethost host[MAXHOST];
 char localaddr[INET6_ADDRSTRLEN];
 unsigned long net_queries[4]; // number of queries (sum, icmp, udp, tcp)
@@ -1070,7 +1073,7 @@ void net_reset(void) {
 }
 
 
-bool net_set_ifaddr(char *ifaddr) {
+bool net_set_ifaddr(const char *ifaddr) {
   int len = 0;
   sourcesockaddr->sa_family = af;
   switch (af) {

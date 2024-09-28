@@ -33,13 +33,17 @@
 #include "dns.h"
 #include "net.h"
 
+#ifndef MAXNS
+#define MAXNS 3
+#endif
+
 #ifdef ENABLE_IPV6
 #if defined(__GLIBC__) || defined(__linux__)
-#define NSSOCKADDR6(i) (myres._u._ext.nsaddrs[i])
+#define NSADDRS6(i) (myres._u._ext.nsaddrs[i])
 #elif defined(__OpenBSD__)
-#define NSSOCKADDR6(i) ((struct sockaddr_in6 *) &(_res_ext.nsaddr_list[i]))
+#define NSADDRS6(i) ((struct sockaddr_in6 *) &_res_ext.nsaddr_list[i])
 #else
-#define NSSOCKADDR6(i) (&(myres._u._ext.ext->nsaddrs[i].sin6))
+#define NSADDRS6(i) (&myres._u._ext.ext->nsaddrs[i].sin6)
 #endif
 #if defined(__FreeBSD__) || defined(__NetBSD__) || defined(__sun) || defined(__HAIKU__) || defined(__APPLE__)
 #ifdef __HAIKU__
@@ -69,8 +73,15 @@ struct __res_state_ext {
 #endif
 #endif
 
+static int nscount;
+static struct sockaddr_in nsaddrs[MAXNS];
+#ifdef ENABLE_IPV6
+static int nscount6;
+static struct sockaddr_in6 nsaddrs6[MAXNS];
+#endif
+
 #ifdef HAVE_RES_NMKQUERY
-struct __res_state myres;
+static struct __res_state myres;
 #define MYRES_INIT(res) res_ninit(&res)
 #define MYRES_CLOSE(res) res_nclose(&res)
 #define MYRES_QUERY(res, ...) res_nmkquery(&res, __VA_ARGS__)
@@ -97,7 +108,6 @@ void (*dns_ptr_handler)(int at, int ndx, const char* answer);
 void (*dns_txt_handler)(int at, int ndx, const char* answer);
 //
 
-static bool resolv_ready;
 static bool dns_ready;
 static int resfd = -1;
 #ifdef ENABLE_IPV6
@@ -126,73 +136,106 @@ static int dns_mkquery(int op, const char *dname, int class, int type, const uin
   return MYRES_QUERY(myres, op, dname, class, type, data, datalen, newrr, buf, buflen);
 }
 
-static bool init_resolv(void) {
-  if (!resolv_ready) {
-    if (MYRES_INIT(myres) >= 0) {
-      if (myres.nscount) {
-        myres.options |= RES_DEFAULT;
-        myres.options &= ~(RES_DNSRCH | RES_DEFNAMES);
-        resolv_ready = true;
-      } else {
-        WARNX("No defined nameservers");
-        MYRES_CLOSE(myres);
-      }
-    } else WARN("res_init");
-  }
-  return resolv_ready;
-}
-
-static bool open_sockets(void) {
-  if (resfd < 0) {
+static bool dns_sockets(void) {
+  if (nscount && (resfd < 0)) {
     if ((resfd = socket(AF_INET, SOCK_DGRAM, 0)) >= 0)
       /*summ*/ sum_sock[0]++;
     else
       WARN("socket");
   }
 #ifdef ENABLE_IPV6
-  if (resfd6 < 0) {
+  if (nscount6 && (resfd6 < 0)) {
     if ((resfd6 = socket(AF_INET6, SOCK_DGRAM, 0)) >= 0)
       /*summ*/ sum_sock[0]++;
     else
       LOGMSG("socket6");
   }
 #endif
-  return (resfd >= 0)
+  return (nscount && (resfd >= 0))
 #ifdef ENABLE_IPV6
-     || (resfd6 >= 0)
+    || (nscount6 && (resfd6 >= 0))
 #endif
   ;
 }
 
 bool dns_open(void) {
-  if (init_resolv())
-    dns_ready = open_sockets();
+  if (!dns_ready) {
+    if (MYRES_INIT(myres) >= 0) {
+      myres.options |= RES_DEFAULT;
+      myres.options &= ~(RES_DNSRCH | RES_DEFNAMES);
+      // note: _res is empty with musl libc, .nscount6 is 0 with glibc
+#ifdef ENABLE_IPV6
+      if (!af_specified || (af == AF_INET))
+#endif
+        for (int i = 0; (i < MAXNS) && (nscount < MAXNS); i++)
+          if ((myres.nsaddr_list[i].sin_family == AF_INET) && addr4exist(&myres.nsaddr_list[i].sin_addr))
+            memcpy(&nsaddrs[nscount++], &myres.nsaddr_list[i], sizeof(nsaddrs[0]));
+#ifdef ENABLE_IPV6
+      if (!af_specified || (af == AF_INET6))
+        for (int i = 0; (i < MAXNS) && (nscount6 < MAXNS)
+#if defined(__GLIBC__) || defined(__linux__)
+        && NSADDRS6(i)
+#endif
+        ; i++)
+          if ((NSADDRS6(i)->sin6_family == AF_INET6) && addr6exist(&NSADDRS6(i)->sin6_addr))
+            memcpy(&nsaddrs6[nscount6++], NSADDRS6(i), sizeof(nsaddrs6[0]));
+#endif
+      dns_ready =
+#ifdef ENABLE_IPV6
+        (nscount6 > 0) ||
+#endif
+        (nscount > 0);
+      if (!dns_ready) {
+#ifdef ENABLE_IPV6
+        if (af_specified) WARNX_("No %s nameservers", (af == AF_INET6) ? "IPv6" : "IPv4"); else
+#endif
+        WARNX("No nameservers");
+        MYRES_CLOSE(myres);
+      }
+    } else WARN("res_init");
+  }
+  if (dns_ready) {
+    dns_ready = dns_sockets();
+    if (!dns_ready) MYRES_CLOSE(myres);
+  }
   LOGMSG_("%s", dns_ready ? "ok" : "failed");
+#ifdef LOGMOD
+  LOGMSG_("nscount4=%d", nscount);
+  for (int i = 0; i < nscount; i++) {
+    char buff[INET_ADDRSTRLEN];
+    if (inet_ntop(nsaddrs[i].sin_family, &nsaddrs[i].sin_addr, buff, sizeof(buff)))
+      LOGMSG_("ns4#%d: %s:%u (af=%u)", i, buff, ntohs(nsaddrs[i].sin_port), nsaddrs[i].sin_family)
+    else
+      LOGMSG_("ns4[%d]: %08x:%u (af=%u)", i, nsaddrs[i].sin_addr.s_addr, ntohs(nsaddrs[i].sin_port), nsaddrs[i].sin_family);
+  }
+  LOGMSG_("nscount6=%d", nscount6);
+  for (int i = 0; i < nscount6; i++) {
+    char buff[INET6_ADDRSTRLEN];
+    if (!inet_ntop(nsaddrs6[i].sin6_family, &nsaddrs6[i].sin6_addr, buff, sizeof(buff)))
+      for (int j = 0, l = 0; j < sizeof(nsaddrs6[i].sin6_addr.s6_addr); j++)
+        l += snprintf(buff + l, sizeof(buff) - l, "%02x", nsaddrs6[i].sin6_addr.s6_addr[j]);
+    LOGMSG_("ns6#%d: [%s]:%u (af=%u)", i, buff, ntohs(nsaddrs6[i].sin6_port), nsaddrs6[i].sin6_family);
+  }
+#endif
   return dns_ready;
 }
 
 void dns_close(void) {
-  if (dns_ready) { // close own sockets
-    if (resfd >= 0) {
-      close(resfd);
-      /*summ*/ sum_sock[1]++;
-      resfd = -1;
-    }
+  dns_ready = false;
+  if (resfd >= 0) {
+    close(resfd);
+    /*summ*/ sum_sock[1]++;
+    resfd = -1;
+  }
 #ifdef ENABLE_IPV6
-    if (resfd6 >= 0) {
-      close(resfd6);
-      /*summ*/ sum_sock[1]++;
-      resfd6 = -1;
-    }
+  if (resfd6 >= 0) {
+    close(resfd6);
+    /*summ*/ sum_sock[1]++;
+    resfd6 = -1;
+  }
 #endif
-    dns_ready = false;
-    LOGMSG("ok");
-  }
-  // res_close()
-  if (resolv_ready) {
-    MYRES_CLOSE(myres);
-    resolv_ready = false;
-  }
+  MYRES_CLOSE(myres);
+  LOGMSG("ok");
 }
 
 #ifdef ENABLE_IPV6
@@ -217,7 +260,13 @@ char* ip2arpa(ip_t *ip, const char *suff4, const char *suff6) {
   return lqbuf;
 }
 
-
+#define SEND2NS(sendto_fd, sendto_addr, sendto_socktype) { \
+  int rc = sendto(sendto_fd, req_buf, len, 0, \
+    (const struct sockaddr*)sendto_addr, sizeof(struct sendto_socktype)); \
+  /*summ*/ dns_queries[0]++; if (tndx > 0) dns_queries[tndx]++; \
+  if (rc >= 0) return rc; \
+  LOGMSG_("[%d:%d type=%d id=%d] #%d: %s", at, ndx, type, hp->id, i, strerror(errno)); \
+}
 int dns_send_query(int at, int ndx, const char *qstr, int type) {
   static uint8_t req_buf[PACKETSZ];
   if (!dns_ready)
@@ -232,21 +281,20 @@ int dns_send_query(int at, int ndx, const char *qstr, int type) {
   hp->id = str2hint(qstr, at, ndx);
   LOGMSG_("[%d:%d type=%d id=%d]: %s", at, ndx, type, hp->id, qstr);
 
-  for (int i = 0; i < myres.nscount; i++) {
-    int re;
+  { int tndx = (type == T_PTR) ? 1 : ((type == T_TXT) ? 2 : -1);
 #ifdef ENABLE_IPV6
-    if (myres.nsaddr_list[i].sin_family == AF_INET6)
-      re = sendto(resfd6, req_buf, len, 0, (struct sockaddr *)NSSOCKADDR6(i), sizeof(struct sockaddr_in6));
-    else
+    if (!af_specified || (af == AF_INET))
 #endif
-      re = sendto(resfd, req_buf, len, 0, (struct sockaddr *)&myres.nsaddr_list[i], sizeof(struct sockaddr));
-    /*summ*/ { dns_queries[0]++; if (type == T_PTR) dns_queries[1]++; else if (type == T_TXT) dns_queries[2]++; }
-    if (re >= 0) // one successful request is enough
-      return re;
-    LOGMSG_("[%d:%d type=%d id=%d] #%d: %s", at, ndx, type, hp->id, i, strerror(errno));
-  }
-  return -1;
+      for (int i = 0; i < nscount; i++)
+        SEND2NS(resfd, &nsaddrs[i], sockaddr_in);
+#ifdef ENABLE_IPV6
+    if (!af_specified || (af == AF_INET6))
+      for (int i = 0; i < nscount6; i++)
+        SEND2NS(resfd6, &nsaddrs6[i], sockaddr_in6);
+#endif
+  } return -1;
 }
+#undef SENDTONS
 
 const char *dns_ptr_lookup(int at, int ndx) {
   if (!enable_dns) // not enabled
@@ -436,23 +484,24 @@ static void dns_parse_reply(uint8_t *buf, ssize_t len) {
 static bool validate_ns(int family) {
 #ifdef ENABLE_IPV6
   if (family == AF_INET6) {
-    static struct in6_addr localhost6 = IN6ADDR_LOOPBACK_INIT;
-    bool local = addr6equal(&(from6->sin6_addr), &localhost6);
-    for (int i = 0; i < myres.nscount; i++) {
-      if (addr6equal(&(NSSOCKADDR6(i)->sin6_addr), &(from6->sin6_addr)))
+    static struct in6_addr localhost = IN6ADDR_LOOPBACK_INIT;
+    bool local = addr6equal(&from6->sin6_addr, &localhost);
+    for (int i = 0; i < nscount6; i++) {
+      struct in6_addr *addr = &nsaddrs6[i].sin6_addr;
+      if (addr6equal(addr, &from6->sin6_addr))
         return true;
-      if (local && addr6equal(&(NSSOCKADDR6(i)->sin6_addr), &unspec_addr))
+      if (local && addr6equal(addr, &unspec_addr))
         return true;
     }
   } else
 #endif
-  {
-    static struct in_addr localhost4 = { .s_addr = INADDR_LOOPBACK };
-    bool local = addr4equal(&(from4->sin_addr), &localhost4);
-    for (int i = 0; i < myres.nscount; i++) {
-      if (addr4equal(&(myres.nsaddr_list[i].sin_addr), &(from4->sin_addr)))
+  { static struct in_addr localhost = { .s_addr = INADDR_LOOPBACK };
+    bool local = addr4equal(&from4->sin_addr, &localhost);
+    for (int i = 0; i < nscount; i++) {
+      struct in_addr *addr = &nsaddrs[i].sin_addr;
+      if (addr4equal(addr, &from4->sin_addr))
         return true;
-      if (local && addr4equal(&(myres.nsaddr_list[i].sin_addr), &unspec_addr))
+      if (local && addr4equal(addr, &unspec_addr))
         return true;
     }
   }
