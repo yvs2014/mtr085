@@ -100,6 +100,7 @@ EXCLOPTS += g
 endif
 if !DNS
 EXCLOPTS += n
+EXCLOPTS += N
 endif
 if !OUTPUTFMT
 EXCLOPTS += o

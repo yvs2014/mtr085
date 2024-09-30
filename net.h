@@ -23,18 +23,16 @@
 #include <arpa/inet.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
-#include <netdb.h>
 #include <time.h>
 
 #include "common.h"
 
+#ifdef HAVE_NETDB_H
+#include <netdb.h>
+#endif
 #ifdef ENABLE_IPV6
 #include <netinet/ip6.h>
 #include <netinet/icmp6.h>
-#endif
-
-#ifndef INET6_ADDRSTRLEN
-#define INET6_ADDRSTRLEN	46
 #endif
 
 #define MAXHOST 64          // if you choose 256, then adjust IDMASK ID2AT AT2ID ID2NDX

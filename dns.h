@@ -20,10 +20,15 @@
 #define DNS_H
 
 #include "common.h"
+#include "config.h"
 
 extern bool enable_dns;
 extern unsigned dns_queries[];
 extern unsigned dns_replies[];
+extern struct sockaddr_in *custom_res;
+#ifdef ENABLE_IPV6
+extern struct sockaddr_in6 *custom_res6;
+#endif
 
 bool dns_open(void);
 void dns_close(void);
@@ -40,9 +45,7 @@ extern void (*dns_txt_handler)(int at, int ndx, const char* answer);
 #ifdef HAVE_SYS_TYPES_H
 #include <sys/types.h>
 #endif
-#ifdef HAVE_NETINET_IN_H
 #include <netinet/in.h>
-#endif
 #ifdef HAVE_ARPA_NAMESER_H
 #ifndef BIND_8_COMPAT
 #define BIND_8_COMPAT

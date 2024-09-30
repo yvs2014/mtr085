@@ -29,10 +29,9 @@
 /* DNS stuff */
 #cmakedefine ENABLE_DNS
 #cmakedefine HAVE_RES_NMKQUERY
+#cmakedefine HAVE_ARPA_NAMESER_H
 #cmakedefine HAVE_SYS_TYPES_H
 #cmakedefine HAVE_NETDB_H
-#cmakedefine HAVE_NETINET_IN_H
-#cmakedefine HAVE_ARPA_NAMESER_H
 
 /* IDN capabilities */
 #cmakedefine LIBIDN
@@ -74,7 +73,8 @@
  aux settings
 */
 
-/* arc4 functions */
+/* BSD functions */
+#cmakedefine HAVE_STRLCPY
 #cmakedefine HAVE_ARC4RANDOM_UNIFORM
 #cmakedefine HAVE_BSD_STDLIB_H
 

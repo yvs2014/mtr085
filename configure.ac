@@ -24,18 +24,17 @@ m4_ifdef([AX_CHECK_COMPILE_FLAG],
 	)]
 )
 
-# common Unix parameters
+AC_CHECK_HEADERS([netdb.h], AC_DEFINE(HAVE_NETDB_H, 1))
 AC_CHECK_HEADERS([sys/param.h], AC_DEFINE(HAVE_SYS_PARAM_H, 1))
-# for netcode
-dnl AC_CHECK_HEADERS([netinet/in_systm.h], AC_DEFINE(HAVE_NETINET_IN_SYSTM_H, 1))
+AC_CHECK_HEADERS([bsd/stdlib.h], AC_DEFINE(HAVE_BSD_STDLIB_H, 1))
 
 AC_SEARCH_LIBS([pow], [m],, AC_MSG_ERROR(No math library found))
 AC_SEARCH_LIBS([warnx], [bsd],, AC_MSG_ERROR(No bsd err/warn library found))
 AC_SEARCH_LIBS([socket], [socket network],, AC_MSG_ERROR(No socket library found))
+AC_CHECK_FUNC([strlcpy], AC_DEFINE(HAVE_STRLCPY, 1, [Define if strlcpy exists]),
+	AC_SEARCH_LIBS([strlcpy], [bsd], [AC_DEFINE(HAVE_STRLCPY, 1)]))
 AC_CHECK_FUNC([arc4random_uniform], AC_DEFINE(HAVE_ARC4RANDOM_UNIFORM, 1, [Define if arc4random_uniform exists]),
-	AC_SEARCH_LIBS([arc4random_uniform], [bsd], [AC_DEFINE(HAVE_ARC4RANDOM_UNIFORM, 1,,)
-		AC_CHECK_HEADERS([bsd/stdlib.h], AC_DEFINE(HAVE_BSD_STDLIB_H, 1, [Define if arc4 funcs in bsd/stdlib.h]))
-]))
+	AC_SEARCH_LIBS([arc4random_uniform], [bsd], [AC_DEFINE(HAVE_ARC4RANDOM_UNIFORM, 1)]))
 
 AC_ARG_ENABLE([ipv6],
 	AS_HELP_STRING([--disable-ipv6], [do not enable IPv6]),

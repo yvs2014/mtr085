@@ -7,6 +7,14 @@
 #include <stdlib.h>
 #include <sys/time.h>
 
+#include <netinet/in.h>
+#ifndef INET_ADDRSTRLEN
+#define INET_ADDRSTRLEN	16
+#endif
+#ifndef INET6_ADDRSTRLEN
+#define INET6_ADDRSTRLEN	46
+#endif
+
 #include "config.h"
 
 #ifdef HAVE_SYS_PARAM_H
@@ -19,7 +27,7 @@ typedef struct in6_addr ip_t;
 typedef struct in_addr ip_t;
 #endif
 
-// stats fields description
+// stat fields description
 typedef struct statf {
   const char key;
   const char *hint;

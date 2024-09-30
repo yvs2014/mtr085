@@ -54,7 +54,7 @@ if meson.version().version_compare('>=0.53')
     'IPV6': ipv6, 'MPLS': mpls,
   }, bool_yn: true)
 endif
-headers = ['sys/param.h']
+headers = ['sys/param.h', 'netdb.h']
 incdir  = []
 
 # sources
@@ -165,8 +165,6 @@ if dns
     deps += libnsl
   endif
   headers += 'arpa/nameser.h'
-  headers += 'netinet/in.h'
-  headers += 'netdb.h'
   headers += 'sys/types.h'
   srcn += 'dns'
   optlist += '+DNS'
@@ -174,6 +172,7 @@ if dns
 else
   optlist += '-DNS'
   manexcl += 'n'
+  manexcl += 'N'
 endif
 #
 if idn
@@ -353,6 +352,7 @@ fndesc = {
   'pow': {'libs': ['m'], 'hdr': 'math.h'},
   'warnx': {'libs': ['bsd'], 'hdr': 'err.h'},
   'socket': {'libs': ['socket', 'network'], 'hdr': 'sys/socket.h'},
+  'strlcpy': {'libs': ['bsd'], 'hdr': 'bsd/stdlib.h', 'libhdr': true, 'req': false},
   'arc4random_uniform': {'libs': ['bsd'], 'hdr': 'bsd/stdlib.h', 'libhdr': true, 'req': false},
 }
 #

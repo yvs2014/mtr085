@@ -29,10 +29,9 @@
 /* DNS stuff */
 #mesondefine ENABLE_DNS
 #mesondefine HAVE_RES_NMKQUERY
+#mesondefine HAVE_ARPA_NAMESER_H
 #mesondefine HAVE_SYS_TYPES_H
 #mesondefine HAVE_NETDB_H
-#mesondefine HAVE_NETINET_IN_H
-#mesondefine HAVE_ARPA_NAMESER_H
 
 /* IDN capabilities */
 #mesondefine LIBIDN
@@ -74,7 +73,8 @@
  aux settings
 */
 
-/* arc4 functions */
+/* BSD functions */
+#mesondefine HAVE_STRLCPY
 #mesondefine HAVE_ARC4RANDOM_UNIFORM
 #mesondefine HAVE_BSD_STDLIB_H
 

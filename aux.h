@@ -16,7 +16,7 @@
 #define FLD_DEFAULT "LS NABWV"
 #define LENVALMIL(val) double _v = (val) / (double)MIL; int _l = val2len(_v);
 
-char *trim(char *s);
+char* trim(char *s);
 int val2len(double v);
 
 void set_fld_active(const char *s);

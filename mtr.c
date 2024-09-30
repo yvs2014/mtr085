@@ -18,6 +18,7 @@
 
 #include <stdio.h>
 #include <unistd.h>
+#include <string.h>
 #include <libgen.h>
 #include <getopt.h>
 #include <fcntl.h>
@@ -25,6 +26,16 @@
 #include <sys/stat.h>
 
 #include "common.h"
+
+#ifdef HAVE_STLCPY
+#ifdef HAVE_BSD_STDLIB_H
+#include <bsd/stdlib.h>
+#endif
+// note: return size can distinct: src.len() and printed chars
+#define STRLCPY(dst, src, size) strlcpy(dst, src, size)
+#else
+#define STRLCPY(dst, src, size) snprintf(dst, size, "%s", src)
+#endif
 
 #ifdef LIBCAP
 #include <sys/capability.h>
@@ -172,6 +183,7 @@ static struct option long_options[] = {
   { "max-ttl",    1, 0, 'm' },
 #ifdef ENABLE_DNS
   { "no-dns",     0, 0, 'n' },
+  { "ns",         1, 0, 'N' },
 #endif
 #ifdef OUTPUT_FORMAT
   { "output",     1, 0, 'o' },  // output format: raw, txt, csv, json, xml
@@ -263,6 +275,9 @@ static const char *get_opt_desc(char opt) {
     case 'd': return "MODE";
     case 's': return "BYTES";
     case 'F': return "FIELDS";
+#ifdef ENABLE_DNS
+    case 'N': return "NS.ADD.RE.SS";
+#endif
 #ifdef OUTPUT_FORMAT
     case 'o': { static char _oopt[] =
 #ifdef OUTPUT_FORMAT_RAW
@@ -426,6 +441,59 @@ static void parse_options(int argc, char **argv) {
       enable_dns = false;
       CLRBIT(kept_args, RA_DNS);
       break;
+    case 'N': {
+      char buff[INET6_ADDRSTRLEN + 6] = {0};
+      STRLCPY(buff, optarg, sizeof(buff));
+      char *host = trim(buff), *port = NULL;
+#ifdef ENABLE_IPV6
+      if (host && (host[0] == '[')) {
+        port = strrchr(host, ']');
+        if (!port) FAIL_("Failed to parse IPv6 literal: %s", host);
+        *port++ = 0; port = trim(port);
+        host++; host = trim(host);
+        if (port && (port[0] == ':')) port++;
+        port = trim(port);
+      } else if (strchr(host, '.'))
+#endif
+      { port = strrchr(host, ':');
+        if (port) { *port++ = 0; port = trim(port); host = trim(host); }}
+      if (!port) port = "53";
+      struct addrinfo hints = {0}, *ns;
+      hints.ai_family = AF_UNSPEC;
+      hints.ai_socktype = SOCK_DGRAM;
+      hints.ai_flags |= AI_NUMERICHOST;
+      hints.ai_flags |= AI_NUMERICSERV;
+      int rc = getaddrinfo(host, port, &hints, &ns);
+      if (rc || !ns) {
+        if (rc == EAI_SYSTEM) FAIL("getaddrinfo()");
+        FAIL_("Failed to set NS(%s): %s", optarg, gai_strerror(rc));
+      }
+#define NS_WARN "%s is aready set, setting a new one ..."
+#ifdef ENABLE_IPV6
+      if (ns->ai_family == AF_INET6) {
+        if (custom_res6) { free(custom_res6); WARNX_(NS_WARN, "NS6"); }
+        custom_res6 = malloc(sizeof(*custom_res6));
+        if (custom_res6 && ns->ai_addr && (ns->ai_addrlen == sizeof(*custom_res6))
+            && addr6exist(&((struct sockaddr_in6 *)ns->ai_addr)->sin6_addr))
+          memcpy(custom_res6, ns->ai_addr, ns->ai_addrlen);
+        else
+          FAIL_("Failed to set NS6(%s)", optarg);
+        if (!custom_res6->sin6_port)
+          custom_res6->sin6_port = htons(53);
+      } else if (ns->ai_family == AF_INET)
+#endif
+      { if (custom_res) { free(custom_res); WARNX_(NS_WARN, "NS"); }
+        custom_res = malloc(sizeof(*custom_res));
+        if (custom_res && ns->ai_addr && (ns->ai_addrlen == sizeof(*custom_res))
+            && addr4exist(&((struct sockaddr_in *)ns->ai_addr)->sin_addr))
+          memcpy(custom_res, ns->ai_addr, ns->ai_addrlen);
+        else
+          FAIL_("Failed to set NS(%s)", optarg);
+        if (!custom_res->sin_port)
+          custom_res->sin_port = htons(53); }
+#undef NS_WARN
+      freeaddrinfo(ns);
+      } break;
 #endif
 #ifdef OUTPUT_FORMAT
     case 'o':
