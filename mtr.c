@@ -89,6 +89,9 @@
 #ifdef GRAPHMODE
 #include "graphcairo-mtr.h"
 #endif
+#ifdef OUTPUT_FORMAT_RAW
+#include "report.h"
+#endif
 
 #define REPORT_PINGS 10
 #define CACHE_TIMEOUT 60
@@ -101,6 +104,9 @@ char mtr_args[ARGS_LEN + 1];  // display in curses title
 unsigned run_args;            // runtime args to display hints
 unsigned kept_args;           // kept args mapped in bits
 
+#ifdef ENABLE_IPV6
+static bool af_specified; // set with -4/-6 options
+#endif
 #ifdef ENABLE_DNS
 bool show_ips;
 #endif
@@ -122,7 +128,6 @@ int syn_timeout = MIL;        // for TCP tracing (1sec in msec)
 int sum_sock[2];              // socket summary: open()/close() calls
 int last_neterr;              // last known network error
 char neterr_txt[ERRBYFN_SZ];  // buff for 'last_neterr'
-static bool set_target_success;
 // chart related
 int display_offset;
 int curses_mode;              // 1st and 2nd bits, 3rd is reserved
@@ -341,6 +346,31 @@ int limit_int(const int v0, const int v1, const int v, const char *it) {
   return v;
 }
 
+#ifdef ENABLE_DNS
+static bool set_custom_res(struct addrinfo *ns) {
+  if (ns && ns->ai_addr && ns->ai_family &&
+#ifdef ENABLE_IPV6
+      ((ns->ai_family == AF_INET6) ? addr6exist(&((struct sockaddr_in6 *)ns->ai_addr)->sin6_addr) :
+#endif
+      ((ns->ai_family == AF_INET) ? addr4exist(&((struct sockaddr_in *)ns->ai_addr)->sin_addr) : false))) {
+    if (custom_res) { free(custom_res); WARNX("NS is aready set, setting a new one ..."); }
+    custom_res = malloc(sizeof(*custom_res));
+    if (custom_res) {
+      memcpy(custom_res, ns->ai_addr, ns->ai_addrlen);
+      uint16_t *port =
+#ifdef ENABLE_IPV6
+        (ns->ai_family == AF_INET6) ? &custom_res->S6PORT :
+#endif
+        ((ns->ai_family == AF_INET) ? &custom_res->S_PORT : NULL);
+      if (port && !*port) *port = htons(53);
+      return true;
+    }
+  }
+  return false;
+}
+#endif
+
+
 static void parse_options(int argc, char **argv) {
   SETBIT(kept_args, RA_DNS); // dns is on by default
 
@@ -442,7 +472,7 @@ static void parse_options(int argc, char **argv) {
       CLRBIT(kept_args, RA_DNS);
       break;
     case 'N': {
-      char buff[INET6_ADDRSTRLEN + 6] = {0};
+      char buff[MAX_ADDRSTRLEN + 6/*:port*/] = {0};
       STRLCPY(buff, optarg, sizeof(buff));
       char *host = trim(buff), *port = NULL;
 #ifdef ENABLE_IPV6
@@ -468,30 +498,7 @@ static void parse_options(int argc, char **argv) {
         if (rc == EAI_SYSTEM) FAIL("getaddrinfo()");
         FAIL_("Failed to set NS(%s): %s", optarg, gai_strerror(rc));
       }
-#define NS_WARN "%s is aready set, setting a new one ..."
-#ifdef ENABLE_IPV6
-      if (ns->ai_family == AF_INET6) {
-        if (custom_res6) { free(custom_res6); WARNX_(NS_WARN, "NS6"); }
-        custom_res6 = malloc(sizeof(*custom_res6));
-        if (custom_res6 && ns->ai_addr && (ns->ai_addrlen == sizeof(*custom_res6))
-            && addr6exist(&((struct sockaddr_in6 *)ns->ai_addr)->sin6_addr))
-          memcpy(custom_res6, ns->ai_addr, ns->ai_addrlen);
-        else
-          FAIL_("Failed to set NS6(%s)", optarg);
-        if (!custom_res6->sin6_port)
-          custom_res6->sin6_port = htons(53);
-      } else if (ns->ai_family == AF_INET)
-#endif
-      { if (custom_res) { free(custom_res); WARNX_(NS_WARN, "NS"); }
-        custom_res = malloc(sizeof(*custom_res));
-        if (custom_res && ns->ai_addr && (ns->ai_addrlen == sizeof(*custom_res))
-            && addr4exist(&((struct sockaddr_in *)ns->ai_addr)->sin_addr))
-          memcpy(custom_res, ns->ai_addr, ns->ai_addrlen);
-        else
-          FAIL_("Failed to set NS(%s)", optarg);
-        if (!custom_res->sin_port)
-          custom_res->sin_port = htons(53); }
-#undef NS_WARN
+      if (!set_custom_res(ns)) FAIL_("Failed to set NS(%s)", optarg);
       freeaddrinfo(ns);
       } break;
 #endif
@@ -551,11 +558,10 @@ static void parse_options(int argc, char **argv) {
       max_ping = REPORT_PINGS;
       break;
     case 's': {
-      int s_val = atoi(optarg);
-      cpacketsize = limit_int(MINPACKET, MAXPACKET, abs(s_val), "Packet size");
-      if (s_val < 0)
-        cpacketsize = -cpacketsize;
-      } break;
+      int sz = atoi(optarg);
+      cpacketsize = limit_int(MINPACKET, MAXPACKET, abs(sz), "Packet size");
+      if (sz < 0) cpacketsize = -cpacketsize;
+    } break;
     case 'S':
       enable_stat_at_exit = true;
       break;
@@ -652,17 +658,17 @@ static bool set_target(struct addrinfo *res) {
   if (af_specified) {
 #endif
     for (ai = res; ai; ai = ai->ai_next)
-      if (af == ai->ai_family)  // use only the desired AF
+      if (ai->ai_family == af)  // use only the desired AF
         break;
-    if (!ai || (af != ai->ai_family)) {  // not found
+    if (!ai || (ai->ai_family != af)) {  // not found
       warnx("target(%s): No address found for IPv%c (AF %d)", dsthost, af == AF_INET ? '4' : '6', af);
       return false;
     }
 #ifdef ENABLE_IPV6
   } else { // preference: first ipv4, second ipv6
-    for (ai = res; ai; ai = ai->ai_next) if (af == AF_INET) break;
+    for (ai = res; ai; ai = ai->ai_next) if (ai->ai_family == AF_INET) break;
     if (!ai)
-      for (ai = res; ai; ai = ai->ai_next) if (af == AF_INET6) break;
+      for (ai = res; ai; ai = ai->ai_next) if (ai->ai_family == AF_INET6) break;
     if (!ai) {
       warnx("target(%s): No address found", dsthost);
       return false;
@@ -674,30 +680,17 @@ static bool set_target(struct addrinfo *res) {
   }
 #endif
 
-  char* alptr[2] = { NULL, NULL };
-  if (af == AF_INET)
-    alptr[0] = (void*) &(((struct sockaddr_in *)ai->ai_addr)->sin_addr);
+  t_ipaddr *ipaddr =
 #ifdef ENABLE_IPV6
-  else if (af == AF_INET6)
-    alptr[0] = (void*) &(((struct sockaddr_in6 *)ai->ai_addr)->sin6_addr);
+    (af == AF_INET6) ? (t_ipaddr*)&((struct sockaddr_in6 *)ai->ai_addr)->sin6_addr :
 #endif
-  else {
-    WARNX_("Unknown address family %d", af);
-    return false;
-  }
-  static struct hostent h = {0};
-  h.h_name = ai->ai_canonname;
-  h.h_aliases = NULL;
-  h.h_addrtype = ai->ai_family;
-  h.h_length = ai->ai_addrlen;
-  h.h_addr_list = alptr;
-
-  if (!net_set_host(&h)) {
-    WARNX("Unable to set host entry");
+    ((af == AF_INET) ? (t_ipaddr*)&((struct sockaddr_in *)ai->ai_addr)->sin_addr : NULL);
+  if (!af || !ipaddr || !net_set_host(ipaddr)) {
+    WARNX_("Unable to set host entry (af=%d)", af);
     return false;
   }
   if (iface_addr && !net_set_ifaddr(iface_addr)) {
-    WARNX_("Unable to set interface address \"%s\"", iface_addr);
+    WARNX_("Unable to set interface address(%s)", iface_addr);
     return false;
   }
   return true;
@@ -777,6 +770,8 @@ int main(int argc, char **argv) {
   if (gethostname(srchost, sizeof(srchost)))
     strncpy(srchost, "UNKNOWN", sizeof(srchost));
   display_start();
+
+  bool set_target_success = false;
 
   for (; optind < argc; optind++) {
     static bool notfirst;

@@ -270,7 +270,7 @@ static int printw_mpls(const mpls_data_t *m) {
 #endif
 
 static void printw_addr(int at, int ndx, int up) {
-  ip_t *addr = &IP_AT_NDX(at, ndx);
+  t_ipaddr *addr = &IP_AT_NDX(at, ndx);
 #ifdef WITH_IPINFO
   if (ipinfo_ready())
     printw("%s", fmt_ipinfo(at, ndx));
@@ -315,7 +315,7 @@ static void print_addr_extra(int at, int y) { // mpls + multipath
   for (int ndx = 0; ndx < MAXPATH; ndx++) {  // multipath
     if (ndx == host[at].current)
       continue; // because already printed
-    ip_t *addr = &IP_AT_NDX(at, ndx);
+    t_ipaddr *addr = &IP_AT_NDX(at, ndx);
     if (!addr_exist(addr))
       break;
     printw("    ");
@@ -338,7 +338,7 @@ static void print_hops(int statx) {
     getyx(stdscr, y, __unused_int);
     move(y, 0);
     printw("%2d. ", at + 1);
-    ip_t *addr = &CURRENT_IP(at);
+    t_ipaddr *addr = &CURRENT_IP(at);
     if (!addr_exist(addr)) {
       printw("%s", UNKN_ITEM);
       if (move(y + 1, 0) == ERR)
@@ -502,7 +502,7 @@ static void histogram(int statx, int cols) {
 		move(y, 0);
 		printw("%2d. ", at + 1);
 
-		ip_t *addr = &CURRENT_IP(at);
+		t_ipaddr *addr = &CURRENT_IP(at);
 		if (addr_exist(addr)) {
 			if (!host[at].up)
 				attron(A_BOLD);

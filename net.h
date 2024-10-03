@@ -55,14 +55,10 @@
 #endif
 
 extern int af;
-#ifdef ENABLE_IPV6
-extern bool af_specified;
-#endif
-extern ip_t unspec_addr;
 
-extern bool (*addr_exist)(const void *); // true if specified
-extern bool (*addr_equal)(const void *, const void *); // equal
-extern void* (*addr_copy)(void *a, const void *b);
+extern bool (*addr_exist)(const void *); // true if not 0
+extern bool (*addr_equal)(const void *, const void *);
+extern void (*addr_copy)(void *dst, const void *src);
 
 extern unsigned long net_queries[];
 extern unsigned long net_replies[];
@@ -119,7 +115,7 @@ typedef struct mpls_data {
 
 // Address(es) plus associated data
 typedef struct eaddr {
-  ip_t ip;
+  t_ipaddr ipaddr;
 #ifdef WITH_MPLS
   mpls_data_t mpls;
 #endif
@@ -156,8 +152,8 @@ typedef struct atndx { int at, ndx, type; } atndx_t;
 extern char localaddr[];
 
 // helpful macros
-#define CURRENT_IP(at)   (host[at].eaddr[host[at].current].ip)
-#define IP_AT_NDX(at, ndx)   (host[at].eaddr[ndx].ip)
+#define CURRENT_IP(at)   (host[at].eaddr[host[at].current].ipaddr)
+#define IP_AT_NDX(at, ndx)   (host[at].eaddr[ndx].ipaddr)
 #ifdef WITH_MPLS
 #define CURRENT_MPLS(at) (host[at].eaddr[host[at].current].mpls)
 #define MPLS_AT_NDX(at, ndx) (host[at].eaddr[ndx].mpls)
@@ -191,7 +187,7 @@ void
 bool net_open(void);
 void net_assert(void);
 void net_set_type(int type);
-bool net_set_host(struct hostent *h);
+bool net_set_host(t_ipaddr *ipaddr);
 bool net_set_ifaddr(const char *ifaddr);
 void net_reset(void);
 void net_close(void);
@@ -206,15 +202,14 @@ int net_send_batch(void);
 void net_end_transit(void);
 int net_duplicate(int at, int seq);
 
-void sockaddrtop(struct sockaddr *saddr, char *strptr, size_t len);
-const char *strlongip(ip_t *ip);
+const char *strlongip(t_ipaddr *ipaddr);
 bool addr4exist(const void *a);
 bool addr4equal(const void *a, const void *b);
-void* addr4copy(void *a, const void *b);
+void addr4copy(void *a, const void *b);
 #ifdef ENABLE_IPV6
 bool addr6exist(const void *a);
 bool addr6equal(const void *a, const void *b);
-void* addr6copy(void *a, const void *b);
+void addr6copy(void *a, const void *b);
 void net_setsocket6(void);
 #endif
 #ifdef WITH_MPLS

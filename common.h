@@ -6,14 +6,16 @@
 #include <err.h>
 #include <stdlib.h>
 #include <sys/time.h>
-
+#include <sys/socket.h>
 #include <netinet/in.h>
+
 #ifndef INET_ADDRSTRLEN
 #define INET_ADDRSTRLEN	16
 #endif
 #ifndef INET6_ADDRSTRLEN
 #define INET6_ADDRSTRLEN	46
 #endif
+#define MAX_ADDRSTRLEN INET6_ADDRSTRLEN
 
 #include "config.h"
 
@@ -21,11 +23,30 @@
 #include <sys/param.h>
 #endif
 
+typedef union inaddr_union {
+  struct in_addr in;
+  uint8_t s_addr8[4];
 #ifdef ENABLE_IPV6
-typedef struct in6_addr ip_t;
-#else
-typedef struct in_addr ip_t;
+  struct in6_addr in6;
+  uint64_t addr64[2];
+#ifdef HAVE___UINT128_T
+  __uint128_t addr128;
 #endif
+#endif
+} t_ipaddr;
+
+typedef union sockaddr_union {
+  struct sockaddr     sa;
+  struct sockaddr_in  sin;
+#define SA_AF sa.sa_family
+#define S_ADDR sin.sin_addr
+#define S_PORT sin.sin_port
+#ifdef ENABLE_IPV6
+  struct sockaddr_in6 sin6;
+#define S6ADDR sin6.sin6_addr
+#define S6PORT sin6.sin6_port
+#endif
+} t_sockaddr;
 
 // stat fields description
 typedef struct statf {

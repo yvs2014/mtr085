@@ -37,10 +37,14 @@ AC_CHECK_FUNC([arc4random_uniform], AC_DEFINE(HAVE_ARC4RANDOM_UNIFORM, 1, [Defin
 	AC_SEARCH_LIBS([arc4random_uniform], [bsd], [AC_DEFINE(HAVE_ARC4RANDOM_UNIFORM, 1)]))
 
 AC_ARG_ENABLE([ipv6],
-	AS_HELP_STRING([--disable-ipv6], [do not enable IPv6]),
+	AS_HELP_STRING([--disable-ipv6], [Do not enable IPv6]),
 	[ipv6=${enableval}], [ipv6=yes])
 AM_CONDITIONAL([IPV6], [test "x$ipv6" = "xyes"])
 AS_IF([test "x$ipv6" = "xyes"], [AC_DEFINE([ENABLE_IPV6], [], [Define to enable IPv6])])
+
+AC_ARG_ENABLE([int128],
+	AS_HELP_STRING([--disable-int128], [Do not enable int128 detection]),
+	[int128=${enableval}], [int128=yes])
 
 AC_ARG_WITH(splitmode,
 	AS_HELP_STRING([--without-splitmode], [without split-mode]),
@@ -72,7 +76,7 @@ AS_IF([test "x$curses" = "xyes"], [
 ])
 
 AC_ARG_ENABLE([dns],
-	AS_HELP_STRING([--disable-dns], [do not enable DNS]),
+	AS_HELP_STRING([--disable-dns], [Do not enable DNS]),
 	[dns=${enableval}], [dns=yes])
 AM_CONDITIONAL([DNS], [test "x$dns" = "xyes"])
 
@@ -263,8 +267,9 @@ AS_IF([test "x$libidn" = "xyes"], [
 	])
 ])
 
-# Extra warning flags (-Wall and -fanalyzer)
-# note: AX_CHECK_COMPILE_FLAG comes from autoconf-archive
+# Extra compiler flags
+#
+# Note, AX_CHECK_COMPILE_FLAG comes from autoconf-archive
 m4_ifdef([AX_CHECK_COMPILE_FLAG], [
 	AX_CHECK_COMPILE_FLAG([-Wall], [CFLAGS="$CFLAGS -Wall"])
 	AS_IF([test "x$analyzer" != "xno"], AX_CHECK_COMPILE_FLAG([-fanalyzer], [CFLAGS="$CFLAGS -fanalyzer"]))
@@ -275,6 +280,10 @@ m4_ifdef([AX_CHECK_COMPILE_FLAG], [
 		AC_MSG_RESULT([-Wall])
 	], [AC_MSG_RESULT([none])])
 ])
+#
+# Check out if compiler provides __uint128_t
+AS_IF([test "x$ipv6" = "xyes" -a "x$int128" = "xyes"],
+	[AC_CHECK_TYPES([__uint128_t],,, [[#include <stdint.h>]])])
 
 _option_list=""
 AS_IF([test "x$libcap" = "xyes"],    [_option_list="$_option_list +CAP"],     [_option_list="$_option_list -CAP"])

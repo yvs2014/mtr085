@@ -59,26 +59,26 @@ void report_open(bool notfirst) {
   printf("[%s] %s: %s %s %s\n", get_now_str(), srchost, FULLNAME, mtr_args, dsthost);
 }
 
-static size_t snprint_addr(char *dst, size_t len, ip_t *addr) {
-  if (addr_exist(addr)) {
+static size_t snprint_addr(char *dst, size_t len, t_ipaddr *ipaddr) {
+  if (addr_exist(ipaddr)) {
 #ifdef ENABLE_DNS
     struct hostent *host = NULL;
     if (enable_dns) {
 #ifdef ENABLE_IPV6
       if (af == AF_INET6)
-        host = gethostbyaddr(addr, sizeof(struct in6_addr), af);
+        host = gethostbyaddr(ipaddr, sizeof(ipaddr->in6), af);
       else if (af == AF_INET)
 #endif
-        host = gethostbyaddr(addr, sizeof(struct in_addr), af);
+        host = gethostbyaddr(ipaddr, sizeof(ipaddr->in), af);
     }
     if (host) {
       if (enable_dns && show_ips)
-        return snprintf(dst, len, "%s (%s)", host->h_name, strlongip(addr));
+        return snprintf(dst, len, "%s (%s)", host->h_name, strlongip(ipaddr));
       else
         return snprintf(dst, len, "%s", host->h_name);
     } else
 #endif
-    return snprintf(dst, len, "%s", strlongip(addr));
+    return snprintf(dst, len, "%s", strlongip(ipaddr));
   } else
     return snprintf(dst, len, "%s", "???");
 }
@@ -110,10 +110,10 @@ static void report_addr_extra(int at, char *bufname, char *lbuf, const char *dfm
   for (int i = 0; i < MAXPATH; i++) {
     if (i == host[at].current)
       continue; // because already printed
-    ip_t *addr = &IP_AT_NDX(at, i);
-    if (!addr_exist(addr))
+    t_ipaddr *ipaddr = &IP_AT_NDX(at, i);
+    if (!addr_exist(ipaddr))
       break; // done
-    snprint_addr(bufname, MAXDNAME, addr);
+    snprint_addr(bufname, MAXDNAME, ipaddr);
 #ifdef WITH_IPINFO
     if (ipinfo_ready())
       snprintf(lbuf, MAXDNAME, dfmt, fmt_ipinfo(at, i), bufname);
@@ -178,8 +178,7 @@ void report_close(bool wide) {
   int max = net_max();
 
   for (int at = net_min(); at < max; at++) {
-    ip_t *addr = &CURRENT_IP(at);
-    snprint_addr(bufname, MAXDNAME, addr);
+    snprint_addr(bufname, MAXDNAME, &CURRENT_IP(at));
 
     // body: left
 #ifdef WITH_IPINFO
@@ -286,9 +285,8 @@ void json_close(bool notfirst) {
   printf("\n%*s{\"destination\":\"%s\",\"datetime\":\"%s\",\"data\":[", JSON_MARGIN, "", dsthost, get_now_str());
   int min = net_min(), max = net_max();
   for (int at = min; at < max; at++) {
-    ip_t *addr = &CURRENT_IP(at);
     printf((at == min) ? "\n" : ",\n");
-    snprint_addr(buf, MAXDNAME, addr);
+    snprint_addr(buf, MAXDNAME,  &CURRENT_IP(at));
     printf("%*s{\"host\":\"%s\",\"hop\":%d,\"up\":%d", JSON_MARGIN * 2, "", buf, at + 1, host[at].up);
     for (int i = 0; i < MAXFLD; i++) {
       const struct statf *sf = active_statf(i);
@@ -348,8 +346,7 @@ void csv_close(bool notfirst) {
   printf("\n");
   int max = net_max();
   for (int at = net_min(); at < max; at++) {
-    ip_t *addr = &CURRENT_IP(at);
-    snprint_addr(buf, MAXDNAME, addr);
+    snprint_addr(buf, MAXDNAME, &CURRENT_IP(at));
 
     printf("%s", dsthost);
     printf(CSV_DELIMITER "%d", at + 1);
@@ -395,8 +392,8 @@ void raw_rawping(int at, int usec) {
   fflush(stdout);
 }
 
-void raw_rawhost(int at, ip_t * ip_addr) {
-  printf("h %d %s\n", at, strlongip(ip_addr));
+void raw_rawhost(int at, t_ipaddr *ipaddr) {
+  printf("h %d %s\n", at, strlongip(ipaddr));
   fflush(stdout);
 }
 #endif

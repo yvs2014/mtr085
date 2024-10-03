@@ -25,10 +25,7 @@
 extern bool enable_dns;
 extern unsigned dns_queries[];
 extern unsigned dns_replies[];
-extern struct sockaddr_in *custom_res;
-#ifdef ENABLE_IPV6
-extern struct sockaddr_in6 *custom_res6;
-#endif
+extern t_sockaddr *custom_res;
 
 bool dns_open(void);
 void dns_close(void);
@@ -36,7 +33,7 @@ int dns_wait(int family);
 void dns_parse(int fd, int family);
 const char *dns_ptr_lookup(int at, int ndx);
 int dns_send_query(int at, int ndx, const char *qstr, int type);
-char* ip2arpa(ip_t *ip, const char *suff4, const char *suff6);
+char* ip2arpa(const t_ipaddr *ipaddr, const char *suff4, const char *suff6);
 
 extern void (*dns_ptr_handler)(int at, int ndx, const char* answer);
 extern void (*dns_txt_handler)(int at, int ndx, const char* answer);

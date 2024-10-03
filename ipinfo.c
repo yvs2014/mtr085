@@ -25,6 +25,7 @@
 
 #include "config.h"
 #if defined(LOG_IPINFO) && !defined(LOGMOD)
+#include <errno.h>
 #define LOGMOD
 #endif
 #if !defined(LOG_IPINFO) && defined(LOGMOD)
@@ -467,10 +468,10 @@ static int create_tcpsock(int seq) {
         ipitseq[seq] = (struct ipitseq) { .sock = sock, .slot = slot, .state = TSEQ_CREATED };
         connect(sock, rp->ai_addr, rp->ai_addrlen); // NOLINT(bugprone-unused-return-value)
         LOGMSG_("send non-blocking connect via sock=%d", sock);
-        rc = 0;
+        rc = 0; // note: non-blocking connect() returns EINPROGRESS
       }
     }
-    if (rc != 0) {
+    if (rc) {
       LOGMSG_("socket=%d close", sock);
       close(sock);
       /*summ*/ sum_sock[1]++;
@@ -493,9 +494,9 @@ static int send_tcp_query(int sock, const char *q) {
   return rc;
 }
 
-static char* make_tcp_qstr(ip_t *ip) {
+static char* make_tcp_qstr(t_ipaddr *ipaddr) {
   static char mkqstr[NAMELEN];
-  snprintf(mkqstr, sizeof(mkqstr), "%s%s", origins[origin_no].prefix, strlongip(ip));
+  snprintf(mkqstr, sizeof(mkqstr), "%s%s", origins[origin_no].prefix, strlongip(ipaddr));
   return mkqstr;
 }
 
@@ -574,15 +575,15 @@ static char *get_ipinfo(int at, int ndx, int nd) {
   if ((af == AF_INET6) && !origins[origin_no].host6) return NULL; else
 #endif
     if (!ORIG_HOST) return NULL; // NOLINT(readability-misleading-indentation)
-  ip_t *ip = &IP_AT_NDX(at, ndx);
+  t_ipaddr *ipaddr = &IP_AT_NDX(at, ndx);
   switch (ORIG_TYPE) {
     case OT_HTTP:
     case OT_WHOIS:
-      ipinfo_lookup(at, ndx, make_tcp_qstr(ip));
+      ipinfo_lookup(at, ndx, make_tcp_qstr(ipaddr));
       break;
 #ifdef ENABLE_DNS
     default:  // dns
-      ipinfo_lookup(at, ndx, ip2arpa(ip, ORIG_HOST, origins[origin_no].host6));
+      ipinfo_lookup(at, ndx, ip2arpa(ipaddr, ORIG_HOST, origins[origin_no].host6));
 #endif
   }
   return NULL;
@@ -781,14 +782,14 @@ void query_ipinfo(void) {
       return;
   int max = net_max();
   for (int at = net_min(); at < max; at++) {
-    ip_t *addr = &CURRENT_IP(at);
-    if (addr_exist(addr)) {
+    t_ipaddr *ipaddr = &CURRENT_IP(at);
+    if (addr_exist(ipaddr)) {
       query_iiaddr(at, host[at].current);
       for (int i = 0; i < MAXPATH; i++) {
         if (i == host[at].current)
           continue; // because already queried
-        ip_t *ip = &IP_AT_NDX(at, i);
-        if (addr_exist(ip))
+        t_ipaddr *ipaddr_i = &IP_AT_NDX(at, i);
+        if (addr_exist(ipaddr_i))
           query_iiaddr(at, i);
       }
     }

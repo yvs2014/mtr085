@@ -26,7 +26,7 @@ void report_close(bool wide);
 #ifdef OUTPUT_FORMAT_RAW
 extern bool enable_raw;
 void raw_rawping(int at, int usec);
-void raw_rawhost(int at, ip_t *addr);
+void raw_rawhost(int at, t_ipaddr *ipaddr);
 #endif
 #ifdef OUTPUT_FORMAT_TXT
 void txt_close(bool notfirst);

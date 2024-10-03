@@ -233,7 +233,7 @@ void gc_redraw(void) {
   }
 
   for (int i = 0, at = min; i < hops; i++, at++) {
-    ip_t *addr = &CURRENT_IP(at);
+    t_ipaddr *addr = &CURRENT_IP(at);
 
     if (addr_exist(addr)) {
       int saved_ndx = SAVED_PINGS - 2;
@@ -261,7 +261,7 @@ void gc_redraw(void) {
         if (params.enable_multipath) {                       // multipath
           for (int j = 0; j < MAXPATH; j++) {
             if (j != host[at].current) {
-              ip_t *ip = &IP_AT_NDX(at, j);
+              t_ipaddr *ip = &IP_AT_NDX(at, j);
               if (!addr_exist(ip))
                 break;
               fill_hostinfo(at, j, glinebuf, sizeof(glinebuf));

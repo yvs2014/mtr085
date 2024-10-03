@@ -232,11 +232,11 @@ static bool svc(struct timespec *last, const struct timespec *interval, int *tim
         grace_started = now;
       }
       if (!grace) { // send batch unless grace period
-        int re = net_send_batch();
-        if (re > 0) {
+        int rc = net_send_batch();
+        if (rc > 0) {
           numpings++;
           LOGMSG_("cycle=%ld", numpings);
-        } else if (re < 0) // fail
+        } else if (rc < 0) // fail
           return false;
       }
     }
@@ -340,6 +340,12 @@ static int keyboard_events(int action) {
       CLRBIT(run_args, RA_UDP); CLRBIT(run_args, RA_TCP);
       if (mtrtype != IPPROTO_ICMP) net_set_type(IPPROTO_ICMP);
       else {
+#ifdef ENABLE_IPV6
+        if ((af == AF_INET6) && ((action == ActionUDP) || (action == ActionTCP))) {
+          WARNX_("IPv6 %s is not tested yet", (action == ActionUDP) ? "UDP" : "TCP");
+          action = ActionNone; net_set_type(IPPROTO_ICMP); break;
+        }
+#endif
         net_set_type((action == ActionUDP) ? IPPROTO_UDP : IPPROTO_TCP);
         SETBIT(run_args, (action == ActionUDP) ? RA_UDP : RA_TCP);
       }

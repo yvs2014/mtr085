@@ -40,15 +40,15 @@ void split_redraw(void) {
   const char fields[] = "LRSBAW"; // Loss, Recv, Sent, Best, Avg, Worst
   int max = net_max();
   for (int at = net_min() + display_offset; at < max; at++) {
-    ip_t *addr = &CURRENT_IP(at);
+    t_ipaddr *ipaddr = &CURRENT_IP(at);
     printf("%2d", at + 1);
-    if (addr_exist(addr)) {
+    if (addr_exist(ipaddr)) {
 #ifdef ENABLE_DNS
       const char *name = dns_ptr_lookup(at, host[at].current);
-      printf("%c%s", SPLIT_SEP, name ? name : strlongip(addr));
+      printf("%c%s", SPLIT_SEP, name ? name : strlongip(ipaddr));
       if (show_ips)
 #endif
-        printf("%c%s", SPLIT_SEP, strlongip(addr));
+        printf("%c%s", SPLIT_SEP, strlongip(ipaddr));
       for (int i = 0; i < sizeof(fields); i++) {
         const char *str = net_elem(at, fields[i]);
         if (str) printf("%c%s", SPLIT_SEP, str);
@@ -59,22 +59,22 @@ void split_redraw(void) {
 #endif
       printf("\n");
 
-      for (int ndx = 0; ndx < MAXPATH; ndx++) { // multipath
-        if (ndx == host[at].current)
+      for (int i = 0; i < MAXPATH; i++) { // multipath
+        if (i == host[at].current)
           continue; // because already printed
-        ip_t *ip = &IP_AT_NDX(at, ndx);
-        if (!addr_exist(ip))
+        t_ipaddr *ipaddr = &IP_AT_NDX(at, i);
+        if (!addr_exist(ipaddr))
           break;
-        printf("%2d:%d", at + 1, ndx);
+        printf("%2d:%d", at + 1, i);
 #ifdef ENABLE_DNS
-        name = dns_ptr_lookup(at, ndx);
-        printf("%c%s", SPLIT_SEP, name ? name : strlongip(ip));
+        name = dns_ptr_lookup(at, i);
+        printf("%c%s", SPLIT_SEP, name ? name : strlongip(ipaddr));
         if (show_ips)
 #endif
-          printf("%c%s", SPLIT_SEP, strlongip(ip));
+          printf("%c%s", SPLIT_SEP, strlongip(ipaddr));
 #ifdef WITH_IPINFO
         if (ipinfo_ready())
-          printf("%c%s", SPLIT_SEP, sep_ipinfo(at, ndx, SPLIT_SEP));
+          printf("%c%s", SPLIT_SEP, sep_ipinfo(at, i, SPLIT_SEP));
 #endif
         printf("\n");
       }

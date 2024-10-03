@@ -17,6 +17,7 @@
 */
 
 #include <stddef.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <unistd.h>
 #include <string.h>
@@ -33,26 +34,33 @@
 #include <netinet/ip_icmp.h>
 #include <netinet/tcp.h>
 #include <netinet/udp.h>
+#include <arpa/inet.h>
 #include <assert.h>
 
 #include "config.h" // IWYU pragma: keep
+
 #if defined(LOG_NET) && !defined(LOGMOD)
 #define LOGMOD
 #endif
 #if !defined(LOG_NET) && defined(LOGMOD)
 #undef LOGMOD
 #endif
-#include "common.h"
+
 #ifdef LIBCAP
 #include <sys/capability.h>
 #endif
 
+#include "common.h"
 #include "net.h"
 #include "aux.h"
 #include "mtr-poll.h"
 #include "display.h"
+
 #ifdef ENABLE_DNS
 #include "dns.h"
+#endif
+#ifdef OUTPUT_FORMAT_RAW
+#include "report.h"
 #endif
 
 #ifdef HAVE_ARC4RANDOM_UNIFORM
@@ -163,13 +171,6 @@ struct PACKIT icmpext_object { // RFC4884
 
 #define EXIT(s) { int e = errno; display_close(true); ERRX_(e, "%s: %s", s, strerror(e)); }
 
-#define SET_TCP_ATTR(lo_addr, ssa_addr, re_addr, re_port, paddr) { \
-  addr_copy(&lo_addr, &ssa_addr); \
-  addr_copy(&re_addr, remoteaddress); \
-  re_port = htons((remoteport > 0) ? remoteport : TCP_DEFAULT_PORT); \
-  addrlen = sizeof(*paddr); \
-}
-
 #define CLOSE(fd) if ((fd) >= 0) { close(fd); fd = -1; /*summ*/ sum_sock[1]++; }
 
 #define FAIL_WITH_WARNX(rcode, fd, fmt, ...) { last_neterr = rcode; \
@@ -191,16 +192,12 @@ struct sequence {
 };
 
 // global vars
-ip_t unspec_addr; // 0 by definition
-bool (*addr_exist)(const void *); // true if address is specified
-bool (*addr_equal)(const void *, const void *); // equal
-void* (*addr_copy)(void *, const void *);
-int af = AF_INET; // address family
-#ifdef ENABLE_IPV6
-bool af_specified; // set by options (-4 -6)
-#endif
+bool (*addr_exist)(const void *); // true if not 0
+bool (*addr_equal)(const void *, const void *);
+void (*addr_copy)(void *, const void *);
+int af = AF_INET;  // default address family
 struct nethost host[MAXHOST];
-char localaddr[INET6_ADDRSTRLEN];
+char localaddr[MAX_ADDRSTRLEN];
 unsigned long net_queries[4]; // number of queries (sum, icmp, udp, tcp)
 unsigned long net_replies[4]; // number of replies (sum, icmp, udp, tcp)
 enum { QR_SUM = 0 /*sure*/, QR_ICMP, QR_UDP, QR_TCP };
@@ -221,29 +218,15 @@ static int recvsock4 = -1;
 #ifdef ENABLE_IPV6
 static int sendsock6 = -1;
 static int sendsock6_icmp = -1;
-static int sendsock6_udp = -1;
+//static int sendsock6_udp = -1;
+//static int sendsock6_tcp = -1;
 static int recvsock6 = -1;
 #endif
 static int sendsock = -1;
 static int recvsock = -1;
 
-#ifdef ENABLE_IPV6
-static struct sockaddr_storage sourcesockaddr_struct;
-static struct sockaddr_storage remotesockaddr_struct;
-static struct sockaddr_in6 *ssa6 = (struct sockaddr_in6 *) &sourcesockaddr_struct;
-static struct sockaddr_in6 *rsa6 = (struct sockaddr_in6 *) &remotesockaddr_struct;
-#else
-static struct sockaddr_in sourcesockaddr_struct;
-static struct sockaddr_in remotesockaddr_struct;
-#endif
-
-static struct sockaddr *sourcesockaddr = (struct sockaddr *) &sourcesockaddr_struct;
-static struct sockaddr *remotesockaddr = (struct sockaddr *) &remotesockaddr_struct;
-static struct sockaddr_in *ssa4 = (struct sockaddr_in *) &sourcesockaddr_struct;
-static struct sockaddr_in *rsa4 = (struct sockaddr_in *) &remotesockaddr_struct;
-
-static ip_t *sourceaddress;
-static ip_t *remoteaddress;
+static t_sockaddr lsa, rsa; // losal and remote sockaddr
+static t_ipaddr *remote_ipaddr;
 
 static int echo_reply, time_exceed, dst_unreach;
 
@@ -261,14 +244,43 @@ static int stopper = MAXHOST;
 enum { RE_PONG, RE_EXCEED, RE_UNREACH }; // reason of a pong response
 
 
-bool addr4exist(const void *a) { return memcmp(a, &unspec_addr, sizeof(struct in_addr)) ? true : false; }
-bool addr4equal(const void *a, const void *b) { return memcmp(a, b, sizeof(struct in_addr)) ? false : true; }
-void* addr4copy(void *a, const void *b) { return memcpy(a, b, sizeof(struct in_addr)); }
+inline bool addr4exist(const void *a) { return *(in_addr_t*)a != 0; }
+inline bool addr4equal(const void *a, const void *b) { return *(in_addr_t*)a == *(in_addr_t*)b; }
+inline void addr4copy(void *dst, const void *src) { *(in_addr_t*)dst = *(in_addr_t*)src; }
+
 #ifdef ENABLE_IPV6
-bool addr6exist(const void *a) { return memcmp(a, &unspec_addr, sizeof(struct in6_addr)) ? true : false; }
-bool addr6equal(const void *a, const void *b) { return memcmp(a, b, sizeof(struct in6_addr)) ? false : true; }
-void* addr6copy(void *a, const void *b) { return memcpy(a, b, sizeof(struct in6_addr)); }
+inline bool addr6exist(const void *a) {
+  const t_ipaddr *b = (const t_ipaddr*)a;
+#ifdef HAVE___UINT128_T
+  return b->addr128 != 0;
+#else
+  return b->addr64[0] || b->addr64[1];
 #endif
+}
+
+inline bool addr6equal(const void *a, const void *b) {
+  const t_ipaddr *c = (const t_ipaddr*)a;
+  const t_ipaddr *d = (const t_ipaddr*)b;
+#ifdef HAVE___UINT128_T
+  return c->addr128 == d->addr128;
+#else
+  return (c->addr64[0] == d->addr64[0])
+      && (c->addr64[1] == d->addr64[1]);
+#endif
+}
+
+inline void addr6copy(void *dst, const void *src) {
+        t_ipaddr *d =       (t_ipaddr*)dst;
+  const t_ipaddr *s = (const t_ipaddr*)src;
+#ifdef HAVE___UINT128_T
+  d->addr128 = s->addr128;
+#else
+  d->addr64[0] = s->addr64[0];
+  d->addr64[1] = s->addr64[1];
+#endif
+}
+#endif // ENABLE_IPV6
+
 
 // return in 'tv' waittime before sending the next ping
 void waitspec(struct timespec *tv) {
@@ -282,15 +294,11 @@ void waitspec(struct timespec *tv) {
   tv->tv_nsec = (wait - tv->tv_sec) * NANO;
 }
 
-static uint16_t sum16(const void *data, int sz) {
-  const uint16_t *ch = data;
-  unsigned sum = 0;
-  for (; sz > 1; sz -= 2)
-    sum += *ch++;
-  if (sz)
-    sum += *(uint8_t*)ch;
-  sum = (sum >> 16) + (sum & 0xffff);
-  sum += (sum >> 16);
+static uint16_t sum1616(const uint16_t *data, unsigned len, unsigned sum) {
+  for (; len; len--)
+    sum += *data++;
+  while (sum >> 16)
+    sum = (sum >> 16) + (sum & 0xffff);
   return ~sum;
 }
 
@@ -311,7 +319,7 @@ static uint16_t udpsum16(struct _iphdr *ip, void *udata, int udata_len, int dsiz
   content->uh_dport = data->uh_dport;
   content->uh_ulen  = data->uh_ulen;
   content->uh_sum   = data->uh_sum;
-  return sum16(csumpacket, tsize);
+  return sum1616((uint16_t*)csumpacket, tsize / 2, (tsize % 2) ? (bitpattern & 0xff) : 0);
 }
 
 static inline bool save_send_ts(int seq) {
@@ -377,51 +385,55 @@ static bool settosttl6(int sock, int ttl) {
 
 // Create TCP socket for hop 'at', and try to connect (poll results later)
 static bool net_send_tcp(int at) {
-  struct sockaddr_storage local;
-  struct sockaddr_storage remote;
-  struct sockaddr_in *local4 = (struct sockaddr_in *) &local;
-  struct sockaddr_in *remote4 = (struct sockaddr_in *) &remote;
-#ifdef ENABLE_IPV6
-  struct sockaddr_in6 *local6 = (struct sockaddr_in6 *) &local;
-  struct sockaddr_in6 *remote6 = (struct sockaddr_in6 *) &remote;
-#endif
-
-  int ttl = at + 1;
+#define SET_TCP_ATTR(src_addr, ssa_addr, dst_addr, dst_port) { \
+  addr_copy(&src_addr, &ssa_addr); \
+  addr_copy(&dst_addr, remote_ipaddr); \
+  dst_port = htons((dst_port > 0) ? dst_port : TCP_DEFAULT_PORT); \
+}
   int sock = socket(af, SOCK_STREAM, 0);
   if (sock < 0)
     FAIL_WITH_WARN(sock, "socket[at=%d]", at);
   /*summ*/ sum_sock[0]++;
 
-  memset(&local, 0, sizeof (local));
-  memset(&remote, 0, sizeof (remote));
-  local.ss_family = af;
-  remote.ss_family = af;
-
-  socklen_t addrlen;
+  t_sockaddr local = {0}, remote = {0};
+  local.SA_AF = remote.SA_AF = af;
+  socklen_t addrlen = sizeof(local);
+  switch (af) {
+    case AF_INET:
+      SET_TCP_ATTR(local.S_ADDR, lsa.S_ADDR, remote.S_ADDR, remote.S_PORT);
+      addrlen = sizeof(lsa.sin);
+      break;
 #ifdef ENABLE_IPV6
-  if (af == AF_INET6) SET_TCP_ATTR(local6->sin6_addr, ssa6->sin6_addr, remote6->sin6_addr, remote6->sin6_port, local6) else
+    case AF_INET6:
+      SET_TCP_ATTR(local.S6ADDR, lsa.S6ADDR, remote.S6ADDR, remote.S6PORT)
+      addrlen = sizeof(lsa.sin6);
+      break;
 #endif
-  SET_TCP_ATTR(local4->sin_addr, ssa4->sin_addr, remote4->sin_addr, remote4->sin_port, local4);
-  if (bind(sock, (struct sockaddr *) &local, addrlen))
+    default:
+      FAIL_POSTPONE(ENOPROTOOPT, "address family %d", af);
+  }
+  if (bind(sock, &local.sa, addrlen))
     FAIL_WITH_WARN(sock, "bind[at=%d]", at);
-
-  if (getsockname(sock, (struct sockaddr *) &local, &addrlen))
+  if (getsockname(sock, &local.sa, &addrlen))
     FAIL_WITH_WARN(sock, "getsockname[at=%d]", at);
-
   int flags = fcntl(sock, F_GETFL, 0);
   if (fcntl(sock, F_SETFL, flags | O_NONBLOCK) < 0)
     FAIL_WITH_WARN(sock, "fcntl(O_NONBLOCK) at=%d", at);
 
-  int port;
+  int ttl = at + 1, port;
+  switch (af) {
+    case AF_INET:
+      if (!settosttl(sock, ttl)) return false;
+      port = ntohs(local.S_PORT);
+    break;
 #ifdef ENABLE_IPV6
-  if (af == AF_INET6) {
-    if (!settosttl6(sock, ttl)) return false;
-    port = ntohs(local6->sin6_port);
-  } else
+    case AF_INET6:
+      if (!settosttl6(sock, ttl)) return false;
+      port = ntohs(local.S6PORT);
+    break;
 #endif
-  {
-    if (!settosttl(sock, ttl)) return false;
-    port = ntohs(local4->sin_port);
+    default:
+      FAIL_POSTPONE(ENOPROTOOPT, "address family %d", af);
   }
 
   int seq = port % MAXSEQ;
@@ -429,27 +441,66 @@ static bool net_send_tcp(int at) {
     FAIL_WITH_WARNX(1, sock, "no place in pool for sockets (at=%d)", at);
   save_sequence(seq, at);
   if (!save_send_ts(seq)) return false;
-  connect(sock, (struct sockaddr *) &remote, addrlen); // NOLINT(bugprone-unused-return-value)
+  connect(sock, &remote.sa, addrlen); // NOLINT(bugprone-unused-return-value)
 #ifdef LOGMOD
   { struct timespec now;
     int rc = clock_gettime(CLOCK_MONOTONIC, &now); // LOGMOD for debug only
-    LOGMSG_("at=%d seq=%d sock=%d: ttl=%d (ts=%lld.%09ld)", at, seq, sock, ttl, rc ? 0 : (long long)now.tv_sec, rc ? 0 : now.tv_nsec);
-  }
+    LOGMSG_("at=%d seq=%d sock=%d: ttl=%d (ts=%lld.%09ld)", at, seq, sock, ttl, rc ? 0 : (long long)now.tv_sec, rc ? 0 : now.tv_nsec); }
 #endif
   /*summ*/ net_queries[QR_SUM]++; net_queries[QR_TCP]++;
   return true;
+#undef SET_TCP_ATTR
 }
 
-// Send packet for hop 'at'
-static bool net_send(int at) {
-  static char packet[MAXPACKET];
-  if (mtrtype == IPPROTO_TCP)
-    return net_send_tcp(at);
-  else if (!((mtrtype == IPPROTO_ICMP) || (mtrtype == IPPROTO_UDP)))
-    FAIL_POSTPONE(EPROTONOSUPPORT, "protocol type %d", mtrtype);
+static inline void net_fill_icmp_hdr(uint16_t seq, uint8_t type, uint8_t *data, uint16_t size) {
+  struct _icmphdr *icmp = (struct _icmphdr *)data;
+  icmp->type = type;
+  icmp->code = 0;
+  icmp->sum  = 0;
+  icmp->id   = mypid;
+  icmp->seq  = seq;
+  icmp->sum  = sum1616((uint16_t*)data, size / 2, (size % 2) ? (bitpattern & 0xff) : 0);
+  LOGMSG_("icmp: seq=%d id=%u", icmp->seq, icmp->id);
+}
 
+static inline bool net_fill_udp_hdr(uint16_t seq, uint8_t *data, uint16_t size
+#ifdef IP_HDRINCL
+  , struct _iphdr *ip
+#endif
+) {
+  struct udphdr *udp = (struct udphdr *)data;
+  udp->uh_sum  = 0;
+  udp->uh_ulen = htons(size);
+  if (remoteport < 0)
+    SET_UDP_UH_PORTS(udp, portpid, LO_UDPPORT + seq)
+  else
+    SET_UDP_UH_PORTS(udp, LO_UDPPORT + seq, remoteport);
+  LOGMSG_("udp: seq=%d port=%u", seq, ntohs(udp->uh_dport));
+  switch (af) {
+    case AF_INET:
+#ifdef IP_HDRINCL
+      if (ip->saddr) { // checksum is not mandatory, calculate if source address is known
+        uint16_t sum = udpsum16(ip, udp, udp->uh_ulen, size);
+        udp->uh_sum = sum ? sum : 0xffff;
+      }
+#endif
+      return true;
+#ifdef ENABLE_IPV6
+    case AF_INET6: { // checksumming by kernel
+      int opt = 6;
+      if (setsockopt(sendsock, IPPROTO_IPV6, IPV6_CHECKSUM, &opt, sizeof(opt)))
+        FAIL_WITH_WARN(sendsock, "setsockopt6(CHECKSUM) optval=%d", opt);
+    } return true;
+#endif
+  } return false;
+}
+
+
+// Send packet for hop 'at'
+static bool net_send_icmp_udp(int at) {
   if (packetsize < MINPACKET) packetsize = MINPACKET;
   else if (packetsize > MAXPACKET) packetsize = MAXPACKET;
+  static uint8_t packet[MAXPACKET];
   memset(packet, bitpattern, packetsize);
 
   int iphsize = 0, echotype = 0, salen = 0;
@@ -459,73 +510,63 @@ static bool net_send(int at) {
   int ttl = at + 1;
 
   switch (af) {
-  case AF_INET:
+    case AF_INET:
 #ifdef IP_HDRINCL
-    iphsize = sizeof(struct _iphdr);
-    ip->ver   = 4;
-    ip->ihl   = 5;
-    ip->tos   = tos;
-    ip->len   = IPLEN_RAW(packetsize);
-    ip->id    = 0;
-    ip->frag  = 0;
-    ip->ttl   = ttl;
-    ip->proto = mtrtype;
-    ip->sum   = 0;
-    // BSD needs the source address here
-    addr_copy(&(ip->saddr), &(ssa4->sin_addr));
-    addr_copy(&(ip->daddr), remoteaddress);
+      iphsize = sizeof(struct _iphdr);
+      ip->ver   = 4;
+      ip->ihl   = 5;
+      ip->tos   = tos;
+      ip->len   = IPLEN_RAW(packetsize);
+      ip->id    = 0;
+      ip->frag  = 0;
+      ip->ttl   = ttl;
+      ip->proto = mtrtype;
+      ip->sum   = 0;
+      // BSD needs the source IPv4 address here
+      addr_copy(&ip->saddr, &lsa.S_ADDR);
+      addr_copy(&ip->daddr, &rsa.S_ADDR);
 #else
-    if (!settosttl(sendsock, ttl)) return false;
-    iphsize = 0;
+      if (!settosttl(sendsock, ttl)) return false;
+      iphsize = 0;
 #endif
-    echotype = ICMP_ECHO;
-    salen = sizeof(struct sockaddr_in);
-    break;
+      echotype = ICMP_ECHO;
+      salen = sizeof(struct sockaddr_in);
+      break;
 #ifdef ENABLE_IPV6
-  case AF_INET6:
-    if (!settosttl6(sendsock, ttl)) return false;
-    iphsize = 0;
-    echotype = ICMP6_ECHO_REQUEST;
-    salen = sizeof(struct sockaddr_in6);
-    break;
+    case AF_INET6:
+      if (!settosttl6(sendsock, ttl)) return false;
+      iphsize = 0;
+      echotype = ICMP6_ECHO_REQUEST;
+      salen = sizeof(struct sockaddr_in6);
+      break;
 #endif
+    default:
+      FAIL_POSTPONE(ENOPROTOOPT, "address family %d", af);
   }
 
   int seq = new_sequence(at);
-  if (mtrtype == IPPROTO_ICMP) {
-    struct _icmphdr *icmp = (struct _icmphdr *)(packet + iphsize);
-    icmp->type = echotype;
-    icmp->code = 0;
-    icmp->sum  = 0;
-    icmp->id   = mypid;
-    icmp->seq  = seq;
-    icmp->sum  = sum16(icmp, packetsize - iphsize);
-    LOGMSG_("icmp: at=%d seq=%d id=%u", at, icmp->seq, icmp->id);
-  } else if (mtrtype == IPPROTO_UDP) {
-    struct udphdr *udp = (struct udphdr *)(packet + iphsize);
-    udp->uh_sum  = 0;
-    udp->uh_ulen = htons(packetsize - iphsize);
-    if (remoteport < 0)
-      SET_UDP_UH_PORTS(udp, portpid, LO_UDPPORT + seq)
-    else
-      SET_UDP_UH_PORTS(udp, LO_UDPPORT + seq, remoteport);
-    LOGMSG_("udp: at=%d seq=%d port=%u", at, seq, ntohs(udp->uh_dport));
-    if ((af == AF_INET) && ip->saddr) { // checksum is not mandatory, calculate if ip->saddr is known
-      uint16_t sum = udpsum16(ip, udp, udp->uh_ulen, packetsize - iphsize);
-      udp->uh_sum = sum ? sum : 0xffff;
-    }
-#ifdef ENABLE_IPV6
-    else if (af == AF_INET6) { // kernel checksum calculation
-      int offset = 6;
-      if (setsockopt(sendsock, IPPROTO_IPV6, IPV6_CHECKSUM, &offset, sizeof(offset)))
-        FAIL_WITH_WARN(sendsock, "setsockopt6(CHECKSUM) at=%d", at);
-    }
+  uint8_t *ipdata = packet + iphsize;
+  uint16_t ipdatasize = packetsize - iphsize;
+  switch (mtrtype) {
+    case IPPROTO_ICMP:
+      net_fill_icmp_hdr(seq, echotype, ipdata, ipdatasize);
+      break;
+    case IPPROTO_UDP:
+      if (!net_fill_udp_hdr(seq, ipdata, ipdatasize
+#ifdef IP_HDRINCL
+         , ip
 #endif
+      )) return false;
+      break;
+    default:
+      FAIL_POSTPONE(EPROTONOSUPPORT, "protocol type %d", mtrtype);
   }
 
   if (!save_send_ts(seq)) return false;
-  if (sendto(sendsock, packet, packetsize, 0, remotesockaddr, salen) < 0)
-    FAIL_WITH_WARN(sendsock, "sendto at=%d: ttl=%d", at, ttl);
+  if (sendto(sendsock, packet, packetsize, 0, &rsa.sa, salen) < 0) {
+    int rc = errno; const char *dst = strlongip(remote_ipaddr); errno = rc;
+    FAIL_WITH_WARN(sendsock, "sendto(%s)", dst ? dst : "");
+  }
   /*summ*/ net_queries[QR_SUM]++; (mtrtype == IPPROTO_ICMP) ? net_queries[QR_ICMP]++ : net_queries[QR_UDP];
   return true;
 }
@@ -571,7 +612,7 @@ static void stats(int at, timemsec_t curr) {
     host[at].seen = time(NULL);
 }
 
-int addr2ndx(int hop, ip_t *addr) { // return index of 'addr' at 'hop', otherwise -1
+static int addr2ndx(int hop, const t_ipaddr *addr) { // return index of 'addr' at 'hop', otherwise -1
   for (int i = 0; i < MAXPATH; i++)
     if (addr_equal(&IP_AT_NDX(hop, i), addr))
       return i;
@@ -585,9 +626,9 @@ int at2next(int hop) { // return first free slot at 'hop', otherwise -1
   return -1;
 }
 
-// Set new ip-addr and clear associated data
-void set_new_addr(int at, int ndx, const ip_t *ip MPLSFNTAIL(const mpls_data_t *mpls)) {
-  addr_copy(&IP_AT_NDX(at, ndx), ip);
+// set new ip-addr and clear associated data
+static void set_new_addr(int at, int ndx, const t_ipaddr *ipaddr MPLSFNTAIL(const mpls_data_t *mpls)) {
+  addr_copy(&IP_AT_NDX(at, ndx), ipaddr);
 #ifdef WITH_MPLS
   mpls ? memcpy(&MPLS_AT_NDX(at, ndx), mpls, sizeof(mpls_data_t))
     : memset(&MPLS_AT_NDX(at, ndx), 0, sizeof(mpls_data_t));
@@ -637,7 +678,7 @@ static int net_stat(unsigned port, const void *addr, struct timespec *recv_at, i
   if (at > stopper)    // return unless reachable
     return true;
 
-  ip_t copy;
+  t_ipaddr copy;
   addr_copy(&copy, addr); // can it be overwritten?
   int ndx = addr2ndx(at, &copy);
   if (ndx < 0) {        // new one
@@ -866,7 +907,7 @@ const char *net_elem(int at, char c) {
 int net_max(void) {
   int max = 0;
   for (int at = 0; at < maxTTL; at++) {
-    if (addr_equal(&CURRENT_IP(at), remoteaddress)) {
+    if (addr_equal(&CURRENT_IP(at), remote_ipaddr)) {
       max = at + 1;
       if (endpoint_mode)
         fstTTL = max;
@@ -888,7 +929,7 @@ inline void net_end_transit(void) { for (int at = 0; at < MAXHOST; at++) host[at
 
 int net_send_batch(void) {
   if (batch_at < fstTTL) {
-    // [every cycle] Randomize bit-pattern and packet-size if they are less than 0
+    // Randomize bit-pattern and packet-size if requested
     bitpattern = (cbitpattern < 0) ? RANDUNIFORM(256) : cbitpattern;
     if (cpacketsize < 0) {
       int base = -cpacketsize - MINPACKET;
@@ -897,30 +938,34 @@ int net_send_batch(void) {
       packetsize = cpacketsize;
   }
 
-  bool ping = true;
-  if (cache_mode)
-    if (host[batch_at].up && (host[batch_at].seen > 0))
-      if ((time(NULL) - host[batch_at].seen) <= cache_timeout)
-        ping = false;
-  if (ping && !net_send(batch_at))
-    LOG_RE(-1, "failed");
-
-  int n_unknown = 0;
-  for (int at = fstTTL - 1; at < batch_at; at++) {
-    if (!addr_exist(&CURRENT_IP(at)))
-      n_unknown++;
-    if (addr_equal(&CURRENT_IP(at), remoteaddress))
-      n_unknown = MAXHOST; // Make sure we drop into "we should restart"
+  { // Send packet if needed
+    bool ping = true;
+    if (cache_mode)
+      if (host[batch_at].up && (host[batch_at].seen > 0))
+        if ((time(NULL) - host[batch_at].seen) <= cache_timeout)
+          ping = false;
+    if (ping && !( (mtrtype == IPPROTO_TCP) ?
+        net_send_tcp(batch_at) : net_send_icmp_udp(batch_at) ))
+      LOG_RE(-1, "failed");
   }
 
-  if (addr_equal(&CURRENT_IP(batch_at), remoteaddress) // success in reaching target
-     || (n_unknown > MAX_UNKNOWN_HOSTS) // fail in consecuitive MAX_UNKNOWN_HOSTS (firewall?)
-     || (batch_at >= (maxTTL - 1))      // or reach limit
-     || (batch_at >= stopper)) {        // or learnt unreachable
-    numhosts = batch_at + 1;
-    batch_at = fstTTL - 1;
-    LOGMSG_("stop at hop #%d", numhosts);
-    return 1;
+  { // Calculate rc for caller
+    int n_unknown = 0;
+    for (int at = fstTTL - 1; at < batch_at; at++) {
+      if (!addr_exist(&CURRENT_IP(at)))
+        n_unknown++;
+      if (addr_equal(&CURRENT_IP(at), remote_ipaddr))
+        n_unknown = MAXHOST; // Make sure we drop into "we should restart"
+    }
+    if (addr_equal(&CURRENT_IP(batch_at), remote_ipaddr) // success in reaching target
+        || (n_unknown > MAX_UNKNOWN_HOSTS) // fail in consecuitive MAX_UNKNOWN_HOSTS
+        || (batch_at >= (maxTTL - 1))      // or reach limit
+        || (batch_at >= stopper)) {        // or learnt unreachable
+      numhosts = batch_at + 1;
+      batch_at = fstTTL - 1;
+      LOGMSG_("stop at hop #%d", numhosts);
+      return 1;
+    }
   }
 
   batch_at++;
@@ -932,7 +977,8 @@ static void net_sock_close(void) {
   CLOSE(recvsock4);
 #ifdef ENABLE_IPV6
   CLOSE(sendsock6_icmp);
-  CLOSE(sendsock6_udp);
+//  CLOSE(sendsock6_udp);
+//  CLOSE(sendsock6_tcp);
   CLOSE(recvsock6);
 #endif
 }
@@ -983,7 +1029,8 @@ bool net_open(void) {
   RAWCAP_ON;
   recvsock6 = socket(AF_INET6, SOCK_RAW, IPPROTO_ICMPV6);
   sendsock6_icmp = socket(AF_INET6, SOCK_RAW, IPPROTO_ICMPV6);
-  sendsock6_udp = socket(AF_INET6, SOCK_RAW, IPPROTO_UDP);
+//  sendsock6_udp = socket(AF_INET6, SOCK_RAW, IPPROTO_UDP);
+//  sendsock6_tcp = socket(AF_INET6, SOCK_RAW, IPPROTO_TCP);
   RAWCAP_OFF;
 #endif
 #ifdef IP_HDRINCL
@@ -1000,59 +1047,60 @@ bool net_open(void) {
 #ifdef ENABLE_IPV6
 inline void net_setsocket6(void) {
   if (mtrtype == IPPROTO_ICMP) sendsock6 = sendsock6_icmp;
-  else if (mtrtype == IPPROTO_UDP) sendsock6 = sendsock6_udp;
+  else if (mtrtype == IPPROTO_UDP) { sendsock6 = /*sendsock6_udp*/-1; WARNX("UDP6 is not tested yet"); }
+  else if (mtrtype == IPPROTO_TCP) { sendsock6 = /*sendsock6_tcp*/-1; WARNX("TCP6 is not tested yet"); }
 }
 #endif
 
-bool net_set_host(struct hostent *h) {
-#ifdef ENABLE_IPV6
-  struct sockaddr_storage name_struct;
-#else
-  struct sockaddr_in name_struct;
-#endif
-  struct sockaddr *name = (struct sockaddr *) &name_struct;
-  remotesockaddr->sa_family = h->h_addrtype;
-
-  switch (h->h_addrtype) {
-  case AF_INET:
-    sendsock = sendsock4;
-    recvsock = recvsock4;
-    addr_copy(&(rsa4->sin_addr), h->h_addr);
-    sourceaddress = (ip_t*) &(ssa4->sin_addr);
-    remoteaddress = (ip_t*) &(rsa4->sin_addr);
+bool net_set_host(t_ipaddr *ipaddr) {
+  rsa.SA_AF = af;
+  switch (af) {
+    case AF_INET:
+      sendsock = sendsock4;
+      recvsock = recvsock4;
+      addr_copy(&rsa.S_ADDR, ipaddr);
+      remote_ipaddr = (t_ipaddr*)&rsa.S_ADDR;
     break;
 #ifdef ENABLE_IPV6
-  case AF_INET6:
-    if ((sendsock6 < 0) || (recvsock6 < 0)) {
-      WARNX("Unable to open IPv6 socket");
-      return false;
-    }
-    sendsock = sendsock6;
-    recvsock = recvsock6;
-    addr_copy(&(rsa6->sin6_addr), h->h_addr);
-    sourceaddress = (ip_t*) &(ssa6->sin6_addr);
-    remoteaddress = (ip_t*) &(rsa6->sin6_addr);
+    case AF_INET6:
+      if ((sendsock6 < 0) || (recvsock6 < 0)) {
+        WARNX("No IPv6 sockets");
+        return false;
+      }
+      sendsock = sendsock6;
+      recvsock = recvsock6;
+      addr_copy(&rsa.S6ADDR, ipaddr);
+      remote_ipaddr = (t_ipaddr*)&rsa.S6ADDR;
     break;
 #endif
-  default:
-    WARNX_("Unknown address type %d", h->h_addrtype);
-    return false;
   }
 
-  if (!addr_exist(remoteaddress)) {
-    WARNX("Unspecified destination");
+  if (!af || !addr_exist(remote_ipaddr)) {
+    WARNX_("Unspecified destination (af=%d)", af);
     return false;
   }
 
   net_reset();
-  socklen_t len = sizeof(name_struct);
-  getsockname(recvsock, name, &len);
-  sockaddrtop(name, localaddr, sizeof(localaddr));
+  { struct sockaddr_storage ss[1];
+    socklen_t len = sizeof(*ss);
+    if (!getsockname(recvsock, (struct sockaddr *)ss, &len)) {
+      if (len > sizeof(*ss)) WARNX("Address of recv socket is truncated");
+      int saf = ss->ss_family;
+      char *addr =
+#ifdef ENABLE_IPV6
+        (saf == AF_INET6) ? (char*)&((struct sockaddr_in6 *)ss)->sin6_addr :
+#endif
+        ((saf == AF_INET) ? (char*)&((struct sockaddr_in *)ss)->sin_addr : NULL);
+      if (!addr) WARNX_("Unknown address family: %d", saf);
+      else if (!inet_ntop(saf, addr, localaddr, sizeof(localaddr))) WARN("inet_ntop()");
+    } else WARN("getsockname()");
+  }
   portpid = IPPORT_RESERVED + mypid % (65535 - IPPORT_RESERVED);
   return true;
 }
 
 void net_reset(void) {
+  t_ipaddr unspec_addr; memset(&unspec_addr, 0, sizeof(unspec_addr));
   for (int at = 0; at < MAXHOST; at++)
     for (int ndx = 0; ndx < MAXPATH; ndx++)
       set_new_addr(at, ndx, &unspec_addr MPLSFNTAIL(NULL));  // clear all query-response cache
@@ -1075,28 +1123,28 @@ void net_reset(void) {
 
 bool net_set_ifaddr(const char *ifaddr) {
   int len = 0;
-  sourcesockaddr->sa_family = af;
+  lsa.SA_AF = af;
   switch (af) {
     case AF_INET:
-      ssa4->sin_port = 0;
-      if (!inet_aton(ifaddr, &(ssa4->sin_addr))) {
+      lsa.S_PORT = 0;
+      if (!inet_aton(ifaddr, &lsa.S_ADDR)) {
         WARNX_("bad address %s", ifaddr);
         return false;
       }
-      len = sizeof(struct sockaddr);
-      break;
+      len = sizeof(lsa.sin);
+    break;
 #ifdef ENABLE_IPV6
     case AF_INET6:
-      ssa6->sin6_port = 0;
-      if (inet_pton(af, ifaddr, &(ssa6->sin6_addr)) < 1) {
+      lsa.S6PORT = 0;
+      if (inet_pton(af, ifaddr, &lsa.S6ADDR) < 1) {
         WARNX_("bad IPv6 address %s", ifaddr);
         return false;
       }
-      len = sizeof(struct sockaddr_in6);
-      break;
+      len = sizeof(lsa.sin6);
+    break;
 #endif
   }
-  if (bind(sendsock, sourcesockaddr, len) < 0) {
+  if (bind(sendsock, &lsa.sa, len) < 0) {
     WARN_("bind(%d)", sendsock);
     return false;
   }
@@ -1106,6 +1154,7 @@ bool net_set_ifaddr(const char *ifaddr) {
 void net_close(void) {
   net_sock_close();
   // clear memory allocated for query-response cache
+  t_ipaddr unspec_addr; memset(&unspec_addr, 0, sizeof(unspec_addr));
   for (int at = 0; at < MAXHOST; at++)
     for (int ndx = 0; ndx < MAXPATH; ndx++)
       set_new_addr(at, ndx, &unspec_addr MPLSFNTAIL(NULL));
@@ -1113,62 +1162,22 @@ void net_close(void) {
 
 inline int net_wait(void) { return recvsock; }
 
-/* Similar to inet_ntop but uses a sockaddr as it's argument. */
-void sockaddrtop(struct sockaddr *saddr, char *strptr, size_t len) {
-  struct sockaddr_in *sa4;
-#ifdef ENABLE_IPV6
-  struct sockaddr_in6 *sa6;
-#endif
-  switch (saddr->sa_family) {
-  case AF_INET:
-    sa4 = (struct sockaddr_in *) saddr;
-    strncpy(strptr, inet_ntoa(sa4->sin_addr), len - 1);
-    strptr[len - 1] = '\0';
-    return;
-#ifdef ENABLE_IPV6
-  case AF_INET6:
-    sa6 = (struct sockaddr_in6 *) saddr;
-    inet_ntop(sa6->sin6_family, &(sa6->sin6_addr), strptr, len);
-    return;
-#endif
-  default:
-    WARNX_("Unknown address type %d", saddr->sa_family);
-    strptr[0] = '\0';
-    return;
-  }
-}
-
 static int err_slippage(int sock) {
-  struct sockaddr *addr = NULL;
-  socklen_t namelen;
-  switch (af) {
-    case AF_INET:
-      addr = (struct sockaddr *)rsa4;
-      namelen = sizeof(*rsa4);
-      break;
-#ifdef ENABLE_IPV6
-    case AF_INET6:
-      addr = (struct sockaddr *)rsa6;
-      namelen = sizeof(*rsa6);
-      break;
-#endif
-  }
-
-  int r = getpeername(sock, addr, &namelen);
+  socklen_t namelen = sizeof(rsa);
+  int r = getpeername(sock, &rsa.sa, &namelen);
   if ((r < 0) && (errno == ENOTCONN)) {
     r = read(sock, &namelen, 1);
-    if (r >= 0) // sanity lost
-      return -1;
+    if (r >= 0) return -1; // sanity lost
     r = errno;
-  } else
-    r = 0;
+  } else r = 0;
   return r;
 }
 
 // Check connection state with error-slippage
 void net_tcp_parse(int sock, int seq, int noerr, struct timespec *recv_at) {
   int reason = -1, e = err_slippage(sock);
-  LOGMSG_("recv <e=%d> sock=%d ts=%lld.%09ld", e, sock, recv_at ? (long long)(recv_at->tv_sec) : 0, recv_at ? recv_at->tv_nsec : 0);
+  LOGMSG_("recv <e=%d> sock=%d ts=%lld.%09ld", e, sock,
+    recv_at ? (long long)(recv_at->tv_sec) : 0, recv_at ? recv_at->tv_nsec : 0);
   // if no errors, or connection refused, or host down, the target is probably reached
   switch (e) {
     case EHOSTUNREACH:
@@ -1177,7 +1186,7 @@ void net_tcp_parse(int sock, int seq, int noerr, struct timespec *recv_at) {
     case EHOSTDOWN:
     case ECONNREFUSED:
     case 0: // no error
-      net_stat(seq, remoteaddress, recv_at, reason MPLSFNTAIL(NULL)); /*no MPLS decoding?*/
+      net_stat(seq, remote_ipaddr, recv_at, reason MPLSFNTAIL(NULL)); /*no MPLS decoding?*/
       LOGMSG_("stat seq=%d for sock=%d", seq, sock);
       break;
 //  case EAGAIN: // need to wait more
@@ -1284,9 +1293,9 @@ void net_settings(
   net_set_type(mtrtype);
 }
 
-const char *strlongip(ip_t *ip) {
-  static char addrstr[INET6_ADDRSTRLEN];
-  return inet_ntop(af, ip, addrstr, sizeof(addrstr));
+const char *strlongip(t_ipaddr *ipaddr) {
+  static char addrstr[MAX_ADDRSTRLEN];
+  return inet_ntop(af, ipaddr, addrstr, sizeof(addrstr));
 }
 
 #ifdef WITH_MPLS
