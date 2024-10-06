@@ -42,10 +42,6 @@ AC_ARG_ENABLE([ipv6],
 AM_CONDITIONAL([IPV6], [test "x$ipv6" = "xyes"])
 AS_IF([test "x$ipv6" = "xyes"], [AC_DEFINE([ENABLE_IPV6], [], [Define to enable IPv6])])
 
-AC_ARG_ENABLE([int128],
-	AS_HELP_STRING([--disable-int128], [Do not enable int128 detection]),
-	[int128=${enableval}], [int128=yes])
-
 AC_ARG_WITH(splitmode,
 	AS_HELP_STRING([--without-splitmode], [without split-mode]),
 	splitmode=${withval}, [splitmode=yes])
@@ -268,7 +264,6 @@ AS_IF([test "x$libidn" = "xyes"], [
 ])
 
 # Extra compiler flags
-#
 # Note, AX_CHECK_COMPILE_FLAG comes from autoconf-archive
 m4_ifdef([AX_CHECK_COMPILE_FLAG], [
 	AX_CHECK_COMPILE_FLAG([-Wall], [CFLAGS="$CFLAGS -Wall"])
@@ -280,10 +275,6 @@ m4_ifdef([AX_CHECK_COMPILE_FLAG], [
 		AC_MSG_RESULT([-Wall])
 	], [AC_MSG_RESULT([none])])
 ])
-#
-# Check out if compiler provides __uint128_t
-AS_IF([test "x$ipv6" = "xyes" -a "x$int128" = "xyes"],
-	[AC_CHECK_TYPES([__uint128_t],,, [[#include <stdint.h>]])])
 
 _option_list=""
 AS_IF([test "x$libcap" = "xyes"],    [_option_list="$_option_list +CAP"],     [_option_list="$_option_list -CAP"])

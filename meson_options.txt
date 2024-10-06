@@ -7,7 +7,6 @@ option('IPINFO',    type: 'boolean', value: true,  description: 'IPINFO support'
 option('SPLIT',     type: 'boolean', value: true,  description: 'SPLIT mode')
 option('GRAPH',     type: 'boolean', value: false, description: 'XCB/Xlib cairo graphs')
 option('IPV6',      type: 'boolean', value: true,  description: 'IPv6 support')
-option('INT128',    type: 'boolean', value: true,  description: '128bit integers')
 option('MPLS',      type: 'boolean', value: true,  description: 'MPLS decoding')
 option('OUTRAW',    type: 'boolean', value: false, description: 'Output: format raw')
 option('OUTTXT',    type: 'boolean', value: true,  description: 'Output: format text')

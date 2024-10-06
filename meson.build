@@ -32,7 +32,6 @@ ipinfo     = get_option('IPINFO')
 split      = get_option('SPLIT')
 graph      = get_option('GRAPH')
 ipv6       = get_option('IPV6')
-int128     = get_option('INT128')
 mpls       = get_option('MPLS')
 outfmt = []
 outraw     = get_option('OUTRAW')
@@ -257,19 +256,6 @@ else
 endif
 #
 if ipv6
-  width = []
-  if int128
-#    width += 64 # no need?
-    width += 128
-  endif
-  foreach i: width
-    type = '__uint' + i.to_string() + '_t'
-    src  = '#include <stdint.h>\n'
-    src += 'int main() { return ((' + type + ')1 << ' + (i - 1).to_string() + ') == 0; }\n'
-    if cc.links(src, name: type, args: '-Werror')
-      config.set('HAVE_' + type.to_upper(), 1)
-    endif
-  endforeach
   optlist += '+IPV6'
   config.set('ENABLE_IPV6', 1)
 else

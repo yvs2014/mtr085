@@ -51,7 +51,6 @@
 
 /* IPv6 */
 #cmakedefine ENABLE_IPV6
-#cmakedefine HAVE___UINT128_T
 
 /* MPLS decoding */
 #cmakedefine WITH_MPLS

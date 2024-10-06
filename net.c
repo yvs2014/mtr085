@@ -192,9 +192,10 @@ struct sequence {
 };
 
 // global vars
-bool (*addr_exist)(const void *); // true if not 0
-bool (*addr_equal)(const void *, const void *);
-void (*addr_copy)(void *, const void *);
+t_ipaddr unspec_addr; // 0
+bool  (*addr_exist)(const void *a); // true if not 0
+bool  (*addr_equal)(const void *a, const void *b);
+void* (*addr_copy)(void *dst, const void *src);
 int af = AF_INET;  // default address family
 struct nethost host[MAXHOST];
 char localaddr[MAX_ADDRSTRLEN];
@@ -243,44 +244,14 @@ static int portpid;
 static int stopper = MAXHOST;
 enum { RE_PONG, RE_EXCEED, RE_UNREACH }; // reason of a pong response
 
-
-inline bool addr4exist(const void *a) { return *(in_addr_t*)a != 0; }
-inline bool addr4equal(const void *a, const void *b) { return *(in_addr_t*)a == *(in_addr_t*)b; }
-inline void addr4copy(void *dst, const void *src) { *(in_addr_t*)dst = *(in_addr_t*)src; }
-
+bool addr4exist(const void *a) { return memcmp(a, &unspec_addr, sizeof(struct in_addr)) ? true : false; }
+bool addr4equal(const void *a, const void *b) { return memcmp(a, b, sizeof(struct in_addr)) ? false : true; }
+void* addr4copy(void *dst, const void *src) { return memcpy(dst, src, sizeof(struct in_addr)); }
 #ifdef ENABLE_IPV6
-inline bool addr6exist(const void *a) {
-  const t_ipaddr *b = (const t_ipaddr*)a;
-#ifdef HAVE___UINT128_T
-  return b->addr128 != 0;
-#else
-  return b->addr64[0] || b->addr64[1];
+bool addr6exist(const void *a) { return memcmp(a, &unspec_addr, sizeof(struct in6_addr)) ? true : false; }
+bool addr6equal(const void *a, const void *b) { return memcmp(a, b, sizeof(struct in6_addr)) ? false : true; }
+void* addr6copy(void *dst, const void *src) { return memcpy(dst, src, sizeof(struct in6_addr)); }
 #endif
-}
-
-inline bool addr6equal(const void *a, const void *b) {
-  const t_ipaddr *c = (const t_ipaddr*)a;
-  const t_ipaddr *d = (const t_ipaddr*)b;
-#ifdef HAVE___UINT128_T
-  return c->addr128 == d->addr128;
-#else
-  return (c->addr64[0] == d->addr64[0])
-      && (c->addr64[1] == d->addr64[1]);
-#endif
-}
-
-inline void addr6copy(void *dst, const void *src) {
-        t_ipaddr *d =       (t_ipaddr*)dst;
-  const t_ipaddr *s = (const t_ipaddr*)src;
-#ifdef HAVE___UINT128_T
-  d->addr128 = s->addr128;
-#else
-  d->addr64[0] = s->addr64[0];
-  d->addr64[1] = s->addr64[1];
-#endif
-}
-#endif // ENABLE_IPV6
-
 
 // return in 'tv' waittime before sending the next ping
 void waitspec(struct timespec *tv) {
@@ -1100,7 +1071,6 @@ bool net_set_host(t_ipaddr *ipaddr) {
 }
 
 void net_reset(void) {
-  t_ipaddr unspec_addr; memset(&unspec_addr, 0, sizeof(unspec_addr));
   for (int at = 0; at < MAXHOST; at++)
     for (int ndx = 0; ndx < MAXPATH; ndx++)
       set_new_addr(at, ndx, &unspec_addr MPLSFNTAIL(NULL));  // clear all query-response cache
@@ -1154,7 +1124,6 @@ bool net_set_ifaddr(const char *ifaddr) {
 void net_close(void) {
   net_sock_close();
   // clear memory allocated for query-response cache
-  t_ipaddr unspec_addr; memset(&unspec_addr, 0, sizeof(unspec_addr));
   for (int at = 0; at < MAXHOST; at++)
     for (int ndx = 0; ndx < MAXPATH; ndx++)
       set_new_addr(at, ndx, &unspec_addr MPLSFNTAIL(NULL));

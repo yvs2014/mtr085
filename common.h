@@ -28,10 +28,6 @@ typedef union inaddr_union {
   uint8_t s_addr8[4];
 #ifdef ENABLE_IPV6
   struct in6_addr in6;
-  uint64_t addr64[2];
-#ifdef HAVE___UINT128_T
-  __uint128_t addr128;
-#endif
 #endif
 } t_ipaddr;
 

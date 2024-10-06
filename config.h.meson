@@ -51,7 +51,6 @@
 
 /* IPv6 */
 #mesondefine ENABLE_IPV6
-#mesondefine HAVE___UINT128_T
 
 /* MPLS decoding */
 #mesondefine WITH_MPLS

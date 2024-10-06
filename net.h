@@ -56,9 +56,9 @@
 
 extern int af;
 
-extern bool (*addr_exist)(const void *); // true if not 0
-extern bool (*addr_equal)(const void *, const void *);
-extern void (*addr_copy)(void *dst, const void *src);
+extern bool  (*addr_exist)(const void *a); // true if not 0
+extern bool  (*addr_equal)(const void *a, const void *b);
+extern void* (*addr_copy)(void *dst, const void *src);
 
 extern unsigned long net_queries[];
 extern unsigned long net_replies[];
@@ -203,13 +203,13 @@ void net_end_transit(void);
 int net_duplicate(int at, int seq);
 
 const char *strlongip(t_ipaddr *ipaddr);
-bool addr4exist(const void *a);
-bool addr4equal(const void *a, const void *b);
-void addr4copy(void *a, const void *b);
+bool  addr4exist(const void *a);
+bool  addr4equal(const void *a, const void *b);
+void* addr4copy(void *dst, const void *src);
 #ifdef ENABLE_IPV6
-bool addr6exist(const void *a);
-bool addr6equal(const void *a, const void *b);
-void addr6copy(void *a, const void *b);
+bool  addr6exist(const void *a);
+bool  addr6equal(const void *a, const void *b);
+void* addr6copy(void *dst, const void *src);
 void net_setsocket6(void);
 #endif
 #ifdef WITH_MPLS
