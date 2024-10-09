@@ -49,7 +49,7 @@ BUILD_PREREQUIRES="
 
 BUILD() {
 	mkdir -p _build
-	meson _build -DCAP=false --buildtype=release \
+	meson _build -DCAP=false -Dc_std=gnu99 --buildtype=release \
 --prefix=$prefix --libdir=$libDir --includedir=$includeDir
 	ninja -C _build
 }

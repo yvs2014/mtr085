@@ -23,6 +23,16 @@
 #include <sys/param.h>
 #endif
 
+#ifdef HAVE_STRLCPY
+#ifdef HAVE_BSD_STDLIB_H
+#include <bsd/stdlib.h>
+#endif
+// note: return size can distinct: src.len() and printed chars
+#define STRLCPY(dst, src, size) strlcpy(dst, src, size)
+#else
+#define STRLCPY(dst, src, size) snprintf(dst, size, "%s", src)
+#endif
+
 typedef union inaddr_union {
   struct in_addr in;
   uint8_t s_addr8[4];
@@ -46,10 +56,10 @@ typedef union sockaddr_union {
 
 // stat fields description
 typedef struct statf {
-  const char key;
-  const char *hint;
   const char *name;
+  const char *hint;
   int len;
+  const char key;
 } t_statf;
 
 #define NAMELEN 256

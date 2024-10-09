@@ -124,8 +124,7 @@ static int enter_smth(int y) {
 }
 
 static void enter_stat_fields(void) {
-  char fields[MAXFLD + 1];
-  memset(fields, 0, sizeof(fields));
+  char fields[MAXFLD + 1] = {0};
   int curs = curs_set(1);
   for (int i = 0, c; ((c = getch()) != '\n') && (i < MAXFLD);) {
     int j = 0;
@@ -205,7 +204,7 @@ int mc_keyaction(void) {
       mvprintw(2, 0, "Fields: %s\n\n", fld_active);
       for (int i = 0; i < statf_max; i++)
         if (statf[i].hint)
-          printw("  %s\n", statf[i].hint);
+          printw("  %c: %s\n", statf[i].key, statf[i].hint);
       addch('\n');
       move(2, 8); // length of "Fields: "
       refresh();
@@ -538,10 +537,10 @@ static void histogram(int statx, int cols) {
 
 int mc_statf_title(char *buf, int sz) {
   int l = 0;
-  for (int i = 0; (i < MAXFLD) && (l < sz); i++ ) {
+  for (int i = 0; (i < MAXFLD) && (l < sz); i++) {
     const struct statf *sf = active_statf(i);
-    if (sf)
-      l += snprintf(buf + l, sz - l, "%*s", sf->len, sf->name);
+    if (!sf) break;
+    l += snprintf(buf + l, sz - l, "%*s", sf->len, sf->name);
   }
   buf[l] = 0;
   return l;
@@ -681,7 +680,7 @@ void mc_redraw(void) {
     l = maxx - tlen - 1;
     mvprintw(staty - 1, l > 0 ? l : 0, "%s", linebuf);
     if (is_custom_fld())
-      l = snprintf(linebuf, sizeof(linebuf), "CUSTOMIZED-OUTPUT: %s", fld_active);
+      l = snprintf(linebuf, sizeof(linebuf), "Custom keys: %s", fld_active);
     else
       l = snprintf(linebuf, sizeof(linebuf), "Packets      Pings");
     l = l >= tlen ? maxx - l : maxx - tlen + 1;
@@ -761,9 +760,9 @@ bool mc_open(void) {
   }
 
   // init title
-  int l = snprintf(mc_title, sizeof(mc_title), "%s", FULLNAME);
-  if (mtr_args[0]) l += snprintf(mc_title + l, sizeof(mc_title) - l, " %s", mtr_args);
-  l += snprintf(mc_title + l, sizeof(mc_title) - l, " %s", dsthost);
+  { int l = snprintf(mc_title, sizeof(mc_title), "%s", FULLNAME);
+    if (mtr_args[0]) l += snprintf(mc_title + l, sizeof(mc_title) - l, " %s", mtr_args);
+    snprintf(mc_title + l, sizeof(mc_title) - l, " %s", dsthost); }
 
   mc_init();
   mc_redraw();

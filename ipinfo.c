@@ -79,14 +79,14 @@ enum { OT_DNS = 0 /*sure*/, OT_HTTP, OT_WHOIS };
 typedef struct {
   char* host;
   char* host6;
-  char* name[MAX_TXT_ITEMS];
   char* unkn;
-  char  sep;
+  char* prefix;
+  char* name[MAX_TXT_ITEMS];
+  char* skip_str[MAX_TXT_ITEMS]; // skip by string: "query ip", ...
   int   type; // 0 - dns, 1 - http, 2 - whois
   int   skip_ndx[MAX_TXT_ITEMS]; // skip by index: 1, ...
-  char* skip_str[MAX_TXT_ITEMS]; // skip by string: "query ip", ...
-  char* prefix;
   int   width[MAX_TXT_ITEMS];
+  char  sep;
 } origin_t;
 
 #define ORIG_TYPE (origins[origin_no].type)
@@ -197,8 +197,7 @@ static void unkn2norm(char **record) {
 }
 
 static char** split_record(char *r) {
-  static char* recbuf[MAX_TXT_ITEMS];
-  memset(recbuf, 0, sizeof(recbuf));
+  static char* recbuf[MAX_TXT_ITEMS] = {0};
   recbuf[0] = r;
   split_with_sep(recbuf, MAX_TXT_ITEMS, origins[origin_no].sep, '"');
   unkn2norm(recbuf);
@@ -249,8 +248,7 @@ void save_txt_answer(int at, int ndx, const char *answer) {
   if (data)
     save_fields(at, ndx, data);
   else {
-    char* empty[MAX_TXT_ITEMS];
-    memset(empty, 0, sizeof(empty));
+    char* empty[MAX_TXT_ITEMS] = {0};
     save_fields(at, ndx, empty); // it sets as unknown
   }
   if (copy)
@@ -308,8 +306,7 @@ static void parse_http(void *buf, int r, atndx_t id) {
       LOGMSG_("not OK: %.*s", h11ok_ln, p);
       break; // i.e. set as unknown
     }
-    char* lines[TCP_RESP_LINES];
-    memset(lines, 0, sizeof(lines));
+    char* lines[TCP_RESP_LINES] = {0};
     lines[0] = buf;
     int rn = split_with_sep(lines, TCP_RESP_LINES, '\n', 0);
     if (rn < 4) { // HEADER + NL + NL + DATA
@@ -357,8 +354,7 @@ static void parse_http(void *buf, int r, atndx_t id) {
   }
 
   // not found
-  char* empty[MAX_TXT_ITEMS];
-  memset(empty, 0, sizeof(empty));
+  char* empty[MAX_TXT_ITEMS] = {0};
   save_records(id, empty); // it sets as unknown
 }
 
@@ -367,10 +363,8 @@ static void parse_whois(void *txt, int r, atndx_t id) {
   LOGMSG_("got[%d]: \"%.*s\"", r, r, (char*)txt);
   /*summ*/ ipinfo_replies[0]++; ipinfo_replies[2]++;
 
-  static char* record[MAX_TXT_ITEMS];
-  memset(record, 0, sizeof(record));
-  char* lines[TCP_RESP_LINES];
-  memset(lines, 0, sizeof(lines));
+  char* record[MAX_TXT_ITEMS] = {0};
+  char* lines[TCP_RESP_LINES] = {0};
   lines[0] = txt;
 
   int rn = split_with_sep(lines, TCP_RESP_LINES, '\n', 0);
@@ -392,15 +386,14 @@ static void parse_whois(void *txt, int r, atndx_t id) {
           if (strcasecmp(ORIG_NAME(j), ln[0]) == 0)
             record[j] = ln[1];
           if (j == WHOIS_LAST_NDX) { // split the last item (description, country)
-            char* dc[2] = { record[j] };
+            char* dc[2] = { record[j], NULL };
             if (split_with_sep(dc, 2, COMMA, 0) == 2)
               record[WHOIS_LAST_NDX + 1] = dc[1];
           }
         }
       }
     }
-  } else
-    LOGMSG("Skip empty segment");
+  } else LOGMSG("Skip empty segment");
 
   // save results of parsing
   save_records(id, record);
@@ -442,12 +435,10 @@ static int create_tcpsock(int seq) {
   char srv[8];
   snprintf(srv, sizeof(srv), "%u", port);
   LOGMSG_("%s:%s", ORIG_HOST, srv);
-  struct addrinfo hints, *rp;
-  memset(&hints, 0, sizeof(hints));
-  hints.ai_family = af;
-  hints.ai_socktype = SOCK_STREAM;
-  hints.ai_protocol = IPPROTO_TCP;
-
+  struct addrinfo *rp, hints = {
+    .ai_family = af,
+    .ai_socktype = SOCK_STREAM,
+    .ai_protocol = IPPROTO_TCP };
   int e = getaddrinfo(ORIG_HOST, srv, &hints, &rp);
   if (e || !rp)
     LOG_RE_(-1, "getaddrinfo(%s): %s", ORIG_HOST, gai_strerror(e));
@@ -694,27 +685,22 @@ void ipinfo_close(void) {
 }
 
 bool ipinfo_init(const char *arg) {
-  char* args[MAX_TXT_ITEMS + 1];
-  memset(args, 0, sizeof(args));
-  if (arg) {
-    args[0] = strdup(arg);
-    if (!args[0]) {
-      WARN_("strdup(%s)", arg);
-      return false;
-    }
-    split_with_sep(args, MAX_TXT_ITEMS + 1, COMMA, 0);
-    int max = sizeof(origins) / sizeof(origins[0]);
-    int no = (args[0] && *args[0]) ? atoi(args[0]) : 1;
-    if ((no > 0) && (no <= max)) {
-      origin_no = no - 1;
-      ipinfo_tcpmode = (ORIG_TYPE != OT_DNS);
-    } else {
-      free(args[0]);
-      WARNX_("Out of source range[1..%d]: %d", max, no);
-      return false;
-    }
-  } else
+  if (!arg) return false;
+  char* args[MAX_TXT_ITEMS + 1] = {0};
+
+  args[0] = strdup(arg);
+  if (!args[0]) { WARN_("strdup(%s)", arg); return false; }
+  split_with_sep(args, MAX_TXT_ITEMS + 1, COMMA, 0);
+  int max = sizeof(origins) / sizeof(origins[0]);
+  int no = (args[0] && *args[0]) ? atoi(args[0]) : 1;
+  if ((no > 0) && (no <= max)) {
+    origin_no = no - 1;
+    ipinfo_tcpmode = (ORIG_TYPE != OT_DNS);
+  } else {
+    free(args[0]);
+    WARNX_("Out of source range[1..%d]: %d", max, no);
     return false;
+  }
 
   int j = 0;
   for (int i = 1; (j < MAX_TXT_ITEMS) && (i <= MAX_TXT_ITEMS); i++)

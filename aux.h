@@ -13,7 +13,6 @@
 #define FULLNAME PACKAGE_NAME
 #endif
 
-#define FLD_DEFAULT "LS NABWV"
 #define LENVALMIL(val) double _v = (val) / (double)MIL; int _l = val2len(_v);
 
 char* trim(char *s);

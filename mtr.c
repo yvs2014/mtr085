@@ -19,6 +19,7 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <string.h>
+#include <strings.h>
 #include <libgen.h>
 #include <getopt.h>
 #include <fcntl.h>
@@ -26,16 +27,6 @@
 #include <sys/stat.h>
 
 #include "common.h"
-
-#ifdef HAVE_STLCPY
-#ifdef HAVE_BSD_STDLIB_H
-#include <bsd/stdlib.h>
-#endif
-// note: return size can distinct: src.len() and printed chars
-#define STRLCPY(dst, src, size) strlcpy(dst, src, size)
-#else
-#define STRLCPY(dst, src, size) snprintf(dst, size, "%s", src)
-#endif
 
 #ifdef LIBCAP
 #include <sys/capability.h>
@@ -140,22 +131,22 @@ bool bell_visible;            // 6th bit
 bool bell_target;             // 7th bit
 //
 const struct statf statf[] = {
-// Key, Remark, Header, Width
-  {' ', "<sp>: Space between fields", " ", 1},
-  {'L', "L: Loss Ratio",          "Loss",  6},
-  {'D', "D: Dropped Packets",     "Drop",  5},
-  {'R', "R: Received Packets",    "Rcv",   6},
-  {'S', "S: Sent Packets",        "Snt",   6},
-  {'N', "N: Newest RTT(ms)",      "Last",  6},
-  {'B', "B: Min/Best RTT(ms)",    "Best",  6},
-  {'A', "A: Average RTT(ms)",     "Avg",   6},
-  {'W', "W: Max/Worst RTT(ms)",   "Wrst",  6},
-  {'V', "V: Standard Deviation",  "StDev", 6},
-  {'G', "G: Geometric Mean",      "Gmean", 6},
-  {'J', "J: Current Jitter",      "Jttr",  5},
-  {'M', "M: Jitter Mean/Avg.",    "Javg",  5},
-  {'X', "X: Worst Jitter",        "Jmax",  5},
-  {'I', "I: Interarrival Jitter", "Jint",  5},
+// name     hint                    len key
+  {" ",     "Space between fields", 1,  '_'},
+  {"Loss",  "Loss Ratio",           6,  'L'},
+  {"Drop",  "Dropped Packets",      5,  'D'},
+  {"Rcv",   "Received Packets",     6,  'R'},
+  {"Snt",   "Sent Packets",         6,  'S'},
+  {"Last",  "Newest RTT(ms)",       6,  'N'},
+  {"Best",  "Min/Best RTT(ms)",     6,  'B'},
+  {"Avg",   "Average RTT(ms)",      6,  'A'},
+  {"Wrst",  "Max/Worst RTT(ms)",    6,  'W'},
+  {"StDev", "Standard Deviation",   6,  'V'},
+  {"Gmean", "Geometric Mean",       6,  'G'},
+  {"Jttr",  "Current Jitter",       5,  'J'},
+  {"Javg",  "Jitter Mean/Avg.",     5,  'M'},
+  {"Jmax",  "Worst Jitter",         5,  'X'},
+  {"Jint",  "Interarrival Jitter",  5,  'I'},
 };
 const int statf_max = sizeof(statf) / sizeof(statf[0]);
 //// end-of-global
@@ -475,8 +466,9 @@ static void parse_options(int argc, char **argv) {
       char buff[MAX_ADDRSTRLEN + 6/*:port*/] = {0};
       STRLCPY(buff, optarg, sizeof(buff));
       char *host = trim(buff), *port = NULL;
+      if (!host) break;
 #ifdef ENABLE_IPV6
-      if (host && (host[0] == '[')) {
+      if (host[0] == '[') {
         port = strrchr(host, ']');
         if (!port) FAIL_("Failed to parse IPv6 literal: %s", host);
         *port++ = 0; port = trim(port);
@@ -500,7 +492,7 @@ static void parse_options(int argc, char **argv) {
       }
       if (!set_custom_res(ns)) FAIL_("Failed to set NS(%s)", optarg);
       freeaddrinfo(ns);
-      } break;
+    } break;
 #endif
 #ifdef OUTPUT_FORMAT
     case 'o':
@@ -749,7 +741,7 @@ int main(int argc, char **argv) {
 #ifdef WITH_UNICODE
   autotest_unicode_print();
 #endif
-  set_fld_active(FLD_DEFAULT);
+  set_fld_active(NULL);
   parse_options(argc, argv);
 
   if (optind >= argc) {
@@ -768,7 +760,7 @@ int main(int argc, char **argv) {
     dns_open();
 #endif
   if (gethostname(srchost, sizeof(srchost)))
-    strncpy(srchost, "UNKNOWN", sizeof(srchost));
+    STRLCPY(srchost, "UNKNOWN", sizeof(srchost));
   display_start();
 
   bool set_target_success = false;

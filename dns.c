@@ -354,8 +354,6 @@ static atndx_t *expand_query(const uint8_t *packet, int psize, const uint8_t *dn
 
 
 static void dns_parse_reply(uint8_t *buf, ssize_t len) {
-  static char answer[MAXDNAME];
-
   if (len < (int)sizeof(HEADER))
     LOGRET("Packet smaller than standard header size");
   if (len == (int)sizeof(HEADER))
@@ -381,6 +379,7 @@ static void dns_parse_reply(uint8_t *buf, ssize_t len) {
   int l;
   atndx_t *an;
 
+  char answer[MAXDNAME] = {0};
   if (hp->rcode != NOERROR) {
     if (hp->rcode == NXDOMAIN) {
       LOGMSG_("'No such name' with id=%d", hp->id);
@@ -448,10 +447,14 @@ static void dns_parse_reply(uint8_t *buf, ssize_t len) {
         l = *c;
         if ((l >= size) || !l)
           LOGRET_("Broken TXT record (len=%d, size=%d)", l, size);
-        int max = (l < sizeof(answer)) ? l : (sizeof(answer) - 1);
-        strncpy(answer, (char*)(c + 1), max);
-        answer[l] = 0;
-	  } else if ((l = dn_expand(buf, buf + len, c, answer, sizeof(answer) - 1)) < 0)
+#ifdef HAVE_STRLCPY
+        strlcpy(answer, (char*)(c + 1), sizeof(answer));
+#else
+        { int max = (l < sizeof(answer)) ? l : (sizeof(answer) - 1);
+          strncpy(answer, (char*)(c + 1), max);
+          answer[max] = 0; }
+#endif
+      } else if ((l = dn_expand(buf, buf + len, c, answer, sizeof(answer) - 1)) < 0)
         LOGRET("dn_expand() failed while expanding domain");
       LOGMSG_("Answer %.*s", l, answer);
       if      ((atndx->type == 0) && dns_ptr_handler)

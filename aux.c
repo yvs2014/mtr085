@@ -1,4 +1,5 @@
 
+#include <stdio.h>
 #include <string.h>
 #include <ctype.h>
 #include <stdint.h>
@@ -7,8 +8,10 @@
 
 #define FLOAT_UPTO 10 /* values > FLOAT_UPTO in integer format */
 
+#define FLD_DEFAULT "LS_NABWV"
+#define FLD_JITTER  "DR_AGJMXI"
 #if defined(CURSESMODE) || defined(GRAPHMODE)
-static const char fld_jitter[MAXFLD + 1] = "DR AGJMXI";
+static const char fld_jitter[MAXFLD + 1] = FLD_JITTER;
 #endif
 static char fld_custom[MAXFLD + 1];
 
@@ -27,7 +30,7 @@ char* trim(char *s) {
   return p;
 }
 
-void set_fld_active(const char *s) { strncpy(fld_custom, s, MAXFLD); fld_active = fld_custom; }
+void set_fld_active(const char *s) { STRLCPY(fld_custom, s ? s : FLD_DEFAULT, MAXFLD); fld_active = fld_custom; }
 #ifdef CURSESMODE
 bool is_custom_fld(void) { return strncmp(fld_active, fld_jitter, MAXFLD) && strncmp(fld_active, FLD_DEFAULT, MAXFLD); }
 #endif

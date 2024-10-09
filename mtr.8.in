@@ -128,12 +128,14 @@ Jitter Mean/Average
 Worst Jitter
 .It Cm I
 Interarrival Jitter
+.It Cm _
+<space>
 .El
 .sp 2
 Examples:
 .Bl -tag -offset Ds -compact
-.It Cm -F 'LSD NBAW'
-.It Cm -F 'DR AGJMXI'
+.It Cm -F LS_NABWV
+.It Cm -F DR_AGJMXI
 .El
 .ie "g"\*[og]" \{\
 .It Fl g, Fl -graph Ar ARGUMENTS
