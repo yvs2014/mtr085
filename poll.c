@@ -104,7 +104,7 @@ static void set_fds() {
 static int sock_already_accounted(int sock) {
   for (int i = FD_MAX; i < maxfd; i++) {
     if (allfds[i].fd == sock) {
-      LOGMSG_("sock=%d found in slot #%d", sock, i);
+      LOGMSG("sock=%d found in slot #%d", sock, i);
       return i;
     }
   }
@@ -117,7 +117,7 @@ static int save_in_vacant_slot(int sock, int seq) {
       tcpseq[i] = seq;
       allfds[i].fd = sock;
       allfds[i].events = POLLOUT;
-      LOGMSG_("sock=%d seq=%d put in slot #%d", sock, seq, i);
+      LOGMSG("sock=%d seq=%d put in slot #%d", sock, seq, i);
       return i;
     }
   return -1;
@@ -127,7 +127,7 @@ static bool allocate_more_memory(void) {
   size_t szi = (maxfd + FD_BATCHMAX) * sizeof(int);
   void *mem = realloc(tcpseq, szi);
   if (!mem) {
-    WARN_("seq realloc(%zd)", szi);
+    WARN("seq realloc(%zd)", szi);
     return false;
   }
   tcpseq = (int*)mem;
@@ -136,13 +136,13 @@ static bool allocate_more_memory(void) {
   size_t sz = (maxfd + FD_BATCHMAX) * sizeof(struct pollfd);
   mem = realloc(allfds, sz);
   if (!mem) {
-    WARN_("fd realloc(%zd)", sz);
+    WARN("fd realloc(%zd)", sz);
     return false;
   }
   allfds = (struct pollfd *)mem;
   memset(&allfds[maxfd], -1, FD_BATCHMAX * sizeof(struct pollfd));
   maxfd += FD_BATCHMAX;
-  LOGMSG_("%zd bytes for %d slots added to pool", szi + sz, FD_BATCHMAX);
+  LOGMSG("%zd bytes for %d slots added to pool", szi + sz, FD_BATCHMAX);
   return true;
 }
 
@@ -152,9 +152,9 @@ int poll_reg_fd(int sock, int seq) {
     if ((slot = save_in_vacant_slot(sock, seq)) < 0) {
       if (allocate_more_memory()) {
         if ((slot = save_in_vacant_slot(sock, seq)) < 0)
-          LOGMSG_("sock=%d: assertion failed", sock);
+          LOGMSG("sock=%d: assertion failed", sock);
       } else
-        LOGMSG_("sock=%d: memory allocation failed", sock);
+        LOGMSG("sock=%d: memory allocation failed", sock);
     }
   }
   return slot;
@@ -194,7 +194,7 @@ static void proceed_tcp(struct timespec *polled_at) {
     short ev = allfds[i].revents;
     if ((sock < 0) || !ev)
       continue;
-    LOGMSG_("slot#%d sock=%d event=%d", i, sock, ev);
+    LOGMSG("slot#%d sock=%d event=%d", i, sock, ev);
     int seq = tcpseq[i];
     if (seq >= 0) {
       if (seq < MAXSEQ) { // ping tcp-mode
@@ -213,7 +213,7 @@ static void proceed_tcp(struct timespec *polled_at) {
       }
 #endif
     } else
-      LOGMSG_("no sequence for tcp sock=%d in slot#%d", sock, i);
+      LOGMSG("no sequence for tcp sock=%d in slot#%d", sock, i);
   }
 }
 
@@ -235,7 +235,7 @@ static bool svc(struct timespec *last, const struct timespec *interval, int *tim
         int rc = net_send_batch();
         if (rc > 0) {
           numpings++;
-          LOGMSG_("cycle=%ld", numpings);
+          LOGMSG("cycle=%ld", numpings);
         } else if (rc < 0) // fail
           return false;
       }
@@ -257,7 +257,7 @@ static bool svc(struct timespec *last, const struct timespec *interval, int *tim
 
 // proceed keyboard events and return action
 static int keyboard_events(int action) {
-  LOGMSG_("action=%d", action);
+  LOGMSG("action=%d", action);
   switch (action) {
     case ActionQuit:
       LOGMSG("quit");
@@ -269,7 +269,7 @@ static int keyboard_events(int action) {
 #if defined(CURSESMODE) || defined(GRAPHMODE)
     case ActionDisplay: {
       int cm = (curses_mode + 1) % curses_mode_max;
-      LOGMSG_("switch display mode: %d -> %d", curses_mode, cm);
+      LOGMSG("switch display mode: %d -> %d", curses_mode, cm);
       curses_mode = cm;
       // chart bits
       CLRBIT(run_args, RA_DM0);
@@ -290,7 +290,7 @@ static int keyboard_events(int action) {
 #ifdef WITH_MPLS
     case ActionMPLS:
       enable_mpls = !enable_mpls;
-      LOGMSG_("toggle MPLS: %d -> %d", !enable_mpls, enable_mpls);
+      LOGMSG("toggle MPLS: %d -> %d", !enable_mpls, enable_mpls);
       TGLBIT(run_args, RA_MPLS);
       display_clear();
       break;
@@ -298,14 +298,14 @@ static int keyboard_events(int action) {
 #ifdef ENABLE_DNS
     case ActionDNS:
       enable_dns = !enable_dns;
-      LOGMSG_("toggle DNS: %d -> %d", !enable_dns, enable_dns);
+      LOGMSG("toggle DNS: %d -> %d", !enable_dns, enable_dns);
       TGLBIT(run_args, RA_DNS);
       dns_open();
       break;
 #endif
     case ActionCache:
       cache_mode = !cache_mode;
-      LOGMSG_("toggle cache-mode: %d -> %d", !cache_mode, cache_mode);
+      LOGMSG("toggle cache-mode: %d -> %d", !cache_mode, cache_mode);
       TGLBIT(run_args, RA_CACHE);
       break;
 #ifdef WITH_IPINFO
@@ -321,14 +321,14 @@ static int keyboard_events(int action) {
 #endif
 #if defined(CURSESMODE) || defined(SPLITMODE) || defined(GRAPHMODE)
     case ActionScrollDown: {
-      LOGMSG_("scroll down %d lines", SCROLL_LINES);
+      LOGMSG("scroll down %d lines", SCROLL_LINES);
       display_offset += SCROLL_LINES;
       int hops = net_max() - net_min();
       if (display_offset >= hops)
         display_offset = hops - 1;
     } break;
     case ActionScrollUp: {
-      LOGMSG_("scroll up %d lines", SCROLL_LINES);
+      LOGMSG("scroll up %d lines", SCROLL_LINES);
       int rest = display_offset % 5;
       display_offset -= rest ? rest : SCROLL_LINES;
       if (display_offset < 0)
@@ -342,7 +342,7 @@ static int keyboard_events(int action) {
       else {
 #ifdef ENABLE_IPV6
         if ((af == AF_INET6) && ((action == ActionUDP) || (action == ActionTCP))) {
-          WARNX_("IPv6 %s is not tested yet", (action == ActionUDP) ? "UDP" : "TCP");
+          WARNX("IPv6 %s is not tested yet", (action == ActionUDP) ? "UDP" : "TCP");
           action = ActionNone; net_set_type(IPPROTO_ICMP); break;
         }
 #endif
@@ -430,7 +430,7 @@ static bool seqfd_init(void) {
   size_t sz = FD_MAX * sizeof(int);
   tcpseq = malloc(sz);
   if (!tcpseq) {
-    WARN_("seq malloc(%zd)", sz);
+    WARN("seq malloc(%zd)", sz);
     return false;
   }
   memset(tcpseq, -1, sz);
@@ -438,7 +438,7 @@ static bool seqfd_init(void) {
   sz = FD_MAX * sizeof(struct pollfd);
   allfds = malloc(sz);
   if (!allfds) {
-    WARN_("fd malloc(%zd)", sz);
+    WARN("fd malloc(%zd)", sz);
     free(tcpseq);
     tcpseq = NULL;
     return false;
@@ -512,8 +512,8 @@ int poll_loop(void) {
     if (rv < 0) {
       int e = errno;
       display_close(true);
-      WARN_("poll: %s", strerror(e));
-      LOGMSG_("poll: %s", strerror(e));
+      WARN("poll: %s", strerror(e));
+      LOGMSG("poll: %s", strerror(e));
       break;
     }
     anyset = rv ? true : false; // something triggered, or not

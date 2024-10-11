@@ -120,7 +120,7 @@ static int cr_colors_max = sizeof(cr_colors) / sizeof(cr_colors[0]);
 static bool status(cairo_t *c, const char *fn) {
   int rc = cairo_status(c);
   if (rc)
-    WARNX_("%s: %s", fn, cairo_status_to_string(rc));
+    WARNX("%s: %s", fn, cairo_status_to_string(rc));
   return rc ? false : true;
 }
 
@@ -987,13 +987,13 @@ bool cr_open(cr_params_t *cr_params) {
 	if (backend_create_window(&base_window, cr_resize)) {
 		unclosed_data = calloc(maxTTL, sizeof(unclosed_data_t));
 		if (!unclosed_data) {
-			WARN_("calloc(%d, %zd)", maxTTL, sizeof(unclosed_data_t));
+			WARN("calloc(%d, %zd)", maxTTL, sizeof(unclosed_data_t));
 			return false;
 		}
 		for (int i = 0; i < SPLINE_POINTS; i++) {
 			y_point[i] = calloc(maxTTL, sizeof(int));
 			if (!y_point[i]) {
-				WARN_("calloc(%d, %zd)", maxTTL, sizeof(int));
+				WARN("calloc(%d, %zd)", maxTTL, sizeof(int));
 				return false;
 			}
 		}

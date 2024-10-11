@@ -227,10 +227,10 @@ static void save_fields(int at, int ndx, char **record) {
       free(RTXT_AT_NDX(at, ndx, j));
     RTXT_AT_NDX(at, ndx, j) = strndup(s, NAMELEN);
     if (!RTXT_AT_NDX(at, ndx, j)) {
-      WARN_("[%d:%d:%d]: strndup()", at, ndx, j);
+      WARN("[%d:%d:%d]: strndup()", at, ndx, j);
       break;
     }
-    LOGMSG_("[%d] %s", j, RTXT_AT_NDX(at, ndx, j));
+    LOGMSG("[%d] %s", j, RTXT_AT_NDX(at, ndx, j));
     j++;
   }
 }
@@ -240,7 +240,7 @@ void save_txt_answer(int at, int ndx, const char *answer) {
   if (answer && strnlen(answer, NAMELEN)) {
     copy = strndup(answer, NAMELEN);
     if (!copy) {
-      WARN_("[%d:%d]: strndup()", at, ndx);
+      WARN("[%d:%d]: strndup()", at, ndx);
       return;
     }
     data = split_record(copy);
@@ -298,19 +298,19 @@ static void parse_http(void *buf, int r, atndx_t id) {
   static char h11ok[] = "HTTP/1.1 200 OK";
   static int h11ok_ln = sizeof(h11ok) - 1;
 
-  LOGMSG_("got %d bytes: \"%s\"", r, (char*)buf);
+  LOGMSG("got %d bytes: \"%s\"", r, (char*)buf);
   /*summ*/ ipinfo_replies[0]++; ipinfo_replies[1]++;
 
   for (char *p = buf; (p = strstr(p, h11)) && ((p - (char*)buf) < r); p += h11_ln) {
     if (strncmp(p, h11ok, h11ok_ln)) { // not HTTP OK
-      LOGMSG_("not OK: %.*s", h11ok_ln, p);
+      LOGMSG("not OK: %.*s", h11ok_ln, p);
       break; // i.e. set as unknown
     }
     char* lines[TCP_RESP_LINES] = {0};
     lines[0] = buf;
     int rn = split_with_sep(lines, TCP_RESP_LINES, '\n', 0);
     if (rn < 4) { // HEADER + NL + NL + DATA
-      LOGMSG_("No data after header (got %d lines only)", rn);
+      LOGMSG("No data after header (got %d lines only)", rn);
       continue;
     }
 
@@ -333,13 +333,13 @@ static void parse_http(void *buf, int r, atndx_t id) {
 
     char *txt = calloc(1, clen + 1);
     if (!txt) {
-      WARN_("calloc(%d)", clen + 1);
+      WARN("calloc(%d)", clen + 1);
       return;
     }
     for (int i = cndx, l = 0; (i < rn) && (l < clen); i++) // combine into one line
       l += snprintf(txt + l, clen - l, "%s", lines[i]);
 
-    LOGMSG_("got line: %s", txt);
+    LOGMSG("got line: %s", txt);
     char **re = split_record(trim_str(trim_str(txt, CHAR_QOUTES), CHAR_BRACKETS));
     if (re) {
       int got = count_records(re);
@@ -348,7 +348,7 @@ static void parse_http(void *buf, int r, atndx_t id) {
         free(txt);
         return;
       } else
-        LOGMSG_("Expected %d records, got %d", itemname_max, got);
+        LOGMSG("Expected %d records, got %d", itemname_max, got);
     }
     free(txt);
   }
@@ -360,7 +360,7 @@ static void parse_http(void *buf, int r, atndx_t id) {
 
 
 static void parse_whois(void *txt, int r, atndx_t id) {
-  LOGMSG_("got[%d]: \"%.*s\"", r, r, (char*)txt);
+  LOGMSG("got[%d]: \"%.*s\"", r, r, (char*)txt);
   /*summ*/ ipinfo_replies[0]++; ipinfo_replies[2]++;
 
   char* record[MAX_TXT_ITEMS] = {0};
@@ -406,7 +406,7 @@ static void close_ipitseq(int seq) {
     if (ipitseq[seq].slot >= 0)
       poll_dereg_fd(ipitseq[seq].slot);
     else {
-      LOGMSG_("close sock=%d", sock);
+      LOGMSG("close sock=%d", sock);
       close(sock);
       /*summ*/ sum_sock[1]++;
     }
@@ -425,7 +425,7 @@ void ipinfo_parse(int sock, int seq) { // except dns, dns.ack in dns.c
       case OT_WHOIS: parse_whois(exchbuf, r, id); return;
     }
   } else if (r < 0)
-    WARN_("seq=%d recv(sock=%d)", seq, sock);
+    WARN("seq=%d recv(sock=%d)", seq, sock);
   close_ipitseq(seq);
 }
 
@@ -434,36 +434,36 @@ static int create_tcpsock(int seq) {
   uint16_t port = (ORIG_TYPE == OT_WHOIS) ? 43 : 80;
   char srv[8];
   snprintf(srv, sizeof(srv), "%u", port);
-  LOGMSG_("%s:%s", ORIG_HOST, srv);
+  LOGMSG("%s:%s", ORIG_HOST, srv);
   struct addrinfo *rp, hints = {
     .ai_family = af,
     .ai_socktype = SOCK_STREAM,
     .ai_protocol = IPPROTO_TCP };
   int e = getaddrinfo(ORIG_HOST, srv, &hints, &rp);
   if (e || !rp)
-    LOG_RE_(-1, "getaddrinfo(%s): %s", ORIG_HOST, gai_strerror(e));
+    LOG_RE(-1, "getaddrinfo(%s): %s", ORIG_HOST, gai_strerror(e));
   int rc = -1;
   int sock = socket(rp->ai_family, rp->ai_socktype, rp->ai_protocol);
   if (sock < 0) {
-    LOGMSG_("%s: socket: %s", ORIG_HOST, strerror(errno));
+    LOGMSG("%s: socket: %s", ORIG_HOST, strerror(errno));
   } else {
-    LOGMSG_("socket=%d open", sock);
+    LOGMSG("socket=%d open", sock);
     /*summ*/ sum_sock[0]++;
     if (fcntl(sock, F_SETFL, O_NONBLOCK) < 0) {
-      LOGMSG_("%s: fcntl: %s", ORIG_HOST, strerror(errno));
+      LOGMSG("%s: fcntl: %s", ORIG_HOST, strerror(errno));
     } else {
       int slot = poll_reg_fd(sock, seq + MAXSEQ);
       if (slot < 0) {
-        LOGMSG_("no place in pool for sockets (host=%s)", ORIG_HOST);
+        LOGMSG("no place in pool for sockets (host=%s)", ORIG_HOST);
       } else {
         ipitseq[seq] = (struct ipitseq) { .sock = sock, .slot = slot, .state = TSEQ_CREATED };
         connect(sock, rp->ai_addr, rp->ai_addrlen); // NOLINT(bugprone-unused-return-value)
-        LOGMSG_("send non-blocking connect via sock=%d", sock);
+        LOGMSG("send non-blocking connect via sock=%d", sock);
         rc = 0; // note: non-blocking connect() returns EINPROGRESS
       }
     }
     if (rc) {
-      LOGMSG_("socket=%d close", sock);
+      LOGMSG("socket=%d close", sock);
       close(sock);
       /*summ*/ sum_sock[1]++;
     }
@@ -481,7 +481,7 @@ static int send_tcp_query(int sock, const char *q) {
   if (rc >= 0) {
     /*summ*/ ipinfo_queries[0]++; (ORIG_TYPE == OT_HTTP) ? ipinfo_queries[1]++ : ipinfo_queries[2]++;
   }
-  LOGMSG_("[orig=%d sock=%d] q=\"%s\" rc=%d ts=%lld", origin_no, sock, q, rc, (long long)time(NULL));
+  LOGMSG("[orig=%d sock=%d] q=\"%s\" rc=%d ts=%lld", origin_no, sock, q, rc, (long long)time(NULL));
   return rc;
 }
 
@@ -494,7 +494,7 @@ static char* make_tcp_qstr(t_ipaddr *ipaddr) {
 void ipinfo_seq_ready(int seq) {
   seq %= MAXSEQ;
   int at = seq / MAXPATH, ndx = seq % MAXPATH;
-  LOGMSG_("seq=%d at=%d ndx=%d", seq, at, ndx);
+  LOGMSG("seq=%d at=%d ndx=%d", seq, at, ndx);
   ipitseq[seq].state = TSEQ_READY;
   QTXT_TS_AT_NDX(at, ndx) = time(NULL); // save send-time
   send_tcp_query(ipitseq[seq].sock, make_tcp_qstr(&IP_AT_NDX(at, ndx)));
@@ -512,7 +512,7 @@ static int ipinfo_lookup(int at, int ndx, const char *qstr) {
   if (!QTXT_AT_NDX(at, ndx)) {
     QTXT_AT_NDX(at, ndx) = strndup(qstr, NAMELEN);
     if (!QTXT_AT_NDX(at, ndx)) {
-      WARN_("[%d:%d]: strndup()", at, ndx);
+      WARN("[%d:%d]: strndup()", at, ndx);
       return -1;
   }}
 
@@ -554,7 +554,7 @@ bool ipinfo_timedout(int seq) {
   int dt = time(NULL) - QTXT_TS_AT_NDX(at, ndx);
   if (dt <= IPINFO_TCP_TIMEOUT)
     return false;
-  LOGMSG_("clean tcp seq=%d after %d sec", seq, IPINFO_TCP_TIMEOUT);
+  LOGMSG("clean tcp seq=%d after %d sec", seq, IPINFO_TCP_TIMEOUT);
   close_ipitseq(seq);
   return true;
 }
@@ -641,11 +641,11 @@ static bool alloc_ipitseq(void) {
   size_t sz = MAXHOST * MAXPATH * sizeof(struct ipitseq);
   ipitseq = malloc(sz);
   if (!ipitseq) {
-    WARN_("tcpseq malloc(%zd)", sz);
+    WARN("tcpseq malloc(%zd)", sz);
     return false;
   }
   memset(ipitseq, -1, sz);
-  LOGMSG_("allocated %zd bytes for tcp-sockets", sz);
+  LOGMSG("allocated %zd bytes for tcp-sockets", sz);
   return true;
 }
 
@@ -664,7 +664,7 @@ static void ipinfo_open(void) {
 #ifdef ENABLE_DNS
   dns_txt_handler = save_txt_answer; // handler is used in ipinfo only
 #endif
-  LOGMSG_("%s", ii_ready ? "ok" : "failed");
+  LOGMSG("%s", ii_ready ? "ok" : "failed");
 }
 
 void ipinfo_close(void) {
@@ -689,7 +689,7 @@ bool ipinfo_init(const char *arg) {
   char* args[MAX_TXT_ITEMS + 1] = {0};
 
   args[0] = strdup(arg);
-  if (!args[0]) { WARN_("strdup(%s)", arg); return false; }
+  if (!args[0]) { WARN("strdup(%s)", arg); return false; }
   split_with_sep(args, MAX_TXT_ITEMS + 1, COMMA, 0);
   int max = sizeof(origins) / sizeof(origins[0]);
   int no = (args[0] && *args[0]) ? atoi(args[0]) : 1;
@@ -698,7 +698,7 @@ bool ipinfo_init(const char *arg) {
     ipinfo_tcpmode = (ORIG_TYPE != OT_DNS);
   } else {
     free(args[0]);
-    WARNX_("Out of source range[1..%d]: %d", max, no);
+    WARNX("Out of source range[1..%d]: %d", max, no);
     return false;
   }
 
@@ -723,7 +723,7 @@ bool ipinfo_init(const char *arg) {
     ORIG_WIDTH(i) = strnlen(ORIG_NAME(i), NAMELEN);
   }
 
-  LOGMSG_("Source: %s%s%s", ORIG_HOST, origins[origin_no].host6 ? ", " : "",
+  LOGMSG("Source: %s%s%s", ORIG_HOST, origins[origin_no].host6 ? ", " : "",
     origins[origin_no].host6 ? origins[origin_no].host6 : "");
   return true;
 }

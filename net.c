@@ -169,15 +169,15 @@ struct PACKIT icmpext_object { // RFC4884
 #define IPLEN_RAW(sz) sz
 #endif
 
-#define EXIT(s) { int e = errno; display_close(true); ERRX_(e, "%s: %s", s, strerror(e)); }
+#define EXIT(s) { int e = errno; display_close(true); ERRX(e, "%s: %s", s, strerror(e)); }
 
 #define CLOSE(fd) if ((fd) >= 0) { close(fd); fd = -1; /*summ*/ sum_sock[1]++; }
 
 #define FAIL_WITH_WARNX(rcode, fd, fmt, ...) { last_neterr = rcode; \
   display_clear(); CLOSE(fd); \
-  WARNX_(fmt ": %s", __VA_ARGS__, strerror(last_neterr)); \
+  WARNX(fmt ": %s", __VA_ARGS__, strerror(last_neterr)); \
   snprintf(neterr_txt, ERRBYFN_SZ, fmt ": %s", __VA_ARGS__, strerror(last_neterr)); \
-  LOG_RE_(false, fmt ": %s", __VA_ARGS__, strerror(last_neterr)); \
+  LOG_RE(false, fmt ": %s", __VA_ARGS__, strerror(last_neterr)); \
 }
 
 #define FAIL_WITH_WARN(fd, fmt, ...) FAIL_WITH_WARNX(errno, fd, fmt, __VA_ARGS__)
@@ -300,7 +300,7 @@ static inline bool save_send_ts(int seq) {
 }
 
 static void save_sequence(int seq, int at) {
-  LOGMSG_("seq=%d at=%d", seq, at);
+  LOGMSG("seq=%d at=%d", seq, at);
   seqlist[seq].at = at;
   seqlist[seq].transit = true;
   if (host[at].transit)
@@ -416,7 +416,7 @@ static bool net_send_tcp(int at) {
 #ifdef LOGMOD
   { struct timespec now;
     int rc = clock_gettime(CLOCK_MONOTONIC, &now); // LOGMOD for debug only
-    LOGMSG_("at=%d seq=%d sock=%d: ttl=%d (ts=%lld.%09ld)", at, seq, sock, ttl, rc ? 0 : (long long)now.tv_sec, rc ? 0 : now.tv_nsec); }
+    LOGMSG("at=%d seq=%d sock=%d: ttl=%d (ts=%lld.%09ld)", at, seq, sock, ttl, rc ? 0 : (long long)now.tv_sec, rc ? 0 : now.tv_nsec); }
 #endif
   /*summ*/ net_queries[QR_SUM]++; net_queries[QR_TCP]++;
   return true;
@@ -431,7 +431,7 @@ static inline void net_fill_icmp_hdr(uint16_t seq, uint8_t type, uint8_t *data, 
   icmp->id   = mypid;
   icmp->seq  = seq;
   icmp->sum  = sum1616((uint16_t*)data, size / 2, (size % 2) ? (bitpattern & 0xff) : 0);
-  LOGMSG_("icmp: seq=%d id=%u", icmp->seq, icmp->id);
+  LOGMSG("icmp: seq=%d id=%u", icmp->seq, icmp->id);
 }
 
 static inline bool net_fill_udp_hdr(uint16_t seq, uint8_t *data, uint16_t size
@@ -446,7 +446,7 @@ static inline bool net_fill_udp_hdr(uint16_t seq, uint8_t *data, uint16_t size
     SET_UDP_UH_PORTS(udp, portpid, LO_UDPPORT + seq)
   else
     SET_UDP_UH_PORTS(udp, LO_UDPPORT + seq, remoteport);
-  LOGMSG_("udp: seq=%d port=%u", seq, ntohs(udp->uh_dport));
+  LOGMSG("udp: seq=%d port=%u", seq, ntohs(udp->uh_dport));
   switch (af) {
     case AF_INET:
 #ifdef IP_HDRINCL
@@ -545,7 +545,7 @@ static bool net_send_icmp_udp(int at) {
 
 static void stats(int at, timemsec_t curr) {
   double curr_f = msec2float(curr);
-  LOGMSG_("prev=%lld.%09ld curr=%lld.%09ld", (long long)host[at].last.ms, host[at].last.frac, (long long)curr.ms, curr.frac);
+  LOGMSG("prev=%lld.%09ld curr=%lld.%09ld", (long long)host[at].last.ms, host[at].last.frac, (long long)curr.ms, curr.frac);
 
   if (host[at].recv < 1) {
     host[at].best = host[at].worst = curr;
@@ -633,9 +633,9 @@ static int net_stat(unsigned port, const void *addr, struct timespec *recv_at, i
   if (!seqlist[seq].transit)
     return true;
 #ifdef WITH_MPLS
-  LOGMSG_("at=%d seq=%d (labels=%d)", seqlist[seq].at, seq, mpls ? mpls->n : 0);
+  LOGMSG("at=%d seq=%d (labels=%d)", seqlist[seq].at, seq, mpls ? mpls->n : 0);
 #else
-  LOGMSG_("at=%d seq=%d", seqlist[seq].at, seq);
+  LOGMSG("at=%d seq=%d", seqlist[seq].at, seq);
 #endif
   seqlist[seq].transit = false;
 
@@ -655,7 +655,7 @@ static int net_stat(unsigned port, const void *addr, struct timespec *recv_at, i
   if (ndx < 0) {        // new one
     ndx = at2next(at);
     if (ndx < 0) {      // no free slots? warn about it, and change the last one
-      WARNX_("MAXPATH=%d is exceeded at hop=%d", MAXPATH, at);
+      WARNX("MAXPATH=%d is exceeded at hop=%d", MAXPATH, at);
       ndx = MAXPATH - 1;
     }
     set_new_addr(at, ndx, &copy MPLSFNTAIL(mpls));
@@ -666,7 +666,7 @@ static int net_stat(unsigned port, const void *addr, struct timespec *recv_at, i
   }
 #ifdef WITH_MPLS
   else if (mpls && memcmp(&MPLS_AT_NDX(at, ndx), mpls, sizeof(mpls_data_t))) {
-    LOGMSG_("update mpls at=%d ndx=%d (labels=%d)", at, ndx, mpls->n);
+    LOGMSG("update mpls at=%d ndx=%d (labels=%d)", at, ndx, mpls->n);
     memcpy(&MPLS_AT_NDX(at, ndx), mpls, sizeof(mpls_data_t));
   }
 #endif
@@ -702,14 +702,14 @@ static mpls_data_t *decodempls(const uint8_t *data, int sz) {
   static const size_t mplsoff = MPLSMIN - (IES_SZ + IEO_SZ + LAB_SZ);
   static const size_t ieomin = IEO_SZ + LAB_SZ;
   if (sz < MPLSMIN) {
-    LOGMSG_("got %d bytes of data, whereas mpls min is %d", sz, MPLSMIN);
+    LOGMSG("got %d bytes of data, whereas mpls min is %d", sz, MPLSMIN);
     return NULL;
   }
   int off = mplsoff; // at least 12bytes ahead: icmp_ext_struct(4) icmp_ext_object(4) label(4) [label(4) ...]
   // icmp extension structure
   struct icmpext_struct *ies = (struct icmpext_struct *)&data[off];
   if ((ies->ver != ICMP_EXT_VER) || ies->res || !ies->sum) {
-    LOGMSG_("got ver=%d res=%d sum=%d, expected ver=%d res=0 sum!=0", ies->ver, ies->res, ies->sum, ICMP_EXT_VER);
+    LOGMSG("got ver=%d res=%d sum=%d, expected ver=%d res=0 sum!=0", ies->ver, ies->res, ies->sum, ICMP_EXT_VER);
     return NULL;
   }
   off += IES_SZ;
@@ -717,7 +717,7 @@ static mpls_data_t *decodempls(const uint8_t *data, int sz) {
   struct icmpext_object *ieo = (struct icmpext_object *)&data[off];
   ieo->len = ntohs(ieo->len);
   if ((ieo->len < ieomin) || (ieo->class != ICMP_EXT_CLASS_MPLS) || (ieo->type != ICMP_EXT_TYPE_MPLS)) {
-    LOGMSG_("got len=%d class=%d type=%d, expected len>=%zd class=%d type=%d",
+    LOGMSG("got len=%d class=%d type=%d, expected len>=%zd class=%d type=%d",
       ieo->len, ieo->class, ieo->type, ieomin, ICMP_EXT_CLASS_MPLS, ICMP_EXT_TYPE_MPLS);
     return NULL;
   }
@@ -725,7 +725,7 @@ static mpls_data_t *decodempls(const uint8_t *data, int sz) {
   off += IEO_SZ;
   // limit number of MPLS labels
   if (n > MAXLABELS) {
-    LOGMSG_("got %d MPLS labels, limit=%d", n, MAXLABELS);
+    LOGMSG("got %d MPLS labels, limit=%d", n, MAXLABELS);
     n = MAXLABELS;
   }
   memset(&mplsdata, 0, sizeof(mplsdata));
@@ -741,15 +741,15 @@ static mpls_data_t *decodempls(const uint8_t *data, int sz) {
 
 void net_icmp_parse(struct timespec *recv_at) {
 #define ICMPSEQID { seq = icmp->seq; if (icmp->id != (uint16_t)mypid) \
-  LOGRET_("icmp: unknown id=%u type=%d seq=%d", icmp->id, icmp->type, seq); }
+  LOGRET("icmp: unknown id=%u type=%d seq=%d", icmp->id, icmp->type, seq); }
 
   uint8_t packet[MAXPACKET];
   struct sockaddr_storage sa_in;
 
   ssize_t sz = recvfrom(recvsock, packet, MAXPACKET, 0, (struct sockaddr *)&sa_in, &sa_len);
-  LOGMSG_("got %zd bytes", sz);
+  LOGMSG("got %zd bytes", sz);
   if (sz < hdr_minsz)
-    LOGRET_("incorrect packet size %zd [af=%d proto=%d minsize=%zd]", sz, af, mtrtype, hdr_minsz);
+    LOGRET("incorrect packet size %zd [af=%d proto=%d minsize=%zd]", sz, af, mtrtype, hdr_minsz);
 
   struct _icmphdr *icmp = (struct _icmphdr *)(packet + iphdr_sz);
   uint8_t *data = ((uint8_t*)icmp) + ipicmphdr_sz;
@@ -765,7 +765,7 @@ void net_icmp_parse(struct timespec *recv_at) {
         ICMPSEQID;
       } else if ((icmp->type == time_exceed) || (icmp->type == dst_unreach)) {
         if (sz < minfailsz)
-          LOGRET_("incorrect packet size %zd [af=%d proto=%d expect>=%zd]", sz, af, mtrtype, minfailsz);
+          LOGRET("incorrect packet size %zd [af=%d proto=%d expect>=%zd]", sz, af, mtrtype, minfailsz);
         reason = (icmp->type == time_exceed) ? RE_EXCEED : RE_UNREACH;
         icmp = (struct _icmphdr *)data;
         ICMPSEQID;
@@ -774,9 +774,9 @@ void net_icmp_parse(struct timespec *recv_at) {
 #endif
       }
 #ifdef WITH_MPLS
-      LOGMSG_("icmp seq=%d type=%d mpls=%d", seq, icmp->type, mplson);
+      LOGMSG("icmp seq=%d type=%d mpls=%d", seq, icmp->type, mplson);
 #else
-      LOGMSG_("icmp seq=%d type=%d", seq, icmp->type);
+      LOGMSG("icmp seq=%d type=%d", seq, icmp->type);
 #endif
       /*summ*/ net_replies[QR_ICMP]++;
     } break;
@@ -795,9 +795,9 @@ void net_icmp_parse(struct timespec *recv_at) {
       seq -= LO_UDPPORT;
 #ifdef WITH_MPLS
       mplson = mplslike(sz, data - packet);
-      LOGMSG_("udp seq=%d id=%d mpls=%d", seq, portpid, mplson);
+      LOGMSG("udp seq=%d id=%d mpls=%d", seq, portpid, mplson);
 #else
-      LOGMSG_("udp seq=%d id=%d", seq, portpid);
+      LOGMSG("udp seq=%d id=%d", seq, portpid);
 #endif
       /*summ*/ net_replies[QR_UDP]++;
     } break;
@@ -807,13 +807,13 @@ void net_icmp_parse(struct timespec *recv_at) {
       seq = ntohs(th->th_sport);
 #ifdef WITH_MPLS
       mplson = mplslike(sz, data - packet);
-      LOGMSG_("tcp seq=%d mpls=%d", seq, mplson);
+      LOGMSG("tcp seq=%d mpls=%d", seq, mplson);
 #else
-      LOGMSG_("tcp seq=%d", seq);
+      LOGMSG("tcp seq=%d", seq);
 #endif
       /*summ*/ net_replies[QR_TCP]++;
     } break;
-    default: LOGRET_("Unsupported proto %d", mtrtype);
+    default: LOGRET("Unsupported proto %d", mtrtype);
   } /*end of switch(mtrtype)*/
 
   /*summ*/ net_replies[QR_SUM]++;
@@ -934,7 +934,7 @@ int net_send_batch(void) {
         || (batch_at >= stopper)) {        // or learnt unreachable
       numhosts = batch_at + 1;
       batch_at = fstTTL - 1;
-      LOGMSG_("stop at hop #%d", numhosts);
+      LOGMSG("stop at hop #%d", numhosts);
       return 1;
     }
   }
@@ -1047,7 +1047,7 @@ bool net_set_host(t_ipaddr *ipaddr) {
   }
 
   if (!af || !addr_exist(remote_ipaddr)) {
-    WARNX_("Unspecified destination (af=%d)", af);
+    WARNX("Unspecified destination (af=%d)", af);
     return false;
   }
 
@@ -1062,7 +1062,7 @@ bool net_set_host(t_ipaddr *ipaddr) {
         (saf == AF_INET6) ? (char*)&((struct sockaddr_in6 *)ss)->sin6_addr :
 #endif
         ((saf == AF_INET) ? (char*)&((struct sockaddr_in *)ss)->sin_addr : NULL);
-      if (!addr) WARNX_("Unknown address family: %d", saf);
+      if (!addr) WARNX("Unknown address family: %d", saf);
       else if (!inet_ntop(saf, addr, localaddr, sizeof(localaddr))) WARN("inet_ntop()");
     } else WARN("getsockname()");
   }
@@ -1098,7 +1098,7 @@ bool net_set_ifaddr(const char *ifaddr) {
     case AF_INET:
       lsa.S_PORT = 0;
       if (!inet_aton(ifaddr, &lsa.S_ADDR)) {
-        WARNX_("bad address %s", ifaddr);
+        WARNX("bad address %s", ifaddr);
         return false;
       }
       len = sizeof(lsa.sin);
@@ -1107,7 +1107,7 @@ bool net_set_ifaddr(const char *ifaddr) {
     case AF_INET6:
       lsa.S6PORT = 0;
       if (inet_pton(af, ifaddr, &lsa.S6ADDR) < 1) {
-        WARNX_("bad IPv6 address %s", ifaddr);
+        WARNX("bad IPv6 address %s", ifaddr);
         return false;
       }
       len = sizeof(lsa.sin6);
@@ -1115,7 +1115,7 @@ bool net_set_ifaddr(const char *ifaddr) {
 #endif
   }
   if (bind(sendsock, &lsa.sa, len) < 0) {
-    WARN_("bind(%d)", sendsock);
+    WARN("bind(%d)", sendsock);
     return false;
   }
   return true;
@@ -1145,7 +1145,7 @@ static int err_slippage(int sock) {
 // Check connection state with error-slippage
 void net_tcp_parse(int sock, int seq, int noerr, struct timespec *recv_at) {
   int reason = -1, e = err_slippage(sock);
-  LOGMSG_("recv <e=%d> sock=%d ts=%lld.%09ld", e, sock,
+  LOGMSG("recv <e=%d> sock=%d ts=%lld.%09ld", e, sock,
     recv_at ? (long long)(recv_at->tv_sec) : 0, recv_at ? recv_at->tv_nsec : 0);
   // if no errors, or connection refused, or host down, the target is probably reached
   switch (e) {
@@ -1156,7 +1156,7 @@ void net_tcp_parse(int sock, int seq, int noerr, struct timespec *recv_at) {
     case ECONNREFUSED:
     case 0: // no error
       net_stat(seq, remote_ipaddr, recv_at, reason MPLSFNTAIL(NULL)); /*no MPLS decoding?*/
-      LOGMSG_("stat seq=%d for sock=%d", seq, sock);
+      LOGMSG("stat seq=%d for sock=%d", seq, sock);
       break;
 //  case EAGAIN: // need to wait more
   }
@@ -1172,7 +1172,7 @@ bool net_timedout(int seq) {
   timespecsub(&now, &seqlist[seq].time, &dt);
   if (time2msec(dt) <= syn_timeout)
     return false;
-  LOGMSG_("clean tcp seq=%d after %d sec", seq, syn_timeout / MIL);
+  LOGMSG("clean tcp seq=%d after %d sec", seq, syn_timeout / MIL);
   seqlist[seq].transit = false;
   return true;
 }
@@ -1180,7 +1180,7 @@ bool net_timedout(int seq) {
 #ifdef ENABLE_DNS
 static void save_ptr_answer(int at, int ndx, const char* answer) {
   if (RPTR_AT_NDX(at, ndx)) {
-    LOGMSG_("T_PTR dup or update at=%d ndx=%d for %s", at, ndx, strlongip(&IP_AT_NDX(at, ndx)));
+    LOGMSG("T_PTR dup or update at=%d ndx=%d for %s", at, ndx, strlongip(&IP_AT_NDX(at, ndx)));
     free(RPTR_AT_NDX(at, ndx));
     RPTR_AT_NDX(at, ndx) = NULL;
   }
@@ -1188,7 +1188,7 @@ static void save_ptr_answer(int at, int ndx, const char* answer) {
     // if no answer, save ip-address in text representation
     strndup(strlongip(&IP_AT_NDX(at, ndx)), NAMELEN);
   if (!RPTR_AT_NDX(at, ndx))
-    WARN_("[%d:%d] strndup()", at, ndx);
+    WARN("[%d:%d] strndup()", at, ndx);
 }
 #endif
 
@@ -1209,7 +1209,7 @@ void net_assert(void) { // to be sure
 }
 
 void net_set_type(int type) {
-  LOGMSG_("proto type: %d", type);
+  LOGMSG("proto type: %d", type);
   mtrtype = type;
   ipicmphdr_sz = iphdr_sz + sizeof(struct _icmphdr);
   hdr_minsz = iphdr_sz;
@@ -1217,7 +1217,7 @@ void net_set_type(int type) {
     case IPPROTO_ICMP: hdr_minsz += sizeof(struct _icmphdr); break;
     case IPPROTO_UDP:  hdr_minsz += sizeof(struct udphdr);   break;
     case IPPROTO_TCP:  hdr_minsz += sizeof(struct tcphdr);   break;
-    default: WARN_("Unknown proto: %d", type);
+    default: WARN("Unknown proto: %d", type);
   }
   minfailsz = hdr_minsz + ipicmphdr_sz;
 }

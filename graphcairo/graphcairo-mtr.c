@@ -53,7 +53,7 @@ bool gc_open(void) {
   size_t data_sz = maxTTL * sizeof(int);
   data = malloc(data_sz);
   if (!data) {
-    WARN_("malloc(%zd)", data_sz);
+    WARN("malloc(%zd)", data_sz);
     return false;
   }
   memset(data, -1, data_sz);

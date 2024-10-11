@@ -1,5 +1,5 @@
 project('mtr085', 'c',
-  default_options: [ # 'c_std=gnu99,c99'
+  default_options: [ #'c_std=gnu99,c99',
     'warning_level=1'],
   meson_version: '>= 0.49',
   license: 'GPL-2.0-or-later',

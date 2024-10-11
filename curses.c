@@ -185,7 +185,7 @@ int mc_keyaction(void) {
         else if ((f > 0) && (f < 1) && getuid())
           wait_time = f;
         else
-          WARNX_("Wrong Interval: %s", (char*)entered);
+          WARNX("Wrong Interval: %s", (char*)entered);
       }
       return ActionNone;
     case 'j':

@@ -37,7 +37,7 @@ static void set_delete_window_atom() {
 	xcb_intern_atom_cookie_t cookie = xcb_intern_atom(connection, 1, 12, "WM_PROTOCOLS");
 	xcb_intern_atom_reply_t* reply = xcb_intern_atom_reply(connection, cookie, &error);
 	if (!reply) {
-		WARNX_("WM_PROTOCOLS error %d", error->error_code);
+		WARNX("WM_PROTOCOLS error %d", error->error_code);
 		free(error);
 		return;
 	}
@@ -48,14 +48,14 @@ static void set_delete_window_atom() {
 		delete_window_atom = (*reply2).atom;
 		free(reply2);
 	} else {
-		WARNX_("WM_DELETE_WINDOW error %d", error->error_code);
+		WARNX("WM_DELETE_WINDOW error %d", error->error_code);
 		free(error);
 	}
 	free(reply);
 }
 
 #define DISCONN_AND_RETURN(msg) { \
-	WARNX_("%s: error code %d", msg, error->error_code); \
+	WARNX("%s: error code %d", msg, error->error_code); \
 	free(error); \
 	xcb_destroy_window(connection, window); \
 	xcb_disconnect(connection); \

@@ -168,9 +168,9 @@ extern char localaddr[];
 #endif
 
 #define FAIL_POSTPONE(rcode, fmt, ...) { last_neterr = rcode; \
-  WARNX_(fmt ": %s", __VA_ARGS__, strerror(last_neterr)); \
+  WARNX(fmt ": %s", __VA_ARGS__, strerror(last_neterr)); \
   snprintf(neterr_txt, ERRBYFN_SZ, fmt ": %s", __VA_ARGS__, strerror(last_neterr)); \
-  LOG_RE_(false, fmt ": %s", __VA_ARGS__, strerror(last_neterr)); \
+  LOG_RE(false, fmt ": %s", __VA_ARGS__, strerror(last_neterr)); \
 }
 
 #define FAIL_CLOCK_GETTIME FAIL_POSTPONE(errno, "%s", "clock_gettime()");

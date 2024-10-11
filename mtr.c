@@ -84,7 +84,7 @@
 #include "report.h"
 #endif
 
-#define REPORT_PINGS 10
+#define REPORT_PINGS 100
 #define CACHE_TIMEOUT 60
 
 //// global vars
@@ -211,11 +211,7 @@ const char *dsthost;
 int display_mode = -1;
 double wait_time = 1;
 bool interactive = true;
-long max_ping
-#if !defined(CURSESMODE) && !defined(GRAPHMODE)
-= 100
-#endif
-;
+long max_ping = REPORT_PINGS;  // 0 should be set explicitly
 //
 
 static const char *iface_addr;
@@ -229,7 +225,7 @@ static void locker(FILE *file, short type) {
   int fd = fileno(file);
   struct stat buf;
   if (fstat(fd, &buf) < 0) {
-    WARN_("fstat(%d)", fd);
+    WARN("fstat(%d)", fd);
     return;
   }
   if (!S_ISREG(buf.st_mode))
@@ -238,7 +234,7 @@ static void locker(FILE *file, short type) {
   l.l_type = type;
   l.l_pid = mypid;
   if (fcntl(fd, F_SETLKW, &l) < 0)
-    WARN_("fcntl(fd=%d, type=%d)", fd, type);
+    WARN("fcntl(fd=%d, type=%d)", fd, type);
 }
 
 static int my_getopt_long(int argc, char *argv[], int *opt_ndx) {
@@ -327,11 +323,11 @@ static void usage(const char *name) {
 
 int limit_int(const int v0, const int v1, const int v, const char *it) {
   if (v < v0) {
-    WARNX_("'%s' is less than %d: %d -> %d", it, v0, v, v0);
+    WARNX("'%s' is less than %d: %d -> %d", it, v0, v, v0);
     return v0;
   }
   if (v > v1) {
-    WARNX_("'%s' is greater than %d: %d -> %d", it, v1, v, v1);
+    WARNX("'%s' is greater than %d: %d -> %d", it, v1, v, v1);
     return v1;
   }
   return v;
@@ -426,14 +422,14 @@ static void parse_options(int argc, char **argv) {
       break;
     case 'F':
       if (strlen(optarg) >= sizeof(fld_active))
-        FAIL_("-F: Too many fields (max=%zd): %s", sizeof(fld_active) - 1, optarg);
+        FAIL("-F: Too many fields (max=%zd): %s", sizeof(fld_active) - 1, optarg);
       for (int i = 0; optarg[i]; i++) {
         int j = 0;
         for (; j < statf_max; j++)
           if (optarg[i] == statf[j].key)
             break;
         if (j >= statf_max)
-          FAIL_("-F: Unknown field identifier '%c'", optarg[i]);
+          FAIL("-F: Unknown field identifier '%c'", optarg[i]);
       }
       set_fld_active(optarg);
       break;
@@ -470,7 +466,7 @@ static void parse_options(int argc, char **argv) {
 #ifdef ENABLE_IPV6
       if (host[0] == '[') {
         port = strrchr(host, ']');
-        if (!port) FAIL_("Failed to parse IPv6 literal: %s", host);
+        if (!port) FAIL("Failed to parse IPv6 literal: %s", host);
         *port++ = 0; port = trim(port);
         host++; host = trim(host);
         if (port && (port[0] == ':')) port++;
@@ -488,15 +484,15 @@ static void parse_options(int argc, char **argv) {
       int rc = getaddrinfo(host, port, &hints, &ns);
       if (rc || !ns) {
         if (rc == EAI_SYSTEM) FAIL("getaddrinfo()");
-        FAIL_("Failed to set NS(%s): %s", optarg, gai_strerror(rc));
+        FAIL("Failed to set NS(%s): %s", optarg, gai_strerror(rc));
       }
-      if (!set_custom_res(ns)) FAIL_("Failed to set NS(%s)", optarg);
+      if (!set_custom_res(ns)) FAIL("Failed to set NS(%s)", optarg);
       freeaddrinfo(ns);
     } break;
 #endif
 #ifdef OUTPUT_FORMAT
     case 'o':
-      max_ping = REPORT_PINGS;
+      if (max_ping <= 0) max_ping = REPORT_PINGS;
       switch (tolower((int)optarg[0])) {
 #ifdef OUTPUT_FORMAT_RAW
         case 'r':
@@ -538,7 +534,7 @@ static void parse_options(int argc, char **argv) {
     case 'P':
       remoteport = atoi(optarg);
       if (remoteport > 65535 || remoteport < 1)
-        FAIL_("-P: Illegal port number %d", remoteport);
+        FAIL("-P: Invalid port number %d", remoteport);
       break;
     case 'q':
       tos = atoi(optarg);
@@ -547,7 +543,7 @@ static void parse_options(int argc, char **argv) {
       break;
     case 'r':
       display_mode = DisplayReport;
-      max_ping = REPORT_PINGS;
+      if (max_ping <= 0) max_ping = REPORT_PINGS;
       break;
     case 's': {
       int sz = atoi(optarg);
@@ -578,14 +574,14 @@ static void parse_options(int argc, char **argv) {
       exit(EXIT_SUCCESS);
     case 'w':
       display_mode = DisplayReport;
-      max_ping = REPORT_PINGS;
+      if (max_ping <= 0) max_ping = REPORT_PINGS;
       report_wide = true;
       break;
     case 'x':
       cache_mode = true;
       cache_timeout = atoi(optarg);
       if (cache_timeout < 0)
-        FAIL_("-x: Cache timeout %d must be positive", cache_timeout);
+        FAIL("-x: Cache timeout %d must be positive", cache_timeout);
       else if (cache_timeout == 0)
         cache_timeout = CACHE_TIMEOUT;  // default 60 seconds
       SETBIT(kept_args, RA_CACHE)
@@ -678,11 +674,11 @@ static bool set_target(struct addrinfo *res) {
 #endif
     ((af == AF_INET) ? (t_ipaddr*)&((struct sockaddr_in *)ai->ai_addr)->sin_addr : NULL);
   if (!af || !ipaddr || !net_set_host(ipaddr)) {
-    WARNX_("Unable to set host entry (af=%d)", af);
+    WARNX("Unable to set host entry (af=%d)", af);
     return false;
   }
   if (iface_addr && !net_set_ifaddr(iface_addr)) {
-    WARNX_("Unable to set interface address(%s)", iface_addr);
+    WARNX("Unable to set interface address(%s)", iface_addr);
     return false;
   }
   return true;
@@ -783,8 +779,8 @@ int main(int argc, char **argv) {
     }
 #endif
     if (rc) {
-      if (rc == EAI_SYSTEM) WARN_("getaddrinfo(%s)", dsthost);
-      else WARNX_("Failed to resolve \"%s\": %s", dsthost, rc_msg ? rc_msg : gai_strerror(rc));
+      if (rc == EAI_SYSTEM) WARN("getaddrinfo(%s)", dsthost);
+      else WARNX("Failed to resolve \"%s\": %s", dsthost, rc_msg ? rc_msg : gai_strerror(rc));
     } else {
       if ((set_target_success = set_target(res))) {
         locker(stdout, F_WRLCK);
