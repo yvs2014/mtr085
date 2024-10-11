@@ -88,19 +88,42 @@ typedef struct statf {
 /* note, VA_OPT min compat: gcc8, clang6 */
 
 // logging, warnings, errors
+#ifdef LOGMOD
+#include <syslog.h>
+#else
+#define LOGMSG(fmt, ...) ((void)0)
+#define LOGRET(fmt, ...) return
+#define LOG_RE(re, fmt, ...) return (re)
+#endif
+//
+#if (__GNUC__ >= 8) || (__clang_major__ >= 6) || (__STDC_VERSION__ >= 202311L)
 #define WARN(fmt, ...)   warn("%s: " fmt, __func__ __VA_OPT__(,) __VA_ARGS__)
 #define WARNX(fmt, ...) warnx("%s: " fmt, __func__ __VA_OPT__(,) __VA_ARGS__)
 #define ERRR(status, fmt, ...)  err(status, "%s: " fmt, __func__ __VA_OPT__(,) __VA_ARGS__)
 #define ERRX(status, fmt, ...) errx(status, "%s: " fmt, __func__ __VA_OPT__(,) __VA_ARGS__)
 #define FAIL(fmt, ...)         errx(EXIT_FAILURE, "%s: " fmt, __func__ __VA_OPT__(,) __VA_ARGS__)
 #ifdef LOGMOD
-#include <syslog.h>
 #define LOGMSG(fmt, ...) syslog(LOG_PRIORITY, "%s: " fmt, __func__ __VA_OPT__(,) __VA_ARGS__)
-#else
-#define LOGMSG(fmt, ...) ((void)0)
+#define LOGMSG(fmt, ...) syslog(LOG_PRIORITY, "%s: " fmt, __func__ __VA_OPT__(,) __VA_ARGS__)
+#define LOGRET(fmt, ...) do { \
+  syslog(LOG_PRIORITY, "%s: " fmt, __func__ __VA_OPT__(,) __VA_ARGS__); return; } while(0)
+#define LOG_RE(re, fmt, ...) do { \
+  syslog(LOG_PRIORITY, "%s: " fmt, __func__ __VA_OPT__(,) __VA_ARGS__); return (re); } while(0)
 #endif
-#define LOGRET(fmt, ...)     { LOGMSG(fmt, __VA_ARGS__); return; }
-#define LOG_RE(re, fmt, ...) { LOGMSG(fmt, __VA_ARGS__); return re; }
+#else // no VA_OPT, use GNU extension
+#define WARN(fmt, ...)   warn("%s: " fmt, __func__, ##__VA_ARGS__)
+#define WARNX(fmt, ...) warnx("%s: " fmt, __func__, ##__VA_ARGS__)
+#define ERRR(status, fmt, ...)  err(status, "%s: " fmt, __func__, ##__VA_ARGS__)
+#define ERRX(status, fmt, ...) errx(status, "%s: " fmt, __func__, ##__VA_ARGS__)
+#define FAIL(fmt, ...)         errx(EXIT_FAILURE, "%s: " fmt, __func__, ##__VA_ARGS__)
+#ifdef LOGMOD
+#define LOGMSG(fmt, ...) syslog(LOG_PRIORITY, "%s: " fmt, __func__, ##__VA_ARGS__)
+#define LOGRET(fmt, ...) do { \
+  syslog(LOG_PRIORITY, "%s: " fmt, __func__, ##__VA_ARGS__); return; } while(0)
+#define LOG_RE(re, fmt, ...) do { \
+  syslog(LOG_PRIORITY, "%s: " fmt, __func__, ##__VA_ARGS__); return (re); } while(0)
+#endif
+#endif // VA_OPT
 
 // time conversions
 #define time2msec(t) ((t).tv_sec * MIL + (t).tv_nsec / MICRO)
