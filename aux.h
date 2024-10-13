@@ -21,7 +21,8 @@ int val2len(double v);
 void set_fld_active(const char *s);
 #ifdef CURSESMODE
 bool is_custom_fld(void);
-int limit_int(const int v0, const int v1, const int v, const char *it);
+extern char limit_error[];
+int limit_int(int min, int max, int val, const char *what, char fail);
 #endif
 #if defined(CURSESMODE) || defined(GRAPHMODE)
 void onoff_jitter(void);

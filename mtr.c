@@ -22,6 +22,7 @@
 #include <strings.h>
 #include <libgen.h>
 #include <getopt.h>
+#include <errno.h>
 #include <fcntl.h>
 #include <limits.h>
 #include <sys/stat.h>
@@ -43,12 +44,14 @@
 #else
 #include <idn2.h>
 #endif
-#define IDN_TO_ASCII_LZ	idn2_to_ascii_lz
-#define IDN_TO_ASCII_8Z	idn2_to_ascii_8z
+#define IDN_TO_ASCII_LZ idn2_to_ascii_lz
+#define IDN_TO_ASCII_8Z idn2_to_ascii_8z
+#define IDN_STRERROR    idn2_strerror
 #elif defined(LIBIDN)
 #include <idna.h>
-#define IDN_TO_ASCII_LZ	idna_to_ascii_lz
-#define IDN_TO_ASCII_8Z	idna_to_ascii_8z
+#define IDN_TO_ASCII_LZ idna_to_ascii_lz
+#define IDN_TO_ASCII_8Z idna_to_ascii_8z
+#define IDN_STRERROR    idna_strerror
 #endif
 
 #ifdef WITH_UNICODE
@@ -188,7 +191,6 @@ static struct option long_options[] = {
 #ifdef SPLITMODE
   { "split",      0, 0, 'p' },
 #endif
-  { "port",       1, 0, 'P' },  // target port number for TCP
   { "tos",        1, 0, 'q' },  // typeof service (0..255)
   { "report",     0, 0, 'r' },
   { "psize",      1, 0, 's' },  // packet size
@@ -258,8 +260,7 @@ static const char *get_opt_desc(char opt) {
     case 'm':
     case 'f':
     case 'B':
-    case 'q':
-    case 'P': return "NUMBER";
+    case 'q': return "NUMBER";
     case 'i':
     case 'x':
     case 'T': return "SECONDS";
@@ -307,7 +308,7 @@ static void usage(const char *name) {
   for (int i = 0; i < l; i++)
     if (short_options[i] != ':')
       putchar(short_options[i]);
-  printf("] HOSTNAME ...\n");
+  printf("] TARGET[:PORT] ...\n");
   for (int i = 0; long_options[i].name; i++) {
     printf("\t[");
     char c = (char)long_options[i].val;
@@ -322,16 +323,23 @@ static void usage(const char *name) {
   free(bname);
 }
 
-int limit_int(const int v0, const int v1, const int v, const char *it) {
-  if (v < v0) {
-    warnx("'%s' is less than %d: %d -> %d", it, v0, v, v0);
-    return v0;
+char limit_error[256];
+int limit_int(int min, int max, int val, const char *what, char fail) {
+  limit_error[0] = 0;
+  int lim = val, l = 0;
+  if (val < min) {
+    lim = min;
+    l = snprintf(limit_error, sizeof(limit_error), "%s is less than %d", what, min);
+  } else if (val > max) {
+    lim = max;
+    l = snprintf(limit_error, sizeof(limit_error), "%s is greater than %d", what, max);
   }
-  if (v > v1) {
-    warnx("'%s' is greater than %d: %d -> %d", it, v1, v, v1);
-    return v1;
+  if (val != lim) {
+    if (fail > 0) { warnx("%s", limit_error); errx(EXIT_FAILURE, "-%c option failed", fail); }
+    else if (fail < 0) warnx("%s", limit_error);
+    else snprintf(limit_error + l, sizeof(limit_error) - l, ", corrected(%d -> %d)", val, lim);
   }
-  return v;
+  return lim;
 }
 
 #ifdef ENABLE_DNS
@@ -358,6 +366,33 @@ static bool set_custom_res(struct addrinfo *ns) {
 }
 #endif
 
+#ifdef ENABLE_IPV6
+static const char* two_colons(const char *s) {
+  if (s) { s = strchr(s, ':'); if (s) s++; }
+  return s ? strchr(s, ':') : NULL;
+}
+#endif
+
+static bool split_hostport(char *buff, char* hostport[2]) {
+   if (!buff) return false;
+   char *host = trim(buff), *port = NULL;
+   if (!host) return false;
+#ifdef ENABLE_IPV6
+   if (host[0] == '[') {
+     port = strrchr(host, ']');
+     if (!port) { warnx("Failed to parse hostport literal: %s", buff); return false; }
+     *port++ = 0; port = trim(port);
+     if (port && (port[0] == ':')) port++;
+     port = trim(port);
+     host++; host = trim(host);
+   } else if (!two_colons(host))
+#endif
+   { port = strrchr(host, ':');
+     if (port) { *port++ = 0; port = trim(port); host = trim(host); } }
+   hostport[0] = (host && host[0]) ? host : NULL;
+   hostport[1] = (port && port[0]) ? port : NULL;
+   return true;
+}
 
 static void parse_options(int argc, char **argv) {
   SETBIT(kept_args, RA_DNS); // dns is on by default
@@ -390,7 +425,7 @@ static void parse_options(int argc, char **argv) {
       break;
 #endif
     case 'B':
-      cbitpattern = limit_int(-1, 255, atoi(optarg), "Bit Pattern");
+      cbitpattern = limit_int(-1, 255, atoi(optarg), "Bit Pattern", opt);
       break;
     case 'c':
       max_ping = atol(optarg);
@@ -419,7 +454,7 @@ static void parse_options(int argc, char **argv) {
         endpoint_mode = true;
         break;
       }
-      fstTTL = limit_int(1, maxTTL, atoi(optarg), "First TTL");
+      fstTTL = limit_int(1, maxTTL, atoi(optarg), "First TTL", opt);
       break;
     case 'F':
       if (strlen(optarg) >= sizeof(fld_active))
@@ -445,10 +480,10 @@ static void parse_options(int argc, char **argv) {
       usage(argv[0]);
       exit(EXIT_SUCCESS);
     case 'i':
-      wait_time = limit_int(1, INT_MAX, atoi(optarg), "interval");
+      wait_time = limit_int(1, INT_MAX, atoi(optarg), "interval", opt);
       break;
     case 'm':
-      maxTTL = limit_int(1, ((MAXHOST - 1) > maxTTL) ? maxTTL : (MAXHOST - 1), atoi(optarg), "Max TTL");
+      maxTTL = limit_int(fstTTL, MAXHOST - 1, atoi(optarg), "Max TTL", opt);
       break;
 #ifdef ENABLE_DNS
     case 'n':
@@ -458,27 +493,14 @@ static void parse_options(int argc, char **argv) {
     case 'N': {
       char buff[MAX_ADDRSTRLEN + 6/*:port*/] = {0};
       STRLCPY(buff, optarg, sizeof(buff));
-      char *host = trim(buff), *port = NULL;
-      if (!host) break;
-#ifdef ENABLE_IPV6
-      if (host[0] == '[') {
-        port = strrchr(host, ']');
-        if (!port) FAIL("Failed to parse IPv6 literal: %s", host);
-        *port++ = 0; port = trim(port);
-        host++; host = trim(host);
-        if (port && (port[0] == ':')) port++;
-        port = trim(port);
-      } else if (strchr(host, '.'))
-#endif
-      { port = strrchr(host, ':');
-        if (port) { *port++ = 0; port = trim(port); host = trim(host); }}
-      if (!port) port = "53";
-      struct addrinfo hints = {0}, *ns;
-      hints.ai_family = AF_UNSPEC;
-      hints.ai_socktype = SOCK_DGRAM;
-      hints.ai_flags |= AI_NUMERICHOST;
-      hints.ai_flags |= AI_NUMERICSERV;
-      int rc = getaddrinfo(host, port, &hints, &ns);
+      char* hostport[2] = {0};
+      if (!split_hostport(buff, hostport)) FAIL("Failed to parse NS(%s)", buff);
+      if (!hostport[1]) hostport[1] = "53";
+      struct addrinfo *ns, hints = {
+        .ai_family   = AF_UNSPEC,
+        .ai_socktype = SOCK_DGRAM,
+        .ai_flags    = AI_NUMERICHOST | AI_NUMERICSERV };
+      int rc = getaddrinfo(hostport[0], hostport[1], &hints, &ns);
       if (rc || !ns) {
         if (rc == EAI_SYSTEM) FAIL("getaddrinfo()");
         FAIL("Failed to set NS(%s): %s", optarg, gai_strerror(rc));
@@ -528,11 +550,6 @@ static void parse_options(int argc, char **argv) {
       display_mode = DisplaySplit;
       break;
 #endif
-    case 'P':
-      remoteport = atoi(optarg);
-      if (remoteport > 65535 || remoteport < 1)
-        FAIL("-P: Invalid port number %d", remoteport);
-      break;
     case 'q':
       tos = atoi(optarg);
       if (tos > 255 || tos < 0)	// error message, should do more checking for valid values
@@ -544,7 +561,7 @@ static void parse_options(int argc, char **argv) {
       break;
     case 's': {
       int sz = atoi(optarg);
-      cpacketsize = limit_int(MINPACKET, MAXPACKET, abs(sz), "Packet size");
+      cpacketsize = limit_int(MINPACKET, MAXPACKET, abs(sz), "Packet size", opt);
       if (sz < 0) cpacketsize = -cpacketsize;
     } break;
     case 'S':
@@ -557,7 +574,7 @@ static void parse_options(int argc, char **argv) {
       SETBIT(kept_args, RA_TCP)
       break;
     case 'T':
-      syn_timeout = limit_int(1, TCPSYN_TOUT_MAX, atoi(optarg), "TCP timeout") * MIL;
+      syn_timeout = limit_int(1, TCPSYN_TOUT_MAX, atoi(optarg), "TCP timeout", opt) * MIL;
       break;
     case 'u':
       if (mtrtype == IPPROTO_TCP)
@@ -626,14 +643,6 @@ static void parse_options(int argc, char **argv) {
 #endif
       interactive = false;
   }
-}
-
-
-#define IDNA_RESOLV(func) { \
-  rc = func(dsthost, &hostname, 0); \
-  if (rc == IDNA_SUCCESS) rc = getaddrinfo(hostname, NULL, &hints, &res); \
-  else rc_msg = idna_strerror(rc); \
-  if (hostname) free(hostname); \
 }
 
 
@@ -710,6 +719,41 @@ static bool reset_caps(void) {
 }
 #endif
 
+typedef struct {
+  const char *target, *error;
+  struct addrinfo *res, hints;
+  int rc;
+} t_res_rc;
+
+static void getaddrinfo_e(t_res_rc *rr, const char *name) {
+  if (!rr || !name) return;
+  rr->rc = getaddrinfo(name, NULL, &rr->hints, &rr->res);
+  if (rr->rc) rr->error =
+    (rr->rc == EAI_SYSTEM) ? strerror(errno) : gai_strerror(rr->rc);
+}
+
+#if defined(LIBIDN2) || defined(LIBIDN)
+static void idn_resolv(t_res_rc *rr, int (*idn2ascii)(const char*, char**, int)) {
+  if (!rr || !idn2ascii) return;
+  char *name = NULL;
+  rr->rc = idn2ascii(rr->target, &name, 0);
+  if (!rr->rc && name) getaddrinfo_e(rr, name);
+  else rr->error = IDN_STRERROR(rr->rc);
+  if (name) free(name);
+}
+#endif
+
+static void try_to_resolv(t_res_rc *rr) {
+  if (!rr || !rr->target) return;
+  getaddrinfo_e(rr, rr->target);
+#if defined(LIBIDN2) || defined(LIBIDN)
+  if (rr->rc) {
+    idn_resolv(rr, IDN_TO_ASCII_LZ);
+    if (rr->rc) idn_resolv(rr, IDN_TO_ASCII_8Z);
+  }
+#endif
+}
+
 int main(int argc, char **argv) {
   if (!net_open()) // get raw sockets
     FAIL("Unable to get raw sockets");
@@ -756,40 +800,42 @@ int main(int argc, char **argv) {
     STRLCPY(srchost, "UNKNOWN", sizeof(srchost));
   display_start();
 
-  bool set_target_success = false;
-
+  int defport = remoteport;
+  bool first = true, set_target_success = false;
   for (; optind < argc; optind++) {
-    static bool notfirst;
     if (!(dsthost = argv[optind]))
       continue;
-
-    struct addrinfo hints = {0}, *res;
-    hints.ai_family = AF_UNSPEC;
-    hints.ai_socktype = SOCK_DGRAM;
-    int rc = getaddrinfo(dsthost, NULL, &hints, &res);
-    const char *rc_msg = NULL;
-#if defined(LIBIDN2) || defined(LIBIDN)
-    if (rc) {
-      char *hostname = NULL;
-      IDNA_RESOLV(IDN_TO_ASCII_LZ);
-      if (rc) IDNA_RESOLV(IDN_TO_ASCII_8Z);
+    remoteport = defport;
+    t_res_rc rr0 = {.hints = {.ai_family = AF_UNSPEC, .ai_socktype = SOCK_DGRAM}};
+    t_res_rc rr = rr0; rr.target = dsthost;
+    try_to_resolv(&rr);
+    if (rr.rc && ((mtrtype == IPPROTO_TCP) || (mtrtype == IPPROTO_UDP))) {
+      char buff[MAX_ADDRSTRLEN + 6/*:port*/] = {0};
+      STRLCPY(buff, dsthost, sizeof(buff));
+      char* hostport[2] = {0};
+      if (split_hostport(buff, hostport)) {
+        limit_error[0] = 0;
+        if (hostport[1]) remoteport = limit_int(1, 65535, atoi(hostport[1]), "port number", -1);
+        if (!limit_error[0]) {
+          rr = rr0; rr.target = hostport[0];
+          try_to_resolv(&rr);
+        }
+      } else warn("Failed to parse(%s)", buff);
     }
-#endif
-    if (rc) {
-      if (rc == EAI_SYSTEM) WARN("getaddrinfo(%s)", dsthost);
-      else WARNX("Failed to resolve \"%s\": %s", dsthost, rc_msg ? rc_msg : gai_strerror(rc));
-    } else {
-      if ((set_target_success = set_target(res))) {
+    if (rr.rc)
+      warnx("Failed to resolve(%s): %s", dsthost, rr.error ? rr.error : "Unknown error");
+    else if (rr.res) {
+      if ((set_target_success = set_target(rr.res))) {
         locker(stdout, F_WRLCK);
-        if (display_open(notfirst)) display_loop();
+        if (display_open(!first)) display_loop();
         else WARNX("Unable to open display");
         net_end_transit();
-        display_close(notfirst);
+        display_close(!first);
         locker(stdout, F_UNLCK);
       }
-      freeaddrinfo(res);
-    }
-    notfirst = true;
+      freeaddrinfo(rr.res);
+    } else warnx("Cannot get resolv data(%s)", dsthost);
+    if (first) first = false;
   }
 
   display_final();

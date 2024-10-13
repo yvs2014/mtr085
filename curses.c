@@ -109,8 +109,8 @@ static int __unused_int;
 static char entered[MAXFLD + 1]; // enough?
 static char mc_title[256]; // basename-version arguments destination
 
-static int enter_smth(int y) {
-  move(2, y);
+static int enter_smth(int y, int x) {
+  move(y, x);
   memset(entered, 0, sizeof(entered));
   int curs = curs_set(1);
   refresh();
@@ -119,6 +119,7 @@ static int enter_smth(int y) {
     refresh();
     entered[i++] = c;
   }
+  move(y, 0); clrtoeol(); refresh();
   if (curs != ERR) curs_set(curs);
   return strnlen(entered, MAXFLD);
 }
@@ -144,6 +145,26 @@ static void enter_stat_fields(void) {
   if (curs != ERR) curs_set(curs);
 }
 
+#define HINT_YPOS 2
+
+static bool mc_get_int(int *val, int min, int max, const char *what, const char *hint) {
+  bool rc = false;
+  if (val) {
+    mvprintw(HINT_YPOS, 0, "%s: %d", what, *val);
+    if (hint) mvprintw(HINT_YPOS + 1, 0, "-> %s", hint);
+    int xpos = what ? strlen(what) : 0;
+    if (enter_smth(HINT_YPOS, xpos + 2)) {
+      *val = limit_int(min, max, atoi((char*)entered), what, 0);
+      rc = true;
+    }
+    if (limit_error[0]) {
+      printw("%s, press any key to continue ...", limit_error);
+      refresh(); getch();
+    }
+  }
+  return rc;
+}
+
 int mc_keyaction(void) {
   int c = getch();
 
@@ -157,14 +178,11 @@ int mc_keyaction(void) {
       getch();
       return ActionNone;
     case 'b':
-      mvprintw(2, 0, "Ping Bit Pattern: %d\n", cbitpattern);
-      mvprintw(3, 0, "Pattern Range: 0-255, -1 random.\n");
-      if (enter_smth(18))
-        cbitpattern = limit_int(-1, 255, atoi((char*)entered), "Bit Pattern");
+      mc_get_int(&cbitpattern, -1, 255, "Bit Pattern", "range[0-255], random is -1");
       return ActionNone;
     case 'c':
-      mvprintw(2, 0, "Number (unlimit < 1) of cycles: %ld\n\n", max_ping);
-      if (enter_smth(32))
+      mvprintw(HINT_YPOS, 0, "Number (unlimit < 1) of cycles: %ld", max_ping);
+      if (enter_smth(HINT_YPOS, 32))
         max_ping = atol((char*)entered);
       return ActionNone;
     case 'd': return ActionDisplay;
@@ -172,61 +190,50 @@ int mc_keyaction(void) {
     case 'e': return ActionMPLS;
 #endif
     case 'f':
-      mvprintw(2, 0, "First TTL: %d\n\n", fstTTL);
-      if (enter_smth(11))
-        fstTTL = limit_int(1, maxTTL, atoi((char*)entered), "First TTL");
+      mc_get_int(&fstTTL, 1, maxTTL, "First TTL", NULL);
       return ActionNone;
-    case 'i':
-      mvprintw(2, 0, "Interval: %0.0f\n\n", wait_time);
-      if (enter_smth(11)) {
-        double f = atof((char*)entered);
-        if (f >= 1)
-          wait_time = f;
-        else if ((f > 0) && (f < 1) && getuid())
-          wait_time = f;
-        else
-          WARNX("Wrong Interval: %s", (char*)entered);
-      }
-      return ActionNone;
+    case 'i': { int tout = wait_time;
+      if (mc_get_int(&tout, 1, INT_MAX, "Interval", NULL))
+        wait_time = tout;
+    } return ActionNone;
     case 'j':
-      TGLBIT(run_args, RA_JITTER);	// latency OR jitter
+      TGLBIT(run_args, RA_JITTER); // latency OR jitter
       onoff_jitter();
       return ActionNone;
     case 'm':
-      mvprintw(2, 0, "Max TTL: %d\n\n", maxTTL);
-      if (enter_smth(9))
-        maxTTL = limit_int(1, ((MAXHOST - 1) > maxTTL) ? maxTTL : (MAXHOST - 1), atoi((char*)entered), "Max TTL");
+      mc_get_int(&maxTTL, 1, MAXHOST - 1, "Max TTL", NULL);
       return ActionNone;
 #ifdef ENABLE_DNS
     case 'n': return ActionDNS;
 #endif
-    case 'o':  // fields to display and their ordering
-      mvprintw(2, 0, "Fields: %s\n\n", fld_active);
-      for (int i = 0; i < statf_max; i++)
-        if (statf[i].hint)
-          printw("  %c: %s\n", statf[i].key, statf[i].hint);
-      addch('\n');
-      move(2, 8); // length of "Fields: "
+    case 'o': { // fields to display and their order
+      const char what[] = "Fields";
+      mvprintw(HINT_YPOS, 0, "%s: %s\n\n", what, fld_active);
+      for (int i = 0; i < statf_max; i++) if (statf[i].hint)
+        printw("  %c: %s\n", statf[i].key, statf[i].hint);
+      move(HINT_YPOS, strlen(what) + 2);
       refresh();
       enter_stat_fields();
-      return ActionNone;
+    } return ActionNone;
     case ' ':
     case 'p': return ActionPauseResume;
     case  3 : // ^C
     case 'q': return ActionQuit;
     case 'Q':
-      mvprintw(2, 0, "ToS (Type of Service): %d\n", tos);
-      mvprintw(3, 0, "Bits: 1st lowcost, 2nd reliability, 3rd throughput, 4th lowdelay\n");
-      if (enter_smth(23))
-        tos = limit_int(0, 255, atoi((char*)entered), "Type of Service (ToS)");
+      mc_get_int(&tos, 0, 255, "Type of Service (ToS)",
+        "bits: lowcost(1), reliability(2), throughput(4), lowdelay(8)");
       return ActionNone;
     case 'r': return ActionReset;
     case 's':
-      mvprintw(2, 0, "Change Packet Size: %d\n", cpacketsize);
-      mvprintw(3, 0, "Size Range: %d-%d, < 0:random.\n", MINPACKET, MAXPACKET);
-      if (enter_smth(20)) {
+      mvprintw(HINT_YPOS,     0, "Change Packet Size: %d", cpacketsize);
+      mvprintw(HINT_YPOS + 1, 0, "-> range[%d-%d], negative values are for random", MINPACKET, MAXPACKET);
+      if (enter_smth(HINT_YPOS, 20)) {
         int s_val = atoi((char*)entered);
-        cpacketsize = limit_int(MINPACKET, MAXPACKET, abs(s_val), "Packet size");
+        cpacketsize = limit_int(MINPACKET, MAXPACKET, abs(s_val), "Packet size", 0);
+        if (limit_error[0]) {
+          printw("%s, press any key to continue ...", limit_error);
+          refresh(); getch();
+        }
         if (s_val < 0)
           cpacketsize = -cpacketsize;
       }
@@ -246,11 +253,10 @@ int mc_print_at(int at, char *buf, int sz) {
   int l = 0;
   for (int i = 0; (i < MAXFLD) && (l < sz); i++) {
     const struct statf *sf = active_statf(i);
-    if (sf) {
-      // if there's no replies, show only packet counters
-      const char *str = (host[at].recv || strchr("LDRS", sf->key)) ? net_elem(at, sf->key) : "";
-      l += snprintf(buf + l, sz - l, "%*s", sf->len, str ? str : "");
-    }
+    if (!sf) break;
+    // if there's no replies, show only packet counters
+    const char *str = (host[at].recv || strchr("LDRS", sf->key)) ? net_elem(at, sf->key) : "";
+    l += snprintf(buf + l, sz - l, "%*s", sf->len, str ? str : "");
   }
   return l;
 }

@@ -19,8 +19,8 @@
 .Nd a network diagnostic tool
 .Sh SYNOPSIS
 .Nm
-.Op Fl a\*[on b]Bcd\*[oe]fF\*[og]im\*[on]\*[oN]\*[oo]\*[op]PqrsStTuvwx\*[oy]\*[o6]
-HOSTNAME ...
+.Op Fl a\*[on b]Bcd\*[oe]fF\*[og]im\*[on]\*[oN]\*[oo]\*[op]qrsStTuvwx\*[oy]\*[o6]
+TARGET[:PORT] ...
 .Sh DESCRIPTION
 .Nm
 combines the functionality of the
@@ -34,14 +34,14 @@ As
 starts, it investigates the network connection between the host
 .Nm
 runs on and
-.Sy HOSTNAME
+.Sy TARGET
 by sending packets with purposely low TTLs.  It continues to send packets with low TTL, noting the response time of the intervening routers.  This allows
 .Nm
 to print the response percentage and response times of the internet route to
-.Sy HOSTNAME .
+.Sy TARGET .
 A sudden increase in packet loss or response time is often an indication of a bad (or simply overloaded) link.
 .Pp
-The results are usually reported as round-trip-response times in miliseconds and the percentage of packetloss.
+The results are usually reported as round-trip-response times in milliseconds and the percentage of packetloss.
 .Sh OPTIONS
 .Bl -tag -width Ds
 .It Fl a, Fl -address Ar IPADDRESS
@@ -194,8 +194,6 @@ formatted output respectively
 .It Fl p, Fl -split
 Split out a format that is suitable for a split-user interface
 .\}
-.It Fl P, Fl -port Ar PORT
-The target port number for TCP traces
 .It Fl Q, Fl -tos Ar NUM
 Set value for type of service (ToS) field in IP header.  Should be within range 0-255.
 .It Fl r, Fl -report
