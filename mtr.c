@@ -86,6 +86,7 @@
 
 #define REPORT_PINGS 100
 #define CACHE_TIMEOUT 60
+#define TCPSYN_TOUT_MAX 60
 
 //// global vars
 int mtrtype = IPPROTO_ICMP;   // ICMP as default packet type
@@ -193,6 +194,7 @@ static struct option long_options[] = {
   { "psize",      1, 0, 's' },  // packet size
   { "summary",    0, 0, 'S' },  // print send/recv summary at exit
   { "tcp",        0, 0, 't' },  // TCP (default is ICMP)
+  { "timeout",    1, 0, 'T' },  // timeout for TCP sockets
   { "udp",        0, 0, 'u' },  // UDP (default is ICMP)
   { "version",    0, 0, 'v' },
   { "wide",       0, 0, 'w' },  // wide report (-r)
@@ -201,7 +203,6 @@ static struct option long_options[] = {
   { "ipinfo",     1, 0, 'y' },
   { "aslookup",   0, 0, 'z' },
 #endif
-  { "timeout",    1, 0, 'Z' },  // timeout for TCP sockets
   { 0, 0, 0, 0 }
 };
 static char *short_options;
@@ -261,7 +262,7 @@ static const char *get_opt_desc(char opt) {
     case 'P': return "NUMBER";
     case 'i':
     case 'x':
-    case 'Z': return "SECONDS";
+    case 'T': return "SECONDS";
     case 'a': return "IP.ADD.RE.SS";
     case 'c': return "COUNT";
     case 'd': return "MODE";
@@ -323,11 +324,11 @@ static void usage(const char *name) {
 
 int limit_int(const int v0, const int v1, const int v, const char *it) {
   if (v < v0) {
-    WARNX("'%s' is less than %d: %d -> %d", it, v0, v, v0);
+    warnx("'%s' is less than %d: %d -> %d", it, v0, v, v0);
     return v0;
   }
   if (v > v1) {
-    WARNX("'%s' is greater than %d: %d -> %d", it, v1, v, v1);
+    warnx("'%s' is greater than %d: %d -> %d", it, v1, v, v1);
     return v1;
   }
   return v;
@@ -444,11 +445,7 @@ static void parse_options(int argc, char **argv) {
       usage(argv[0]);
       exit(EXIT_SUCCESS);
     case 'i':
-      wait_time = atof(optarg);
-      if (wait_time <= 0)
-        FAIL("-i: Wait time must be positive");
-      if (getuid() && (wait_time < 1))
-        FAIL("-i: Non-root users cannot set an interval less than one second");
+      wait_time = limit_int(1, INT_MAX, atoi(optarg), "interval");
       break;
     case 'm':
       maxTTL = limit_int(1, ((MAXHOST - 1) > maxTTL) ? maxTTL : (MAXHOST - 1), atoi(optarg), "Max TTL");
@@ -559,6 +556,9 @@ static void parse_options(int argc, char **argv) {
       net_set_type(IPPROTO_TCP);
       SETBIT(kept_args, RA_TCP)
       break;
+    case 'T':
+      syn_timeout = limit_int(1, TCPSYN_TOUT_MAX, atoi(optarg), "TCP timeout") * MIL;
+      break;
     case 'u':
       if (mtrtype == IPPROTO_TCP)
         FAIL("-u and -t are mutually exclusive");
@@ -597,9 +597,6 @@ static void parse_options(int argc, char **argv) {
         exit(EXIT_FAILURE);
       break;
 #endif
-    case 'Z':
-      syn_timeout = atoi(optarg) * MIL; // in msec
-      break;
     default:
       usage(argv[0]);
       exit(EXIT_FAILURE);

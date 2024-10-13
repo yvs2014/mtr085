@@ -19,7 +19,7 @@
 .Nd a network diagnostic tool
 .Sh SYNOPSIS
 .Nm
-.Op Fl a\*[on b]Bcd\*[oe]fF\*[og]im\*[on]\*[oN]\*[oo]\*[op]PqrsStuvwx\*[oy]Z\*[o6]
+.Op Fl a\*[on b]Bcd\*[oe]fF\*[og]im\*[on]\*[oN]\*[oo]\*[op]PqrsStTuvwx\*[oy]\*[o6]
 HOSTNAME ...
 .Sh DESCRIPTION
 .Nm
@@ -168,7 +168,7 @@ default, 5min, default, disable, default
 .El
 .\}
 .It Fl i, Fl -interval Ar SECONDS
-Set number of seconds between ICMP ECHO requests.  The default value for this parameter is one second.  The root user may choose values between zero and one.
+Set number of seconds between ICMP ECHO requests.  Default is 1.
 .It Fl m, Fl -max-ttl Ar NUM
 Specify maximum number of hops (max time-to-live value) traceroute will probe.  Default is 30.
 .ie "n"\*[on]" \{\
@@ -222,12 +222,15 @@ Set it to a negative VALUE to randomize in a range of [28, -VALUE].
 Print send/receive summary at exit
 .It Fl t, Fl -tcp
 Use TCP SYN packets instead of ICMP ECHO
+.It Fl T, Fl -timeout Ar SECONDS
+The number of seconds (minimum 1, maximum 60) to keep the TCP socket open before giving up on the connection.  This will only affect the final hop.  Using large values for this, will use up a lot of file descriptors.
 .It Fl u, Fl -udp
 Use UDP datagrams instead of ICMP ECHO
 .It Fl v, Fl -version
 .br
-Print the installed version of
+Print
 .Nm
+version and build options
 .It Fl w, Fl -wide
 This option puts
 .Nm
@@ -281,8 +284,6 @@ origin.asn.cymru.com: ASN
 Turn on ASN lookups. The data source is
 .Lk riswhois.ripe.net
 .\}
-.It Fl Z, Fl -timeout Ar SECONDS
-The number of seconds to keep the TCP socket open before giving up on the connection.  This will only affect the final hop.  Using large values for this, especially combined with a short interval, will use up a lot of file descriptors.
 .ie "46"\*[o6]" \{\
 .It Fl 4
 Use IPv4 only
