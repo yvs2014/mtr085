@@ -340,17 +340,11 @@ static int keyboard_events(int action) {
       CLRBIT(run_args, RA_UDP); CLRBIT(run_args, RA_TCP);
       if (mtrtype != IPPROTO_ICMP) net_set_type(IPPROTO_ICMP);
       else {
-#ifdef ENABLE_IPV6
-        if ((af == AF_INET6) && ((action == ActionUDP) || (action == ActionTCP))) {
-          WARNX("IPv6 %s is not tested yet", (action == ActionUDP) ? "UDP" : "TCP");
-          action = ActionNone; net_set_type(IPPROTO_ICMP); break;
-        }
-#endif
         net_set_type((action == ActionUDP) ? IPPROTO_UDP : IPPROTO_TCP);
         SETBIT(run_args, (action == ActionUDP) ? RA_UDP : RA_TCP);
       }
 #ifdef ENABLE_IPV6
-      net_setsocket6();
+      net_setsock6();
 #endif
       break;
     default: action = ActionNone;

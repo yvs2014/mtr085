@@ -610,7 +610,7 @@ static void print_scale(void) {
   if (NEQBIT(run_args, kept_args, (bit))) l += snprint_iarg((bit), buf + l, sz - l, (what)); }
 static bool iargs_sp;
 static int snprint_iarg(int bit, char *buf, int sz, const char *msg) {
-  int l = snprintf(buf, sz, "%s%s%c", IASP, msg, CHKBIT(run_args, bit) ? '+' : '-');
+  int l = snprintf(buf, sz, "%s%c%s", IASP, CHKBIT(run_args, bit) ? '+' : '-', msg);
   SET_IASP;
   return l;
 }

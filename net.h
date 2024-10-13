@@ -175,15 +175,9 @@ extern char localaddr[];
 
 #define FAIL_CLOCK_GETTIME FAIL_POSTPONE(errno, "%s", "clock_gettime()");
 
-enum { IPV6_DISABLED = false, IPV6_ENABLED = true };
+enum { IPV6_UNDEF = -1, IPV6_DISABLED = 0, IPV6_ENABLED = 1 };
 
-void net_settings(
-#ifdef ENABLE_IPV6
-bool ipv6_enabled
-#else
-void
-#endif
-);
+void net_settings(int ipv6_enabled);
 bool net_open(void);
 void net_assert(void);
 void net_set_type(int type);
@@ -210,7 +204,7 @@ void* addr4copy(void *dst, const void *src);
 bool  addr6exist(const void *a);
 bool  addr6equal(const void *a, const void *b);
 void* addr6copy(void *dst, const void *src);
-void net_setsocket6(void);
+void  net_setsock6(void);
 #endif
 #ifdef WITH_MPLS
 const char *mpls2str(const mpls_label_t *label, int indent);

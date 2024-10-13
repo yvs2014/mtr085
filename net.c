@@ -219,8 +219,7 @@ static int recvsock4 = -1;
 #ifdef ENABLE_IPV6
 static int sendsock6 = -1;
 static int sendsock6_icmp = -1;
-//static int sendsock6_udp = -1;
-//static int sendsock6_tcp = -1;
+static int sendsock6_udp = -1;
 static int recvsock6 = -1;
 #endif
 static int sendsock = -1;
@@ -330,36 +329,32 @@ static int new_sequence(int at) {
   return seq;
 }
 
-static bool settosttl(int sock, int ttl) {
-  if (setsockopt(sock, IPPROTO_IP, IP_TTL, &ttl, sizeof(ttl)) < 0)
-    FAIL_WITH_WARN(sock, "setsockopt(TTL=%d)", ttl);
 #ifdef IP_TOS
-  if (tos)
-    if (setsockopt(sock, IPPROTO_IP, IP_TOS, &tos, sizeof(tos)) < 0)
-      FAIL_WITH_WARN(sock, "setsockopt(TOS=%d)", tos);
+#define NET_TOS(PROTO_VERSION, TOS_TYPE) { if (tos) \
+  if (setsockopt(sock, PROTO_VERSION, TOS_TYPE, &tos, sizeof(tos)) < 0) \
+    FAIL_WITH_WARN(sock, "%s(sock=%d, tos=%d)", __func__, sock, tos);  }
+#else
+#define NET_TOS
 #endif
-  return true;
-}
+#define NET_TTLTOS(PROTO_VERSION, TTL_TYPE, TOS_TYPE) { \
+  if (setsockopt(sock, PROTO_VERSION, TTL_TYPE, &ttl, sizeof(ttl)) < 0) \
+    FAIL_WITH_WARN(sock, "%s(sock=%d, ttl=%d)", __func__, sock, ttl); \
+  NET_TOS(PROTO_VERSION, TOS_TYPE); \
+  return true; }
 
+static bool settosttl(int sock, int ttl) NET_TTLTOS(IPPROTO_IP, IP_TTL, IP_TOS)
 #ifdef ENABLE_IPV6
-static bool settosttl6(int sock, int ttl) {
-  if (setsockopt(sendsock, IPPROTO_IPV6, IPV6_UNICAST_HOPS, &ttl, sizeof(ttl)) < 0)
-    FAIL_WITH_WARN(sock, "setsockopt6(TTL=%d)", ttl);
-#ifdef IPV6_TCLASS
-  if (tos)
-    if (setsockopt(sendsock, IPPROTO_IPV6, IPV6_TCLASS, &tos, sizeof(tos)) < 0)
-      FAIL_WITH_WARN(sock, "setsockopt6(TOS=%d)", tos);
+static bool settosttl6(int sock, int ttl) NET_TTLTOS(IPPROTO_IPV6, IPV6_UNICAST_HOPS, IPV6_TCLASS)
 #endif
-  return true;
-}
-#endif
+#undef NET_TOS
+#undef NET_TTLTOS
 
 // Create TCP socket for hop 'at', and try to connect (poll results later)
 static bool net_send_tcp(int at) {
 #define SET_TCP_ATTR(src_addr, ssa_addr, dst_addr, dst_port) { \
   addr_copy(&src_addr, &ssa_addr); \
   addr_copy(&dst_addr, remote_ipaddr); \
-  dst_port = htons((dst_port > 0) ? dst_port : TCP_DEFAULT_PORT); \
+  dst_port = htons((remoteport > 0) ? remoteport : TCP_DEFAULT_PORT); \
 }
   int sock = socket(af, SOCK_STREAM, 0);
   if (sock < 0)
@@ -460,7 +455,7 @@ static inline bool net_fill_udp_hdr(uint16_t seq, uint8_t *data, uint16_t size
     case AF_INET6: { // checksumming by kernel
       int opt = 6;
       if (setsockopt(sendsock, IPPROTO_IPV6, IPV6_CHECKSUM, &opt, sizeof(opt)))
-        FAIL_WITH_WARN(sendsock, "setsockopt6(CHECKSUM) optval=%d", opt);
+        FAIL_WITH_WARN(sendsock, "setsockopt6(sock=%d, IPV6_CHECKSUM)", sendsock);
     } return true;
 #endif
   } return false;
@@ -741,7 +736,7 @@ static mpls_data_t *decodempls(const uint8_t *data, int sz) {
 
 void net_icmp_parse(struct timespec *recv_at) {
 #define ICMPSEQID { seq = icmp->seq; if (icmp->id != (uint16_t)mypid) \
-  LOGRET("icmp: unknown id=%u type=%d seq=%d", icmp->id, icmp->type, seq); }
+  LOGRET("icmp(myid=%u): got unknown id=%u (type=%u seq=%u)", mypid, icmp->id, icmp->type, seq); }
 
   uint8_t packet[MAXPACKET];
   struct sockaddr_storage sa_in;
@@ -948,8 +943,7 @@ static void net_sock_close(void) {
   CLOSE(recvsock4);
 #ifdef ENABLE_IPV6
   CLOSE(sendsock6_icmp);
-//  CLOSE(sendsock6_udp);
-//  CLOSE(sendsock6_tcp);
+  CLOSE(sendsock6_udp);
   CLOSE(recvsock6);
 #endif
 }
@@ -1000,14 +994,13 @@ bool net_open(void) {
   RAWCAP_ON;
   recvsock6 = socket(AF_INET6, SOCK_RAW, IPPROTO_ICMPV6);
   sendsock6_icmp = socket(AF_INET6, SOCK_RAW, IPPROTO_ICMPV6);
-//  sendsock6_udp = socket(AF_INET6, SOCK_RAW, IPPROTO_UDP);
-//  sendsock6_tcp = socket(AF_INET6, SOCK_RAW, IPPROTO_TCP);
+  sendsock6_udp = socket(AF_INET6, SOCK_RAW, IPPROTO_UDP);
   RAWCAP_OFF;
 #endif
 #ifdef IP_HDRINCL
   int trueopt = 1; // tell that we provide IP header
   if (setsockopt(sendsock4, 0, IP_HDRINCL, &trueopt, sizeof(trueopt)) < 0) {
-    WARN("setsockopt(IP_HDRINCL)");
+    WARN("setsockopt(sock=%d, IP_HDRINCL)", sendsock4);
     net_sock_close();
     return false;
   }
@@ -1016,11 +1009,14 @@ bool net_open(void) {
 }
 
 #ifdef ENABLE_IPV6
-inline void net_setsocket6(void) {
-  if (mtrtype == IPPROTO_ICMP) sendsock6 = sendsock6_icmp;
-  else if (mtrtype == IPPROTO_UDP) { sendsock6 = /*sendsock6_udp*/-1; WARNX("UDP6 is not tested yet"); }
-  else if (mtrtype == IPPROTO_TCP) { sendsock6 = /*sendsock6_tcp*/-1; WARNX("TCP6 is not tested yet"); }
+static inline int net_getsock6(void) {
+  switch (mtrtype) {
+    case IPPROTO_ICMP: return sendsock6_icmp;
+    case IPPROTO_UDP:  return sendsock6_udp;
+  }
+  return -1;
 }
+inline void net_setsock6(void) { sendsock = sendsock6 = net_getsock6(); }
 #endif
 
 bool net_set_host(t_ipaddr *ipaddr) {
@@ -1034,7 +1030,7 @@ bool net_set_host(t_ipaddr *ipaddr) {
     break;
 #ifdef ENABLE_IPV6
     case AF_INET6:
-      if ((sendsock6 < 0) || (recvsock6 < 0)) {
+      if ((recvsock6 < 0) || ((mtrtype != IPPROTO_TCP) && (sendsock6 < 0))) {
         WARNX("No IPv6 sockets");
         return false;
       }
@@ -1044,6 +1040,7 @@ bool net_set_host(t_ipaddr *ipaddr) {
       remote_ipaddr = (t_ipaddr*)&rsa.S6ADDR;
     break;
 #endif
+    default: return false;
   }
 
   if (!af || !addr_exist(remote_ipaddr)) {
@@ -1201,17 +1198,12 @@ void net_assert(void) { // to be sure
   assert(IEO_SZ == 4);
   assert(LAB_SZ == 4);
 #endif
-  net_settings(
-#ifdef ENABLE_IPV6
-    IPV6_DISABLED
-#endif
-  );
+  net_settings(IPV6_UNDEF);
 }
 
 void net_set_type(int type) {
   LOGMSG("proto type: %d", type);
   mtrtype = type;
-  ipicmphdr_sz = iphdr_sz + sizeof(struct _icmphdr);
   hdr_minsz = iphdr_sz;
   switch (type) {
     case IPPROTO_ICMP: hdr_minsz += sizeof(struct _icmphdr); break;
@@ -1219,7 +1211,7 @@ void net_set_type(int type) {
     case IPPROTO_TCP:  hdr_minsz += sizeof(struct tcphdr);   break;
     default: WARN("Unknown proto: %d", type);
   }
-  minfailsz = hdr_minsz + ipicmphdr_sz;
+  minfailsz = hdr_minsz + iphdr_sz + sizeof(struct _icmphdr);
 }
 
 #define NET46SETS(n_sz, n_er, n_te, n_un) { \
@@ -1229,35 +1221,33 @@ void net_set_type(int type) {
   dst_unreach = n_un; \
 }
 
-void net_settings(
-#ifdef ENABLE_IPV6
-  bool ipv6_enabled
-#else
-  void
-#endif
-) {
+void net_settings(int ipv6_enabled) {
 #ifdef ENABLE_DNS
   dns_ptr_handler = save_ptr_answer; // no checks, handler for net-module only
 #endif
+  switch (ipv6_enabled) {
 #ifdef ENABLE_IPV6
-  if (ipv6_enabled) {
-    af = AF_INET6;
-    addr_exist = addr6exist;
-    addr_equal = addr6equal;
-    addr_copy  = addr6copy;
-    iphdr_sz = 0;
-    sa_addr_offset = offsetof(struct sockaddr_in6, sin6_addr);
-    NET46SETS(sizeof(struct sockaddr_in6), ICMP6_ECHO_REPLY, ICMP6_TIME_EXCEEDED, ICMP6_DST_UNREACH);
-  } else
+    case IPV6_ENABLED:
+      af = AF_INET6;
+      addr_exist = addr6exist;
+      addr_equal = addr6equal;
+      addr_copy  = addr6copy;
+      iphdr_sz = 0;
+      ipicmphdr_sz = 40 + sizeof(struct _icmphdr);
+      sa_addr_offset = offsetof(struct sockaddr_in6, sin6_addr);
+      NET46SETS(sizeof(struct sockaddr_in6), ICMP6_ECHO_REPLY, ICMP6_TIME_EXCEEDED, ICMP6_DST_UNREACH);
+    break;
 #endif
-  { // IPv4 by default
-    af = AF_INET;
-    addr_exist = addr4exist;
-    addr_equal = addr4equal;
-    addr_copy  = addr4copy;
-    iphdr_sz = sizeof(struct _iphdr);
-    sa_addr_offset = offsetof(struct sockaddr_in, sin_addr);
-    NET46SETS(sizeof(struct sockaddr_in), ICMP_ECHOREPLY, ICMP_TIME_EXCEEDED, ICMP_UNREACH);
+    default: // IPv4 by default
+      af = AF_INET;
+      addr_exist = addr4exist;
+      addr_equal = addr4equal;
+      addr_copy  = addr4copy;
+      iphdr_sz = sizeof(struct _iphdr);
+      ipicmphdr_sz = iphdr_sz + sizeof(struct _icmphdr);
+      sa_addr_offset = offsetof(struct sockaddr_in, sin_addr);
+      NET46SETS(sizeof(struct sockaddr_in), ICMP_ECHOREPLY, ICMP_TIME_EXCEEDED, ICMP_UNREACH);
+    break;
   }
   net_set_type(mtrtype);
 }

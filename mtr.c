@@ -749,7 +749,7 @@ int main(int argc, char **argv) {
   openlog(PACKAGE_NAME, LOG_PID, LOG_USER);
 #endif
 #ifdef ENABLE_IPV6
-  net_setsocket6();
+  net_setsock6();
 #endif
 #ifdef ENABLE_DNS
   if (enable_dns)
