@@ -565,7 +565,7 @@ static char *get_ipinfo(int at, int ndx, int nd) {
 #ifdef ENABLE_IPV6
   if ((af == AF_INET6) && !origins[origin_no].host6) return NULL; else
 #endif
-    if (!ORIG_HOST) return NULL; // NOLINT(readability-misleading-indentation)
+  { if (!ORIG_HOST) return NULL; }
   t_ipaddr *ipaddr = &IP_AT_NDX(at, ndx);
   switch (ORIG_TYPE) {
     case OT_HTTP:

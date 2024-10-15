@@ -54,8 +54,12 @@ if meson.version().version_compare('>=0.53')
     'IPV6': ipv6, 'MPLS': mpls,
   }, bool_yn: true)
 endif
-headers = ['sys/param.h', 'netdb.h']
+cc   = meson.get_compiler('c')
+deps = []
+cpps = []
 incdir  = []
+headers = ['netdb.h', 'netinet/in.h', 'sys/param.h']
+#
 
 # sources
 srcn  = [name]
@@ -64,11 +68,6 @@ srcn += 'display'
 srcn += 'report'
 srcn += 'poll'
 srcn += 'aux'
-
-# deps and checkouts
-cc   = meson.get_compiler('c')
-deps = []
-cpps = []
 
 # optional: CAP (default yes)
 if cap
@@ -139,8 +138,11 @@ endif
 #
 if dns
   fn = 'res_mkquery'
-  incl  = '#include <netinet/in.h>\n'
-  incl += '#include <resolv.h>\n'
+  hdrs = ['netinet/in.h', 'resolv.h', 'netdb.h']
+  incl  = ''
+  foreach h: hdrs
+    incl += cc.has_header(h) ? '#include <' + h + '>\n' : ''
+  endforeach
   res = 'resolv'
   libres = cc.find_library(res, required: false)
   if cc.has_function(fn, prefix: incl, dependencies: libres)
@@ -158,14 +160,13 @@ if dns
     config.set('HAVE_' + fn.underscorify().to_upper(), 1)
   endif
   fn = 'gethostbyaddr'
-  incl += '\n#include <netdb.h>'
   if not cc.has_function(fn, prefix: incl, dependencies: libres)
     libnsl = cc.find_library('nsl')
     assert(cc.has_function(fn, prefix: incl, dependencies: libnsl), 'DNS is enabled, but NSL not found')
     deps += libnsl
   endif
-  headers += 'arpa/nameser.h'
   headers += 'sys/types.h'
+  headers += 'arpa/nameser.h'
   srcn += 'dns'
   optlist += '+DNS'
   config.set('ENABLE_DNS', 1)
@@ -342,12 +343,6 @@ foreach c: srcn
   srcs += c + '.c'
 endforeach
 #
-foreach h: headers
-  if cc.has_header(h)
-    config.set('HAVE_' + h.underscorify().to_upper(), 1)
-  endif
-endforeach
-#
 fndesc = {
   'pow': {'libs': ['m'], 'hdr': 'math.h'},
   'warnx': {'libs': ['bsd'], 'hdr': 'err.h'},
@@ -358,8 +353,11 @@ fndesc = {
 #
 foreach fn, desc: fndesc
   libs   = desc['libs']
+  incl   = ''
   hdr    = 'hdr' in desc ? desc['hdr'] : ''
-  incl   = hdr == '' ? '' : '#include <' + hdr + '>'
+  if hdr != ''
+    incl += cc.has_header(hdr) ? '#include <' + hdr + '>' : ''
+  endif
   req    = 'req' in desc ? desc['req'] : true
   libhdr = 'libhdr' in desc ? desc['libhdr'] : false
   found = true
@@ -389,6 +387,18 @@ foreach fn, desc: fndesc
   endif
   if found
     config.set('HAVE_' + fn.underscorify().to_upper(), 1)
+  endif
+endforeach
+#
+if cc.get_define('IP_TOS',
+  prefix: cc.has_header('netinet/in.h') ? '#include <netinet/in.h>' : ''
+) == ''
+  manexcl += 'q'
+endif
+# retest headers with optional ones
+foreach h: headers
+  if cc.has_header(h)
+    config.set('HAVE_' + h.underscorify().to_upper(), 1)
   endif
 endforeach
 #

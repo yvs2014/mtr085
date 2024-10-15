@@ -79,15 +79,15 @@ typedef struct statf {
 #define CHKBIT(a, n) (((a) >> (n)) & 1)
 #define NEQBIT(a, b, n) (((a) ^ (b)) & (1 << (n)))
 
+#define NOOP ((void)0)
+
+// logging, warnings, errors
 #if defined(__NetBSD__) || defined(__FreeBSD__) || defined(__OpenBSD__)
 #define LOG_PRIORITY LOG_NOTICE
 #else
 #define LOG_PRIORITY LOG_INFO
 #endif
-
-/* note, VA_OPT min compat: gcc8, clang6 */
-
-// logging, warnings, errors
+//
 #ifdef LOGMOD
 #include <syslog.h>
 #else
@@ -95,7 +95,7 @@ typedef struct statf {
 #define LOGRET(fmt, ...) return
 #define LOG_RE(re, fmt, ...) return (re)
 #endif
-//
+// note, VA_OPT min compat: gcc8, clang6
 #if (__GNUC__ >= 8) || (__clang_major__ >= 6) || (__STDC_VERSION__ >= 202311L)
 #define WARN(fmt, ...)   warn("%s: " fmt, __func__ __VA_OPT__(,) __VA_ARGS__)
 #define WARNX(fmt, ...) warnx("%s: " fmt, __func__ __VA_OPT__(,) __VA_ARGS__)

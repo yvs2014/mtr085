@@ -263,6 +263,14 @@ AS_IF([test "x$libidn" = "xyes"], [
 	])
 ])
 
+AC_COMPILE_IFELSE([AC_LANG_SOURCE([[
+#include <netinet/in.h>
+#ifndef IP_TOS
+#error no IP_TOS
+#endif
+]])], [iptos="yes"], [iptos="no"])
+AM_CONDITIONAL([IPTOS], [test "x$iptos" = "xyes"])
+
 # Extra compiler flags
 # Note, AX_CHECK_COMPILE_FLAG comes from autoconf-archive
 m4_ifdef([AX_CHECK_COMPILE_FLAG], [
@@ -312,7 +320,6 @@ AH_BOTTOM([
 #endif
 ])
 
-dnl AC_CONFIG_FILES([Makefile img/Makefile])
 AC_CONFIG_FILES([Makefile])
 
 # fix mandir

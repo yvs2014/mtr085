@@ -21,6 +21,10 @@
 #include <strings.h>
 #include <limits.h>
 #include <time.h>
+#include <netinet/in.h>
+#ifdef ENABLE_IPV6
+#include <netinet/ip6.h>
+#endif
 
 #include "mtr-curses.h"
 #include "config.h"
@@ -90,7 +94,9 @@ const char CMODE_HINTS[] =
 "  o <str>    set fields to display (default 'LRS N BAWV')\n"
 "  p|<space>  pause and resume\n"
 "  q          quit\n"
+#ifdef IP_TOS
 "  Q <int>    set ToS/QoS\n"
+#endif
 "  r          reset statistics\n"
 "  s <int>    set packet size (default 64), or random (<0)\n"
 "  t          toggle TCP pings\n"
@@ -219,10 +225,19 @@ int mc_keyaction(void) {
     case 'p': return ActionPauseResume;
     case  3 : // ^C
     case 'q': return ActionQuit;
+#ifdef IP_TOS
     case 'Q':
-      mc_get_int(&tos, 0, 255, "Type of Service (ToS)",
-        "bits: lowcost(1), reliability(2), throughput(4), lowdelay(8)");
+#if defined(ENABLE_IPV6) && !defined(IPV6_TCLASS)
+      if (af == AF_INET6) {
+        mvprintw(HINT_YPOS,     0, "IPv6 traffic class is not supported");
+        mvprintw(HINT_YPOS + 1, 0, "-> Press any key to continue ...");
+        getch();
+      } else
+#endif
+      { mc_get_int(&tos, 0, 255, "Type of Service (ToS)",
+        "bits: lowcost(1), reliability(2), throughput(4), lowdelay(8)"); }
       return ActionNone;
+#endif
     case 'r': return ActionReset;
     case 's':
       mvprintw(HINT_YPOS,     0, "Change Packet Size: %d", cpacketsize);

@@ -881,9 +881,9 @@ static void cr_resize(int width, int height, int shift) {
 		return;
 	if (!skins[BASE].cairo)
 		return;
-	GCMSG_("%sresize: (%d, %d) => (%d, %d)\n", shift ? "shift+" : "", base_window.width, base_window.height, width, height);
+	GCMSG("%sresize: (%d, %d) => (%d, %d)\n", shift ? "shift+" : "", base_window.width, base_window.height, width, height);
 	if (shift) {
-		GCMSG_("legend: (%d, %d, %d, %d) => ", legend.x, legend.y, legend.width, legend.height);
+		GCMSG("legend: (%d, %d, %d, %d) => ", legend.x, legend.y, legend.width, legend.height);
 		legend.width += width - base_window.width;
 		if (legend.width < 0)
 			legend.width = 0;
@@ -891,7 +891,7 @@ static void cr_resize(int width, int height, int shift) {
 		legend.height += height - base_window.height;
 		if (legend.height < 0)
 			legend.height = 0;
-		GCMSG_("(%d, %d, %d, %d)\n", legend.x, legend.y, legend.width, legend.height);
+		GCMSG("(%d, %d, %d, %d)\n", legend.x, legend.y, legend.width, legend.height);
 		base_window.width = width;
 		base_window.height = height;
 		return;
@@ -951,37 +951,37 @@ static void cr_resize(int width, int height, int shift) {
 
 bool cr_open(cr_params_t *cr_params) {
 	params = cr_params;
-	GCMSG_("params: %s", "type=");
+	GCMSG("params: %s", "type=");
 	switch (params->graph_type) {
 		case GT_DOT:
 			graph_func = graph_dot;
-			GCMSG("dot");
+			GCMSG("%s", "dot");
 			break;
 		case GT_LINE:
 			graph_func = graph_line;
-			GCMSG("line");
+			GCMSG("%s", "line");
 			break;
 		case GT_CURVE:
 			graph_func = graph_curve;
-			GCMSG("curve");
+			GCMSG("%s", "curve");
 			break;
 		default:
 			params->graph_type = GT_CURVE;
 			graph_func = graph_curve;
-			GCMSG("curve");
+			GCMSG("%s", "curve");
 	}
 
 	if (params->period)
 		params->period *= GRIDLINES;
 	else
 		params->period = VIEWPORT_PERIOD;
-	GCMSG_(", period=%dsec", params->period);
+	GCMSG(", period=%dsec", params->period);
 	tm_fmt = (params->period < 3600) ? TM_MMSS : TM_HHMM;
 
 	if (params->enable_legend)
 		base_window.height *= 1.6;
 
-	GCMSG_(", legend=%d, multipath=%d, jitter_graph=%d\n", params->enable_legend, params->enable_multipath, params->jitter_graph);
+	GCMSG(", legend=%d, multipath=%d, jitter_graph=%d\n", params->enable_legend, params->enable_multipath, params->jitter_graph);
 	set_source_rgb_func = (maxTTL < cr_colors_max) ? set_source_rgb_dir : set_source_rgb_mod;
 
 	if (backend_create_window(&base_window, cr_resize)) {

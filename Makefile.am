@@ -123,6 +123,9 @@ endif
 if !SPLITMODE
 EXCLOPTS += p
 endif
+if !IPTOS
+EXCLOPTS += q
+endif
 if !IPINFO
 EXCLOPTS += y
 endif

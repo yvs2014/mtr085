@@ -276,7 +276,7 @@ static uint16_t sum1616(const uint16_t *data, unsigned len, unsigned sum) {
 static uint16_t udpsum16(struct _iphdr *ip, void *udata, int udata_len, int dsize) {
   unsigned tsize = sizeof(struct _udpph) + dsize;
   char csumpacket[tsize];
-  memset(csumpacket, bitpattern, tsize);
+  memset(csumpacket, bitpattern, sizeof(csumpacket));
   struct _udpph *prepend = (struct _udpph *)csumpacket;
   prepend->saddr = ip->saddr;
   prepend->daddr = ip->daddr;
@@ -329,25 +329,30 @@ static int new_sequence(int at) {
   return seq;
 }
 
-#ifdef IP_TOS
-#define NET_TOS(PROTO_VERSION, TOS_TYPE) { if (tos) \
+#define NET_SETTOS(PROTO_VERSION, TOS_TYPE) if (tos) \
   if (setsockopt(sock, PROTO_VERSION, TOS_TYPE, &tos, sizeof(tos)) < 0) \
-    FAIL_WITH_WARN(sock, "%s(sock=%d, tos=%d)", __func__, sock, tos);  }
-#else
-#define NET_TOS
-#endif
-#define NET_TTLTOS(PROTO_VERSION, TTL_TYPE, TOS_TYPE) { \
+    FAIL_WITH_WARN(sock, "%s(sock=%d, tos=%d)", __func__, sock, tos);
+#define NET_SETTTL(PROTO_VERSION, TTL_TYPE) \
   if (setsockopt(sock, PROTO_VERSION, TTL_TYPE, &ttl, sizeof(ttl)) < 0) \
-    FAIL_WITH_WARN(sock, "%s(sock=%d, ttl=%d)", __func__, sock, ttl); \
-  NET_TOS(PROTO_VERSION, TOS_TYPE); \
-  return true; }
+    FAIL_WITH_WARN(sock, "%s(sock=%d, ttl=%d)", __func__, sock, ttl);
 
-static bool settosttl(int sock, int ttl) NET_TTLTOS(IPPROTO_IP, IP_TTL, IP_TOS)
-#ifdef ENABLE_IPV6
-static bool settosttl6(int sock, int ttl) NET_TTLTOS(IPPROTO_IPV6, IPV6_UNICAST_HOPS, IPV6_TCLASS)
+static bool settosttl(int sock, int ttl) {
+  NET_SETTTL(IPPROTO_IP, IP_TTL);
+#ifdef IP_TOS
+  NET_SETTOS(IPPROTO_IP, IP_TOS);
 #endif
-#undef NET_TOS
-#undef NET_TTLTOS
+  return true; }
+#ifdef ENABLE_IPV6
+static bool settosttl6(int sock, int ttl) {
+  NET_SETTTL(IPPROTO_IPV6, IPV6_UNICAST_HOPS);
+#ifdef IPV6_TCLASS
+  NET_SETTOS(IPPROTO_IPV6, IPV6_TCLASS);
+#endif
+  return true; }
+#endif
+
+#undef NET_SETTOS
+#undef NET_SETTTL
 
 // Create TCP socket for hop 'at', and try to connect (poll results later)
 static bool net_send_tcp(int at) {
@@ -467,7 +472,7 @@ static bool net_send_icmp_udp(int at) {
   if (packetsize < MINPACKET) packetsize = MINPACKET;
   else if (packetsize > MAXPACKET) packetsize = MAXPACKET;
   static uint8_t packet[MAXPACKET];
-  memset(packet, bitpattern, packetsize);
+  memset(packet, bitpattern, sizeof(packet));
 
   int iphsize = 0, echotype = 0, salen = 0;
 #ifdef IP_HDRINCL

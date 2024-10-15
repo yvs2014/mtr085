@@ -10,6 +10,7 @@
 .ds ooj "j
 .ds oox "x
 .ds op "p
+.ds oq "q
 .ds oy "yz
 .Dd $Mdocdate$
 .Dt MTR 8 SMM
@@ -19,7 +20,7 @@
 .Nd a network diagnostic tool
 .Sh SYNOPSIS
 .Nm
-.Op Fl a\*[on b]Bcd\*[oe]fF\*[og]im\*[on]\*[oN]\*[oo]\*[op]qrsStTuvwx\*[oy]\*[o6]
+.Op Fl a\*[on b]Bcd\*[oe]fF\*[og]im\*[on]\*[oN]\*[oo]\*[op]\*[oq]rsStTuvwx\*[oy]\*[o6]
 TARGET[:PORT] ...
 .Sh DESCRIPTION
 .Nm
@@ -194,8 +195,10 @@ formatted output respectively
 .It Fl p, Fl -split
 Split out a format that is suitable for a split-user interface
 .\}
-.It Fl Q, Fl -tos Ar NUM
+.ie "q"\*[oq]" \{\
+.It Fl q, Fl -tos Ar NUM
 Set value for type of service (ToS) field in IP header.  Should be within range 0-255.
+.\}
 .It Fl r, Fl -report
 This option puts
 .Nm

@@ -21,6 +21,7 @@ endif()
 #set(CMAKE_EXPORT_COMPILE_COMMANDS ON) # compile_commands.json
 include(GNUInstallDirs)
 include(CheckIncludeFile)
+include(CheckSymbolExists)
 include(CheckFunctionExists)
 include(CheckLibraryExists)
 
@@ -341,6 +342,12 @@ set(FN_LIBS bsd)
 set(FN_LIST warnx strlcpy arc4random_uniform)
 set(FN_MUST warnx)
 fn_checkout()
+#
+check_symbol_exists(IP_TOS "netinet/in.h" HAVE_IP_TOS)
+if(NOT HAVE_IP_TOS)
+  list(APPEND MAN_EXCL q)
+endif()
+#
 
 # exclude unset options from man page
 file(MAKE_DIRECTORY "${MAN_PATH}")

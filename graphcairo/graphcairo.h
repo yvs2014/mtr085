@@ -5,11 +5,9 @@
 
 // two sets to not detect ##/VA_OPT
 #ifdef GCDEBUG
-#define GCMSG(lit)       printf(lit)
-#define GCMSG_(fmt, ...) printf(fmt, __VA_ARGS__)
+#define GCMSG(fmt, ...) printf(fmt, __VA_ARGS__)
 #else
-#define GCMSG(lit)       {}
-#define GCMSG_(fmt, ...) {}
+#define GCMSG(fmt, ...) NOOP
 #endif
 
 #define POS_ROUND(x) ((int)((x) + 0.5))

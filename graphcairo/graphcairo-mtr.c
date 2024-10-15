@@ -137,36 +137,36 @@ int gc_keyaction(void) {
   if (params.enable_legend) {
     switch (c) {
       case '+':  // ScrollDown
-        GCMSG("scroll down\n");
+        GCMSG("%s", "scroll down\n");
         hostinfo_max = 0;
         return ActionScrollDown;
       case '-':  // ScrollUp
-        GCMSG("scroll up\n");
+        GCMSG("%s", "scroll up\n");
         hostinfo_max = 0;
         return ActionScrollUp;
 #ifdef WITH_MPLS
       case 'e':  // MPLS
-        GCMSG("toggle MPLS\n");
+        GCMSG("%s", "toggle MPLS\n");
         return ActionMPLS;
 #endif
       case 'j':  // Latency,Jitter
-        GCMSG("toggle latency/jitter stats\n");
+        GCMSG("%s", "toggle latency/jitter stats\n");
         onoff_jitter();
         mc_statf_title(legend_header, sizeof(legend_header));
         return ActionNone;
 #ifdef ENABLE_DNS
       case 'n':  // DNS
-        GCMSG("toggle DNS\n");
+        GCMSG("%s", "toggle DNS\n");
         hostinfo_max = 0;
         return ActionDNS;
 #endif
 #ifdef WITH_IPINFO
       case 'y':  // IP Info
-        GCMSG("switching IP info\n");
+        GCMSG("%s", "switching IP info\n");
         hostinfo_max = 0;
         return ActionII;
       case 'z':  // ASN
-        GCMSG("toggle ASN info\n");
+        GCMSG("%s", "toggle ASN info\n");
         hostinfo_max = 0;
         return ActionAS;
 #endif
@@ -175,21 +175,21 @@ int gc_keyaction(void) {
 
   switch (c) {
     case 'p':  // Pause,Resume
-      GCMSG("pause/resume pressed");
+      GCMSG("%s", "pause/resume pressed");
       return ActionPauseResume;
     case  3 :  // ^C
     case 'q':  // Quit
-      GCMSG("quit\n");
+      GCMSG("%s", "quit\n");
       return ActionQuit;
     case 'r':  // Reset
-      GCMSG("net reset\n");
+      GCMSG("%s", "net reset\n");
       cr_net_reset(0);
       return ActionReset;
     case 't':  // TCP on/off
-      GCMSG("toggle TCP pings\n");
+      GCMSG("%s", "toggle TCP pings\n");
       return ActionTCP;
     case 'u':  // UDP on/off
-      GCMSG("toggle UDP pings\n");
+      GCMSG("%s", "toggle UDP pings\n");
       return ActionUDP;
   }
   return ActionNone;

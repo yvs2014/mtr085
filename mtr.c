@@ -26,6 +26,11 @@
 #include <fcntl.h>
 #include <limits.h>
 #include <sys/stat.h>
+#include <sys/stat.h>
+#include <netinet/in.h>
+#ifdef ENABLE_IPV6
+#include <netinet/ip6.h>
+#endif
 
 #include "common.h"
 
@@ -191,7 +196,9 @@ static struct option long_options[] = {
 #ifdef SPLITMODE
   { "split",      0, 0, 'p' },
 #endif
-  { "tos",        1, 0, 'q' },  // typeof service (0..255)
+#ifdef IP_TOS
+  { "tos",        1, 0, 'q' },  // type of service (0..255)
+#endif
   { "report",     0, 0, 'r' },
   { "psize",      1, 0, 's' },  // packet size
   { "summary",    0, 0, 'S' },  // print send/recv summary at exit
@@ -259,8 +266,10 @@ static const char *get_opt_desc(char opt) {
   switch (opt) {
     case 'm':
     case 'f':
-    case 'B':
-    case 'q': return "NUMBER";
+#ifdef IP_TOS
+    case 'q':
+#endif
+    case 'B': return "NUMBER";
     case 'i':
     case 'x':
     case 'T': return "SECONDS";
@@ -393,6 +402,18 @@ static bool split_hostport(char *buff, char* hostport[2]) {
    hostport[1] = (port && port[0]) ? port : NULL;
    return true;
 }
+
+#ifdef IP_TOS
+#if defined(ENABLE_IPV6) && !defined(IPV6_TCLASS)
+#define TOS4TOS(what) do { \
+  if ((af == AF_INET6) && tos) \
+    warnx("%s: tos=%d: IPv6 traffic class is not supported", what, tos); \
+} while (0)
+#endif
+#endif
+#ifndef TOS4TOS
+#define TOS4TOS(what) NOOP
+#endif
 
 static void parse_options(int argc, char **argv) {
   SETBIT(kept_args, RA_DNS); // dns is on by default
@@ -550,11 +571,12 @@ static void parse_options(int argc, char **argv) {
       display_mode = DisplaySplit;
       break;
 #endif
+#ifdef IP_TOS
     case 'q':
-      tos = atoi(optarg);
-      if (tos > 255 || tos < 0)	// error message, should do more checking for valid values
-        tos = 0;
+      tos = limit_int(0, 255, atoi(optarg), "Type of Service (ToS)", opt);
+      TOS4TOS("option -q");
       break;
+#endif
     case 'r':
       display_mode = DisplayReport;
       if (max_ping <= 0) max_ping = REPORT_PINGS;
@@ -754,6 +776,7 @@ static void try_to_resolv(t_res_rc *rr) {
 #endif
 }
 
+
 int main(int argc, char **argv) {
   if (!net_open()) // get raw sockets
     FAIL("Unable to get raw sockets");
@@ -826,6 +849,7 @@ int main(int argc, char **argv) {
       warnx("Failed to resolve(%s): %s", dsthost, rr.error ? rr.error : "Unknown error");
     else if (rr.res) {
       if ((set_target_success = set_target(rr.res))) {
+        TOS4TOS(dsthost);
         locker(stdout, F_WRLCK);
         if (display_open(!first)) display_loop();
         else WARNX("Unable to open display");
