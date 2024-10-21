@@ -11,7 +11,7 @@ URL:        https://github.com/yvs2014/%{name}
 Source0:    %{name}-%{version}.tar.gz
 
 Requires: ncurses
-BuildRequires: meson, git, sed, pkgconf, ncurses-devel, libidn2-devel, libcap-devel
+BuildRequires: meson, git, sed, pkgconf, ncurses-devel, libcap-devel
 BuildRequires: (gcc or clang)
 %if 0%{?fedora}
 BuildRequires: glibc-langpack-en
@@ -22,7 +22,7 @@ Conflicts: mtr, mtr-gtk
 
 %description
 mtr combines the functionality of the traceroute and ping programs in a single network diagnostic tool.
-Built from https://github.com/yvs2014/mtr085 fork with whois info, IDN, unicode, etc.
+Built from https://github.com/yvs2014/mtr085 fork with whois info, unicode, etc.
 Main project's location is https://github.com/traviscross/mtr
 
 %define binname mtr

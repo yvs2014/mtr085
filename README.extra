@@ -1,22 +1,18 @@
 >>> IDN (Internationalized Domain Names)
 
-% ./configure --with-libidn ...
-...
 % mtr köthe.de
 % mtr はじめよう.みんな
 
-   ----------------------------
 
 >>> Unicode (histograms)
 
-% ./configure --with-unicode ...
-...
 % mtr -d3 ...
 % mtr -d11 ...
 
-   ----------------------------
 
->>> Ipinfo (additional information about hopes)
+>>> Ipinfo (IP-address information)
+
+% mtr -y ...
 
  -y ORIGIN,FIELDS
 
@@ -38,35 +34,10 @@
    -y2,4,2       riswhois.ripe.net: CC Origin
    -y,           origin.asn.cymru.com: ASN
 
-   ----------------------------
 
 >>> Graphcairo (XCB/Xlib graphs)
 
-Dependencies:
-  XCB  backend:  cairo pango cairo-xcb xcb xcb-keysyms
-  Xlib backend:  cairo pango cairo-xlib x11
-
-Ubuntu packages:
-  XCB:  libcairo(-dev) libpango(-dev) libxcb(-dev) libxcb-keysyms(-dev)
-  Xlib: libcairo(-dev) libpango(-dev) libx11(-dev)
-FreeBSD packages:
-  XCB:  cairo >= 1.12 pango libxcb xcb-util-keysyms
-  Xlib: cairo pango libX11
-NetBSD packages:
-  XCB:  cairo pango libxcb xcb-util-keysyms
-  Xlib: cairo pango libX11
-OpenIndiana packages:
-  XCB:  cairo pango libxcb
-  Xlib: cairo pango libx11
-MacOS packages:
-  XCB:  cairo pango xcb-util-keysym # cairo libxcb
-
-
-Build and run:
-% ./configure --with-graphcairo-xcb
-...
-% mtr -g, hostname
-
+% mtr -g ...
 
 Arguments (-g args):
   Available arguments:
@@ -85,12 +56,4 @@ Examples:
   -g,       all args in default (curve, 1min, legend, multipath, latency)
   -g2       line, default, default, default, default
   -g,30,,0  default, 5min, default, disable, default
-
-
-work-in-progress BSD port templates are located in 'misc/' folder
-
-
->>> Linux note
-on older systems arc4random functions are in a separate libbsd package,
-and in libc on newer ones
 

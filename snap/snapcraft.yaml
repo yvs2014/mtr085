@@ -8,7 +8,7 @@ description: |
   in a single network diagnostic tool
 
   Built from https://github.com/yvs2014/mtr085 fork
-  with whois info, IDN, unicode, etc.
+  with whois info, unicode, etc.
 
   Main project's location is https://github.com/traviscross/mtr
 
@@ -49,12 +49,10 @@ parts:
       - pkgconf
       - build-essential
       - libncurses-dev
-      - libidn2-dev
       - libcap-dev
       - libcap2-bin
     stage-packages:
       - libncursesw6
-      - libidn2-0
       - libcap2
     prime:
       - usr/bin/mtr

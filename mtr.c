@@ -16,6 +16,17 @@
     Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 */
 
+/* GNU/Mac/Solaris extensions */
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE 1
+#endif
+#ifndef _DARWIN_C_SOURCE
+#define _DARWIN_C_SOURCE 1
+#endif
+#ifndef __EXTENSIONS__
+#define __EXTENSIONS__ 1
+#endif
+
 #include <stdio.h>
 #include <unistd.h>
 #include <string.h>
@@ -28,11 +39,15 @@
 #include <sys/stat.h>
 #include <sys/stat.h>
 #include <netinet/in.h>
+
+#include "common.h"
+
 #ifdef ENABLE_IPV6
 #include <netinet/ip6.h>
 #endif
-
-#include "common.h"
+#ifdef HAVE_NETDB_H
+#include <netdb.h>
+#endif
 
 #ifdef LIBCAP
 #include <sys/capability.h>
@@ -43,6 +58,7 @@
 #include <syslog.h>
 #endif
 
+#ifndef AI_IDN
 #if   defined(LIBIDN2)
 #if   defined(HAVE_IDN2_IDN2_H)
 #include <idn2/idn2.h>
@@ -57,6 +73,7 @@
 #define IDN_TO_ASCII_LZ idna_to_ascii_lz
 #define IDN_TO_ASCII_8Z idna_to_ascii_8z
 #define IDN_STRERROR    idna_strerror
+#endif
 #endif
 
 #ifdef WITH_UNICODE
@@ -754,7 +771,7 @@ static void getaddrinfo_e(t_res_rc *rr, const char *name) {
     (rr->rc == EAI_SYSTEM) ? strerror(errno) : gai_strerror(rr->rc);
 }
 
-#if defined(LIBIDN2) || defined(LIBIDN)
+#if !defined(AI_IDN) && (defined(LIBIDN2) || defined(LIBIDN))
 static void idn_resolv(t_res_rc *rr, int (*idn2ascii)(const char*, char**, int)) {
   if (!rr || !idn2ascii) return;
   char *name = NULL;
@@ -768,7 +785,7 @@ static void idn_resolv(t_res_rc *rr, int (*idn2ascii)(const char*, char**, int))
 static void try_to_resolv(t_res_rc *rr) {
   if (!rr || !rr->target) return;
   getaddrinfo_e(rr, rr->target);
-#if defined(LIBIDN2) || defined(LIBIDN)
+#if !defined(AI_IDN) && (defined(LIBIDN2) || defined(LIBIDN))
   if (rr->rc) {
     idn_resolv(rr, IDN_TO_ASCII_LZ);
     if (rr->rc) idn_resolv(rr, IDN_TO_ASCII_8Z);
@@ -829,7 +846,11 @@ int main(int argc, char **argv) {
     if (!(dsthost = argv[optind]))
       continue;
     remoteport = defport;
-    t_res_rc rr0 = {.hints = {.ai_family = AF_UNSPEC, .ai_socktype = SOCK_DGRAM}};
+    t_res_rc rr0 = {.hints = {.ai_family = AF_UNSPEC, .ai_socktype = SOCK_DGRAM,
+#ifdef AI_IDN
+      .ai_flags = AI_IDN,
+#endif
+    }};
     t_res_rc rr = rr0; rr.target = dsthost;
     try_to_resolv(&rr);
     if (rr.rc && ((mtrtype == IPPROTO_TCP) || (mtrtype == IPPROTO_UDP))) {
@@ -839,7 +860,7 @@ int main(int argc, char **argv) {
       if (split_hostport(buff, hostport)) {
         limit_error[0] = 0;
         if (hostport[1]) remoteport = limit_int(1, 65535, atoi(hostport[1]), "port number", -1);
-        if (!limit_error[0]) {
+        if (!limit_error[0] && hostport[0]) {
           rr = rr0; rr.target = hostport[0];
           try_to_resolv(&rr);
         }

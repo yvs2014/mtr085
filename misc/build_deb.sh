@@ -1,6 +1,6 @@
 :
 
-# build depends on: dpkg-dev devscripts debhelper [libidn2]
+# build depends on: dpkg-dev devscripts debhelper
 chk_cmd() {
   command -v "$1" >/dev/null && return
   echo "FAIL: '$1' is mandatory for packaging, please install '$2'"
@@ -22,7 +22,7 @@ chf="debian/changelog"
 mkdir -p "$ddir"
 rm -f "$chf.tmp"
 dch --create -c "$chf.tmp" --package="$name" -v "$rev" -D "$dist" -u "low" -M \
-  "$name fork with whois info, IDN, unicode, etc."
+  "$name fork with whois info, unicode, etc."
 
 mv "$chf.tmp" "$chf"
 

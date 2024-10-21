@@ -120,11 +120,6 @@ AC_ARG_WITH([mpls],
 AM_CONDITIONAL([MPLS], [test "x$mpls" = "xyes"])
 AS_IF([test "x$mpls" = "xyes"], [AC_DEFINE([WITH_MPLS], [1], [Define to support MPLS decoding])])
 
-AC_ARG_WITH([libidn],
-	AS_HELP_STRING([--with-libidn], [IDN support (libidn)]),
-	[libidn="${withval}"], [libidn=no])
-AM_CONDITIONAL([LIBIDN], [test "x$libidn" = "xyes"])
-
 AC_ARG_WITH([ipinfo],
 	AS_HELP_STRING([--without-ipinfo], [without IP-info lookup]),
 	[ipinfo="${withval}"], [ipinfo=yes])
@@ -217,7 +212,7 @@ AS_IF([test "x$ipinfo" = "xyes"], [
 ])
 
 
-AS_IF([test "x$libidn" = "xyes" || test "x$graphcairo_xcb" = "xyes" || test "x$graphcairo_xlib" = "xyes"], [need_pkgconfig=yes])
+AS_IF([test "x$graphcairo_xcb" = "xyes" || test "x$graphcairo_xlib" = "xyes"], [need_pkgconfig=yes])
 
 AS_IF([test "x$need_pkgconfig" = "xyes"], [
 	# don't break anything if pkg-config is absent
@@ -226,7 +221,7 @@ AS_IF([test "x$need_pkgconfig" = "xyes"], [
     .../share/aclocal/pkg.m4
   Before running bootstrap try setting the environment variable
     ACLOCAL_PATH="/own/dir"
-  or configure --without-libidn --without-graphcairo-*
+  or configure --without-graphcairo-*
 	])])])
 	PKG_PROG_PKG_CONFIG
 ])
@@ -249,26 +244,73 @@ AS_IF([test "x$graphcairo_xlib" = "xyes"], [
 ])
 ])
 
-AS_IF([test "x$libidn" = "xyes"], [
-	PKG_CHECK_MODULES([libidn2], [libidn2], [
-		AC_SUBST(libidn2_CFLAGS)
-		AC_SUBST(libidn2_LIBS)
-		AC_DEFINE([LIBIDN2], [1], [Define to enable libidn2])
+need_libidn="no"
+AC_MSG_CHECKING([for AI_IDN macro])
+AC_COMPILE_IFELSE([AC_LANG_SOURCE([[
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE 1
+#endif
+#ifndef _DARWIN_C_SOURCE
+#define _DARWIN_C_SOURCE 1
+#endif
+#ifndef __EXTENSIONS__
+#define __EXTENSIONS__ 1
+#endif
+#include <netdb.h>
+#ifndef AI_IDN
+#error no AI_IDN
+#endif
+]])], [aiidn="yes"], [aiidn="no"])
+AS_IF([test "x$aiidn" = "xyes"], AC_MSG_RESULT([found]), AC_MSG_RESULT([none]))
+
+AS_IF([test "x$aiidn" != "xyes"], [
+	m4_ifdef([PKG_CHECK_MODULES], [
+		PKG_PROG_PKG_CONFIG
+		PKG_CHECK_MODULES([libidn2], [libidn2], [
+			AC_DEFINE([LIBIDN2], [1], [Define to enable libidn2])
+			AC_SUBST(libidn2_CFLAGS)
+			AC_SUBST(libidn2_LIBS)
+			need_libidn="yes"
+		], [
+		PKG_CHECK_MODULES([libidn], [libidn], [
+			AC_DEFINE([LIBIDN], [1], [Define to enable libidn])
+			AC_SUBST(libidn_CFLAGS)
+			AC_SUBST(libidn_LIBS)
+			need_libidn="yes"
+		])])
 	], [
-	PKG_CHECK_MODULES([libidn], [libidn], [
-		AC_SUBST(libidn_CFLAGS)
-		AC_SUBST(libidn_LIBS)
-		AC_DEFINE([LIBIDN], [1], [Define to enable libidn])
-	])
+		AC_CHECK_HEADER([idn2.h], AC_CHECK_LIB([idn2], [idn2_strerror], [
+			AC_DEFINE([LIBIDN2], [1], [Define to enable libidn2])
+			AC_SUBST(libidn2_CFLAGS)
+			AC_SUBST(libidn2_LIBS, "-lidn2")
+			need_libidn="yes" ]))
+		AS_IF([test "x$need_libidn" != "xyes"], [
+		AC_CHECK_HEADER([idn2/idn2.h], AC_CHECK_LIB([idn2], [idn2_strerror], [
+			AC_DEFINE([LIBIDN2], [1], [Define to enable libidn2])
+			AC_DEFINE([HAVE_IDN2_IDN2_H], [1], [idn2 header])
+			AC_SUBST(libidn2_CFLAGS)
+			AC_SUBST(libidn2_LIBS, "-lidn2")
+			need_libidn="yes" ]))
+		])
+		AS_IF([test "x$need_libidn" != "xyes"], [
+		AC_CHECK_HEADER([idna.h], AC_CHECK_LIB([idn], [idna_strerror], [
+			AC_DEFINE([LIBIDN], [1], [Define to enable libidn])
+			AC_SUBST(libidn_CFLAGS)
+			AC_SUBST(libidn_LIBS, "-lidn")
+			need_libidn="yes" ]))
+		])
 	])
 ])
+AM_CONDITIONAL([LIBIDN], [test "x$need_libidn" = "xyes"])
 
+AC_MSG_CHECKING([for IP_TOS macro])
 AC_COMPILE_IFELSE([AC_LANG_SOURCE([[
 #include <netinet/in.h>
 #ifndef IP_TOS
 #error no IP_TOS
 #endif
 ]])], [iptos="yes"], [iptos="no"])
+AS_IF([test "x$iptos" = "xyes"], AC_MSG_RESULT([found]), AC_MSG_RESULT([none]))
 AM_CONDITIONAL([IPTOS], [test "x$iptos" = "xyes"])
 
 # Extra compiler flags
@@ -289,7 +331,8 @@ AS_IF([test "x$libcap" = "xyes"],    [_option_list="$_option_list +CAP"],     [_
 AS_IF([test "x$curses" = "xyes"],    [_option_list="$_option_list +CURSES"],  [_option_list="$_option_list -CURSES"])
 AS_IF([test "x$_unicode" = "xyes"],  [_option_list="$_option_list +UNICODE"], [_option_list="$_option_list -UNICODE"])
 AS_IF([test "x$dns" = "xyes"],       [_option_list="$_option_list +DNS"],     [_option_list="$_option_list -DNS"])
-AS_IF([test "x$libidn" = "xyes"],    [_option_list="$_option_list +IDN"],     [_option_list="$_option_list -IDN"])
+AS_IF([test "x$aiidn" = "xyes" -o "x$need_libidn" = "yes"],
+	[_option_list="$_option_list +IDN"], [_option_list="$_option_list -IDN"])
 AS_IF([test "x$ipinfo" = "xyes"],    [_option_list="$_option_list +IPINFO"],  [_option_list="$_option_list -IPINFO"])
 AS_IF([test "x$splitmode" = "xyes"], [_option_list="$_option_list +SPLIT"],   [_option_list="$_option_list -SPLIT"])
 AS_IF([test "x$graphcairo_xcb" = "xyes" -o "x$graphcairo_xlib" = "yes"],

@@ -26,7 +26,6 @@ cap        = get_option('CAP')
 curses     = get_option('CURSES')
 unicode    = get_option('UNICODE')
 dns        = get_option('DNS')
-idn        = get_option('IDN')
 ipinfo     = get_option('IPINFO')
 split      = get_option('SPLIT')
 graph      = get_option('GRAPH')
@@ -46,14 +45,6 @@ debipinfo = get_option('DEBIPINFO')
 sbin      = get_option('SBIN')
 manexcl = []
 
-if meson.version().version_compare('>=0.53')
-  summary({'CAP': cap,
-    'CURSES': curses, 'UNICODE': unicode,
-    'DNS': dns, 'IDN': idn, 'IPINFO': ipinfo,
-    'SPLIT': split, 'GRAPH': graph,
-    'IPV6': ipv6, 'MPLS': mpls,
-  }, bool_yn: true)
-endif
 cc   = meson.get_compiler('c')
 deps = []
 cpps = []
@@ -176,32 +167,41 @@ else
   manexcl += 'N'
 endif
 #
-if idn
-  lib = 'idn2'
-  idn_dep = dependency('lib' + lib, required: false)
-  if idn_dep.found()
-    deps += idn_dep
-  else
-    libidn = cc.find_library(lib, required: false)
-    if libidn.found()
-      headers += lib / lib + '.h'
-      deps += libidn
-    else
-      lib = 'idn'
-      idn_dep = dependency('lib' + lib, required: false)
-      if idn_dep.found()
-        deps += idn_dep
-      else
-        libidn = cc.find_library(lib)
-        deps += libidn
-      endif
+ai_idn_hdr = '''
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE 1
+#endif
+#ifndef _DARWIN_C_SOURCE
+#define _DARWIN_C_SOURCE 1
+#endif
+#ifndef __EXTENSIONS__
+#define __EXTENSIONS__ 1
+#endif
+'''
+foreach hdr: ['sys/types.h', 'sys/socket.h', 'netdb.h']
+  ai_idn_hdr += cc.has_header(hdr)  ? '\n#include <' + hdr + '>'  : ''
+endforeach
+idn = cc.get_define('AI_IDN', prefix: ai_idn_hdr) != ''
+#
+if not idn # no getaddrinfo() with AI_IDN flag
+  foreach lib: ['idn2', 'idn']
+    dep = dependency('lib' + lib, required: false)
+    idn = dep.found()
+    if not idn
+      dep = cc.find_library(lib, required: false)
+      idn = dep.found()
     endif
-  endif
-  config.set('LIB' + lib.to_upper(), 1)
-  optlist += '+IDN'
-else
-  optlist += '-IDN'
+    if idn
+      config.set('LIB' + lib.to_upper(), 1)
+      if (lib == 'idn2')
+        headers += lib / lib + '.h'
+      endif
+      deps += dep
+      break
+    endif
+  endforeach
 endif
+optlist += idn ? '+IDN' : '-IDN'
 #
 if ipinfo
   srcn += 'ipinfo'
@@ -402,6 +402,12 @@ foreach h: headers
   endif
 endforeach
 #
+
+if meson.version().version_compare('>=0.53')
+  summary({'CAP': cap, 'CURSES': curses, 'UNICODE': unicode, 'DNS': dns, 'IDN': idn,
+    'IPINFO': ipinfo, 'SPLIT': split, 'GRAPH': graph, 'IPV6': ipv6, 'MPLS': mpls },
+    bool_yn: true)
+endif
 
 # fin
 #

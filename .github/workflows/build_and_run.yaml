@@ -26,7 +26,7 @@ jobs:
       - name: Install mandatory packages for building
         run: |
           sudo apt update
-          sudo apt install -y devscripts debhelper libidn2-dev libcap-dev meson git sed pkgconf libcap2-bin libbsd-dev
+          sudo apt install -y devscripts debhelper meson git sed pkgconf libcap2-bin libcap-dev libbsd-dev
       - name: Create deb package with ${{matrix.compiler}}
         env:
           CC: ${{matrix.compiler}}
