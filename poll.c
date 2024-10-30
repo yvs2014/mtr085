@@ -459,7 +459,8 @@ int poll_loop(void) {
   LOGMSG("start");
   if (!seqfd_init())
     return false;
-  bool anyset = false, paused = false;
+  int anyset = ActionNone;
+  bool paused = false;
   numpings = 0;
   grace = NO_GRACE;
   memset(&grace_started, 0, sizeof(grace_started));
@@ -477,7 +478,7 @@ int poll_loop(void) {
     int rv;
 
     do {
-      if (anyset || paused) {
+      if ((anyset != ActionNone) || paused) {
         timeout = paused ? PAUSE_MSEC : 0;
         if (paused && interactive)
           display_redraw();
@@ -510,13 +511,14 @@ int poll_loop(void) {
       LOGMSG("poll: %s", strerror(e));
       break;
     }
-    anyset = rv ? true : false; // something triggered, or not
-    if (anyset) {
-      int rc = conclude(&polled_now);
-      if (rc == ActionQuit)
+    if (rv) {
+      anyset = conclude(&polled_now);
+      if (anyset == ActionQuit)
         break;
-      else if (rc == ActionPauseResume)
+      else if (anyset == ActionPauseResume) {
         paused = !paused;
+        if (!paused) anyset = ActionNone;
+      }
     } else if (tcpish())
       tcp_timedout(); // not waiting for TCP ETIMEDOUT
 #ifdef GRAPHMODE

@@ -173,6 +173,16 @@ static bool mc_get_int(int *val, int min, int max, const char *what, const char 
 
 int mc_keyaction(void) {
   int c = getch();
+#ifdef KEY_RESIZE
+#define GETCH_BATCH 100
+  if (c == KEY_RESIZE) { // cleanup by batch
+    for (int i = 0; (c == KEY_RESIZE) && (i < GETCH_BATCH); i++)
+      c = getch();
+    if (c == KEY_RESIZE) // otherwise flush
+      flushinp();
+  }
+#undef GETCH_BATCH
+#endif
 
   switch (c) {
     case '+': return ActionScrollDown;
