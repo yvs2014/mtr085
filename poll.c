@@ -17,10 +17,12 @@
 */
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
 #include <errno.h>
 #include <time.h>
+#include <poll.h>
 
 #include "config.h" // IWYU pragma: keep
 #if defined(LOG_POLL) && !defined(LOGMOD)
@@ -45,10 +47,10 @@
 #define SCROLL_LINES 5
 #endif
 
-#define FD_BATCHMAX 30
+enum { FD_BATCHMAX = 30 };
 // between poll() calls
-#define MINSLEEP_USEC 10  // minimal pause, in microseconds
-#define PAUSE_MSEC 100    // when pause button is pressed, in milliseconds
+enum { MINSLEEP_USEC = 10 }; // in microseconds
+enum { PAUSE_MSEC = 100 };   // in milliseconds
 
 long numpings; // global
 
@@ -124,34 +126,36 @@ static int save_in_vacant_slot(int sock, int seq) {
 }
 
 static bool allocate_more_memory(void) {
-  size_t szi = (maxfd + FD_BATCHMAX) * sizeof(int);
-  void *mem = realloc(tcpseq, szi);
+  size_t tcpseq_size = (maxfd + FD_BATCHMAX) * sizeof(int);
+  void *mem = realloc(tcpseq, tcpseq_size);
   if (!mem) {
-    WARN("seq realloc(%zd)", szi);
+    WARN("seq realloc(%zd)", tcpseq_size);
     return false;
   }
   tcpseq = (int*)mem;
   memset(&tcpseq[maxfd], -1, FD_BATCHMAX * sizeof(int));
   //
-  size_t sz = (maxfd + FD_BATCHMAX) * sizeof(struct pollfd);
-  mem = realloc(allfds, sz);
+  size_t pollfd_size = (maxfd + FD_BATCHMAX) * sizeof(struct pollfd);
+  mem = realloc(allfds, pollfd_size);
   if (!mem) {
-    WARN("fd realloc(%zd)", sz);
+    WARN("fd realloc(%zd)", pollfd_size);
     return false;
   }
   allfds = (struct pollfd *)mem;
   memset(&allfds[maxfd], -1, FD_BATCHMAX * sizeof(struct pollfd));
   maxfd += FD_BATCHMAX;
-  LOGMSG("%zd bytes for %d slots added to pool", szi + sz, FD_BATCHMAX);
+  LOGMSG("%zd bytes for %d slots added to pool", tcpseq_size + pollfd_size, FD_BATCHMAX);
   return true;
 }
 
 int poll_reg_fd(int sock, int seq) {
   int slot = sock_already_accounted(sock);
   if (slot < 0) {
-    if ((slot = save_in_vacant_slot(sock, seq)) < 0) {
+    slot = save_in_vacant_slot(sock, seq);
+    if (slot < 0) {
       if (allocate_more_memory()) {
-        if ((slot = save_in_vacant_slot(sock, seq)) < 0)
+        slot = save_in_vacant_slot(sock, seq);
+        if (slot < 0)
           LOGMSG("sock=%d: assertion failed", sock);
       } else
         LOGMSG("sock=%d: memory allocation failed", sock);
@@ -256,7 +260,7 @@ static bool svc(struct timespec *last, const struct timespec *interval, int *tim
 }
 
 // proceed keyboard events and return action
-static int keyboard_events(int action) {
+static key_action_t keyboard_events(key_action_t action) {
   LOGMSG("action=%d", action);
   switch (action) {
     case ActionQuit:
@@ -268,9 +272,9 @@ static int keyboard_events(int action) {
       break;
 #if defined(CURSESMODE) || defined(GRAPHMODE)
     case ActionDisplay: {
-      int cm = (curses_mode + 1) % curses_mode_max;
-      LOGMSG("switch display mode: %d -> %d", curses_mode, cm);
-      curses_mode = cm;
+      int mode = (curses_mode + 1) % curses_mode_max;
+      LOGMSG("switch display mode: %d -> %d", curses_mode, mode);
+      curses_mode = mode;
       // chart bits
       CLRBIT(run_args, RA_DM0);
       CLRBIT(run_args, RA_DM1);
@@ -370,6 +374,8 @@ static void proceed_ipinfo() {
 #endif
       LOGMSG("query extra IP info");
       query_ipinfo();
+      break;
+    default: break;
   }
 }
 #endif
@@ -388,13 +394,11 @@ static int conclude(struct timespec *polled_at) {
   int rc = ActionNone;
   if (IN_ISSET(FD_STDIN)) { // check keyboard events
     LOGMSG("got stdin event");
-    int ev = display_key_action();
-    if (ev != ActionNone) {
-      ev = keyboard_events(ev);
-      if (ev == ActionQuit)
-        return ev; // return immediatelly if 'quit' is pressed
-      else if (ev == ActionPauseResume)
-        rc = ev;
+    key_action_t act = display_key_action();
+    if (act != ActionNone) {
+      act = keyboard_events(act);
+      if (act == ActionQuit) return act;
+      if (act == ActionPauseResume) rc = act;
     }
   }
   if (IN_ISSET(FD_NET)) { // net packet
@@ -421,18 +425,18 @@ static int conclude(struct timespec *polled_at) {
 }
 
 static bool seqfd_init(void) {
-  size_t sz = FD_MAX * sizeof(int);
-  tcpseq = malloc(sz);
+  size_t size = FD_MAX * sizeof(int);
+  tcpseq = malloc(size);
   if (!tcpseq) {
-    WARN("seq malloc(%zd)", sz);
+    WARN("seq malloc(%zd)", size);
     return false;
   }
-  memset(tcpseq, -1, sz);
+  memset(tcpseq, -1, size);
   //
-  sz = FD_MAX * sizeof(struct pollfd);
-  allfds = malloc(sz);
+  size = FD_MAX * sizeof(struct pollfd);
+  allfds = malloc(size);
   if (!allfds) {
-    WARN("fd malloc(%zd)", sz);
+    WARN("fd malloc(%zd)", size);
     free(tcpseq);
     tcpseq = NULL;
     return false;
@@ -474,9 +478,7 @@ int poll_loop(void) {
 
     struct timespec interval;
     waitspec(&interval);
-    int timeout;
-    int rv;
-
+    int timeout = 0, rv = 0;
     do {
       if ((anyset != ActionNone) || paused) {
         timeout = paused ? PAUSE_MSEC : 0;
@@ -515,7 +517,7 @@ int poll_loop(void) {
       anyset = conclude(&polled_now);
       if (anyset == ActionQuit)
         break;
-      else if (anyset == ActionPauseResume) {
+      if (anyset == ActionPauseResume) {
         paused = !paused;
         if (!paused) anyset = ActionNone;
       }
@@ -523,13 +525,11 @@ int poll_loop(void) {
       tcp_timedout(); // not waiting for TCP ETIMEDOUT
 #ifdef GRAPHMODE
     { // external triggers
-      int ev = display_extra_action();
-      if (ev != ActionNone) {
-        ev = keyboard_events(ev);
-        if (ev == ActionQuit)
-          break;
-        else if (ev == ActionPauseResume)
-          paused = !paused;
+      key_action_t act = display_ext_action();
+      if (act != ActionNone) {
+        act = keyboard_events(act);
+        if (act == ActionQuit) break;
+        if (act == ActionPauseResume) paused = !paused;
       }
     }
 #endif

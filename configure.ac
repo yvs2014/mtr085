@@ -172,7 +172,7 @@ AS_IF([test "x$output_json" != "xno"], [AC_DEFINE([OUTPUT_FORMAT_JSON], 1, [Supp
 
 AC_ARG_WITH([output_xml],
 	AS_HELP_STRING([--with-output-xml], [XML output format]),
-	[output_xml="${withval}"], [output_xml=no])
+	[output_xml="${withval}"], [output_xml=yes])
 AM_CONDITIONAL([OUTPUT_XML], [test "x$output_xml" = "xyes"])
 AS_IF([test "x$output_xml" != "xno"], [AC_DEFINE([OUTPUT_FORMAT_XML], 1, [Support XML output format])])
 

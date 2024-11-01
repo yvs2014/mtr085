@@ -28,15 +28,17 @@
 #endif
 
 #include <stdio.h>
+#include <stdint.h>
+#include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
 #include <strings.h>
 #include <libgen.h>
 #include <getopt.h>
+#include <err.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <limits.h>
-#include <sys/stat.h>
 #include <sys/stat.h>
 #include <netinet/in.h>
 
@@ -109,9 +111,9 @@
 #include "report.h"
 #endif
 
-#define REPORT_PINGS 100
-#define CACHE_TIMEOUT 60
-#define TCPSYN_TOUT_MAX 60
+enum { REPORT_PINGS    = 100 };
+enum { CACHE_TIMEOUT   = 60  };
+enum { TCPSYN_TOUT_MAX = 60  };
 
 //// global vars
 int mtrtype = IPPROTO_ICMP;   // ICMP as default packet type
@@ -135,7 +137,7 @@ bool endpoint_mode;           // -fa option, i.e. auto, corresponding to TTL of 
 bool cache_mode;              // don't ping known hops
 int cache_timeout = CACHE_TIMEOUT;  // cache timeout in seconds
 bool enable_stat_at_exit;
-int fstTTL = 1;	              // default start at first hop
+int fstTTL = 1;               // default start at first hop
 int maxTTL = 30;              // enough?
 int remoteport = -1;          // target port
 int tos;                      // type of service set in ping packet
@@ -144,7 +146,7 @@ int cpacketsize = 64;         // default packet size
 int syn_timeout = MIL;        // for TCP tracing (1sec in msec)
 int sum_sock[2];              // socket summary: open()/close() calls
 int last_neterr;              // last known network error
-char neterr_txt[ERRBYFN_SZ];  // buff for 'last_neterr'
+char neterr_txt[NAMELEN];     // buff for 'last_neterr'
 // chart related
 int display_offset;
 int curses_mode;              // 1st and 2nd bits, 3rd is reserved
@@ -235,7 +237,7 @@ static char *short_options;
 
 char srchost[NAMELEN];
 const char *dsthost;
-int display_mode = -1;
+display_mode_t display_mode = DisplayAuto;
 double wait_time = 1;
 bool interactive = true;
 long max_ping = REPORT_PINGS;  // 0 should be set explicitly
@@ -247,21 +249,14 @@ static const char *iface_addr;
 // If the file stream is associated with a regular file, lock/unlock the file
 // in order coordinate writes to a common file from multiple mtr instances
 static void locker(FILE *file, short type) {
-  if (!file)
-    return;
+  if (!file) return;
   int fd = fileno(file);
-  struct stat buf;
-  if (fstat(fd, &buf) < 0) {
-    WARN("fstat(%d)", fd);
-    return;
-  }
-  if (!S_ISREG(buf.st_mode))
-    return;
-  static struct flock l = { .l_whence = SEEK_END };
-  l.l_type = type;
-  l.l_pid = mypid;
-  if (fcntl(fd, F_SETLKW, &l) < 0)
-    WARN("fcntl(fd=%d, type=%d)", fd, type);
+  if (fd < 0) { WARN("fileno()"); return; }
+  { struct stat stat;
+    if (fstat(fd, &stat) < 0) { WARN("fstat(%d)", fd); return; }
+    if (!S_ISREG(stat.st_mode)) return; }
+  { struct flock lock = { .l_whence = SEEK_END, .l_type = type, .l_pid = mypid };
+    if (fcntl(fd, F_SETLKW, &lock) < 0) { WARN("fcntl(fd=%d, type=%d)", fd, type); return; }}
 }
 
 static int my_getopt_long(int argc, char *argv[], int *opt_ndx) {
@@ -269,11 +264,11 @@ static int my_getopt_long(int argc, char *argv[], int *opt_ndx) {
     short_options = calloc((sizeof(long_options) / sizeof(long_options[0])) * 2 + 1, 1);
     if (!short_options)
       return -1;
-    char *p = short_options;
+    char *ptr = short_options;
     for (int i = 0; long_options[i].name; i++) {
-      *p++ = (char)long_options[i].val;
+      *ptr++ = (char)long_options[i].val;
       if (long_options[i].has_arg)
-        *p++ = ':';
+        *ptr++ = ':';
     }
   }
   return getopt_long(argc, argv, short_options, long_options, opt_ndx);
@@ -323,6 +318,7 @@ static const char *get_opt_desc(char opt) {
 #ifdef GRAPHMODE
     case 'g': return "type,period,legend,multipath,jitter";
 #endif
+    default: break;
   }
   return NULL;
 }
@@ -330,18 +326,18 @@ static const char *get_opt_desc(char opt) {
 static void usage(const char *name) {
   char *bname = strdup(name);
   printf("Usage: %s [-", basename(bname));
-  int l = strlen(short_options);
-  for (int i = 0; i < l; i++)
+  size_t len = strlen(short_options);
+  for (size_t i = 0; i < len; i++)
     if (short_options[i] != ':')
       putchar(short_options[i]);
   printf("] TARGET[:PORT] ...\n");
   for (int i = 0; long_options[i].name; i++) {
     printf("\t[");
-    char c = (char)long_options[i].val;
-    if (c)
-      printf("-%c|", c);
+    char opt = (char)long_options[i].val;
+    if (opt)
+      printf("-%c|", opt);
     printf("--%s", long_options[i].name);
-    const char *desc = long_options[i].has_arg ? get_opt_desc(c) : NULL;
+    const char *desc = long_options[i].has_arg ? get_opt_desc(opt) : NULL;
     if (desc)
       printf(" %s", desc);
     printf("]\n");
@@ -349,32 +345,32 @@ static void usage(const char *name) {
   free(bname);
 }
 
-char limit_error[256];
+char limit_error[NAMELEN];
 int limit_int(int min, int max, int val, const char *what, char fail) {
   limit_error[0] = 0;
-  int lim = val, l = 0;
+  int lim = val, len = 0;
   if (val < min) {
     lim = min;
-    l = snprintf(limit_error, sizeof(limit_error), "%s is less than %d", what, min);
+    len = snprintf(limit_error, sizeof(limit_error), "%s is less than %d", what, min);
   } else if (val > max) {
     lim = max;
-    l = snprintf(limit_error, sizeof(limit_error), "%s is greater than %d", what, max);
+    len = snprintf(limit_error, sizeof(limit_error), "%s is greater than %d", what, max);
   }
   if (val != lim) {
     if (fail > 0) { warnx("%s", limit_error); errx(EXIT_FAILURE, "-%c option failed", fail); }
     else if (fail < 0) warnx("%s", limit_error);
-    else snprintf(limit_error + l, sizeof(limit_error) - l, ", corrected(%d -> %d)", val, lim);
+    else snprintf(limit_error + len, sizeof(limit_error) - len, ", corrected(%d -> %d)", val, lim);
   }
   return lim;
 }
 
 #ifdef ENABLE_DNS
 static bool set_custom_res(struct addrinfo *ns) {
-  if (ns && ns->ai_addr && ns->ai_family &&
+  if (ns && ns->ai_addr && (
 #ifdef ENABLE_IPV6
-      ((ns->ai_family == AF_INET6) ? addr6exist(&((struct sockaddr_in6 *)ns->ai_addr)->sin6_addr) :
+       (ns->ai_family == AF_INET6) ? addr6exist(&((struct sockaddr_in6 *)ns->ai_addr)->sin6_addr) :
 #endif
-      ((ns->ai_family == AF_INET) ? addr4exist(&((struct sockaddr_in *)ns->ai_addr)->sin_addr) : false))) {
+      ((ns->ai_family == AF_INET)  ? addr4exist(&((struct sockaddr_in *)ns->ai_addr)->sin_addr) : false))) {
     if (custom_res) { free(custom_res); WARNX("NS is aready set, setting a new one ..."); }
     custom_res = malloc(sizeof(*custom_res));
     if (custom_res) {
@@ -383,7 +379,7 @@ static bool set_custom_res(struct addrinfo *ns) {
 #ifdef ENABLE_IPV6
         (ns->ai_family == AF_INET6) ? &custom_res->S6PORT :
 #endif
-        ((ns->ai_family == AF_INET) ? &custom_res->S_PORT : NULL);
+       ((ns->ai_family == AF_INET)  ? &custom_res->S_PORT : NULL);
       if (port && !*port) *port = htons(53);
       return true;
     }
@@ -432,15 +428,119 @@ static bool split_hostport(char *buff, char* hostport[2]) {
 #define TOS4TOS(what) NOOP
 #endif
 
-static void parse_options(int argc, char **argv) {
-  SETBIT(kept_args, RA_DNS); // dns is on by default
+#if defined(CURSESMODE) || defined(GRAPHMODE)
+static inline void option_d(void) {
+  int val = atoi(optarg);
+  curses_mode = (val & ~8) % curses_mode_max;
+  enable_color = val & 8;
+  bell_audible = val & 16;
+  bell_visible = val & 32;
+  bell_target  = val & 64;
+  // chart mode bits
+  if (val & 1) kept_args |= RA_DM0;
+  if (val & 2) kept_args |= RA_DM1;
+}
+#endif
 
-  while (1) {
-    int opt = my_getopt_long(argc, argv, NULL);
-    if (opt == -1)
+static inline void option_F(char opt) {
+  if (strlen(optarg) >= sizeof(fld_active))
+    FAIL("-%c: Too many fields (max=%zd): %s", opt, sizeof(fld_active) - 1, optarg);
+  for (int i = 0; optarg[i]; i++) {
+    int cnt = 0;
+    for (; cnt < statf_max; cnt++)
+      if (optarg[i] == statf[cnt].key)
+        break;
+    if (cnt >= statf_max)
+      FAIL("-%c: Unknown field identifier '%c'", opt, optarg[i]);
+  }
+  set_fld_active(optarg);
+}
+
+#ifdef ENABLE_DNS
+static inline void option_N(void) {
+  char buff[MAX_ADDRSTRLEN + 6/*:port*/] = {0};
+  STRLCPY(buff, optarg, sizeof(buff));
+  char* hostport[2] = {0};
+  if (!split_hostport(buff, hostport)) FAIL("Failed to parse NS(%s)", buff);
+  if (!hostport[1]) hostport[1] = "53";
+  struct addrinfo *ns = NULL, hints = {
+    .ai_family   = AF_UNSPEC,
+    .ai_socktype = SOCK_DGRAM,
+    .ai_flags    = AI_NUMERICHOST | AI_NUMERICSERV };
+  int rc = getaddrinfo(hostport[0], hostport[1], &hints, &ns);
+  if (rc || !ns) {
+    if (rc == EAI_SYSTEM) FAIL("getaddrinfo()");
+    FAIL("Failed to set NS(%s): %s", optarg, gai_strerror(rc));
+  }
+  if (!set_custom_res(ns)) FAIL("Failed to set NS(%s)", optarg);
+  freeaddrinfo(ns);
+}
+#endif
+
+#ifdef OUTPUT_FORMAT
+static inline void option_o(const char *progname) {
+  if (max_ping <= 0) max_ping = REPORT_PINGS;
+  switch (tolower((int)optarg[0])) {
+#ifdef OUTPUT_FORMAT_RAW
+    case 'r':
+      display_mode = DisplayRaw;
+      enable_raw = true;
       break;
+#endif
+#ifdef OUTPUT_FORMAT_TXT
+    case 't':
+      display_mode = DisplayTXT;
+      break;
+#endif
+#ifdef OUTPUT_FORMAT_CSV
+    case 'c':
+      display_mode = DisplayCSV;
+      break;
+#endif
+#ifdef OUTPUT_FORMAT_JSON
+    case 'j':
+      display_mode = DisplayJSON;
+      break;
+#endif
+#ifdef OUTPUT_FORMAT_XML
+    case 'x':
+      display_mode = DisplayXML;
+      break;
+#endif
+    default:
+      usage(progname);
+      exit(EXIT_FAILURE);
+  }
+}
+#endif
 
-    switch (opt) {
+static inline void ineractive_modes(display_mode_t mode) {
+  switch (mode) {
+    case DisplayReport:
+#ifdef OUTPUT_FORMAT_RAW
+    case DisplayRaw:
+#endif
+#ifdef OUTPUT_FORMAT_TXT
+    case DisplayTXT:
+#endif
+#ifdef OUTPUT_FORMAT_CSV
+    case DisplayCSV:
+#endif
+#ifdef OUTPUT_FORMAT_JSON
+    case DisplayJSON:
+#endif
+#ifdef OUTPUT_FORMAT_XML
+    case DisplayXML:
+#endif
+      interactive = false;
+      break;
+    default: break;
+  }
+}
+
+
+static inline void short_set(char opt, const char *progname) {
+  switch (opt) {
 #ifdef ENABLE_IPV6
     case '4':
       net_settings(IPV6_DISABLED);
@@ -451,9 +551,6 @@ static void parse_options(int argc, char **argv) {
       af_specified = true;
       break;
 #endif
-    case '?':
-      usage(argv[0]);
-      exit(EXIT_FAILURE);
     case 'a':
       iface_addr = optarg;
       break;
@@ -463,23 +560,15 @@ static void parse_options(int argc, char **argv) {
       break;
 #endif
     case 'B':
-      cbitpattern = limit_int(-1, 255, atoi(optarg), "Bit Pattern", opt);
+      cbitpattern = limit_int(-1, UCHAR_MAX, atoi(optarg), "Bit Pattern", opt);
       break;
     case 'c':
       max_ping = atol(optarg);
       break;
 #if defined(CURSESMODE) || defined(GRAPHMODE)
-    case 'd': {
-      int v = atoi(optarg);
-      curses_mode = (v & ~8) % curses_mode_max;
-      enable_color = v & 8;
-      bell_audible = v & 16;
-      bell_visible = v & 32;
-      bell_target  = v & 64;
-      // chart mode bits
-      if (v & 1) kept_args |= RA_DM0;
-      if (v & 2) kept_args |= RA_DM1;
-      } break;
+    case 'd':
+      option_d();
+      break;
 #endif
 #ifdef WITH_MPLS
     case 'e':
@@ -488,24 +577,11 @@ static void parse_options(int argc, char **argv) {
       break;
 #endif
     case 'f':
-      if (optarg[0] == 'a') {
-        endpoint_mode = true;
-        break;
-      }
-      fstTTL = limit_int(1, maxTTL, atoi(optarg), "First TTL", opt);
+      if (optarg[0] == 'a') endpoint_mode = true;
+      else fstTTL = limit_int(1, maxTTL, atoi(optarg), "First TTL", opt);
       break;
     case 'F':
-      if (strlen(optarg) >= sizeof(fld_active))
-        FAIL("-F: Too many fields (max=%zd): %s", sizeof(fld_active) - 1, optarg);
-      for (int i = 0; optarg[i]; i++) {
-        int j = 0;
-        for (; j < statf_max; j++)
-          if (optarg[i] == statf[j].key)
-            break;
-        if (j >= statf_max)
-          FAIL("-F: Unknown field identifier '%c'", optarg[i]);
-      }
-      set_fld_active(optarg);
+      option_F(opt);
       break;
 #ifdef GRAPHMODE
     case 'g':
@@ -514,9 +590,6 @@ static void parse_options(int argc, char **argv) {
       display_mode = DisplayGraphCairo;
       break;
 #endif
-    case 'h':
-      usage(argv[0]);
-      exit(EXIT_SUCCESS);
     case 'i':
       wait_time = limit_int(1, INT_MAX, atoi(optarg), "interval", opt);
       break;
@@ -528,59 +601,13 @@ static void parse_options(int argc, char **argv) {
       enable_dns = false;
       CLRBIT(kept_args, RA_DNS);
       break;
-    case 'N': {
-      char buff[MAX_ADDRSTRLEN + 6/*:port*/] = {0};
-      STRLCPY(buff, optarg, sizeof(buff));
-      char* hostport[2] = {0};
-      if (!split_hostport(buff, hostport)) FAIL("Failed to parse NS(%s)", buff);
-      if (!hostport[1]) hostport[1] = "53";
-      struct addrinfo *ns, hints = {
-        .ai_family   = AF_UNSPEC,
-        .ai_socktype = SOCK_DGRAM,
-        .ai_flags    = AI_NUMERICHOST | AI_NUMERICSERV };
-      int rc = getaddrinfo(hostport[0], hostport[1], &hints, &ns);
-      if (rc || !ns) {
-        if (rc == EAI_SYSTEM) FAIL("getaddrinfo()");
-        FAIL("Failed to set NS(%s): %s", optarg, gai_strerror(rc));
-      }
-      if (!set_custom_res(ns)) FAIL("Failed to set NS(%s)", optarg);
-      freeaddrinfo(ns);
-    } break;
+    case 'N':
+      option_N();
+      break;
 #endif
 #ifdef OUTPUT_FORMAT
     case 'o':
-      if (max_ping <= 0) max_ping = REPORT_PINGS;
-      switch (tolower((int)optarg[0])) {
-#ifdef OUTPUT_FORMAT_RAW
-        case 'r':
-          display_mode = DisplayRaw;
-          enable_raw = true;
-          break;
-#endif
-#ifdef OUTPUT_FORMAT_TXT
-        case 't':
-          display_mode = DisplayTXT;
-          break;
-#endif
-#ifdef OUTPUT_FORMAT_CSV
-        case 'c':
-          display_mode = DisplayCSV;
-          break;
-#endif
-#ifdef OUTPUT_FORMAT_JSON
-        case 'j':
-          display_mode = DisplayJSON;
-          break;
-#endif
-#ifdef OUTPUT_FORMAT_XML
-        case 'x':
-          display_mode = DisplayXML;
-          break;
-#endif
-        default:
-          usage(argv[0]);
-          exit(EXIT_FAILURE);
-      }
+      option_o(progname);
       break;
 #endif
 #ifdef SPLITMODE
@@ -590,7 +617,7 @@ static void parse_options(int argc, char **argv) {
 #endif
 #ifdef IP_TOS
     case 'q':
-      tos = limit_int(0, 255, atoi(optarg), "Type of Service (ToS)", opt);
+      tos = limit_int(0, UCHAR_MAX, atoi(optarg), "Type of Service (ToS)", opt);
       TOS4TOS("option -q");
       break;
 #endif
@@ -599,9 +626,9 @@ static void parse_options(int argc, char **argv) {
       if (max_ping <= 0) max_ping = REPORT_PINGS;
       break;
     case 's': {
-      int sz = atoi(optarg);
-      cpacketsize = limit_int(MINPACKET, MAXPACKET, abs(sz), "Packet size", opt);
-      if (sz < 0) cpacketsize = -cpacketsize;
+      int size = atoi(optarg);
+      cpacketsize = limit_int(MINPACKET, MAXPACKET, abs(size), "Packet size", opt);
+      if (size < 0) cpacketsize = -cpacketsize;
     } break;
     case 'S':
       enable_stat_at_exit = true;
@@ -654,76 +681,69 @@ static void parse_options(int argc, char **argv) {
       break;
 #endif
     default:
-      usage(argv[0]);
-      exit(EXIT_FAILURE);
-    }
-  }
-  run_args = kept_args; // for displaying runtime changes
-
-  for (int i = 1, l = 0; (i < optind) && (l < ARGS_LEN); i++)
-    l += snprintf(mtr_args + l, ARGS_LEN - l, (i != 1) ? " %s" : "%s" , argv[i]);
-
-  switch (display_mode) {
-    case DisplayReport:
-#ifdef OUTPUT_FORMAT_RAW
-    case DisplayRaw:
-#endif
-#ifdef OUTPUT_FORMAT_TXT
-    case DisplayTXT:
-#endif
-#ifdef OUTPUT_FORMAT_CSV
-    case DisplayCSV:
-#endif
-#ifdef OUTPUT_FORMAT_JSON
-    case DisplayJSON:
-#endif
-#ifdef OUTPUT_FORMAT_XML
-    case DisplayXML:
-#endif
-      interactive = false;
+      usage(progname);
+      exit((opt == 'h') ? EXIT_SUCCESS : EXIT_FAILURE);
   }
 }
 
 
-static bool set_target(struct addrinfo *res) {
-  struct addrinfo *ai;
+static void parse_options(int argc, char **argv) {
+  SETBIT(kept_args, RA_DNS); // dns is on by default
+  int opt = 0;
+  while ((opt = my_getopt_long(argc, argv, NULL)) >= 0)
+    short_set((char)opt, argv[0]);
+  run_args = kept_args;      // to display runtime changes
+  for (int i = 1, len = 0; (i < optind) && (len < ARGS_LEN); i++)
+    len += snprintf(mtr_args + len, ARGS_LEN - len, (i > 1) ? " %s" : "%s", argv[i]);
+  ineractive_modes(display_mode);
+}
+
+static inline const struct addrinfo* find_ai_af(const struct addrinfo *res) {
+  const struct addrinfo *ai = NULL;
+  for (ai = res; ai; ai = ai->ai_next)
+    if (ai->ai_family == af) // desired AF
+      break;
+  if (ai && (ai->ai_family != af)) ai = NULL; // unsuitable AF
+  if (!ai) // not found
+    warnx("target(%s): No address found for IPv%c (AF %d)", dsthost, af == AF_INET ? '4' : '6', af);
+  return ai;
+}
+
 #ifdef ENABLE_IPV6
-  if (af_specified) {
-#endif
-    for (ai = res; ai; ai = ai->ai_next)
-      if (ai->ai_family == af)  // use only the desired AF
-        break;
-    if (!ai || (ai->ai_family != af)) {  // not found
-      warnx("target(%s): No address found for IPv%c (AF %d)", dsthost, af == AF_INET ? '4' : '6', af);
-      return false;
-    }
-#ifdef ENABLE_IPV6
-  } else { // preference: first ipv4, second ipv6
-    for (ai = res; ai; ai = ai->ai_next) if (ai->ai_family == AF_INET) break;
-    if (!ai)
-      for (ai = res; ai; ai = ai->ai_next) if (ai->ai_family == AF_INET6) break;
-    if (!ai) {
-      warnx("target(%s): No address found", dsthost);
-      return false;
-    }
-    if (af != ai->ai_family) {
-      af = ai->ai_family;
-      net_settings((af == AF_INET6) ? IPV6_ENABLED : IPV6_DISABLED);
-    }
+static inline const struct addrinfo* find_ai_pref(const struct addrinfo *res) {
+  // preference: first ipv4, second ipv6
+  const struct addrinfo *ai = NULL;
+  for (ai = res; ai; ai = ai->ai_next) if (ai->ai_family == AF_INET) break;
+  if (!ai)
+    for (ai = res; ai; ai = ai->ai_next) if (ai->ai_family == AF_INET6) break;
+  if (!ai) warnx("target(%s): No address found", dsthost);
+  else if (af != ai->ai_family) {
+    af = ai->ai_family;
+    net_settings((af == AF_INET6) ? IPV6_ENABLED : IPV6_DISABLED);
   }
+  return ai;
+}
 #endif
 
+static bool set_target(const struct addrinfo *res) {
+  const struct addrinfo *ai =
+#ifdef ENABLE_IPV6
+    !af_specified ? find_ai_pref(res) :
+#endif
+    find_ai_af(res);
+  if (!ai) return false;
+  //
   t_ipaddr *ipaddr =
 #ifdef ENABLE_IPV6
     (af == AF_INET6) ? (t_ipaddr*)&((struct sockaddr_in6 *)ai->ai_addr)->sin6_addr :
 #endif
-    ((af == AF_INET) ? (t_ipaddr*)&((struct sockaddr_in *)ai->ai_addr)->sin_addr : NULL);
+    ((af == AF_INET) ? (t_ipaddr*)&((struct sockaddr_in  *)ai->ai_addr)->sin_addr  : NULL);
   if (!af || !ipaddr || !net_set_host(ipaddr)) {
     WARNX("Unable to set host entry (af=%d)", af);
     return false;
   }
   if (iface_addr && !net_set_ifaddr(iface_addr)) {
-    WARNX("Unable to set interface address(%s)", iface_addr);
+    WARNX("Unable to use address(%s)", iface_addr);
     return false;
   }
   return true;
@@ -747,14 +767,14 @@ void autotest_unicode_print(void) {
 
 #ifdef LIBCAP
 static bool reset_caps(void) {
-  bool re = false;
+  bool set = false;
   cap_t cap = cap_init();
   if (cap) {
-    re = cap_set_proc(cap) == 0;
-    if (!re) WARN("cap_set_proc");
+    set = cap_set_proc(cap) == 0;
+    if (!set) warn("cap_set_proc()");
     cap_free(cap);
-  } else WARN("cap_init");
-  return re;
+  } else warn("cap_init()");
+  return set;
 }
 #endif
 
@@ -793,39 +813,52 @@ static void try_to_resolv(t_res_rc *rr) {
 #endif
 }
 
+static inline void resolv_with_port(t_res_rc *rr, t_res_rc *rr_init) {
+  if (!rr) return;
+  char buff[MAX_ADDRSTRLEN + 6/*:port*/] = {0};
+  STRLCPY(buff, dsthost, sizeof(buff));
+  char* hostport[2] = {0};
+  if (split_hostport(buff, hostport)) {
+    limit_error[0] = 0;
+    if (hostport[1]) remoteport = limit_int(1, USHRT_MAX, atoi(hostport[1]), "port number", -1);
+    if (!limit_error[0] && hostport[0] && rr_init) {
+      *rr = *rr_init; rr->target = hostport[0];
+      try_to_resolv(rr);
+    }
+  } else warn("Failed to parse(%s)", buff);
+}
 
-int main(int argc, char **argv) {
-  if (!net_open()) // get raw sockets
-    FAIL("Unable to get raw sockets");
-  if (setgid(getgid()) || setuid(getuid())) // drop permissions if that's set
-    ERRR(EXIT_FAILURE, "Unable to drop permissions");
-  if ((geteuid() != getuid()) || (getegid() != getgid())) // just in case
-    FAIL("Unable to drop permissions");
-#ifdef LIBCAP
-  if (!reset_caps())
-    FAIL("Unable to reset capabilities");
+static inline void stat_fin(void) {
+  printf("SOCKET: %u opened, %u closed\n", sum_sock[0], sum_sock[1]);
+  printf("NET: %lu queries (%lu icmp, %lu udp, %lu tcp), %lu replies (%lu icmp, %lu udp, %lu tcp)\n",
+    net_queries[0], net_queries[1], net_queries[2], net_queries[3],
+    net_replies[0], net_replies[1], net_replies[2], net_replies[3]);
+#ifdef ENABLE_DNS
+  printf("DNS: %u queries (%u ptr, %u txt), %u replies (%u ptr, %u txt)\n",
+    dns_queries[0], dns_queries[1], dns_queries[2],
+    dns_replies[0], dns_replies[1], dns_replies[2]);
 #endif
-  net_assert();
+#ifdef WITH_IPINFO
+  printf("IPINFO: %u queries (%u http, %u whois), %u replies (%u http, %u whois)\n",
+    ipinfo_queries[0], ipinfo_queries[1], ipinfo_queries[2],
+    ipinfo_replies[0], ipinfo_replies[1], ipinfo_replies[2]);
+#endif
+}
 
+static inline void main_prep(int argc, char **argv) {
+  net_assert();
   mypid = getpid();
 #ifndef HAVE_ARC4RANDOM_UNIFORM
   srand(mypid); // reset the random seed
 #endif
-
   for (int i = 0; i < statf_max; i++)
     fld_index[(uint8_t)statf[i].key] = i;
-
 #ifdef WITH_UNICODE
   autotest_unicode_print();
 #endif
   set_fld_active(NULL);
   parse_options(argc, argv);
-
-  if (optind >= argc) {
-    usage(argv[0]);
-    exit(EXIT_SUCCESS);
-  }
-
+  if (optind >= argc) { usage(argv[0]); exit(EXIT_SUCCESS); }
 #ifdef WITH_SYSLOG
   openlog(PACKAGE_NAME, LOG_PID, LOG_USER);
 #endif
@@ -839,50 +872,29 @@ int main(int argc, char **argv) {
   if (gethostname(srchost, sizeof(srchost)))
     STRLCPY(srchost, "UNKNOWN", sizeof(srchost));
   display_start();
+}
 
-  int defport = remoteport;
-  bool first = true, set_target_success = false;
-  for (; optind < argc; optind++) {
-    if (!(dsthost = argv[optind]))
-      continue;
-    remoteport = defport;
-    t_res_rc rr0 = {.hints = {.ai_family = AF_UNSPEC, .ai_socktype = SOCK_DGRAM,
-#ifdef AI_IDN
-      .ai_flags = AI_IDN,
-#endif
-    }};
-    t_res_rc rr = rr0; rr.target = dsthost;
-    try_to_resolv(&rr);
-    if (rr.rc && ((mtrtype == IPPROTO_TCP) || (mtrtype == IPPROTO_UDP))) {
-      char buff[MAX_ADDRSTRLEN + 6/*:port*/] = {0};
-      STRLCPY(buff, dsthost, sizeof(buff));
-      char* hostport[2] = {0};
-      if (split_hostport(buff, hostport)) {
-        limit_error[0] = 0;
-        if (hostport[1]) remoteport = limit_int(1, 65535, atoi(hostport[1]), "port number", -1);
-        if (!limit_error[0] && hostport[0]) {
-          rr = rr0; rr.target = hostport[0];
-          try_to_resolv(&rr);
-        }
-      } else warn("Failed to parse(%s)", buff);
+static inline bool main_loop(struct addrinfo *ai) {
+  static bool next_target;
+  bool success = false;
+  if (ai) {
+    success = set_target(ai);
+    if (success) {
+      TOS4TOS(dsthost);
+      locker(stdout, F_WRLCK);
+      if (display_open(next_target)) display_loop();
+      else WARNX("Unable to open display");
+      net_end_transit();
+      display_close(next_target);
+      locker(stdout, F_UNLCK);
+      if (!next_target) next_target = true;
     }
-    if (rr.rc)
-      warnx("Failed to resolve(%s): %s", dsthost, rr.error ? rr.error : "Unknown error");
-    else if (rr.res) {
-      if ((set_target_success = set_target(rr.res))) {
-        TOS4TOS(dsthost);
-        locker(stdout, F_WRLCK);
-        if (display_open(!first)) display_loop();
-        else WARNX("Unable to open display");
-        net_end_transit();
-        display_close(!first);
-        locker(stdout, F_UNLCK);
-      }
-      freeaddrinfo(rr.res);
-    } else warnx("Cannot get resolv data(%s)", dsthost);
-    if (first) first = false;
-  }
+    freeaddrinfo(ai);
+  } else warnx("Cannot get resolv data(%s)", dsthost);
+  return success;
+}
 
+static inline void main_fin(void) {
   display_final();
 #ifdef WITH_IPINFO
   ipinfo_close();
@@ -894,26 +906,48 @@ int main(int argc, char **argv) {
 #ifdef WITH_SYSLOG
   closelog();
 #endif
-
-  if (enable_stat_at_exit) {
-    printf("SOCKET: %u opened, %u closed\n", sum_sock[0], sum_sock[1]);
-    printf("NET: %lu queries (%lu icmp, %lu udp, %lu tcp), %lu replies (%lu icmp, %lu udp, %lu tcp)\n",
-      net_queries[0], net_queries[1], net_queries[2], net_queries[3],
-      net_replies[0], net_replies[1], net_replies[2], net_replies[3]);
-#ifdef ENABLE_DNS
-    printf("DNS: %u queries (%u ptr, %u txt), %u replies (%u ptr, %u txt)\n",
-      dns_queries[0], dns_queries[1], dns_queries[2],
-      dns_replies[0], dns_replies[1], dns_replies[2]);
-#endif
-#ifdef WITH_IPINFO
-    printf("IPINFO: %u queries (%u http, %u whois), %u replies (%u http, %u whois)\n",
-      ipinfo_queries[0], ipinfo_queries[1], ipinfo_queries[2],
-      ipinfo_replies[0], ipinfo_replies[1], ipinfo_replies[2]);
-#endif
-  }
-
+  if (enable_stat_at_exit) stat_fin();
   if (last_neterr && (display_mode == DisplayCurses))
     warnx("%s", neterr_txt); // duplicate an error cleaned by ncurses
-  return last_neterr || !set_target_success;
+}
+
+
+int main(int argc, char **argv) {
+  if (!net_open()) // get raw sockets
+    FAIL("Unable to get raw sockets");
+  if (setgid(getgid()) || setuid(getuid())) // drop permissions if that's set
+    ERRR(EXIT_FAILURE, "Unable to drop permissions");
+  if ((geteuid() != getuid()) || (getegid() != getgid())) // just in case
+    FAIL("Unable to drop permissions");
+#ifdef LIBCAP
+  if (!reset_caps())
+    FAIL("Unable to reset capabilities");
+#endif
+
+  main_prep(argc, argv);
+
+  t_res_rc rr_init = {.hints = {.ai_family = AF_UNSPEC, .ai_socktype = SOCK_DGRAM,
+#ifdef AI_IDN
+    .ai_flags = AI_IDN,
+#endif
+    }};
+  int defport = remoteport;
+  bool success = false;
+  for (; (optind < argc) && argv[optind]; optind++) {
+    dsthost = argv[optind];
+    remoteport = defport;
+    t_res_rc rr = rr_init;
+    rr.target = dsthost;
+    try_to_resolv(&rr);
+    if (rr.rc && ((mtrtype == IPPROTO_TCP) || (mtrtype == IPPROTO_UDP)))
+      resolv_with_port(&rr, &rr_init);
+    if (rr.rc)
+      warnx("Failed to resolve(%s): %s", dsthost, rr.error ? rr.error : "Unknown error");
+    else
+      success = main_loop(rr.res);
+  }
+
+  main_fin();
+  return last_neterr || !success;
 }
 

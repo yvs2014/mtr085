@@ -2,20 +2,25 @@
 #define COMMON_H
 
 #include <stdbool.h>
+#include <stdlib.h>
 #include <unistd.h>
 #include <err.h>
-#include <stdlib.h>
 #include <sys/time.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 
 #ifndef INET_ADDRSTRLEN
-#define INET_ADDRSTRLEN	16
+#define INET_ADDRSTRLEN  16
 #endif
 #ifndef INET6_ADDRSTRLEN
-#define INET6_ADDRSTRLEN	46
+#define INET6_ADDRSTRLEN 46
 #endif
 #define MAX_ADDRSTRLEN INET6_ADDRSTRLEN
+
+// wrapper: __has_attribute
+#ifndef __has_attribute
+#define __has_attribute(attr) 0
+#endif
 
 #include "config.h"
 
@@ -62,22 +67,64 @@ typedef struct statf {
   const char key;
 } t_statf;
 
-#define NAMELEN 256
-#define MAXLABELS 8
-#define MAXFLD   20  // max fields in custom set to display stats
+enum {
+  MAXLABELS = 8, // mpls labels
+  MAXFLD = 20,   // fields in custom set to display stats
+  NAMELEN = 256,
+};
+
+typedef enum {
+  DisplayAuto, // curses mode if available, otherwise split mode
+  DisplayReport,
+  DisplayCurses,
+  DisplaySplit,
+#ifdef GRAPHMODE
+  DisplayGraphCairo,
+#endif
+#ifdef OUTPUT_FORMAT_RAW
+  DisplayRaw,
+#endif
+#ifdef OUTPUT_FORMAT_TXT
+  DisplayTXT,
+#endif
+#ifdef OUTPUT_FORMAT_CSV
+  DisplayCSV,
+#endif
+#ifdef OUTPUT_FORMAT_JSON
+  DisplayJSON,
+#endif
+#ifdef OUTPUT_FORMAT_XML
+  DisplayXML,
+#endif
+} display_mode_t;
+
+typedef enum { ActionNone, ActionQuit, ActionReset, ActionDisplay,
+  ActionClear, ActionPauseResume, ActionScrollDown, ActionScrollUp,
+  ActionUDP, ActionTCP, ActionCache,
+#ifdef WITH_MPLS
+  ActionMPLS,
+#endif
+#ifdef ENABLE_DNS
+  ActionDNS,
+#endif
+#ifdef WITH_IPINFO
+  ActionAS, ActionII,
+#endif
+} key_action_t;
 
 // misc
 #define MIL   1000
 #define MICRO 1000000
 #define NANO  1000000000
 #define UNKN_ITEM "???"
+#define AT_FMT "%2d."
 #define GCDEBUG  // graphcairo output to console
 
-#define SETBIT(a, n) { a |= 1 << (n);}
-#define CLRBIT(a, n) { a &= ~(1 << (n));}
-#define TGLBIT(a, n) { a ^= 1 << (n);}
-#define CHKBIT(a, n) (((a) >> (n)) & 1)
-#define NEQBIT(a, b, n) (((a) ^ (b)) & (1 << (n)))
+#define SETBIT(a, n) { (a) |= 1U << (n);}
+#define CLRBIT(a, n) { (a) &= ~(1U << (n));}
+#define TGLBIT(a, n) { (a) ^= 1U << (n);}
+#define CHKBIT(a, n) (((a) >> (n)) & 1U)
+#define NEQBIT(a, b, n) (((a) ^ (b)) & (1U << (n)))
 
 #define NOOP ((void)0)
 
@@ -129,8 +176,8 @@ typedef struct statf {
 #define time2msec(t) ((t).tv_sec * MIL + (t).tv_nsec / MICRO)
 #define time2mfrac(t) ((t).tv_nsec % MICRO)
 #define time2usec(t) ((t).tv_sec * MICRO + (t).tv_nsec / MIL)
-#define mseccmp(a, b, CMP) (((a).ms == (b).ms) ? ((a).frac CMP (b).frac) : ((a).ms CMP (b).ms))
-#define msec2float(a)        ((a).ms          + (a).frac              / (double)MICRO)
+#define mseccmp(a, b, CMP)  (((a).ms == (b).ms) ? ((a).frac CMP (b).frac) : ((a).ms CMP (b).ms))
+#define msec2float(a)        ((a).ms          +  (a).frac             / (double)MICRO)
 #define float_sub_msec(a, b) ((a).ms - (b).ms + ((a).frac - (b).frac) / (double)MICRO)
 
 // just in case (usually defined in sys/time.h)
@@ -167,7 +214,7 @@ typedef struct statf {
 // externs
 extern int mtrtype;        // default packet type
 
-extern int display_mode;
+extern display_mode_t display_mode;
 extern bool report_wide;
 extern double wait_time;
 
@@ -185,7 +232,6 @@ extern int cpacketsize;    // default packet size, or user defined
 extern int syn_timeout;    // timeout for TCP connections
 extern int sum_sock[];     // summary open()/close() calls for sockets
 
-#define ERRBYFN_SZ 80
 extern int last_neterr;    // last known network error ...
 extern char neterr_txt[];  // ... with this text
 

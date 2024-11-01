@@ -21,7 +21,7 @@
 
 #include <stdbool.h>
 
-void report_open(bool notfirst);
+void report_open(bool next);
 void report_close(bool wide);
 #ifdef OUTPUT_FORMAT_RAW
 extern bool enable_raw;
@@ -29,10 +29,10 @@ void raw_rawping(int at, int usec);
 void raw_rawhost(int at, t_ipaddr *ipaddr);
 #endif
 #ifdef OUTPUT_FORMAT_TXT
-void txt_close(bool notfirst);
+void txt_close(bool next);
 #endif
 #ifdef OUTPUT_FORMAT_CSV
-void csv_close(bool notfirst);
+void csv_close(bool next);
 #endif
 #ifdef OUTPUT_FORMAT_XML
 void xml_close(void);
@@ -40,7 +40,7 @@ void xml_head(void);
 void xml_tail(void);
 #endif
 #ifdef OUTPUT_FORMAT_JSON
-void json_close(bool notfirst);
+void json_close(bool next);
 void json_head(void);
 void json_tail(void);
 #endif

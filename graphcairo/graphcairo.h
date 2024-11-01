@@ -11,7 +11,7 @@
 #endif
 
 #define POS_ROUND(x) ((int)((x) + 0.5))
-#define ACTION_RESIZE -1
+#define ACTION_RESIZE (-1)
 
 typedef struct {
   int graph_type;

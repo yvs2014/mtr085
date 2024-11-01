@@ -11,7 +11,7 @@ option('OUTRAW',    type: 'boolean', value: false, description: 'Output: format 
 option('OUTTXT',    type: 'boolean', value: true,  description: 'Output: format text')
 option('OUTCSV',    type: 'boolean', value: true,  description: 'Output: format csv')
 option('OUTJSON',   type: 'boolean', value: true,  description: 'Output: format json')
-option('OUTXML',    type: 'boolean', value: false, description: 'Output: format xml')
+option('OUTXML',    type: 'boolean', value: true,  description: 'Output: format xml')
 option('DEBPOLL',   type: 'boolean', value: false, description: 'Debug: syslog poll')
 option('DEBNET',    type: 'boolean', value: false, description: 'Debug: syslog net')
 option('DEBDNS',    type: 'boolean', value: false, description: 'Debug: syslog dns')

@@ -6,8 +6,8 @@
 
 #if CAIRO_VERSION < CAIRO_VERSION_ENCODE(1, 10, 0)
 typedef struct {
-	int x, y;
-	int width, height;
+  int x, y;
+  int width, height;
 } cairo_rectangle_int_t;
 #endif
 

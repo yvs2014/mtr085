@@ -18,8 +18,8 @@
 
 #include "mtr-poll.h"
 #include "common.h"
-#include "report.h"
 #include "display.h"
+#include "report.h"
 #ifdef CURSESMODE
 #include "mtr-curses.h"
 #endif
@@ -30,9 +30,9 @@
 #include "graphcairo-mtr.h"
 #endif
 
-bool display_open(bool notfirst) {
+bool display_open(bool next) {
   switch (display_mode) {
-    case DisplayReport: report_open(notfirst); break;
+    case DisplayReport: report_open(next); break;
 #ifdef CURSESMODE
     case DisplayCurses: return mc_open();
 #endif
@@ -42,11 +42,12 @@ bool display_open(bool notfirst) {
 #ifdef GRAPHMODE
     case DisplayGraphCairo: return gc_open();
 #endif
+    default: break;
   }
   return true;
 }
 
-void display_close(bool notfirst) {
+void display_close(bool next) {
   switch (display_mode) {
     case DisplayReport: report_close(report_wide); break;
 #ifdef CURSESMODE
@@ -59,22 +60,23 @@ void display_close(bool notfirst) {
     case DisplayGraphCairo: gc_close(); break;
 #endif
 #ifdef OUTPUT_FORMAT_TXT
-    case DisplayTXT: txt_close(notfirst); break;
+    case DisplayTXT: txt_close(next); break;
 #endif
 #ifdef OUTPUT_FORMAT_CSV
-    case DisplayCSV: csv_close(notfirst); break;
+    case DisplayCSV: csv_close(next); break;
 #endif
 #ifdef OUTPUT_FORMAT_JSON
-    case DisplayJSON: json_close(notfirst); break;
+    case DisplayJSON: json_close(next); break;
 #endif
 #ifdef OUTPUT_FORMAT_XML
     case DisplayXML: xml_close(); break;
 #endif
+    default: break;
   }
 }
 
 void display_start(void) {
-  if (display_mode < 0) {
+  if (display_mode == DisplayAuto) {
 #ifdef CURSESMODE
     display_mode = DisplayCurses; // default
 #else
@@ -88,6 +90,7 @@ void display_start(void) {
 #ifdef OUTPUT_FORMAT_XML
     case DisplayXML: xml_head(); break;
 #endif
+    default: break;
   }
 }
 
@@ -99,11 +102,12 @@ void display_final(void) {
 #ifdef OUTPUT_FORMAT_XML
     case DisplayXML: xml_tail(); break;
 #endif
+    default: break;
   }
 }
 
 void display_redraw(void) {
-  switch(display_mode) {
+  switch (display_mode) {
 #ifdef CURSESMODE
     case DisplayCurses: mc_redraw(); break;
 #endif
@@ -113,22 +117,24 @@ void display_redraw(void) {
 #ifdef GRAPHMODE
     case DisplayGraphCairo: gc_redraw(); break;
 #endif
+    default: break;
   }
 }
 
-int display_key_action(void) {
-  switch(display_mode) {
+key_action_t display_key_action(void) {
+  switch (display_mode) {
 #ifdef CURSESMODE
     case DisplayCurses: return mc_keyaction();
 #endif
 #ifdef SPLITMODE
     case DisplaySplit: return split_keyaction();
 #endif
+    default: break;
   }
   return ActionNone;
 }
 
-int display_extra_action(void) {
+key_action_t display_ext_action(void) {
   return
 #ifdef GRAPHMODE
     (display_mode == DisplayGraphCairo) ? gc_keyaction() :
@@ -137,7 +143,7 @@ int display_extra_action(void) {
 }
 
 void display_loop(void) {
-  switch(display_mode) {
+  switch (display_mode) {
 #ifdef CURSESMODE
     case DisplayCurses:
 #endif
@@ -164,6 +170,7 @@ void display_loop(void) {
     case DisplayXML:
 #endif
       poll_loop(); break;
+    default: break;
   }
 }
 

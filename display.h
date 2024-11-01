@@ -20,50 +20,17 @@
 #define DISPLAY_H
 
 #include <stdbool.h>
-
-enum { ActionNone, ActionQuit, ActionReset, ActionDisplay,
-  ActionClear, ActionPauseResume, ActionScrollDown, ActionScrollUp,
-  ActionUDP, ActionTCP, ActionCache
-#ifdef WITH_MPLS
-  , ActionMPLS
-#endif
-#ifdef ENABLE_DNS
-  , ActionDNS
-#endif
-#ifdef WITH_IPINFO
-  , ActionAS, ActionII
-#endif
-};
-enum { DisplayReport, DisplayCurses, DisplaySplit
-#ifdef GRAPHMODE
-  , DisplayGraphCairo
-#endif
-#ifdef OUTPUT_FORMAT_RAW
-  , DisplayRaw
-#endif
-#ifdef OUTPUT_FORMAT_TXT
-  , DisplayTXT
-#endif
-#ifdef OUTPUT_FORMAT_CSV
-  , DisplayCSV
-#endif
-#ifdef OUTPUT_FORMAT_JSON
-  , DisplayJSON
-#endif
-#ifdef OUTPUT_FORMAT_XML
-  , DisplayXML
-#endif
-};
+#include "common.h"
 
 void display_start(void);
 void display_final(void);
-bool display_open(bool notfirst);
-void display_close(bool notfirst);
+bool display_open(bool next);
+void display_close(bool next);
 
 void display_redraw(void);
 void display_loop(void);
 void display_clear(void);
-int display_key_action(void);
-int display_extra_action(void);
+key_action_t display_key_action(void);
+key_action_t display_ext_action(void);
 
 #endif

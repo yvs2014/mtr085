@@ -15,20 +15,20 @@
 
 #define LENVALMIL(val) double _v = (val) / (double)MIL; int _l = val2len(_v);
 
-char* trim(char *s);
-int val2len(double v);
+char* trim(char *str);
+int val2len(double val);
 
-void set_fld_active(const char *s);
+void set_fld_active(const char *str);
 #ifdef CURSESMODE
 bool is_custom_fld(void);
-extern char limit_error[];
+extern char limit_error[NAMELEN];
 int limit_int(int min, int max, int val, const char *what, char fail);
 #endif
 #if defined(CURSESMODE) || defined(GRAPHMODE)
 void onoff_jitter(void);
 #endif
-const struct statf* active_statf(unsigned i);
+const struct statf* active_statf(unsigned nth);
 
-extern unsigned fld_index[256];
+extern unsigned fld_index[UCHAR_MAX + 1];
 
 #endif

@@ -24,8 +24,9 @@
 #include <unistd.h>
 #include <termios.h>
 
+#include "common.h"
+
 #include "net.h"
-#include "display.h"
 #ifdef ENABLE_DNS
 #include "dns.h"
 #endif
@@ -34,7 +35,26 @@
 #endif
 #include "split.h"
 
-#define SPLIT_SEP	'\t'
+enum { SPLIT_SEP = '\t' };
+
+static inline void split_multipath(int at) {
+  for (int i = 0; i < MAXPATH; i++) { // multipath
+    if (i == host[at].current) continue; // already printed
+    t_ipaddr *ipaddr = &IP_AT_NDX(at, i);
+    if (!addr_exist(ipaddr)) break;
+    printf("%2d:%d", at + 1, i);
+#ifdef ENABLE_DNS
+    const char *name = dns_ptr_lookup(at, i);
+    printf("%c%s", SPLIT_SEP, name ? name : strlongip(ipaddr));
+    if (show_ips)
+#endif
+    { printf("%c%s", SPLIT_SEP, strlongip(ipaddr)); }
+#ifdef WITH_IPINFO
+    if (ipinfo_ready()) printf("%c%s", SPLIT_SEP, sep_ipinfo(at, i, SPLIT_SEP));
+#endif
+    printf("\n");
+  }
+}
 
 void split_redraw(void) {
   const char fields[] = "LRSBAW"; // Loss, Recv, Sent, Best, Avg, Worst
@@ -44,78 +64,57 @@ void split_redraw(void) {
     printf("%2d", at + 1);
     if (addr_exist(ipaddr)) {
 #ifdef ENABLE_DNS
-      const char *name = dns_ptr_lookup(at, host[at].current);
-      printf("%c%s", SPLIT_SEP, name ? name : strlongip(ipaddr));
+      { const char *name = dns_ptr_lookup(at, host[at].current);
+        printf("%c%s", SPLIT_SEP, name ? name : strlongip(ipaddr)); }
       if (show_ips)
 #endif
-        printf("%c%s", SPLIT_SEP, strlongip(ipaddr));
+      { printf("%c%s", SPLIT_SEP, strlongip(ipaddr)); }
       for (int i = 0; i < sizeof(fields); i++) {
         const char *str = net_elem(at, fields[i]);
         if (str) printf("%c%s", SPLIT_SEP, str);
       }
 #ifdef WITH_IPINFO
-      if (ipinfo_ready())
-        printf("%c%s", SPLIT_SEP, sep_ipinfo(at, host[at].current, SPLIT_SEP));
+      if (ipinfo_ready()) printf("%c%s", SPLIT_SEP, sep_ipinfo(at, host[at].current, SPLIT_SEP));
 #endif
       printf("\n");
-
-      for (int i = 0; i < MAXPATH; i++) { // multipath
-        if (i == host[at].current)
-          continue; // because already printed
-        t_ipaddr *ipaddr = &IP_AT_NDX(at, i);
-        if (!addr_exist(ipaddr))
-          break;
-        printf("%2d:%d", at + 1, i);
-#ifdef ENABLE_DNS
-        name = dns_ptr_lookup(at, i);
-        printf("%c%s", SPLIT_SEP, name ? name : strlongip(ipaddr));
-        if (show_ips)
-#endif
-          printf("%c%s", SPLIT_SEP, strlongip(ipaddr));
-#ifdef WITH_IPINFO
-        if (ipinfo_ready())
-          printf("%c%s", SPLIT_SEP, sep_ipinfo(at, i, SPLIT_SEP));
-#endif
-        printf("\n");
-      }
-    } else
-      printf("%c%s\n", SPLIT_SEP, UNKN_ITEM);
+      split_multipath(at);
+    } else printf("%c%s\n", SPLIT_SEP, UNKN_ITEM);
   }
 }
 
 void split_open(void) {
-  struct termios t;
-  if (tcgetattr(0, &t) < 0) {
+  struct termios termios;
+  if (tcgetattr(0, &termios) < 0) {
     WARN("tcgetattr");
     warnx("non-interactive mode is ON");
     interactive = false;
     return;
   }
-  t.c_lflag &= ~ICANON;
-  t.c_lflag &= ~ECHO;
-  t.c_cc[VMIN] = 1;
-  t.c_cc[VTIME] = 0;
-  if (tcsetattr(0, TCSANOW, &t) < 0) {
+  termios.c_lflag &= ~ICANON;
+  termios.c_lflag &= ~ECHO;
+  termios.c_cc[VMIN] = 1;
+  termios.c_cc[VTIME] = 0;
+  if (tcsetattr(0, TCSANOW, &termios) < 0) {
     WARN("tcsetattr");
     interactive = false;
   }
 }
 
 void split_close(void) {
-  struct termios t;
-  if (!interactive)
-    return;
-  if (tcgetattr(0, &t) < 0) {
+  if (!interactive) return;
+  struct termios termios;
+  if (tcgetattr(0, &termios) < 0) {
     WARN("tcgetattr");
     return;
   }
-  t.c_lflag |= ICANON;
-  t.c_lflag |= ECHO;
-  if (tcsetattr(0, TCSADRAIN, &t))
+  termios.c_lflag |= ICANON;
+  termios.c_lflag |= ECHO;
+  if (tcsetattr(0, TCSADRAIN, &termios))
     WARN("tcsetattr");
 }
 
-const char SMODE_HINTS[] =
+static inline void split_help(void) {
+  const char SMODE_HINTS[] =
 "Command:\n"
 "  h   help\n"
 #ifdef ENABLE_DNS
@@ -132,19 +131,18 @@ const char SMODE_HINTS[] =
 #endif
 "\n"
 "press SPACE to resume... ";
+  printf("%s", SMODE_HINTS);
+  fflush(stdout);
+}
 
-int split_keyaction(void) {
-  char c;
-  if (read(0, &c, 1) < 0) {
-    WARN("read");
-    return 0;
-  }
-  switch (c) {
+key_action_t split_keyaction(void) {
+  char ch = 0;
+  if (read(0, &ch, 1) < 0) { WARN("read"); return 0; }
+  switch (ch) {
     case '+': return ActionScrollDown;
     case '-': return ActionScrollUp;
     case 'h':
-      printf("%s", SMODE_HINTS);
-      fflush(stdout);
+      split_help();
       return ActionPauseResume;
 #ifdef ENABLE_DNS
     case 'n': return ActionDNS;
@@ -159,7 +157,8 @@ int split_keyaction(void) {
     case 'y': return ActionII;
     case 'z': return ActionAS;
 #endif
+    default: break;
   }
-  return 0;
+  return ActionNone;
 }
 

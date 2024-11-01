@@ -22,7 +22,7 @@
 #include <poll.h>
 
 int poll_loop(void);
-int  poll_reg_fd(int fd, int seq);
+int  poll_reg_fd(int sock, int seq);
 void poll_dereg_fd(int slot);
 void poll_close_tcpfds(void);
 

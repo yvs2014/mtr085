@@ -27,9 +27,6 @@
 
 #include "common.h"
 
-#ifdef HAVE_NETDB_H
-#include <netdb.h>
-#endif
 #ifdef ENABLE_IPV6
 #include <netinet/ip6.h>
 #include <netinet/icmp6.h>
@@ -40,18 +37,16 @@
 #define MAXSEQ 16384        // maximum pings in processing
 // 16bits as [hash:7 at:6 ndx:3]
 #define IDMASK    (0xFE00)
-#define AT2ID(n)  ((n & 0x003F) << 3)
-#define ID2AT(n)  ((n >> 3) & 0x003F)
-#define ID2NDX(n) (n & 0x7)
+#define AT2ID(n)  (((n) & 0x003F) << 3)
+#define ID2AT(n)  (((n) >> 3) & 0x003F)
+#define ID2NDX(n) ((n) & 0x7)
 
-#define MAXPACKET 4470		// largest test packet size
-#define MINPACKET 28		// 20 bytes IP and 8 bytes ICMP or UDP
+#define MAXPACKET 4470 // largest test packet size
+#define MINPACKET 28   // 20 bytes IP and 8 bytes ICMP or UDP
 
 #ifdef CURSESMODE
 #define SAVED_PINGS 200
-#define CT_UNKN   -1
-#define CT_UNSENT -2
-#define CT_SEAL   -3
+enum { CT_UNKN = -1, CT_UNSENT = -2, CT_SEAL = -3 };
 #endif
 
 extern int af;
@@ -76,11 +71,7 @@ typedef struct timemsec {
   long frac;  // in nanoseconds
 } timemsec_t;
 
-// wrapper: __has_attribute
-#ifndef __has_attribute
-#define __has_attribute(attr)  0
-#endif
-// attribute: __packed__
+// attribute: packed
 #if __has_attribute(__packed__)
 #define PACKIT __attribute__((__packed__))
 #else
@@ -116,9 +107,6 @@ typedef struct mpls_data {
 // Address(es) plus associated data
 typedef struct eaddr {
   t_ipaddr ipaddr;
-#ifdef WITH_MPLS
-  mpls_data_t mpls;
-#endif
   char *q_ptr, *r_ptr; // t_ptr query, reply
   time_t q_ptr_ts;     // timestamp when 'q_ptr' is sent
 #ifdef WITH_IPINFO
@@ -126,10 +114,13 @@ typedef struct eaddr {
   char *r_txt[MAX_TXT_ITEMS]; // t_txt parsed reply
   time_t q_txt_ts;            // timestamp when 'q_txt' is sent
 #endif
+#ifdef WITH_MPLS
+  mpls_data_t mpls;
+#endif
 } eaddr_t;
 
 // Hop description
-struct nethost {
+typedef struct nethost {
   // addresses with all associated data (dns names, mpls labels, extended ip info)
   eaddr_t eaddr[MAXPATH];
   int current;            // index of the last received address
@@ -145,8 +136,9 @@ struct nethost {
   int saved_seq_offset;
 #endif
   time_t seen;            // timestamp for caching, last seen
-};
-extern struct nethost host[];
+} nethost_t;
+extern nethost_t host[];
+
 typedef struct atndx { int at, ndx, type; } atndx_t;
 
 extern char localaddr[];
@@ -169,7 +161,7 @@ extern char localaddr[];
 
 #define FAIL_POSTPONE(rcode, fmt, ...) { last_neterr = rcode; \
   WARNX(fmt ": %s", __VA_ARGS__, strerror(last_neterr)); \
-  snprintf(neterr_txt, ERRBYFN_SZ, fmt ": %s", __VA_ARGS__, strerror(last_neterr)); \
+  snprintf(neterr_txt, NAMELEN, fmt ": %s", __VA_ARGS__, strerror(last_neterr)); \
   LOG_RE(false, fmt ": %s", __VA_ARGS__, strerror(last_neterr)); \
 }
 
@@ -191,7 +183,7 @@ void net_tcp_parse(int sock, int seq, int noerr, struct timespec *recv_at);
 bool net_timedout(int seq);
 int net_min(void);
 int net_max(void);
-const char *net_elem(int at, char c);
+const char *net_elem(int at, char ch);
 int net_send_batch(void);
 void net_end_transit(void);
 int net_duplicate(int at, int seq);
@@ -209,7 +201,7 @@ void  net_setsock6(void);
 #ifdef WITH_MPLS
 const char *mpls2str(const mpls_label_t *label, int indent);
 #endif
-uint16_t str2hint(const char* s, uint16_t at, uint16_t ndx);
+uint16_t str2hint(const char* str, uint16_t at, uint16_t ndx);
 void waitspec(struct timespec *tv);
 
 #endif

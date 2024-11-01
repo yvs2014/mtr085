@@ -57,7 +57,7 @@ if GRAPHS_XCB
 libgraphcairo_a_SOURCES += graphcairo/graphcairo-xcb.c
 endif
 if GRAPHS_XLIB
-libgraphcairo_a_SOURCES += graphcairo/graphcairo-xlib.c
+libgraphcairo_a_SOURCES += graphcairo/graphcairo-x11.c
 endif
 libgraphcairo_a_CPPFLAGS = @graphcairo_CFLAGS@ -I.
 AM_CPPFLAGS += -Igraphcairo

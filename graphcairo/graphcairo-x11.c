@@ -18,118 +18,97 @@ static frontend_resize_t frontend_resize;
 static int shiftkey_pressed;
 
 cairo_surface_t* backend_create_surface(int width, int height) {
-	return cairo_xlib_surface_create(display, window, DefaultVisual(display, screen), width, height);
+  return cairo_xlib_surface_create(display, window, DefaultVisual(display, screen), width, height);
 }
 
 bool backend_create_window(cairo_rectangle_int_t *rectangle, frontend_resize_t frontend_resize_func) {
-	frontend_resize = frontend_resize_func;
-	display = XOpenDisplay(NULL);
-	if (!display) {
-		WARNX("Cannot open display");
-		return false;
-	}
-	screen = DefaultScreen(display);
-	window = XCreateSimpleWindow(display, RootWindow(display, screen),
-		rectangle->x, rectangle->y, rectangle->width, rectangle->height, 0,
-		BlackPixel(display, screen), WhitePixel(display, screen));
-	XSelectInput(display, window,
-		ExposureMask | StructureNotifyMask | KeyPressMask | KeyReleaseMask);
-	XMapWindow(display, window);
-	delete_window_atom = XInternAtom(display, "WM_DELETE_WINDOW", False);
-	XSetWMProtocols(display, window, &delete_window_atom, 1);
-	XFlush(display);
-	while (1) {
-		XEvent ev;
-		XNextEvent(display, &ev);
-		if (ev.type == Expose)
-			break;
-	}
-	return true;
+  frontend_resize = frontend_resize_func;
+  display = XOpenDisplay(NULL);
+  if (!display) {
+    WARNX("Cannot open display");
+    return false;
+  }
+  screen = DefaultScreen(display);
+  window = XCreateSimpleWindow(display, RootWindow(display, screen),
+    rectangle->x, rectangle->y, rectangle->width, rectangle->height, 0,
+    BlackPixel(display, screen), WhitePixel(display, screen));
+  XSelectInput(display, window,
+    ExposureMask | StructureNotifyMask | KeyPressMask | KeyReleaseMask);
+  XMapWindow(display, window);
+  delete_window_atom = XInternAtom(display, "WM_DELETE_WINDOW", False);
+  XSetWMProtocols(display, window, &delete_window_atom, 1);
+  XFlush(display);
+  while (1) {
+    XEvent event;
+    XNextEvent(display, &event);
+    if (event.type == Expose) break;
+  }
+  return true;
 }
 
 void backend_destroy_window(void) {
-	XDestroyWindow(display, window);
-	XCloseDisplay(display);
+  XDestroyWindow(display, window);
+  XCloseDisplay(display);
 }
 
-void backend_flush(void) {
-	XFlush(display);
-}
+inline void backend_flush(void) { XFlush(display); }
 
 static int keysym_to_char(KeySym keysym) {
-	int c = 0;
-	// [a-zA-Z\-\+ ]
-	if ((keysym >= XK_a) && (keysym <= XK_z)) {
-		c = (int)'a' + (keysym - XK_a);
-		if (shiftkey_pressed)
-			c = toupper(c);
-	} else if ((keysym >= XK_A) && (keysym <= XK_Z)) {
-		c = (int)'A' + (keysym - XK_A);
-		if (shiftkey_pressed)
-			c = tolower(c);
-	} else if (keysym == XK_space)
-		c = (int)' ';
-	else if (keysym == XK_KP_Add)
-		c = (int)'+';
-	else if ((keysym == XK_minus) || (keysym == XK_KP_Subtract))
-		c = (int)'-';
-	return c;
+  int ch = 0;
+  // [a-zA-Z\-\+ ]
+  if ((keysym >= XK_a) && (keysym <= XK_z)) {
+    ch = 'a' + (keysym - XK_a);
+    if (shiftkey_pressed) ch = toupper(ch);
+  } else if ((keysym >= XK_A) && (keysym <= XK_Z)) {
+    ch = 'A' + (keysym - XK_A);
+    if (shiftkey_pressed) ch = tolower(ch);
+  } else if (keysym == XK_space) {
+    ch = ' ';
+  } else if (keysym == XK_KP_Add) {
+    ch = '+';
+  } else if ((keysym == XK_minus) || (keysym == XK_KP_Subtract)) {
+    ch = '-';
+  }
+  return ch;
 }
 
-static int keycode_to_char(XKeyEvent *ev) {
-	int keysyms_per_keycode_return;
-	KeySym *p = XGetKeyboardMapping(display, ev->keycode, 2, &keysyms_per_keycode_return);
-	KeySym keysym = 0;
-	KeySym keymod = 0;
-	if (p) {
-		keysym = *p;
-		keymod = *(p + 1);
-	}
-	XFree(p);
-
-	if ((keysym == XK_Shift_L) || (keysym == XK_Shift_R) ||
-		(keymod == XK_Shift_L) || (keymod == XK_Shift_R))
-		shiftkey_pressed = (ev->type == KeyPress) ? 1 : 0;
-#if 0
-	printf("keysym=0x%x, keymod=0x%x, shiftkey=%d, type=%d\n",
-		(unsigned int)keysym, (unsigned int)keymod, shiftkey_pressed, ev->type);
-#endif
-
-	int c = 0;
-	if (ev->type == KeyRelease) {
-		if ((keymod == XK_plus) && shiftkey_pressed)
-			return '+';
-		c = keysym_to_char(keysym);
-	}
-	return c;
+static int keycode_to_char(XKeyEvent *event) {
+  int keysyms_per_keycode_return = 0;
+  KeySym *symmod = XGetKeyboardMapping(display, event->keycode, 2, &keysyms_per_keycode_return);
+  KeySym keysym = symmod ? *symmod : 0;
+  KeySym keymod = symmod ? *(symmod + 1) : 0;
+  if (symmod) XFree(symmod);
+  if ((keysym == XK_Shift_L) || (keysym == XK_Shift_R) ||
+      (keymod == XK_Shift_L) || (keymod == XK_Shift_R))
+    shiftkey_pressed = (event->type == KeyPress) ? 1 : 0;
+  int ch = 0;
+  if (event->type == KeyRelease)
+    ch = ((keymod == XK_plus) && shiftkey_pressed) ? '+' : keysym_to_char(keysym);
+  return ch;
 }
 
 int backend_dispatch_event(void) {
-	int key = 0;
-	XEvent event;
-	XEvent *ev = &event;
-	while (XPending(display)) {
-		XNextEvent(display, ev);
-		switch (event.type) {
-			case ConfigureNotify:
-				frontend_resize(((XConfigureEvent*)ev)->width,
-					((XConfigureEvent*)ev)->height, shiftkey_pressed);
-				break;
-			case Expose:
-				break;
-			case ClientMessage:
-			    if ((Atom)event.xclient.data.l[0] == delete_window_atom)
-					key = 'q';
-				break;
-			case KeyPress:
-			case KeyRelease:
-				key = keycode_to_char((XKeyEvent*)ev);
-				break;
-			default:
-//printf("got event: %d\n", ev->response_type & ~0x80);
-				break;
-		}
-	}
-	return key;
+  int key = 0;
+  while (XPending(display)) {
+    XEvent event = {0};
+    XNextEvent(display, &event);
+    switch (event.type) {
+      case ConfigureNotify:
+        frontend_resize(
+          ((XConfigureEvent*)&event)->width,
+          ((XConfigureEvent*)&event)->height,
+          shiftkey_pressed);
+        break;
+      case ClientMessage:
+        if ((Atom)event.xclient.data.l[0] == delete_window_atom) key = 'q';
+        break;
+      case KeyPress:
+      case KeyRelease:
+        key = keycode_to_char((XKeyEvent*)&event);
+        break;
+      default: break;
+    }
+  }
+  return key;
 }
 

@@ -1,15 +1,16 @@
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
-#include <strings.h>
 #include <time.h>
+
+#include "common.h"
 
 #include "graphcairo.h"
 
 #include "mtr-curses.h"
 #include "mtr-poll.h"
 #include "net.h"
-#include "display.h"
 #ifdef ENABLE_DNS
 #include "dns.h"
 #endif
@@ -18,32 +19,30 @@
 #endif
 #include "aux.h"
 
-#define GC_ARGS_SEP	','
-#define GC_ARGS_MAX	5
-
-#ifndef STARTSTAT
-#define STARTSTAT	30
-#endif
+enum { GC_ARGS_SEP = ',' };
 
 #ifdef WITH_IPINFO
-#define HOSTSTAT_LEN (3 * STARTSTAT + SAVED_PINGS)  // hostinfo + statistics
+#define HOSTSTAT_LEN (HOSTINFOMAX * 3 + SAVED_PINGS)  // hostinfo + statistics
 #else
-#define HOSTSTAT_LEN (STARTSTAT + SAVED_PINGS)      // hostname + statistics
+#define HOSTSTAT_LEN (HOSTINFOMAX + SAVED_PINGS)      // hostname + statistics
 #endif
 
-#define	NUMHOSTS	10	// net.c static numhosts = 10
+enum { NUMHOSTS = 10 }; // net.c static numhosts = 10
 
 static int timeout;
 static struct timespec lasttime;
 
 static cr_params_t params;
-#define ARG_GRAPH_TYPE	0
-#define ARG_PERIOD	1
-#define ARG_LEGEND	2
-#define ARG_MULTIPATH	3
-#define ARG_JITTER_GRAPH	4
+typedef enum {
+  ARG_GRAPH_TYPE   = 0,
+  ARG_PERIOD       = 1,
+  ARG_LEGEND       = 2,
+  ARG_MULTIPATH    = 3,
+  ARG_JITTER_GRAPH = 4,
+  ARG_GRAPH_MAX    = 5,
+} arg_graph_t;
 
-static int args[GC_ARGS_MAX];
+static int args[ARG_GRAPH_MAX];
 static int *data;
 static int curses_cols;
 static int hostinfo_max;
@@ -79,63 +78,63 @@ bool gc_open(void) {
   return true;
 }
 
-void gc_close(void) { if (data) free(data); cr_close(); }
+void gc_close(void) {
+  if (data) free(data);
+  cr_close();
+}
 
 bool gc_parsearg(char* arg) {
   int i = 0;
   if (arg) {
-    char *n, *p, *h = strdup(arg);
-    if (!h) {
-      WARN("strdup()");
-      return false;
-    }
-    for (p = h; (n = strchr(p, GC_ARGS_SEP)) && (i < GC_ARGS_MAX); i++, p = n) {
+    char *h = strdup(arg);
+    if (!h) { WARN("strdup()"); return false; }
+    char *n = NULL, *p = NULL;
+    for (p = h; (n = strchr(p, GC_ARGS_SEP)) && (i < ARG_GRAPH_MAX); i++, p = n) {
       *n++ = 0;
       args[i] = (*p) ? atoi(p) : -1;
     }
-    if (p && (i < GC_ARGS_MAX))
+    if (p && (i < ARG_GRAPH_MAX))
       args[i++] = (*p) ? atoi(p) : -1;
     free(h);
   }
-  for (int j = i; j < GC_ARGS_MAX; j++)
+  for (int j = i; j < ARG_GRAPH_MAX; j++)
     args[j] = -1;
   return true;
 }
 
-static int fill_hostinfo(int at, int ndx, char *buf, int sz) {
-  int l = 0;
+static int fill_hostinfo(int at, int ndx, char *buf, int size) {
+  int len = 0;
 #ifdef WITH_IPINFO
-  if (ipinfo_ready())
-    l += snprintf(buf, sz, "%.*s", 2 * STARTSTAT, fmt_ipinfo(at, ndx));
+  if (ipinfo_ready()) len += snprintf(buf, size, "%.*s", 2 * HOSTINFOMAX, fmt_ipinfo(at, ndx));
 #endif
 #ifdef ENABLE_DNS
   const char *name = dns_ptr_lookup(at, ndx);
   if (name) {
     if (show_ips) {
-      int len = STARTSTAT / 2 - 1;
-      l += snprintf(buf + l, sz - l, "%.*s (%.*s)", len, name, len - 1, strlongip(&IP_AT_NDX(at, ndx)));
+      int host_len = HOSTINFOMAX / 2 - 1;
+      len += snprintf(buf + len, size - len, "%.*s (%.*s)",
+        host_len, name, host_len - 1, strlongip(&IP_AT_NDX(at, ndx)));
     } else
-      l += snprintf(buf + l, sz - l, "%.*s", STARTSTAT, name);
+      len += snprintf(buf + len, size - len, "%.*s", HOSTINFOMAX, name);
   } else
 #endif
-    l += snprintf(buf + l, sz - l, "%.*s", STARTSTAT, strlongip(&IP_AT_NDX(at, ndx)));
-  if (((at + 1) >= display_offset) && (l > hostinfo_max))
-    hostinfo_max = l;
-  return l;
+  { len += snprintf(buf + len, size - len, "%.*s", HOSTINFOMAX, strlongip(&IP_AT_NDX(at, ndx))); }
+  if (((at + 1) >= display_offset) && (len > hostinfo_max))
+    hostinfo_max = len;
+  return len;
 }
 
 
-int gc_keyaction(void) {
-  int c = cr_dispatch_event();
-
-  if (c == ACTION_RESIZE) {
+key_action_t gc_keyaction(void) {
+  int ch = cr_dispatch_event();
+  if (ch == ACTION_RESIZE) {
     if (params.enable_legend)
       curses_cols = cr_recalc(hostinfo_max);
     return ActionNone;
   }
 
   if (params.enable_legend) {
-    switch (c) {
+    switch (ch) {
       case '+':  // ScrollDown
         GCMSG("%s", "scroll down\n");
         hostinfo_max = 0;
@@ -170,10 +169,11 @@ int gc_keyaction(void) {
         hostinfo_max = 0;
         return ActionAS;
 #endif
-	}
+      default: break;
+    }
   }
 
-  switch (c) {
+  switch (ch) {
     case 'p':  // Pause,Resume
       GCMSG("%s", "pause/resume pressed");
       return ActionPauseResume;
@@ -191,17 +191,16 @@ int gc_keyaction(void) {
     case 'u':  // UDP on/off
       GCMSG("%s", "toggle UDP pings\n");
       return ActionUDP;
+    default: break;
   }
   return ActionNone;
 }
 
 #ifdef WITH_MPLS
-static void gc_print_mpls(int i, int d, const mpls_data_t *m, char *buf, int sz) {
-  if (!m)
-    return;
-  for (int j = 0; j < m->n; j++) {
-    snprintf(buf, sz, "%s", mpls2str(&(m->label[i]), 0));
-    cr_print_host(i, d, buf, NULL);
+static void gc_print_mpls(int nth, int data, const mpls_data_t *mpls, char *buf, int size) {
+  if (mpls) for (int i = 0; i < mpls->n; i++) {
+    snprintf(buf, size, "%s", mpls2str(&mpls->label[nth], 0));
+    cr_print_host(nth, data, buf, NULL);
   }
 }
 #endif
@@ -209,15 +208,13 @@ static void gc_print_mpls(int i, int d, const mpls_data_t *m, char *buf, int sz)
 void gc_redraw(void) {
   static char glinebuf[HOSTSTAT_LEN];
   static long prevnum;
-  if (prevnum >= numpings)
-    return;
+  if (prevnum >= numpings) return;
   prevnum = numpings;
 
   int min = net_min();
   int max = net_max();
   int hops = max - min /* + 1 */;
-  if (!hops)
-    hops++;
+  if (!hops) hops++;
   cr_set_hops(hops, min);
 
   if (params.enable_legend) {
@@ -239,7 +236,7 @@ void gc_redraw(void) {
       int saved_ndx = SAVED_PINGS - 2;
       if (params.jitter_graph) {
         // jitter: "tN - tN-1"
-        if ((host[at].saved[saved_ndx] < 0) || (host[at].saved[saved_ndx - 1] < 0))	// unsent, unknown, etc.
+        if ((host[at].saved[saved_ndx] < 0) || (host[at].saved[saved_ndx - 1] < 0)) // unsent, unknown, etc.
           data[i] = -1;
         else {
           int saved_jttr = host[at].saved[saved_ndx] - host[at].saved[saved_ndx - 1];
@@ -250,10 +247,10 @@ void gc_redraw(void) {
 
       if (params.enable_legend) {
         cr_print_hop(i); // #. hop
-        int l = fill_hostinfo(at, host[at].current, glinebuf, sizeof(glinebuf)); // hostinfo
-        l += 1; // step over 0
-        mc_print_at(at, glinebuf + l, sizeof(glinebuf) - l); // statistics
-        cr_print_host(i, data[i], glinebuf, glinebuf + l);   // host+stat
+        int len = fill_hostinfo(at, host[at].current, glinebuf, sizeof(glinebuf)); // hostinfo
+        len += 1; // step over 0
+        mc_print_at(at, glinebuf + len, sizeof(glinebuf) - len); // statistics
+        cr_print_host(i, data[i], glinebuf, glinebuf + len);   // host+stat
 #ifdef WITH_MPLS
         if (enable_mpls) // mpls
           gc_print_mpls(i, data[i], &CURRENT_MPLS(at), glinebuf, sizeof(glinebuf));
@@ -261,9 +258,7 @@ void gc_redraw(void) {
         if (params.enable_multipath) {                       // multipath
           for (int j = 0; j < MAXPATH; j++) {
             if (j != host[at].current) {
-              t_ipaddr *ip = &IP_AT_NDX(at, j);
-              if (!addr_exist(ip))
-                break;
+              if (!addr_exist(&IP_AT_NDX(at, j))) break;
               fill_hostinfo(at, j, glinebuf, sizeof(glinebuf));
               cr_print_host(i, data[i], glinebuf, NULL);
 #ifdef WITH_MPLS

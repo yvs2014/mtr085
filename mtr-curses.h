@@ -20,19 +20,22 @@
 #define MTR_CURSES_H
 
 #include <stdbool.h>
+#include "common.h"
 
 bool mc_open(void);
 void mc_close(void);
 void mc_redraw(void);
-int mc_keyaction(void);
+key_action_t mc_keyaction(void);
 void mc_clear(void);
 
-#define STARTSTAT	30
+#ifndef HOSTINFOMAX
+#define HOSTINFOMAX 30
+#endif
 #ifdef GRAPHMODE
 void mc_init(void);
-int mc_statf_title(char *buf, int sz);
-int mc_print_at(int at, char *buf, int sz);
-int mc_snprint_args(char *buf, int sz);
+int mc_statf_title(char *buf, size_t size);
+int mc_print_at(int at, char *buf, size_t size);
+int mc_snprint_args(char *buf, size_t size);
 #endif
 
 #endif

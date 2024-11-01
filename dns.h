@@ -20,7 +20,6 @@
 #define DNS_H
 
 #include "common.h"
-#include "config.h"
 
 extern bool enable_dns;
 extern unsigned dns_queries[];
@@ -37,21 +36,5 @@ char* ip2arpa(const t_ipaddr *ipaddr, const char *suff4, const char *suff6);
 
 extern void (*dns_ptr_handler)(int at, int ndx, const char* answer);
 extern void (*dns_txt_handler)(int at, int ndx, const char* answer);
-
-// taken from autoconf manual
-#ifdef HAVE_SYS_TYPES_H
-#include <sys/types.h>
-#endif
-#include <netinet/in.h>
-#ifdef HAVE_ARPA_NAMESER_H
-#ifndef BIND_8_COMPAT
-#define BIND_8_COMPAT
-#endif
-#include <arpa/nameser.h>
-#endif
-#ifdef HAVE_NETDB_H
-#include <netdb.h>
-#endif
-#include <resolv.h>
 
 #endif

@@ -16,17 +16,18 @@
     Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 */
 
+#include <stdio.h>
 #include <stddef.h>
 #include <stdint.h>
-#include <stdio.h>
+#include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
 #include <errno.h>
+#include <err.h>
 #include <limits.h>
 #include <math.h>
 #include <fcntl.h>
 #include <time.h>
-#include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in_systm.h>
 #include <netinet/in.h>
@@ -48,6 +49,9 @@
 
 #ifdef LIBCAP
 #include <sys/capability.h>
+#endif
+#ifdef HAVE_NETDB_H
+#include <netdb.h>
 #endif
 
 #include "common.h"
@@ -147,8 +151,8 @@ struct PACKIT icmpext_object { // RFC4884
 #endif /*MPLS*/
 
 
-#define LO_UDPPORT 33433	// start from LO_UDPPORT+1
-#define UDPPORTS 90		// go thru udp:33434-33523 acl
+#define LO_UDPPORT 33433  // start from LO_UDPPORT+1
+#define UDPPORTS 90       // go thru udp:33434-33523 acl
 #define TCP_DEFAULT_PORT 80
 
 #define SET_UDP_UH_PORTS(uh, s, d) { (uh)->uh_sport = htons(s); (uh)->uh_dport = htons(d); }
@@ -171,12 +175,12 @@ struct PACKIT icmpext_object { // RFC4884
 
 #define EXIT(s) { int e = errno; display_close(true); ERRX(e, "%s: %s", s, strerror(e)); }
 
-#define CLOSE(fd) if ((fd) >= 0) { close(fd); fd = -1; /*summ*/ sum_sock[1]++; }
+#define CLOSE(fd) if ((fd) >= 0) { close(fd); (fd) = -1; /*summ*/ sum_sock[1]++; }
 
 #define FAIL_WITH_WARNX(rcode, fd, fmt, ...) { last_neterr = rcode; \
   display_clear(); CLOSE(fd); \
   WARNX(fmt ": %s", __VA_ARGS__, strerror(last_neterr)); \
-  snprintf(neterr_txt, ERRBYFN_SZ, fmt ": %s", __VA_ARGS__, strerror(last_neterr)); \
+  snprintf(neterr_txt, NAMELEN, fmt ": %s", __VA_ARGS__, strerror(last_neterr)); \
   LOG_RE(false, fmt ": %s", __VA_ARGS__, strerror(last_neterr)); \
 }
 
@@ -197,7 +201,7 @@ bool  (*addr_exist)(const void *a); // true if not 0
 bool  (*addr_equal)(const void *a, const void *b);
 void* (*addr_copy)(void *dst, const void *src);
 int af = AF_INET;  // default address family
-struct nethost host[MAXHOST];
+nethost_t host[MAXHOST];
 char localaddr[MAX_ADDRSTRLEN];
 unsigned long net_queries[4]; // number of queries (sum, icmp, udp, tcp)
 unsigned long net_replies[4]; // number of replies (sum, icmp, udp, tcp)
@@ -255,11 +259,11 @@ void* addr6copy(void *dst, const void *src) { return memcpy(dst, src, sizeof(str
 // return in 'tv' waittime before sending the next ping
 void waitspec(struct timespec *tv) {
   double wait = wait_time;
-  int n = numhosts;
-  int f = fstTTL - 1;
-  if ((f > 0) && (n > f))
-    n -= f;
-  wait /= n;
+  int num = numhosts;
+  int first = fstTTL - 1;
+  if ((first > 0) && (num > first))
+    num -= first;
+  wait /= num;
   tv->tv_sec = trunc(wait);
   tv->tv_nsec = (wait - tv->tv_sec) * NANO;
 }
@@ -320,10 +324,9 @@ static void save_sequence(int seq, int at) {
 }
 
 static int new_sequence(int at) {
-  static int max_seqs[] = { [IPPROTO_ICMP] = MAXSEQ, [IPPROTO_UDP] = UDPPORTS };
   static int next_seq;
   int seq = next_seq++;
-  if (next_seq >= max_seqs[mtrtype])
+  if (next_seq >= ((mtrtype == IPPROTO_UDP) ? UDPPORTS : MAXSEQ))
     next_seq = 0;
   save_sequence(seq, at);
   return seq;
@@ -356,10 +359,10 @@ static bool settosttl6(int sock, int ttl) {
 
 // Create TCP socket for hop 'at', and try to connect (poll results later)
 static bool net_send_tcp(int at) {
-#define SET_TCP_ATTR(src_addr, ssa_addr, dst_addr, dst_port) { \
-  addr_copy(&src_addr, &ssa_addr); \
-  addr_copy(&dst_addr, remote_ipaddr); \
-  dst_port = htons((remoteport > 0) ? remoteport : TCP_DEFAULT_PORT); \
+#define SET_ADDR_PORT(src_addr, ssa_addr, dst_addr, dst_port) { \
+  addr_copy(&(src_addr), &(ssa_addr)); \
+  addr_copy(&(dst_addr), remote_ipaddr); \
+  (dst_port) = htons((remoteport > 0) ? remoteport : TCP_DEFAULT_PORT); \
 }
   int sock = socket(af, SOCK_STREAM, 0);
   if (sock < 0)
@@ -371,12 +374,12 @@ static bool net_send_tcp(int at) {
   socklen_t addrlen = sizeof(local);
   switch (af) {
     case AF_INET:
-      SET_TCP_ATTR(local.S_ADDR, lsa.S_ADDR, remote.S_ADDR, remote.S_PORT);
+      SET_ADDR_PORT(local.S_ADDR, lsa.S_ADDR, remote.S_ADDR, remote.S_PORT);
       addrlen = sizeof(lsa.sin);
       break;
 #ifdef ENABLE_IPV6
     case AF_INET6:
-      SET_TCP_ATTR(local.S6ADDR, lsa.S6ADDR, remote.S6ADDR, remote.S6PORT)
+      SET_ADDR_PORT(local.S6ADDR, lsa.S6ADDR, remote.S6ADDR, remote.S6PORT)
       addrlen = sizeof(lsa.sin6);
       break;
 #endif
@@ -391,7 +394,7 @@ static bool net_send_tcp(int at) {
   if (fcntl(sock, F_SETFL, flags | O_NONBLOCK) < 0)
     FAIL_WITH_WARN(sock, "fcntl(O_NONBLOCK) at=%d", at);
 
-  int ttl = at + 1, port;
+  int ttl = at + 1, port = 0;
   switch (af) {
     case AF_INET:
       if (!settosttl(sock, ttl)) return false;
@@ -420,7 +423,7 @@ static bool net_send_tcp(int at) {
 #endif
   /*summ*/ net_queries[QR_SUM]++; net_queries[QR_TCP]++;
   return true;
-#undef SET_TCP_ATTR
+#undef SET_ADDR_PORT
 }
 
 static inline void net_fill_icmp_hdr(uint16_t seq, uint8_t type, uint8_t *data, uint16_t size) {
@@ -462,6 +465,7 @@ static inline bool net_fill_udp_hdr(uint16_t seq, uint8_t *data, uint16_t size
       if (setsockopt(sendsock, IPPROTO_IPV6, IPV6_CHECKSUM, &opt, sizeof(opt)))
         FAIL_WITH_WARN(sendsock, "setsockopt6(sock=%d, IPV6_CHECKSUM)", sendsock);
     } return true;
+    default: break;
 #endif
   } return false;
 }
@@ -696,13 +700,12 @@ static int net_stat(unsigned port, const void *addr, struct timespec *recv_at, i
 #ifdef WITH_MPLS
 static inline bool mplslike(int psize, int hsize) { return enable_mpls & ((psize - hsize) >= MPLSMIN); }
 
-static mpls_data_t *decodempls(const uint8_t *data, int sz) {
-  static mpls_data_t mplsdata;
+static mpls_data_t *decodempls(const uint8_t *data, int size) {
   // given: icmpext_struct(4) icmpext_object(4) label(4) [label(4) ...]
   static const size_t mplsoff = MPLSMIN - (IES_SZ + IEO_SZ + LAB_SZ);
   static const size_t ieomin = IEO_SZ + LAB_SZ;
-  if (sz < MPLSMIN) {
-    LOGMSG("got %d bytes of data, whereas mpls min is %d", sz, MPLSMIN);
+  if (size < MPLSMIN) {
+    LOGMSG("got %d bytes of data, whereas mpls min is %d", size, MPLSMIN);
     return NULL;
   }
   int off = mplsoff; // at least 12bytes ahead: icmp_ext_struct(4) icmp_ext_object(4) label(4) [label(4) ...]
@@ -728,9 +731,10 @@ static mpls_data_t *decodempls(const uint8_t *data, int sz) {
     LOGMSG("got %d MPLS labels, limit=%d", n, MAXLABELS);
     n = MAXLABELS;
   }
+  static mpls_data_t mplsdata;
   memset(&mplsdata, 0, sizeof(mplsdata));
   // mpls labels
-  while ((mplsdata.n < n) && ((off + LAB_SZ) <= sz)) {
+  while ((mplsdata.n < n) && ((off + LAB_SZ) <= size)) {
     mplsdata.label[mplsdata.n++].u32 = ntohl(*(uint32_t*)&data[off]);
     off += LAB_SZ;
   }
@@ -746,10 +750,10 @@ void net_icmp_parse(struct timespec *recv_at) {
   uint8_t packet[MAXPACKET];
   struct sockaddr_storage sa_in;
 
-  ssize_t sz = recvfrom(recvsock, packet, MAXPACKET, 0, (struct sockaddr *)&sa_in, &sa_len);
-  LOGMSG("got %zd bytes", sz);
-  if (sz < hdr_minsz)
-    LOGRET("incorrect packet size %zd [af=%d proto=%d minsize=%zd]", sz, af, mtrtype, hdr_minsz);
+  ssize_t size = recvfrom(recvsock, packet, MAXPACKET, 0, (struct sockaddr *)&sa_in, &sa_len);
+  LOGMSG("got %zd bytes", size);
+  if (size < hdr_minsz)
+    LOGRET("incorrect packet size %zd [af=%d proto=%d minsize=%zd]", size, af, mtrtype, hdr_minsz);
 
   struct _icmphdr *icmp = (struct _icmphdr *)(packet + iphdr_sz);
   uint8_t *data = ((uint8_t*)icmp) + ipicmphdr_sz;
@@ -764,13 +768,13 @@ void net_icmp_parse(struct timespec *recv_at) {
         reason = RE_PONG;
         ICMPSEQID;
       } else if ((icmp->type == time_exceed) || (icmp->type == dst_unreach)) {
-        if (sz < minfailsz)
-          LOGRET("incorrect packet size %zd [af=%d proto=%d expect>=%zd]", sz, af, mtrtype, minfailsz);
+        if (size < minfailsz)
+          LOGRET("incorrect packet size %zd [af=%d proto=%d expect>=%zd]", size, af, mtrtype, minfailsz);
         reason = (icmp->type == time_exceed) ? RE_EXCEED : RE_UNREACH;
         icmp = (struct _icmphdr *)data;
         ICMPSEQID;
 #ifdef WITH_MPLS
-        mplson = mplslike(sz, data - packet);
+        mplson = mplslike(size, data - packet);
 #endif
       }
 #ifdef WITH_MPLS
@@ -794,7 +798,7 @@ void net_icmp_parse(struct timespec *recv_at) {
       }
       seq -= LO_UDPPORT;
 #ifdef WITH_MPLS
-      mplson = mplslike(sz, data - packet);
+      mplson = mplslike(size, data - packet);
       LOGMSG("udp seq=%d id=%d mpls=%d", seq, portpid, mplson);
 #else
       LOGMSG("udp seq=%d id=%d", seq, portpid);
@@ -806,7 +810,7 @@ void net_icmp_parse(struct timespec *recv_at) {
       struct tcphdr *th = (struct tcphdr *)data;
       seq = ntohs(th->th_sport);
 #ifdef WITH_MPLS
-      mplson = mplslike(sz, data - packet);
+      mplson = mplslike(size, data - packet);
       LOGMSG("tcp seq=%d mpls=%d", seq, mplson);
 #else
       LOGMSG("tcp seq=%d", seq);
@@ -819,15 +823,15 @@ void net_icmp_parse(struct timespec *recv_at) {
   /*summ*/ net_replies[QR_SUM]++;
 
   if (seq >= 0) net_stat(seq, ((uint8_t*)&sa_in) + sa_addr_offset, recv_at,
-    reason MPLSFNTAIL(mplson ? decodempls(data, sz - (data - packet)) : NULL));
+    reason MPLSFNTAIL(mplson ? decodempls(data, size - (data - packet)) : NULL));
 #undef ICMPSEQID
 }
 
 
-const char *net_elem(int at, char c) {
+const char *net_elem(int at, char ch) {
   static char elemstr[16];
   int ival = -1;
-  switch (c) {
+  switch (ch) {
     case 'D':  // Dropped Packets
       ival = host[at].sent - host[at].recv - (int)host[at].transit; break;
     case 'R':  // Received Packets
@@ -839,9 +843,9 @@ const char *net_elem(int at, char c) {
     snprintf(elemstr, sizeof(elemstr), "%d", ival);
     return elemstr;
   }
-  double val;
+  double val = NAN;
   char *suffix = NULL;
-  switch (c) {
+  switch (ch) {
     case 'N':   // Newest RTT(msec)
       val = msec2float(host[at].last); break;
     case 'B':   // Min/Best RTT(msec)
@@ -883,7 +887,8 @@ int net_max(void) {
       if (endpoint_mode)
         fstTTL = max;
       break;
-    } else if (addr_exist(&CURRENT_IP(at))) {
+    }
+    if (addr_exist(&CURRENT_IP(at))) {
       max = at + 2;
       if (endpoint_mode)
         fstTTL = max - 1; // -1: show previous known hop
@@ -901,7 +906,7 @@ inline void net_end_transit(void) { for (int at = 0; at < MAXHOST; at++) host[at
 int net_send_batch(void) {
   if (batch_at < fstTTL) {
     // Randomize bit-pattern and packet-size if requested
-    bitpattern = (cbitpattern < 0) ? RANDUNIFORM(256) : cbitpattern;
+    bitpattern = (cbitpattern < 0) ? RANDUNIFORM(UCHAR_MAX + 1) : cbitpattern;
     if (cpacketsize < 0) {
       int base = -cpacketsize - MINPACKET;
       packetsize = base ? (MINPACKET + RANDUNIFORM(base)) : MINPACKET;
@@ -954,7 +959,6 @@ static void net_sock_close(void) {
 }
 
 #ifdef LIBCAP
-#include <sys/capability.h>
 void set_rawcap_flag(cap_flag_value_t flag) {
   static const cap_value_t cap_net_raw = CAP_NET_RAW;
   cap_t proc = cap_get_proc();
@@ -1018,6 +1022,7 @@ static inline int net_getsock6(void) {
   switch (mtrtype) {
     case IPPROTO_ICMP: return sendsock6_icmp;
     case IPPROTO_UDP:  return sendsock6_udp;
+    default: break;
   }
   return -1;
 }
@@ -1063,12 +1068,12 @@ bool net_set_host(t_ipaddr *ipaddr) {
 #ifdef ENABLE_IPV6
         (saf == AF_INET6) ? (char*)&((struct sockaddr_in6 *)ss)->sin6_addr :
 #endif
-        ((saf == AF_INET) ? (char*)&((struct sockaddr_in *)ss)->sin_addr : NULL);
+        ((saf == AF_INET) ? (char*)&((struct sockaddr_in  *)ss)->sin_addr  : NULL);
       if (!addr) WARNX("Unknown address family: %d", saf);
       else if (!inet_ntop(saf, addr, localaddr, sizeof(localaddr))) WARN("inet_ntop()");
     } else WARN("getsockname()");
   }
-  portpid = IPPORT_RESERVED + mypid % (65535 - IPPORT_RESERVED);
+  portpid = IPPORT_RESERVED + mypid % (USHRT_MAX - IPPORT_RESERVED);
   return true;
 }
 
@@ -1104,7 +1109,7 @@ bool net_set_ifaddr(const char *ifaddr) {
         return false;
       }
       len = sizeof(lsa.sin);
-    break;
+      break;
 #ifdef ENABLE_IPV6
     case AF_INET6:
       lsa.S6PORT = 0;
@@ -1113,8 +1118,9 @@ bool net_set_ifaddr(const char *ifaddr) {
         return false;
       }
       len = sizeof(lsa.sin6);
-    break;
+      break;
 #endif
+    default: break;
   }
   if (bind(sendsock, &lsa.sa, len) < 0) {
     WARN("bind(%d)", sendsock);
@@ -1135,13 +1141,13 @@ inline int net_wait(void) { return recvsock; }
 
 static int err_slippage(int sock) {
   socklen_t namelen = sizeof(rsa);
-  int r = getpeername(sock, &rsa.sa, &namelen);
-  if ((r < 0) && (errno == ENOTCONN)) {
-    r = read(sock, &namelen, 1);
-    if (r >= 0) return -1; // sanity lost
-    r = errno;
-  } else r = 0;
-  return r;
+  int rc = getpeername(sock, &rsa.sa, &namelen);
+  if ((rc < 0) && (errno == ENOTCONN)) {
+    rc = read(sock, &namelen, 1);
+    if (rc >= 0) return -1; // sanity lost
+    rc = errno;
+  } else rc = 0;
+  return rc;
 }
 
 // Check connection state with error-slippage
@@ -1161,6 +1167,7 @@ void net_tcp_parse(int sock, int seq, int noerr, struct timespec *recv_at) {
       LOGMSG("stat seq=%d for sock=%d", seq, sock);
       break;
 //  case EAGAIN: // need to wait more
+    default: break;
   }
   seqlist[seq].transit = false;
   if (noerr) { /*summ*/ net_replies[QR_SUM]++; net_replies[QR_TCP]++; }
@@ -1195,13 +1202,13 @@ static void save_ptr_answer(int at, int ndx, const char* answer) {
 #endif
 
 void net_assert(void) { // to be sure
-  assert(sizeof(struct _iphdr)   == 20);
-  assert(sizeof(struct _udpph)   == 12);
-  assert(sizeof(struct _icmphdr) == 8);
+  static_assert(sizeof(struct _iphdr)   == 20, "struct iphdr");
+  static_assert(sizeof(struct _udpph)   == 12, "struct udpph");
+  static_assert(sizeof(struct _icmphdr) == 8,  "struct icmphdr");
 #ifdef WITH_MPLS
-  assert(IES_SZ == 4);
-  assert(IEO_SZ == 4);
-  assert(LAB_SZ == 4);
+  static_assert(IES_SZ == 4, "mpls ies");
+  static_assert(IEO_SZ == 4, "mpls ieo");
+  static_assert(LAB_SZ == 4, "mpls label");
 #endif
   net_settings(IPV6_UNDEF);
 }
@@ -1265,21 +1272,21 @@ const char *strlongip(t_ipaddr *ipaddr) {
 #ifdef WITH_MPLS
 const char *mpls2str(const mpls_label_t *label, int indent) {
   static const char mpls_fmt[] = "%*s[Lbl:%u Exp:%u S:%u TTL:%u]";
-  static char m2s_buf[64];
-  snprintf(m2s_buf, sizeof(m2s_buf), mpls_fmt, indent, "", label->lab, label->exp, label->bos, label->ttl);
-  return m2s_buf;
+  static char mpls2s_buf[64];
+  snprintf(mpls2s_buf, sizeof(mpls2s_buf), mpls_fmt, indent, "", label->lab, label->exp, label->bos, label->ttl);
+  return mpls2s_buf;
 }
 #endif
 
 // type must correspond 'id' in resolve HEADER (unsigned id:16)
 // it's used as a hint for fast search, 16bits as [hash:7 at:6 ndx:3]
-uint16_t str2hint(const char* s, uint16_t at, uint16_t ndx) {
-  uint16_t h = 0, c;
-  while ((c = *s++))
-    h = ((h << 5) + h) ^ c; // h * 33 ^ c
-  h &= IDMASK;
-  h |= AT2ID(at);
-  h |= ID2NDX(ndx);
-  return h;
+uint16_t str2hint(const char* str, uint16_t at, uint16_t ndx) {
+  uint16_t hint = 0, ch;
+  while ((ch = *str++))
+    hint = ((hint << 5) + hint) ^ ch; // h * 33 ^ ch
+  hint &= IDMASK;
+  hint |= AT2ID(at);
+  hint |= ID2NDX(ndx);
+  return hint;
 }
 

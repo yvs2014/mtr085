@@ -21,9 +21,11 @@
 #ifndef SPLIT_H
 #define SPLIT_H
 
+#include "common.h"
+
 void split_open(void);
 void split_close(void);
 void split_redraw(void);
-int split_keyaction(void);
+key_action_t split_keyaction(void);
 
 #endif

@@ -17,11 +17,15 @@
 */
 
 #include <stdio.h>
+#include <stdint.h>
+#include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
+#include <strings.h>
 #include <fcntl.h>
 #include <poll.h>
 #include <time.h>
+#include <sys/socket.h>
 
 #include "config.h"
 #if defined(LOG_IPINFO) && !defined(LOGMOD)
@@ -33,29 +37,37 @@
 #endif
 #include "common.h"
 
+#include <netinet/in.h>
+#ifdef HAVE_ARPA_NAMESER_H
+#ifndef BIND_8_COMPAT
+#define BIND_8_COMPAT
+#endif
+#include <arpa/nameser.h>
+#endif
+#ifdef HAVE_NETDB_H
+#include <netdb.h>
+#endif
+#include <resolv.h>
+
 #include "ipinfo.h"
 #include "mtr-poll.h"
 #include "net.h"
-#include "display.h"
 #ifdef ENABLE_DNS
 #include "dns.h"
 #endif
 #include "aux.h"
 
-#define COMMA  ','
-#define VSLASH '|'
-#define UNKN   "?"
-#define CHAR_QOUTES	  "\"'"
+enum { COMMA = ',', VSLASH = '|', WHOIS_COMMENT = '%' };
+#define UNKN "?"
+#define CHAR_QUOTES   "\"'"
 #define CHAR_BRACKETS "{}"
-#define NETDATA_MAXSIZE   3000
-#define TCP_RESP_LINES    100
-#define TCP_CONN_TIMEOUT  3
-#define WHOIS_COMMENT    '%'
-#define WHOIS_LAST_NDX 2
-#define HTTP_GET "GET %s HTTP/1.1\r\nHost: %s\r\nUser-Agent: %s\r\nAccept: */*\r\n\r\n"
-#define IPINFO_TCP_TIMEOUT 10 /* in seconds */
 
-struct ipitseq { int sock, state, slot; };
+enum { TCP_CONN_TIMEOUT = 3, IPINFO_TCP_TIMEOUT = 10 /* in seconds */ };
+enum { TCP_RESP_LINES = 100, NETDATA_MAXSIZE = 3000 };
+enum { WHOIS_LAST_NDX = 2 };
+#define HTTP_GET "GET %s HTTP/1.1\r\nHost: %s\r\nUser-Agent: %s\r\nAccept: */*\r\n\r\n"
+
+typedef struct { int sock, state, slot; } ipitseq_t;
 enum { TSEQ_CREATED, TSEQ_READY };  // tcp-socket state: created or ready, otherwise -1
 
 // global
@@ -70,11 +82,11 @@ static int origin_no;     // set once at init
 static int itemname_max;  // set once at init
 
 static int ipinfo_syn_timeout = 3;     // in seconds
-static struct ipitseq *ipitseq;        // for tcp-origins
-static char exchbuf[NETDATA_MAXSIZE];  // send-receive buffer
+static ipitseq_t *ipitseq;             // for tcp-origins
 
 // origin types: dns txt, http csv, whois pairs
 enum { OT_DNS = 0 /*sure*/, OT_HTTP, OT_WHOIS };
+enum { WHOIS_PORT = 43, HTTP_PORT = 80 };
 
 typedef struct {
   char* host;
@@ -98,6 +110,8 @@ typedef struct {
 #define ORIG_WIDTH(num) (origins[origin_no].width[num])
 
 static int ipinfo_no[MAX_TXT_ITEMS] = {-1}; // max is #8 getcitydetails.geobytes.com
+
+enum { IPAPI_STATUS_NDX = 1, IPAPI_QUERYIP_NDX = 14};
 
 static origin_t origins[] = {
 // Abbreviations: CC - Country Code, RC - Region Code, MC - Metro Code, Org - Organization, TZ - TimeZone
@@ -140,7 +154,7 @@ static origin_t origins[] = {
       "208.95.112.1",
 #endif
     .name  = { /* Status, */ "Country", "CC", "RC", "Region", "City", "Zip", "Lat", "Long", "TZ", "ISP", "Org", "AS Name" /*, QueryIP */ },
-    .sep   = COMMA, .type = OT_HTTP, .skip_ndx = {1, 14}, .prefix = "/csv/",
+    .sep   = COMMA, .type = OT_HTTP, .skip_ndx = {IPAPI_STATUS_NDX, IPAPI_QUERYIP_NDX}, .prefix = "/csv/",
   },
 // 6
   { .host  = "asn.routeviews.org",
@@ -173,32 +187,33 @@ static int ndx_in_skip_list(const int ndx, const int* list) {
 static int split_with_sep(char** args, int max, char sep, char quote) {
   if (!args || !*args)
     return 0;
-  int i, inside = 0;
-  char *p, **a = args + 1;
-  for (i = 0, p = *args; *p; p++)
-    if ((*p == sep) && !inside) {
-      i++;
-      if (i >= max) break;
-      *p = 0;
-      *a++ = p + 1;
-    } else if (*p == quote) inside = !inside;
+  int cnt = 0, inside = 0;
+  for (char *ptr = *args, **next = args + 1; *ptr; ptr++) {
+    if ((*ptr == sep) && !inside) {
+      cnt++;
+      if (cnt >= max) break;
+      *ptr = 0;
+      *next++ = ptr + 1;
+    } else if (*ptr == quote)
+      inside = !inside;
+  }
   for (int j = 0; (j < max) && args[j]; j++)
     args[j] = trim(args[j]);
-  return (i < max) ? (i + 1) : max;
+  return (cnt < max) ? (cnt + 1) : max;
 }
 
 static void unkn2norm(char **record) {
   if (ORIG_UNKN) { // change to std UNKN
-    int len = strnlen(ORIG_UNKN, NAMELEN);
+    size_t len = strnlen(ORIG_UNKN, NAMELEN);
     for (int i = 0; (i < MAX_TXT_ITEMS) && record[i]; i++)
       if (!strncmp(record[i], ORIG_UNKN, len))
         record[i] = UNKN;
   }
 }
 
-static char** split_record(char *r) {
+static char** split_record(char *record) {
   static char* recbuf[MAX_TXT_ITEMS] = {0};
-  recbuf[0] = r;
+  recbuf[0] = record;
   split_with_sep(recbuf, MAX_TXT_ITEMS, origins[origin_no].sep, '"');
   unkn2norm(recbuf);
   return recbuf;
@@ -206,7 +221,7 @@ static char** split_record(char *r) {
 
 static void adjust_width(char** record) {
   for (int i = 0; (i < MAX_TXT_ITEMS) && record[i]; i++) {
-    int len = strnlen(record[i], NAMELEN); // utf8 ? strnlen() : mbstowcs(NULL, records[i], 0);
+    size_t len = strnlen(record[i], NAMELEN); // utf8 ? strnlen() : mbstowcs(NULL, records[i], 0);
     if (ORIG_WIDTH(i) < len)
       ORIG_WIDTH(i) = len;
   }
@@ -220,12 +235,12 @@ static void save_fields(int at, int ndx, char **record) {
   for (int i = 0, j = 0; (i < MAX_TXT_ITEMS) && record[i]; i++) {
     if (ndx_in_skip_list(i, ORIG_SKIP_NDX) >= 0) // skip it
       continue;
-    char *s = trim(record[i]);
-    if (str_in_skip_list(s, ORIG_SKIP_STR) >= 0) // skip it
+    char *str = trim(record[i]);
+    if (str_in_skip_list(str, ORIG_SKIP_STR) >= 0) // skip it
       continue;
     if (RTXT_AT_NDX(at, ndx, j))
       free(RTXT_AT_NDX(at, ndx, j));
-    RTXT_AT_NDX(at, ndx, j) = strndup(s, NAMELEN);
+    RTXT_AT_NDX(at, ndx, j) = strndup(str, NAMELEN);
     if (!RTXT_AT_NDX(at, ndx, j)) {
       WARN("[%d:%d:%d]: strndup()", at, ndx, j);
       break;
@@ -256,20 +271,21 @@ void save_txt_answer(int at, int ndx, const char *answer) {
   adjust_width(&(RTXT_AT_NDX(at, ndx, 0)));
 }
 
-static char trim_c(char *s, char *sc) {
-    char c;
-    while ((c = *sc++)) if (*s == c) { *s = 0; break;}
-    return (*s);
+static char trim_c(char *str, const char *quotes) {
+  char ch = 0;
+  while ((ch = *quotes++)) if (*str == ch) { *str = 0; break; }
+  return (*str);
 }
 
-static char* trim_str(char *s, char *sc) {
-    char *p;
-    int i, l = strlen(s);
-    for (i = l - 1, p = s + l - 1; i >= 0; i--, p--)
-        if (trim_c(p, sc)) break;
-    for (i = 0, p = s, l = strlen(s); i < l; i++, p++)
-        if (trim_c(p, sc)) break;
-    return p;
+static char* trim_str(char *str, const char *quotes) {
+  { size_t len = strlen(str);
+    char *ptr = str + len - 1;
+    for (size_t i = len; i > 0; i--, ptr--)
+      if (trim_c(ptr, quotes)) break; }
+  { char *ptr = str;
+    for (; ptr; ptr++)
+      if (trim_c(ptr, quotes)) break;
+    return ptr; }
 }
 
 static void save_records(atndx_t id, char **record) {
@@ -278,79 +294,76 @@ static void save_records(atndx_t id, char **record) {
   adjust_width(&(RTXT_AT_NDX(id.at, id.ndx, 0)));
 }
 
-static int count_records(char **r) {
-  int n = 0;
-  for (int i = 0; (i < MAX_TXT_ITEMS) && r[i]; i++) {
+static int count_records(char **record) {
+  int nth = 0;
+  for (int i = 0; (i < MAX_TXT_ITEMS) && record[i]; i++) {
     if (ndx_in_skip_list(i, ORIG_SKIP_NDX) >= 0) // skip it
       continue;
-    r[i] = trim(r[i]);
-    if (str_in_skip_list(r[i], ORIG_SKIP_STR) >= 0) // skip it
+    record[i] = trim(record[i]);
+    if (str_in_skip_list(record[i], ORIG_SKIP_STR) >= 0) // skip it
       continue;
-    n++;
+    nth++;
   }
-  return n;
+  return nth;
+}
+
+static inline int parse_http_content_len(int lines_no, char* lines[TCP_RESP_LINES], int recv_size, int *cndx) {
+  int ndx = 0, len = 0; // content index in tcp response and its length
+  for (int i = 0; i < lines_no; i++) {
+    char* tagvalue[2] = { lines[i], NULL };
+    if (split_with_sep(tagvalue, 2, ' ', 0) == 2)
+      if (strcmp("Content-Length:", tagvalue[0]) == 0)
+        len = atoi(tagvalue[1]);
+    if (lines[i][0]) // skip header lines
+      continue;
+    if ((i + 1) < lines_no)
+      ndx = i + 1;
+    break;
+  }
+  if (ndx && (len > 0) && (len < recv_size))
+    *(lines[ndx] + len) = 0;
+  else
+    len = strnlen(lines[ndx], NAMELEN);
+  if (cndx) *cndx = ndx;
+  return len;
 }
 
 
-static void parse_http(void *buf, int r, atndx_t id) {
+static void parse_http(char *buf, int recv_size, atndx_t id) {
   static char h11[] = "HTTP/1.1";
   static int h11_ln = sizeof(h11) - 1;
   static char h11ok[] = "HTTP/1.1 200 OK";
   static int h11ok_ln = sizeof(h11ok) - 1;
 
-  LOGMSG("got %d bytes: \"%s\"", r, (char*)buf);
   /*summ*/ ipinfo_replies[0]++; ipinfo_replies[1]++;
 
-  for (char *p = buf; (p = strstr(p, h11)) && ((p - (char*)buf) < r); p += h11_ln) {
-    if (strncmp(p, h11ok, h11ok_ln)) { // not HTTP OK
-      LOGMSG("not OK: %.*s", h11ok_ln, p);
+  for (char *ptr = buf; (ptr = strstr(ptr, h11)) && ((ptr - buf) < recv_size); ptr += h11_ln) {
+    if (strncmp(ptr, h11ok, h11ok_ln)) { // not HTTP OK
+      LOGMSG("not OK: %.*s", h11ok_ln, ptr);
       break; // i.e. set as unknown
     }
     char* lines[TCP_RESP_LINES] = {0};
     lines[0] = buf;
-    int rn = split_with_sep(lines, TCP_RESP_LINES, '\n', 0);
-    if (rn < 4) { // HEADER + NL + NL + DATA
-      LOGMSG("No data after header (got %d lines only)", rn);
+    int lines_no = split_with_sep(lines, TCP_RESP_LINES, '\n', 0);
+    if (lines_no < 4) { // HEADER + NL + NL + DATA
+      LOGMSG("No data after header (got %d lines only)", lines_no);
       continue;
     }
 
-    int cndx = 0, clen = 0; // content index in tcpresp and its length
-    for (int i = 0; i < rn; i++) {
-      char* ln[2] = { lines[i] };
-      if (split_with_sep(ln, 2, ' ', 0) == 2)
-        if (strcmp("Content-Length:", ln[0]) == 0)
-          clen = atoi(ln[1]);
-      if (lines[i][0]) // skip header lines
-        continue;
-      if ((i + 1) < rn)
-        cndx = i + 1;
-      break;
-    }
-    if (cndx && (clen > 0) && (clen < r))
-      *(lines[cndx] + clen) = 0;
-    else
-      clen = strnlen(lines[cndx], NAMELEN);
+    int cndx = 0;
+    int clen = parse_http_content_len(lines_no, lines, recv_size, &cndx);
 
-    char *txt = calloc(1, clen + 1);
-    if (!txt) {
-      WARN("calloc(%d)", clen + 1);
-      return;
-    }
-    for (int i = cndx, l = 0; (i < rn) && (l < clen); i++) // combine into one line
-      l += snprintf(txt + l, clen - l, "%s", lines[i]);
+    char txt[clen + 1]; memset(txt, 0, sizeof(txt));
+    for (int i = cndx, len = 0; (i < lines_no) && (len < clen); i++) // combine into one line
+      len += snprintf(txt + len, clen - len, "%s", lines[i]);
 
-    LOGMSG("got line: %s", txt);
-    char **re = split_record(trim_str(trim_str(txt, CHAR_QOUTES), CHAR_BRACKETS));
-    if (re) {
-      int got = count_records(re);
-      if (got == itemname_max) { // save results and return
-        save_records(id, re);
-        free(txt);
-        return;
-      } else
-        LOGMSG("Expected %d records, got %d", itemname_max, got);
+    LOGMSG("record line: %s", txt);
+    char **records = split_record(trim_str(trim_str(txt, CHAR_QUOTES), CHAR_BRACKETS));
+    if (records) {
+      int got = count_records(records);
+      if (got == itemname_max) { save_records(id, records); return; }
+      LOGMSG("Expected %d records, got %d", itemname_max, got);
     }
-    free(txt);
   }
 
   // not found
@@ -359,39 +372,40 @@ static void parse_http(void *buf, int r, atndx_t id) {
 }
 
 
-static void parse_whois(void *txt, int r, atndx_t id) {
-  LOGMSG("got[%d]: \"%.*s\"", r, r, (char*)txt);
+static inline void parse_whois_tagvalue(char* line, char* record[MAX_TXT_ITEMS]) {
+  char* tagvalue[2] = { line, NULL };
+  if (split_with_sep(tagvalue, 2, ':', 0) != 2) return;
+  for (int j = 0; (j < MAX_TXT_ITEMS) && ORIG_NAME(j); j++) {
+    if (!tagvalue[0]) return;
+    if (af == AF_INET6) { // check "*6" fields too
+      size_t end = strnlen(tagvalue[0], NAMELEN) - 1;
+      if ((end > 0) && (tagvalue[0][end] == '6'))
+        tagvalue[0][end] = 0;
+    }
+    if (strcasecmp(ORIG_NAME(j), tagvalue[0]) == 0) record[j] = tagvalue[1];
+    if (j == WHOIS_LAST_NDX) { // split the last item (description, country)
+      char* desc_cc[2] = { record[j], NULL };
+      if (split_with_sep(desc_cc, 2, COMMA, 0) == 2)
+        record[WHOIS_LAST_NDX + 1] = desc_cc[1];
+    }
+  }
+}
+
+
+static void parse_whois(void *txt, atndx_t id) {
   /*summ*/ ipinfo_replies[0]++; ipinfo_replies[2]++;
 
   char* record[MAX_TXT_ITEMS] = {0};
   char* lines[TCP_RESP_LINES] = {0};
   lines[0] = txt;
 
-  int rn = split_with_sep(lines, TCP_RESP_LINES, '\n', 0);
-  int sn = skip_whois_comments(lines, rn);
-  if (sn >= 0) { // not empty segments
-    for (int i = sn; (i < rn) && (i < TCP_RESP_LINES) && lines[i]; i++) {
+  int lines_no = split_with_sep(lines, TCP_RESP_LINES, '\n', 0);
+  int start_no = skip_whois_comments(lines, lines_no);
+  if (start_no >= 0) { // not empty segments
+    for (int i = start_no; (i < lines_no) && (i < TCP_RESP_LINES) && lines[i]; i++) {
       if (!lines[i][0] || (lines[i][0] == WHOIS_COMMENT))
         continue; // skip empty lines and comments
-      char* ln[2] = { lines[i] };
-      if (split_with_sep(ln, 2, ':', 0) == 2) {
-        for (int j = 0; (j < MAX_TXT_ITEMS) && ORIG_NAME(j); j++) {
-          if (!ln[0])
-            break;
-          if (af == AF_INET6) { // check "*6" fields too
-            int lc = strnlen(ln[0], NAMELEN) - 1;
-            if ((lc > 0) && (ln[0][lc] == '6'))
-              ln[0][lc] = 0;
-          }
-          if (strcasecmp(ORIG_NAME(j), ln[0]) == 0)
-            record[j] = ln[1];
-          if (j == WHOIS_LAST_NDX) { // split the last item (description, country)
-            char* dc[2] = { record[j], NULL };
-            if (split_with_sep(dc, 2, COMMA, 0) == 2)
-              record[WHOIS_LAST_NDX + 1] = dc[1];
-          }
-        }
-      }
+      parse_whois_tagvalue(lines[i], record);
     }
   } else LOGMSG("Skip empty segment");
 
@@ -410,38 +424,45 @@ static void close_ipitseq(int seq) {
       close(sock);
       /*summ*/ sum_sock[1]++;
     }
-    memset(&ipitseq[seq], -1, sizeof(struct ipitseq));
+    memset(&ipitseq[seq], -1, sizeof(ipitseq[0]));
   }
 }
 
 void ipinfo_parse(int sock, int seq) { // except dns, dns.ack in dns.c
+  char buf[NETDATA_MAXSIZE] = {0};
   seq %= MAXSEQ;
-  memset(exchbuf, 0, sizeof(exchbuf));
-  int r = recv(sock, exchbuf, NETDATA_MAXSIZE, 0);
-  if (r > 0) {
+  int received = recv(sock, buf, sizeof(buf), 0);
+  if (received > 0) {
     atndx_t id = { .at = seq / MAXPATH, .ndx = seq % MAXPATH };
     switch ORIG_TYPE {
-      case OT_HTTP: parse_http(exchbuf, r, id); return;
-      case OT_WHOIS: parse_whois(exchbuf, r, id); return;
+      case OT_HTTP:
+        LOGMSG( "HTTP: got[%d]: \"%.*s\"", received, received, buf);
+        parse_http(buf, received, id);
+        return;
+      case OT_WHOIS:
+        LOGMSG("WHOIS: got[%d]: \"%.*s\"", received, received, buf);
+        parse_whois(buf, id);
+        return;
+      default: break;
     }
-  } else if (r < 0)
+  } else if (received < 0)
     WARN("seq=%d recv(sock=%d)", seq, sock);
   close_ipitseq(seq);
 }
 
 
 static int create_tcpsock(int seq) {
-  uint16_t port = (ORIG_TYPE == OT_WHOIS) ? 43 : 80;
+  uint16_t port = (ORIG_TYPE == OT_WHOIS) ? WHOIS_PORT : HTTP_PORT;
   char srv[8];
   snprintf(srv, sizeof(srv), "%u", port);
   LOGMSG("%s:%s", ORIG_HOST, srv);
-  struct addrinfo *rp, hints = {
+  struct addrinfo *rp = NULL, hints = {
     .ai_family = af,
     .ai_socktype = SOCK_STREAM,
     .ai_protocol = IPPROTO_TCP };
-  int e = getaddrinfo(ORIG_HOST, srv, &hints, &rp);
-  if (e || !rp)
-    LOG_RE(-1, "getaddrinfo(%s): %s", ORIG_HOST, gai_strerror(e));
+  int ecode = getaddrinfo(ORIG_HOST, srv, &hints, &rp);
+  if (ecode || !rp)
+    LOG_RE(-1, "getaddrinfo(%s): %s", ORIG_HOST, gai_strerror(ecode));
   int rc = -1;
   int sock = socket(rp->ai_family, rp->ai_socktype, rp->ai_protocol);
   if (sock < 0) {
@@ -456,7 +477,7 @@ static int create_tcpsock(int seq) {
       if (slot < 0) {
         LOGMSG("no place in pool for sockets (host=%s)", ORIG_HOST);
       } else {
-        ipitseq[seq] = (struct ipitseq) { .sock = sock, .slot = slot, .state = TSEQ_CREATED };
+        ipitseq[seq] = (ipitseq_t) { .sock = sock, .slot = slot, .state = TSEQ_CREATED };
         connect(sock, rp->ai_addr, rp->ai_addrlen); // NOLINT(bugprone-unused-return-value)
         LOGMSG("send non-blocking connect via sock=%d", sock);
         rc = 0; // note: non-blocking connect() returns EINPROGRESS
@@ -473,11 +494,12 @@ static int create_tcpsock(int seq) {
 }
 
 static int send_tcp_query(int sock, const char *q) {
+  char buf[NETDATA_MAXSIZE] = {0};
   (ORIG_TYPE == OT_WHOIS) ?
-    snprintf(exchbuf, NETDATA_MAXSIZE, "%s\r\n", q) :
-    snprintf(exchbuf, NETDATA_MAXSIZE, HTTP_GET, q, ORIG_HOST, FULLNAME);
-  int len = strnlen(exchbuf, NETDATA_MAXSIZE);
-  int rc = send(sock, exchbuf, len, 0);
+    snprintf(buf, sizeof(buf), "%s\r\n", q) :
+    snprintf(buf, sizeof(buf), HTTP_GET, q, ORIG_HOST, FULLNAME);
+  size_t len = strnlen(buf, sizeof(buf));
+  int rc = send(sock, buf, len, 0);
   if (rc >= 0) {
     /*summ*/ ipinfo_queries[0]++; (ORIG_TYPE == OT_HTTP) ? ipinfo_queries[1]++ : ipinfo_queries[2]++;
   }
@@ -545,25 +567,25 @@ static int ipinfo_lookup(int at, int ndx, const char *qstr) {
 #ifdef ENABLE_DNS
     (ORIG_TYPE == OT_DNS) ? dns_send_query(at, ndx, qstr, T_TXT) :
 #endif
-   	send_tcp_query(ipitseq[seq].sock, qstr);
+    send_tcp_query(ipitseq[seq].sock, qstr);
 }
 
 bool ipinfo_timedout(int seq) {
   seq %= MAXSEQ;
-  int at = seq / MAXPATH, ndx = seq % MAXPATH;
-  int dt = time(NULL) - QTXT_TS_AT_NDX(at, ndx);
-  if (dt <= IPINFO_TCP_TIMEOUT)
+  if ((time(NULL) - QTXT_TS_AT_NDX(seq / MAXPATH, seq % MAXPATH)) <= IPINFO_TCP_TIMEOUT)
     return false;
   LOGMSG("clean tcp seq=%d after %d sec", seq, IPINFO_TCP_TIMEOUT);
   close_ipitseq(seq);
   return true;
 }
 
-static char *get_ipinfo(int at, int ndx, int nd) {
-  if (RTXT_AT_NDX(at, ndx, nd)) // already known
-    return RTXT_AT_NDX(at, ndx, nd);
+static char *get_ipinfo(int at, int ndx, int item_no) {
+  if (RTXT_AT_NDX(at, ndx, item_no)) // already known
+    return RTXT_AT_NDX(at, ndx, item_no);
 #ifdef ENABLE_IPV6
-  if ((af == AF_INET6) && !origins[origin_no].host6) return NULL; else
+  if (af == AF_INET6) {
+    if (!origins[origin_no].host6) return NULL;
+  } else
 #endif
   { if (!ORIG_HOST) return NULL; }
   t_ipaddr *ipaddr = &IP_AT_NDX(at, ndx);
@@ -581,53 +603,49 @@ static char *get_ipinfo(int at, int ndx, int nd) {
 }
 
 
-#define FIELD_FMT	"%%-%ds "
 char* ipinfo_header(void) {
   static char iiheader[NAMELEN];
   iiheader[0] = 0;
-  char fmt[16];
-  for (int i = 0, l = 0; (i < MAX_TXT_ITEMS)
+  for (int i = 0, len = 0; (i < MAX_TXT_ITEMS)
       && (ipinfo_no[i] >= 0) && (ipinfo_no[i] < itemname_max)
-      && ORIG_NAME(ipinfo_no[i]) && (l < sizeof(iiheader)); i++) {
-    snprintf(fmt, sizeof(fmt), FIELD_FMT, ORIG_WIDTH(ipinfo_no[i]));
-    l += snprintf(iiheader + l, sizeof(iiheader) - l, fmt, ORIG_NAME(ipinfo_no[i]));
+      && ORIG_NAME(ipinfo_no[i]) && (len < sizeof(iiheader)); i++) {
+    len += snprintf(iiheader + len, sizeof(iiheader) - len,
+      "%-*s ", ORIG_WIDTH(ipinfo_no[i]), ORIG_NAME(ipinfo_no[i]));
   }
   return iiheader;
 }
 
 int ipinfo_width(void) {
-  int l = 0;
+  int width = 0;
   for (int i = 0; (i < MAX_TXT_ITEMS)
       && (ipinfo_no[i] >= 0) && (ipinfo_no[i] < itemname_max)
-      && (l < NAMELEN); i++)
-    l += 1 + ORIG_WIDTH(ipinfo_no[i]);
-  return l;
+      && (width < NAMELEN); i++)
+    width += 1 + ORIG_WIDTH(ipinfo_no[i]);
+  return width;
 }
 
-typedef int (*filler_fn)(char *buf, int sz, const char *data, int num, char ch);
+typedef int (*filler_fn)(char *buf, int size, const char *data, int num, char ch);
 
-int fmt_filler(char *buf, int sz, const char *data, int width, char ignore) {
-  if (width) {
-    char fmt[16];
-    snprintf(fmt, sizeof(fmt), FIELD_FMT, width);
-    return snprintf(buf, sz, fmt, data);
-  }
-  return snprintf(buf, sz, "%s ", data);
+int fmt_filler(char *buf, int size, const char *data, int width, char ignore) {
+  if (width) return snprintf(buf, size, "%-*s ", width, data);
+  return snprintf(buf, size, "%s ", data);
 }
 
-int sep_filler(char *buf, int sz, const char *data, int seq, char sep) {
-  return seq ? snprintf(buf, sz, "%c\"%s\"", sep, data) : snprintf(buf, sz, "\"%s\"", data);
+int sep_filler(char *buf, int size, const char *data, int seq, char sep) {
+  return seq ? snprintf(buf, size, "%c\"%s\"", sep, data) : snprintf(buf, size, "\"%s\"", data);
 }
 
 static char *fill_ipinfo(int at, int ndx, char sep) {
   static char fmtinfo[NAMELEN];
   fmtinfo[0] = 0;
-  for (int i = 0, l = 0; (i < MAX_TXT_ITEMS)
+  for (int i = 0, len = 0; (i < MAX_TXT_ITEMS)
       && (ipinfo_no[i] >= 0) && (ipinfo_no[i] < itemname_max)
-      && (l < sizeof(fmtinfo)); i++) {
-    const char *rec = addr_exist(&IP_AT_NDX(at, ndx)) ? get_ipinfo(at, ndx, ipinfo_no[i]) : NULL;
-    filler_fn fn = sep ? sep_filler : fmt_filler;
-    l += fn(fmtinfo + l, sizeof(fmtinfo) - l, rec ? rec : UNKN, sep ? i : ORIG_WIDTH(ipinfo_no[i]), sep);
+      && (len < sizeof(fmtinfo)); i++) {
+    const char *rec = addr_exist(&IP_AT_NDX(at, ndx)) ?
+      get_ipinfo(at, ndx, ipinfo_no[i]) : NULL;
+    filler_fn filler = sep ? sep_filler : fmt_filler;
+    len += filler(fmtinfo + len, sizeof(fmtinfo) - len,
+      rec ? rec : UNKN, sep ? i : ORIG_WIDTH(ipinfo_no[i]), sep);
   }
   return fmtinfo;
 }
@@ -638,14 +656,14 @@ inline char *sep_ipinfo(int at, int ndx, char sep) { return fill_ipinfo(at, ndx,
 bool ipinfo_ready(void) { return (enable_ipinfo && ii_ready); }
 
 static bool alloc_ipitseq(void) {
-  size_t sz = MAXHOST * MAXPATH * sizeof(struct ipitseq);
-  ipitseq = malloc(sz);
+  size_t size = sizeof(ipitseq_t) * MAXHOST * MAXPATH;
+  ipitseq = malloc(size);
   if (!ipitseq) {
-    WARN("tcpseq malloc(%zd)", sz);
+    WARN("tcpseq malloc(%zd)", size);
     return false;
   }
-  memset(ipitseq, -1, sz);
-  LOGMSG("allocated %zd bytes for tcp-sockets", sz);
+  memset(ipitseq, -1, size);
+  LOGMSG("allocated %zd bytes for tcp-sockets", size);
   return true;
 }
 
@@ -754,6 +772,7 @@ bool ipinfo_action(int action) {
       break;
     case ActionNone: // first time
       enable_ipinfo = true;
+    default: break;
   }
   return true;
 }

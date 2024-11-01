@@ -2,11 +2,12 @@
 #define GRAPHCAIRO_MTR_H
 
 #include <stdbool.h>
+#include "common.h"
 
 bool gc_open(void);
 void gc_close(void);
 bool gc_parsearg(char* arg);
 void gc_redraw(void);
-int gc_keyaction(void);
+key_action_t gc_keyaction(void);
 
 #endif

@@ -17,12 +17,20 @@
 */
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
-#include <strings.h>
 #include <assert.h>
 #include <time.h>
-#include <sys/types.h>
-#include <netinet/in_systm.h>
+
+#include "config.h"
+#ifdef OUTPUT_FORMAT_CSV
+#include <ctype.h>
+#endif
+#ifdef HAVE_NETDB_H
+#include <netdb.h>
+#endif
+
+#include "common.h"
 
 #include "aux.h"
 #include "report.h"
@@ -34,17 +42,12 @@
 #include "ipinfo.h"
 #endif
 
-#include "config.h"
-#ifdef OUTPUT_FORMAT_CSV
-#include <ctype.h>
-#endif
-
 #ifndef MAXDNAME
 #define MAXDNAME 1025
 #endif
 
-#define HOSTTITLE	"Host"	// report mode
-#define LSIDE_LEN	40	// non-wide report mode: left side of output
+#define HOSTTITLE "Host"
+enum { HOSTINFO_LEN = 40 }; // non-wide report mode: left side of output
 
 static char *get_now_str(void) {
   static char now_str[32];
@@ -53,9 +56,8 @@ static char *get_now_str(void) {
   return now_str;
 }
 
-void report_open(bool notfirst) {
-  if (notfirst)
-    printf("\n");
+void report_open(bool next) {
+  if (next) printf("\n");
   printf("[%s] %s: %s %s %s\n", get_now_str(), srchost, FULLNAME, mtr_args, dsthost);
 }
 
@@ -74,152 +76,128 @@ static size_t snprint_addr(char *dst, size_t len, t_ipaddr *ipaddr) {
     if (host) {
       if (enable_dns && show_ips)
         return snprintf(dst, len, "%s (%s)", host->h_name, strlongip(ipaddr));
-      else
-        return snprintf(dst, len, "%s", host->h_name);
-    } else
+      return snprintf(dst, len, "%s", host->h_name);
+    }
 #endif
     return snprintf(dst, len, "%s", strlongip(ipaddr));
-  } else
-    return snprintf(dst, len, "%s", "???");
+  }
+  return snprintf(dst, len, "%s", "???");
 }
 
 #ifdef WITH_MPLS
-static void print_mpls(const mpls_data_t *m) {
-  for (int i = 0; i < m->n; i++)
-    printf("%s\n", mpls2str(&(m->label[i]), 4));
+static void print_mpls(const mpls_data_t *mpls) {
+  for (int i = 0; i < mpls->n; i++)
+    printf("%s\n", mpls2str(&mpls->label[i], 4));
 }
 #endif
 
 static int get_longest_name(int min, int max) {
-  char *buf = malloc(max);
-  assert(buf);
-  int l = min;
-  int m = net_max();
-  for (int at = net_min(); at < m; at++) {
+  char buf[max];
+  int nmax = net_max();
+  for (int at = net_min(); at < nmax; at++) {
     for (int i = 0; i < MAXPATH; i++) {
-      int n = snprint_addr(buf, max, &IP_AT_NDX(at, i));
-      if (n > l)
-        l = n;
+      int len = snprint_addr(buf, max, &IP_AT_NDX(at, i));
+      if (len > min)
+        min = len;
     }
   }
-  free(buf);
-  return l;
+  return min;
 }
 
-static void report_addr_extra(int at, char *bufname, char *lbuf, const char *dfmt) {
+#define INFOPATT "%-*s"
+#define INDENT "    " // 4 x _
+
+static void report_print_header(int hostlen, int infolen, bool wide) {
+  char buf[MAXDNAME] = {0};
+  printf("%s", INDENT);
+  // left
+  int len = 0;
+#ifdef WITH_IPINFO
+  if (infolen) len += snprintf(buf, sizeof(buf), INFOPATT " ", infolen, ipinfo_header());
+#endif
+  snprintf(buf + len, sizeof(buf) - len, INFOPATT, hostlen, HOSTTITLE);
+  if (!wide && (strnlen(buf, sizeof(buf)) >= HOSTINFO_LEN)) buf[HOSTINFO_LEN] = 0;
+  printf("%s", buf);
+  // right
+  for (int i = 0, len = 0; (i < sizeof(fld_index)) && (len < sizeof(buf)); i++) {
+    const struct statf *stat = active_statf(i);
+    if (stat) printf("%*s", stat->len, stat->name); else break;
+  }
+  printf("\n");
+}
+
+static void report_print_body(int at, const char *fmt, int hostlen, int infolen, bool wide) {
+  char buf[MAXDNAME] = {0};
+  int len = 0;
+  // body: left
+  if (fmt) printf(fmt, at + 1);
+#ifdef WITH_IPINFO
+  if (infolen) len += snprintf(buf, sizeof(buf), INFOPATT " ", infolen, fmt_ipinfo(at, host[at].current));
+#endif
+  { char name[MAXDNAME] = {0};
+    snprint_addr(name, sizeof(name), &CURRENT_IP(at));
+    snprintf(buf + len, sizeof(buf) - len, INFOPATT, hostlen, name); }
+  if (!wide && (strlen(buf) >= HOSTINFO_LEN)) buf[HOSTINFO_LEN] = 0;
+  printf("%s", buf);
+  // body: right
+  for (int i = 0; (i < sizeof(fld_index)); i++) {
+    const struct statf *stat = active_statf(i);
+    if (!stat) break;
+    const char *str = net_elem(at, stat->key);
+    printf("%*s", stat->len, str ? str : "");
+  }
+  printf("\n");
+#ifdef WITH_MPLS
+  if (enable_mpls) print_mpls(&CURRENT_MPLS(at));
+#endif
+}
+
+static void report_print_rest(int at, int hostlen, int infolen) {
+  char buf[MAXDNAME];
   for (int i = 0; i < MAXPATH; i++) {
     if (i == host[at].current)
       continue; // because already printed
     t_ipaddr *ipaddr = &IP_AT_NDX(at, i);
     if (!addr_exist(ipaddr))
       break; // done
-    snprint_addr(bufname, MAXDNAME, ipaddr);
+    printf("%s", INDENT);
+    buf[0] = 0;
+    snprint_addr(buf, sizeof(buf), ipaddr);
 #ifdef WITH_IPINFO
-    if (ipinfo_ready())
-      snprintf(lbuf, MAXDNAME, dfmt, fmt_ipinfo(at, i), bufname);
-    else
+    if (infolen) printf(INFOPATT " ", infolen, fmt_ipinfo(at, i));
 #endif
-      snprintf(lbuf, MAXDNAME, dfmt, bufname);
-    printf("%s\n", lbuf);
+    printf(INFOPATT "\n", hostlen, buf);
 #ifdef WITH_MPLS
     if (enable_mpls)
       print_mpls(&MPLS_AT_NDX(at, i));
 #endif
   }
 }
+#undef INFOPATT
+#undef INDENT
 
 
 void report_close(bool wide) {
-  if (last_neterr != 0)
-    return;
-
-  assert(LSIDE_LEN < MAXDNAME);
-  char *lbuf = calloc(1, MAXDNAME);	// left side
-  assert(lbuf);
-  char *rbuf = calloc(1, MAXDNAME);	// right side
-  assert(rbuf);
-
-  int len = get_longest_name(strlen(HOSTTITLE), MAXDNAME);
-  char lfmt[32];	// left side format
-  char dfmt[32];
-
-  // header: left
+  if (last_neterr != 0) return;
+  static_assert(HOSTINFO_LEN < MAXDNAME, "hostinfo len");
+  int hostlen = get_longest_name(strlen(HOSTTITLE), MAXDNAME);
+  int infolen =
 #ifdef WITH_IPINFO
-  if (ipinfo_ready()) {
-    snprintf(lfmt, sizeof(lfmt), "%%2d. %%-%ds %%-%ds", ipinfo_width(), len); // "at. IPINFO HOST"
-    snprintf(dfmt, sizeof(dfmt), "    %%-%ds %%-%ds",   ipinfo_width(), len);
-    char *h = ipinfo_header();
-    snprintf(lbuf, MAXDNAME, dfmt, h ? h : "", HOSTTITLE);
-  } else
+    ipinfo_ready() ? ipinfo_width() :
 #endif
-  {
-    snprintf(lfmt, sizeof(lfmt), "%%2d. %%-%ds", len); // "at. HOST"
-    snprintf(dfmt, sizeof(dfmt), "    %%-%ds", len);
-    snprintf(lbuf, MAXDNAME, dfmt, HOSTTITLE);
-  }
-
-  // header: right
-  for (int i = 0, r = 0; (i < MAXFLD) && (r < MAXDNAME); i++) {
-    const struct statf *sf = active_statf(i);
-    if (sf)
-      r += snprintf(rbuf + r, MAXDNAME - r, "%*s", sf->len, sf->name);
-  }
-
-  // header: left + right
-  if (!wide)
-    if (strlen(lbuf) >= LSIDE_LEN)
-      lbuf[LSIDE_LEN] = 0;
-  // without space between because all the fields on the right side are supposed to be with some indent
-  printf("%s%s\n", lbuf, rbuf);
-
-  // body
-  char *bufname = calloc(1, MAXDNAME);
-  assert(bufname);
+    0;
+  report_print_header(hostlen, infolen, wide);
   int max = net_max();
-
   for (int at = net_min(); at < max; at++) {
-    snprint_addr(bufname, MAXDNAME, &CURRENT_IP(at));
-
-    // body: left
-#ifdef WITH_IPINFO
-    if (ipinfo_ready())
-      snprintf(lbuf, MAXDNAME, lfmt, at + 1, fmt_ipinfo(at, host[at].current), bufname);
-    else
-#endif
-      snprintf(lbuf, MAXDNAME, lfmt, at + 1, bufname);
-
-    // body: right
-    for (int i = 0, r = 0; (i < MAXFLD) && (r < MAXDNAME); i++) {
-      const struct statf *sf = active_statf(i);
-      if (sf) {
-        const char *str = net_elem(at, sf->key);
-        r += snprintf(rbuf + r, MAXDNAME - r, "%*s", sf->len, str ? str : "");
-      }
-    }
-
-    // body: left + right
-    if (!wide)
-      if (strlen(lbuf) >= LSIDE_LEN)
-        lbuf[LSIDE_LEN] = 0;
-    // without space between because all the fields on the right side are with space-indent
-    printf("%s%s\n", lbuf, rbuf);
-#ifdef WITH_MPLS
-    if (enable_mpls)
-      print_mpls(&CURRENT_MPLS(at));
-#endif
-    // body-extra-lines: multipath, mpls, etc.
-    report_addr_extra(at, bufname, lbuf, dfmt);
+    report_print_body(at, AT_FMT " ", hostlen, infolen, wide);
+    report_print_rest(at, hostlen, infolen); // multipath, mpls, etc.
   }
-  free(bufname);
-  free(rbuf);
-  free(lbuf);
 }
 
 
 #ifdef OUTPUT_FORMAT_TXT
-void txt_close(bool notfirst) {
-  if (notfirst)
-    printf("\n");
+void txt_close(bool next) {
+  if (next) printf("\n");
   report_close(true);
 }
 #endif
@@ -241,20 +219,18 @@ void xml_head(void) {
 void xml_tail(void) { printf("</MTR>\n"); }
 
 void xml_close(void) {
-  char *buf = calloc(1, MAXDNAME);
-  assert(buf);
   printf("%*s<DST HOST=\"%s\">\n", XML_MARGIN, "", dsthost);
   int max = net_max();
   for (int at = net_min(); at < max; at++) {
-    snprint_addr(buf, MAXDNAME, &CURRENT_IP(at));
+    char buf[MAXDNAME] = {0};
+    snprint_addr(buf, sizeof(buf), &CURRENT_IP(at));
     printf("%*s<HOP TTL=\"%d\" HOST=\"%s\">\n", XML_MARGIN * 2, "", at + 1, buf);
-    for (int i = 0; i < MAXFLD; i++) {
-      const struct statf *sf = active_statf(i);
-      if (sf) {
-        const char *str = net_elem(at, sf->key);
-        if (str)
-          printf("%*s<%s>%s</%s>\n", XML_MARGIN * 3, "", sf->name, str, sf->name);
-      }
+    for (int i = 0; i < sizeof(fld_index); i++) {
+      const struct statf *stat = active_statf(i);
+      if (!stat) break;
+      const char *str = net_elem(at, stat->key);
+      if (str)
+        printf("%*s<%s>%s</%s>\n", XML_MARGIN * 3, "", stat->name, str, stat->name);
     }
 #ifdef WITH_IPINFO
     if (ipinfo_ready())
@@ -265,7 +241,6 @@ void xml_close(void) {
   if (last_neterr != 0)
     printf("%*s<ERROR>%s</ERROR>\n", XML_MARGIN * 2, "", neterr_txt);
   printf("%*s</DST>\n", XML_MARGIN, "");
-  free(buf);
 }
 #endif
 
@@ -277,28 +252,25 @@ void xml_close(void) {
 void json_head(void) { printf("{\"source\":\"%s\",\"args\":\"%s\",\"targets\":[", srchost, mtr_args); }
 void json_tail(void) { printf("\n]}\n"); }
 
-void json_close(bool notfirst) {
-  char *buf = malloc(MAXDNAME);
-  assert(buf);
-  if (notfirst)
-    printf(",");
+void json_close(bool next) {
+  if (next) printf(",");
   printf("\n%*s{\"destination\":\"%s\",\"datetime\":\"%s\",\"data\":[", JSON_MARGIN, "", dsthost, get_now_str());
   int min = net_min(), max = net_max();
   for (int at = min; at < max; at++) {
+    char buf[MAXDNAME] = {0};
     printf((at == min) ? "\n" : ",\n");
-    snprint_addr(buf, MAXDNAME,  &CURRENT_IP(at));
+    snprint_addr(buf, sizeof(buf),  &CURRENT_IP(at));
     printf("%*s{\"host\":\"%s\",\"hop\":%d,\"up\":%d", JSON_MARGIN * 2, "", buf, at + 1, host[at].up);
-    for (int i = 0; i < MAXFLD; i++) {
-      const struct statf *sf = active_statf(i);
-      if (sf) {
-        const char *str = net_elem(at, sf->key);
-        if (str) {
-          int l = strnlen(str, MAXDNAME); // for trimming '%' at the end
-          if ((l > 0) && (str[l - 1] == '%'))
-            printf(",\"%s%%\":%.*s", sf->name, l - 1, str);
-          else
-            printf(",\"%s\":%s", sf->name, str);
-        }
+    for (int i = 0; i < sizeof(fld_index); i++) {
+      const struct statf *stat = active_statf(i);
+      if (!stat) break;
+      const char *str = net_elem(at, stat->key);
+      if (str) {
+        int len = strnlen(str, MAXDNAME);
+        if ((len > 0) && (str[len - 1] == '%')) // trim '%' at the end
+          printf(",\"%s%%\":%.*s", stat->name, len - 1, str);
+        else
+          printf(",\"%s\":%s", stat->name, str);
       }
     }
 #ifdef WITH_IPINFO
@@ -311,62 +283,54 @@ void json_close(bool notfirst) {
   if (last_neterr != 0)
     printf(",\"error\":\"%s\"", neterr_txt);
   printf("}");
-  free(buf);
 }
 #endif
 
 
 #ifdef OUTPUT_FORMAT_CSV
 
-#define CSV_DELIMITER	";"
-#define COMA	','
+#define CSV_DELIMITER ";"
+#define COMA ','
 
-static inline void prupper(const char *s) { while (*s) putchar(toupper((int)*s++)); }
+static inline void prupper(const char *str) { while (*str) putchar(toupper((int)*str++)); }
 
-void csv_close(bool notfirst) {
-  if (last_neterr != 0)
-    return;
-  char *buf = calloc(1, MAXDNAME);
-  assert(buf);
+static inline void csv_body(int at) {
+  printf("%s", dsthost);
+  printf(CSV_DELIMITER "%d", at + 1);
+  printf(CSV_DELIMITER "%s", host[at].up ? "up" : "down");
+  { char buf[MAXDNAME] = {0};
+    snprint_addr(buf, sizeof(buf), &CURRENT_IP(at));
+    printf(CSV_DELIMITER "%s", buf); }
+#ifdef WITH_IPINFO
+  if (ipinfo_ready()) printf(CSV_DELIMITER "%s", sep_ipinfo(at, host[at].current, COMA));
+#endif
+  for (int i = 0; i < sizeof(fld_index); i++) {
+    const struct statf *stat = active_statf(i);
+    if (!stat) break;
+    const char *str = net_elem(at, stat->key);
+    if (str) printf(CSV_DELIMITER "%s", str);
+  }
+  printf("\n");
+}
 
-  if (notfirst)
-    printf("\n");
+void csv_close(bool next) {
+  if (last_neterr != 0) return;
+  if (next) printf("\n");
   printf("DESTINATION" CSV_DELIMITER "HOP" CSV_DELIMITER "STATUS" CSV_DELIMITER "HOST");
 #ifdef WITH_IPINFO
-  if (ipinfo_ready())
-    printf(CSV_DELIMITER "INFO");
+  if (ipinfo_ready()) printf(CSV_DELIMITER "INFO");
 #endif
-  for (int i = 0; i < MAXFLD; i++) {
-    const struct statf *sf = active_statf(i);
-    if (sf && sf->key != ' ') {
-      printf(CSV_DELIMITER);
-      prupper(sf->name);
-    }
+  for (int i = 0; i < sizeof(fld_index); i++) {
+    const struct statf *stat = active_statf(i);
+    if (!stat) break;
+    if (isblank((int)stat->key) || (stat->key == '_')) continue;
+    printf(CSV_DELIMITER);
+    prupper(stat->name);
   }
   printf("\n");
   int max = net_max();
-  for (int at = net_min(); at < max; at++) {
-    snprint_addr(buf, MAXDNAME, &CURRENT_IP(at));
-
-    printf("%s", dsthost);
-    printf(CSV_DELIMITER "%d", at + 1);
-    printf(CSV_DELIMITER "%s", host[at].up ? "up" : "down");
-    printf(CSV_DELIMITER "%s", buf);
-#ifdef WITH_IPINFO
-    if (ipinfo_ready())
-      printf(CSV_DELIMITER "%s", sep_ipinfo(at, host[at].current, COMA));
-#endif
-    for (int i = 0; i < MAXFLD; i++) {
-      const struct statf *sf = active_statf(i);
-      if (sf) {
-        const char *str = net_elem(at, sf->key);
-        if (str)
-          printf(CSV_DELIMITER "%s", str);
-      }
-    }
-    printf("\n");
-  }
-  free(buf);
+  for (int at = net_min(); at < max; at++)
+    csv_body(at);
 }
 #endif
 
