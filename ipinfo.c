@@ -22,6 +22,7 @@
 #include <unistd.h>
 #include <string.h>
 #include <strings.h>
+#include <limits.h>
 #include <fcntl.h>
 #include <poll.h>
 #include <time.h>

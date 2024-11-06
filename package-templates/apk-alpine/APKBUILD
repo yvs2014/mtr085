@@ -1,0 +1,65 @@
+# Maintainer: yvs <VSYakovetsky@gmail.com>
+
+# sample (replace 'commit-hash-tag' and 'number' with their values)
+
+_bin='mtr'
+_git='commit-hash-tag'
+_ver="0.85.number"
+_build='_build'
+
+pkgname=mtr085
+pkgver="$_ver"
+pkgrel=1
+pkgdesc='Full screen ncurses traceroute tool, mtr v0.85 fork'
+url="https://github.com/yvs2014/$pkgname"
+giturl="$url"
+arch='all'
+license='GPL'
+depends='!mtr-*'
+makedepends='git meson pkgconf gcc ncurses-dev libcap-dev libidn-dev'
+options='strip !debug'
+subpackages="$pkgname-doc"
+
+provides="$_bin"
+install="$pkgname.post-install"
+
+snapshot() {
+  mkdir -p "$srcdir"
+  cd "$srcdir"
+  if [ -d "$pkgname" ]; then
+    cd $pkgname
+    git fetch
+  else
+    git clone "$giturl" "$pkgname"
+    cd $pkgname
+    git checkout "$_git"
+  fi
+  git archive --prefix="$pkgname/" -o "$srcdir/$pkgname-$pkgver.tar.gz" "$_git"
+}
+
+prepare() {
+  default_prepare
+  snapshot
+}
+
+build() {
+  cd "$srcdir/$pkgname"
+  abuild-meson "$_build" .
+  meson compile -C "$_build"
+}
+
+#check() {
+#  cd "$srcdir/$pkgname"
+#  meson test -C "$_build"
+#}
+
+post_install() {
+  setcap 'cap_net_raw+ep' "usr/bin/$_bin" || :
+}
+
+package() {
+  cd "$srcdir/$pkgname"
+  DESTDIR="$pkgdir" meson install -C "$_build"
+}
+
+sha256sums=SKIP
