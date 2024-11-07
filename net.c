@@ -203,9 +203,9 @@ void* (*addr_copy)(void *dst, const void *src);
 int af = AF_INET;  // default address family
 nethost_t host[MAXHOST];
 char localaddr[MAX_ADDRSTRLEN];
-unsigned long net_queries[4]; // number of queries (sum, icmp, udp, tcp)
-unsigned long net_replies[4]; // number of replies (sum, icmp, udp, tcp)
-enum { QR_SUM = 0 /*sure*/, QR_ICMP, QR_UDP, QR_TCP };
+enum { QR_SUM = 0 /*sure*/, QR_ICMP, QR_UDP, QR_TCP, QR_MAX };
+unsigned long net_queries[QR_MAX]; // number of queries (sum, icmp, udp, tcp)
+unsigned long net_replies[QR_MAX]; // number of replies (sum, icmp, udp, tcp)
 //
 
 
@@ -542,7 +542,7 @@ static bool net_send_icmp_udp(int at) {
     int rc = errno; const char *dst = strlongip(remote_ipaddr); errno = rc;
     FAIL_WITH_WARN(sendsock, "sendto(%s)", dst ? dst : "");
   }
-  /*summ*/ net_queries[QR_SUM]++; (mtrtype == IPPROTO_ICMP) ? net_queries[QR_ICMP]++ : net_queries[QR_UDP];
+  /*summ*/ net_queries[QR_SUM]++; if (mtrtype == IPPROTO_ICMP) net_queries[QR_ICMP]++; else net_queries[QR_UDP]++;
   return true;
 }
 
@@ -782,7 +782,7 @@ void net_icmp_parse(struct timespec *recv_at) {
 #else
       LOGMSG("icmp seq=%d type=%d", seq, icmp->type);
 #endif
-      /*summ*/ net_replies[QR_ICMP]++;
+      if (seq >= 0) /*summ*/ net_replies[QR_ICMP]++;
     } break;
 
     case IPPROTO_UDP: {
@@ -803,7 +803,7 @@ void net_icmp_parse(struct timespec *recv_at) {
 #else
       LOGMSG("udp seq=%d id=%d", seq, portpid);
 #endif
-      /*summ*/ net_replies[QR_UDP]++;
+      if (seq >= 0) /*summ*/ net_replies[QR_UDP]++;
     } break;
 
     case IPPROTO_TCP: {
@@ -815,7 +815,7 @@ void net_icmp_parse(struct timespec *recv_at) {
 #else
       LOGMSG("tcp seq=%d", seq);
 #endif
-      /*summ*/ net_replies[QR_TCP]++;
+      if (seq >= 0) /*summ*/ net_replies[QR_TCP]++;
     } break;
     default: LOGRET("Unsupported proto %d", mtrtype);
   } /*end of switch(mtrtype)*/
@@ -993,17 +993,21 @@ bool net_open(void) {
   RAWCAP_ON;
   sendsock4 = socket(AF_INET, SOCK_RAW, IPPROTO_RAW);
   RAWCAP_OFF;
-  if (sendsock4 < 0) // backup
+  if (sendsock4 < 0) { // backup
     if ((sendsock4 = net_socket(AF_INET, SOCK_RAW, IPPROTO_ICMP, "send socket")) < 0)
       return false;
+  } else /*summ*/ sum_sock[0]++;
   if ((recvsock4 = net_socket(AF_INET, SOCK_RAW, IPPROTO_ICMP, "recv socket")) < 0)
     return false;
 #ifdef ENABLE_IPV6
   // optional ipv6: to not fail
   RAWCAP_ON;
   recvsock6 = socket(AF_INET6, SOCK_RAW, IPPROTO_ICMPV6);
+  if (recvsock6 >= 0)      /*summ*/ sum_sock[0]++;
   sendsock6_icmp = socket(AF_INET6, SOCK_RAW, IPPROTO_ICMPV6);
+  if (sendsock6_icmp >= 0) /*summ*/ sum_sock[0]++;
   sendsock6_udp = socket(AF_INET6, SOCK_RAW, IPPROTO_UDP);
+  if (sendsock6_udp >= 0)  /*summ*/ sum_sock[0]++;
   RAWCAP_OFF;
 #endif
 #ifdef IP_HDRINCL
