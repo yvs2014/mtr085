@@ -276,6 +276,7 @@ extern bool bell_target;
 extern const char *fld_active;
 extern const t_statf statf[];
 extern const int statf_max;
+enum { BLANK_INDICATOR = '_' };
 //
 extern char srchost[];
 extern const char *dsthost;

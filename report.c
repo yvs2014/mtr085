@@ -92,12 +92,12 @@ static void print_mpls(const mpls_data_t *mpls) {
 }
 #endif
 
-static int get_longest_name(int min, int max) {
+static size_t get_longest_name(size_t min, size_t max) {
   char buf[max];
   int nmax = net_max();
   for (int at = net_min(); at < nmax; at++) {
     for (int i = 0; i < MAXPATH; i++) {
-      int len = snprint_addr(buf, max, &IP_AT_NDX(at, i));
+      size_t len = snprint_addr(buf, max, &IP_AT_NDX(at, i));
       if (len > min)
         min = len;
     }
@@ -290,26 +290,26 @@ void json_close(bool next) {
 
 #ifdef OUTPUT_FORMAT_CSV
 
-#define CSV_DELIMITER ";"
-#define COMA ','
+enum { CSV_DELIMITER = ';', CSV_HOSTINFO_DELIMITER = ',' };
 
 static inline void prupper(const char *str) { while (*str) putchar(toupper((int)*str++)); }
 
 static inline void csv_body(int at) {
   printf("%s", dsthost);
-  printf(CSV_DELIMITER "%d", at + 1);
-  printf(CSV_DELIMITER "%s", host[at].up ? "up" : "down");
+  printf("%c%d", CSV_DELIMITER, at + 1);
+  printf("%c%s", CSV_DELIMITER, host[at].up ? "up" : "down");
   { char buf[MAXDNAME] = {0};
     snprint_addr(buf, sizeof(buf), &CURRENT_IP(at));
-    printf(CSV_DELIMITER "%s", buf); }
+    printf("%c%s", CSV_DELIMITER, buf); }
 #ifdef WITH_IPINFO
-  if (ipinfo_ready()) printf(CSV_DELIMITER "%s", sep_ipinfo(at, host[at].current, COMA));
+  if (ipinfo_ready()) printf("%c%s", CSV_DELIMITER, sep_ipinfo(at, host[at].current, CSV_HOSTINFO_DELIMITER));
 #endif
   for (int i = 0; i < sizeof(fld_index); i++) {
     const struct statf *stat = active_statf(i);
     if (!stat) break;
     const char *str = net_elem(at, stat->key);
-    if (str) printf(CSV_DELIMITER "%s", str);
+    if (str) printf("%c%s", CSV_DELIMITER, str);
+    else if (stat->key == BLANK_INDICATOR) putchar(CSV_DELIMITER);
   }
   printf("\n");
 }
@@ -317,16 +317,15 @@ static inline void csv_body(int at) {
 void csv_close(bool next) {
   if (last_neterr != 0) return;
   if (next) printf("\n");
-  printf("DESTINATION" CSV_DELIMITER "HOP" CSV_DELIMITER "STATUS" CSV_DELIMITER "HOST");
+  printf("DESTINATION%cHOP%cSTATUS%cHOST", CSV_DELIMITER, CSV_DELIMITER, CSV_DELIMITER);
 #ifdef WITH_IPINFO
-  if (ipinfo_ready()) printf(CSV_DELIMITER "INFO");
+  if (ipinfo_ready()) printf("%c%s", CSV_DELIMITER, "INFO");
 #endif
   for (int i = 0; i < sizeof(fld_index); i++) {
     const struct statf *stat = active_statf(i);
     if (!stat) break;
-    if (isblank((int)stat->key) || (stat->key == '_')) continue;
-    printf(CSV_DELIMITER);
-    prupper(stat->name);
+    putchar(CSV_DELIMITER);
+    if (stat->key != BLANK_INDICATOR) prupper(stat->name);
   }
   printf("\n");
   int max = net_max();

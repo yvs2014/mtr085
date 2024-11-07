@@ -160,7 +160,7 @@ bool bell_target;             // 7th bit
 //
 const struct statf statf[] = {
 // name     hint                    len key
-  {" ",     "Space between fields", 1,  '_'},
+  {" ",     "Space between fields", 1,  BLANK_INDICATOR},
   {"Loss",  "Loss Ratio",           6,  'L'},
   {"Drop",  "Dropped Packets",      5,  'D'},
   {"Rcv",   "Received Packets",     6,  'R'},
