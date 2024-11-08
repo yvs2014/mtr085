@@ -144,6 +144,10 @@ static inline void mc_key_h(void) { // help
 "  f <int>    set first TTL (default 1)\n"
 "  i <int>    set interval in seconds (default 1)\n"
 "  j          toggle lattency/jitter stats (default latency)\n"
+#ifdef WITH_IPINFO
+"  l          toggle ASN lookup\n"
+"  L          switch IP info\n"
+#endif
 "  m <int>    set max TTL (default 30)\n"
 #ifdef ENABLE_DNS
 "  n          toggle DNS\n"
@@ -159,10 +163,6 @@ static inline void mc_key_h(void) { // help
 "  t          toggle TCP pings\n"
 "  u          toggle UDP pings\n"
 "  x          toggle cache mode\n"
-#ifdef WITH_IPINFO
-"  y          switch IP info\n"
-"  z          toggle ASN lookup\n"
-#endif
 "  +-         scroll up/down\n"
 "  hH?        this help page\n"
 "\n"
@@ -262,6 +262,10 @@ key_action_t mc_keyaction(void) {
       TGLBIT(run_args, RA_JITTER);
       onoff_jitter();
       break;
+#ifdef WITH_IPINFO
+    case 'l': return ActionAS;
+    case 'L': return ActionII;
+#endif
     case 'm': // max ttl
       mc_get_int(&maxTTL, 1, MAXHOST - 1, "Max TTL", NULL);
       break;
@@ -287,10 +291,6 @@ key_action_t mc_keyaction(void) {
     case 't': return ActionTCP;
     case 'u': return ActionUDP;
     case 'x': return ActionCache;
-#ifdef WITH_IPINFO
-    case 'y': return ActionII;
-    case 'z': return ActionAS;
-#endif
     default: break;
   }
   return ActionNone; // ignore unknown input

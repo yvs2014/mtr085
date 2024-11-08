@@ -206,7 +206,7 @@ if(IPINFO)
   set(WITH_IPINFO ON)
 else()
   list(APPEND OPTION_LIST "-IPINFO")
-  list(APPEND MAN_EXCL y)
+  list(APPEND MAN_EXCL l)
 endif()
 
 if(SPLIT)

@@ -209,7 +209,7 @@ if ipinfo
   config.set('WITH_IPINFO', 1)
 else
   optlist += '-IPINFO'
-  manexcl += 'y'
+  manexcl += 'l'
 endif
 #
 if split

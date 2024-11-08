@@ -98,6 +98,9 @@ endif
 if !GRAPHS
 EXCLOPTS += g
 endif
+if !IPINFO
+EXCLOPTS += l
+endif
 if !DNS
 EXCLOPTS += n
 EXCLOPTS += N
@@ -125,9 +128,6 @@ EXCLOPTS += p
 endif
 if !IPTOS
 EXCLOPTS += q
-endif
-if !IPINFO
-EXCLOPTS += y
 endif
 
 $(man_MANS): $(man_MANS).in config.h

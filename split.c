@@ -144,6 +144,10 @@ key_action_t split_keyaction(void) {
     case 'h':
       split_help();
       return ActionPauseResume;
+#ifdef WITH_IPINFO
+    case 'l': return ActionAS;
+    case 'L': return ActionII;
+#endif
 #ifdef ENABLE_DNS
     case 'n': return ActionDNS;
 #endif
@@ -153,10 +157,6 @@ key_action_t split_keyaction(void) {
     case 'r': return ActionReset;
     case 't': return ActionTCP;
     case 'u': return ActionUDP;
-#ifdef WITH_IPINFO
-    case 'y': return ActionII;
-    case 'z': return ActionAS;
-#endif
     default: break;
   }
   return ActionNone;

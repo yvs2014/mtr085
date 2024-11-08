@@ -203,6 +203,10 @@ static struct option long_options[] = {
 #endif
   { "help",       0, 0, 'h' },
   { "interval",   1, 0, 'i' },
+#ifdef WITH_IPINFO
+  { "lookup",     0, 0, 'l' },
+  { "ipinfo",     1, 0, 'L' },
+#endif
   { "max-ttl",    1, 0, 'm' },
 #ifdef ENABLE_DNS
   { "no-dns",     0, 0, 'n' },
@@ -225,10 +229,6 @@ static struct option long_options[] = {
   { "udp",        0, 0, 'u' },  // UDP (default is ICMP)
   { "version",    0, 0, 'v' },
   { "cache",      1, 0, 'x' },  // enable cache with timeout in seconds (0 means default 60sec)
-#ifdef WITH_IPINFO
-  { "ipinfo",     1, 0, 'y' },
-  { "aslookup",   0, 0, 'z' },
-#endif
   { 0, 0, 0, 0 }
 };
 static char *short_options;
@@ -288,6 +288,9 @@ static const char *get_opt_desc(char opt) {
     case 'd': return "MODE";
     case 's': return "BYTES";
     case 'F': return "FIELDS";
+#ifdef WITH_IPINFO
+    case 'L': return "ORIGIN,FIELDS";
+#endif
 #ifdef ENABLE_DNS
     case 'N': return "NS.ADD.RE.SS";
 #endif
@@ -309,9 +312,6 @@ static const char *get_opt_desc(char opt) {
 " XML"
 #endif
     ; return trim(_oopt); }
-#endif
-#ifdef WITH_IPINFO
-    case 'y': return "ORIGIN,FIELDS";
 #endif
 #ifdef GRAPHMODE
     case 'g': return "type,period,legend,multipath,jitter";
@@ -663,11 +663,11 @@ static inline void short_set(char opt, const char *progname) {
       SETBIT(kept_args, RA_CACHE)
       break;
 #ifdef WITH_IPINFO
-    case 'y':
+    case 'L':
       SETBIT(kept_args, RA_IPINFO)
-    case 'z':
+    case 'l':
       SETBIT(kept_args, RA_ASN)
-      if (!ipinfo_init((opt == 'y') ? optarg : ASLOOKUP_DEFAULT))
+      if (!ipinfo_init((opt == 'L') ? optarg : ASLOOKUP_DEFAULT))
         exit(EXIT_FAILURE);
       if (!ipinfo_action(ActionNone)) // don't switch at start
         exit(EXIT_FAILURE);

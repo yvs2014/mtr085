@@ -153,21 +153,21 @@ key_action_t gc_keyaction(void) {
         onoff_jitter();
         mc_statf_title(legend_header, sizeof(legend_header));
         return ActionNone;
+#ifdef WITH_IPINFO
+      case 'l':  // ASN
+        GCMSG("%s", "toggle ASN lookup\n");
+        hostinfo_max = 0;
+        return ActionAS;
+      case 'L':  // IP Info
+        GCMSG("%s", "switching IP info\n");
+        hostinfo_max = 0;
+        return ActionII;
+#endif
 #ifdef ENABLE_DNS
       case 'n':  // DNS
         GCMSG("%s", "toggle DNS\n");
         hostinfo_max = 0;
         return ActionDNS;
-#endif
-#ifdef WITH_IPINFO
-      case 'y':  // IP Info
-        GCMSG("%s", "switching IP info\n");
-        hostinfo_max = 0;
-        return ActionII;
-      case 'z':  // ASN
-        GCMSG("%s", "toggle ASN info\n");
-        hostinfo_max = 0;
-        return ActionAS;
 #endif
       default: break;
     }
