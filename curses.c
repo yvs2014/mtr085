@@ -831,6 +831,16 @@ bool mc_open(void) {
   return true;
 }
 
+void mc_final(void) {
+  const char *mesg = "Press any key to quit...";
+  int y = getmaxy(stdscr) - 1;
+  move(y - 1, 0); clrtoeol();
+  move(y,     0); clrtoeol();
+  mvaddstr(y - 1, (getmaxx(stdscr) - strlen(mesg)) / 2, mesg);
+  flushinp();
+  getch();
+  endwin();
+}
 
 void mc_close(void) {
   addch('\n');
