@@ -30,9 +30,8 @@
 #include "graphcairo-mtr.h"
 #endif
 
-bool display_open(bool next) {
+bool display_open(void) {
   switch (display_mode) {
-    case DisplayReport: report_open(next); break;
 #ifdef CURSESMODE
     case DisplayCurses: return mc_open();
 #endif
@@ -42,6 +41,10 @@ bool display_open(bool next) {
 #ifdef GRAPHMODE
     case DisplayGraphCairo: return gc_open();
 #endif
+#ifdef OUTPUT_FORMAT_JSON
+    case DisplayJSON: // the same as DisplayReport keeping start time
+#endif
+    case DisplayReport: report_started_at(); break;
     default: break;
   }
   return true;
@@ -49,7 +52,7 @@ bool display_open(bool next) {
 
 void display_close(bool next) {
   switch (display_mode) {
-    case DisplayReport: report_close(report_wide); break;
+    case DisplayReport: report_close(next, true); break;
 #ifdef CURSESMODE
     case DisplayCurses: mc_close(); break;
 #endif
@@ -60,7 +63,7 @@ void display_close(bool next) {
     case DisplayGraphCairo: gc_close(); break;
 #endif
 #ifdef OUTPUT_FORMAT_TXT
-    case DisplayTXT: txt_close(next); break;
+    case DisplayTXT: report_close(next, false); break;
 #endif
 #ifdef OUTPUT_FORMAT_CSV
     case DisplayCSV: csv_close(next); break;

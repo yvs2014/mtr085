@@ -24,7 +24,7 @@
 
 void display_start(void);
 void display_final(void);
-bool display_open(bool next);
+bool display_open(void);
 void display_close(bool next);
 
 void display_redraw(void);

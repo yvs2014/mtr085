@@ -21,15 +21,12 @@
 
 #include <stdbool.h>
 
-void report_open(bool next);
-void report_close(bool wide);
+void report_started_at(void);
+void report_close(bool next, bool with_header);
 #ifdef OUTPUT_FORMAT_RAW
 extern bool enable_raw;
 void raw_rawping(int at, int usec);
 void raw_rawhost(int at, t_ipaddr *ipaddr);
-#endif
-#ifdef OUTPUT_FORMAT_TXT
-void txt_close(bool next);
 #endif
 #ifdef OUTPUT_FORMAT_CSV
 void csv_close(bool next);

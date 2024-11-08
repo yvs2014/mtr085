@@ -215,7 +215,6 @@ typedef enum { ActionNone, ActionQuit, ActionReset, ActionDisplay,
 extern int mtrtype;        // default packet type
 
 extern display_mode_t display_mode;
-extern bool report_wide;
 extern double wait_time;
 
 extern int fstTTL;

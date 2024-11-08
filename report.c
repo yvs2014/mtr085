@@ -48,19 +48,18 @@
 #endif
 
 #define HOSTTITLE "Host"
-enum { HOSTINFO_LEN = 40 }; // non-wide report mode: left side of output
 
-static char *get_now_str(void) {
-  static char now_str[32];
-  time_t now = time(NULL);
-  strftime(now_str, sizeof(now_str), "%F %T %z", localtime(&now));
-  return now_str;
+static time_t started_at;
+
+static char *at_time_str(time_t at) {
+  static char report_time_str[32];
+  report_time_str[0] = 0;
+  struct tm *tm = (at > 0) ? localtime(&at) : NULL;
+  if (tm) strftime(report_time_str, sizeof(report_time_str), "%F %T %z", tm);
+  return report_time_str;
 }
 
-void report_open(bool next) {
-  if (next) printf("\n");
-  printf("[%s] %s: %s %s %s\n", get_now_str(), srchost, FULLNAME, mtr_args, dsthost);
-}
+inline void report_started_at(void) { started_at = time(NULL); }
 
 static size_t snprint_addr(char *dst, size_t len, t_ipaddr *ipaddr) {
   if (addr_exist(ipaddr)) {
@@ -108,38 +107,30 @@ static size_t get_longest_name(size_t min, size_t max) {
 #define INFOPATT "%-*s"
 #define INDENT "    " // 4 x _
 
-static void report_print_header(int hostlen, int infolen, bool wide) {
-  char buf[MAXDNAME] = {0};
+static void report_print_header(int hostlen, int infolen) {
   printf("%s", INDENT);
   // left
-  int len = 0;
 #ifdef WITH_IPINFO
-  if (infolen) len += snprintf(buf, sizeof(buf), INFOPATT " ", infolen, ipinfo_header());
+  if (infolen) printf(INFOPATT " ", infolen, ipinfo_header());
 #endif
-  snprintf(buf + len, sizeof(buf) - len, INFOPATT, hostlen, HOSTTITLE);
-  if (!wide && (strnlen(buf, sizeof(buf)) >= HOSTINFO_LEN)) buf[HOSTINFO_LEN] = 0;
-  printf("%s", buf);
+  printf(INFOPATT, hostlen, HOSTTITLE);
   // right
-  for (int i = 0, len = 0; (i < sizeof(fld_index)) && (len < sizeof(buf)); i++) {
+  for (int i = 0; i < sizeof(fld_index); i++) {
     const struct statf *stat = active_statf(i);
     if (stat) printf("%*s", stat->len, stat->name); else break;
   }
   printf("\n");
 }
 
-static void report_print_body(int at, const char *fmt, int hostlen, int infolen, bool wide) {
-  char buf[MAXDNAME] = {0};
-  int len = 0;
+static void report_print_body(int at, const char *fmt, int hostlen, int infolen) {
   // body: left
   if (fmt) printf(fmt, at + 1);
 #ifdef WITH_IPINFO
-  if (infolen) len += snprintf(buf, sizeof(buf), INFOPATT " ", infolen, fmt_ipinfo(at, host[at].current));
+  if (infolen) printf(INFOPATT " ", infolen, fmt_ipinfo(at, host[at].current));
 #endif
   { char name[MAXDNAME] = {0};
     snprint_addr(name, sizeof(name), &CURRENT_IP(at));
-    snprintf(buf + len, sizeof(buf) - len, INFOPATT, hostlen, name); }
-  if (!wide && (strlen(buf) >= HOSTINFO_LEN)) buf[HOSTINFO_LEN] = 0;
-  printf("%s", buf);
+    printf(INFOPATT, hostlen, name); }
   // body: right
   for (int i = 0; (i < sizeof(fld_index)); i++) {
     const struct statf *stat = active_statf(i);
@@ -154,7 +145,6 @@ static void report_print_body(int at, const char *fmt, int hostlen, int infolen,
 }
 
 static void report_print_rest(int at, int hostlen, int infolen) {
-  char buf[MAXDNAME];
   for (int i = 0; i < MAXPATH; i++) {
     if (i == host[at].current)
       continue; // because already printed
@@ -162,12 +152,12 @@ static void report_print_rest(int at, int hostlen, int infolen) {
     if (!addr_exist(ipaddr))
       break; // done
     printf("%s", INDENT);
-    buf[0] = 0;
-    snprint_addr(buf, sizeof(buf), ipaddr);
 #ifdef WITH_IPINFO
     if (infolen) printf(INFOPATT " ", infolen, fmt_ipinfo(at, i));
 #endif
-    printf(INFOPATT "\n", hostlen, buf);
+    { char name[MAXDNAME] = {0};
+      snprint_addr(name, sizeof(name), ipaddr);
+      printf(INFOPATT "\n", hostlen, name); }
 #ifdef WITH_MPLS
     if (enable_mpls)
       print_mpls(&MPLS_AT_NDX(at, i));
@@ -178,35 +168,28 @@ static void report_print_rest(int at, int hostlen, int infolen) {
 #undef INDENT
 
 
-void report_close(bool wide) {
+void report_close(bool next, bool with_header) {
   if (last_neterr != 0) return;
-  static_assert(HOSTINFO_LEN < MAXDNAME, "hostinfo len");
+  if (next) printf("\n");
+  if (with_header) printf("[%s] %s: %s %s %s\n", at_time_str(started_at), srchost, FULLNAME, mtr_args, dsthost);
   int hostlen = get_longest_name(strlen(HOSTTITLE), MAXDNAME);
   int infolen =
 #ifdef WITH_IPINFO
     ipinfo_ready() ? ipinfo_width() :
 #endif
     0;
-  report_print_header(hostlen, infolen, wide);
+  report_print_header(hostlen, infolen);
   int max = net_max();
   for (int at = net_min(); at < max; at++) {
-    report_print_body(at, AT_FMT " ", hostlen, infolen, wide);
+    report_print_body(at, AT_FMT " ", hostlen, infolen);
     report_print_rest(at, hostlen, infolen); // multipath, mpls, etc.
   }
 }
 
 
-#ifdef OUTPUT_FORMAT_TXT
-void txt_close(bool next) {
-  if (next) printf("\n");
-  report_close(true);
-}
-#endif
-
-
 #ifdef OUTPUT_FORMAT_XML
 
-#define XML_MARGIN 2
+enum { XML_MARGIN = 2 };
 
 void xml_head(void) {
   printf("<?xml version=\"1.0\"?>\n");
@@ -248,14 +231,15 @@ void xml_close(void) {
 
 #ifdef OUTPUT_FORMAT_JSON
 
-#define JSON_MARGIN 4
+enum { JSON_MARGIN = 4 };
 
 void json_head(void) { printf("{\"source\":\"%s\",\"args\":\"%s\",\"targets\":[", srchost, mtr_args); }
 void json_tail(void) { printf("\n]}\n"); }
 
 void json_close(bool next) {
   if (next) printf(",");
-  printf("\n%*s{\"destination\":\"%s\",\"datetime\":\"%s\",\"data\":[", JSON_MARGIN, "", dsthost, get_now_str());
+  printf("\n%*s{\"destination\":\"%s\",\"datetime\":\"%s\",\"data\":[", JSON_MARGIN, "",
+    dsthost, at_time_str(started_at));
   int min = net_min(), max = net_max();
   for (int at = min; at < max; at++) {
     char buf[MAXDNAME] = {0};

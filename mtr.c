@@ -132,7 +132,6 @@ bool show_ips;
 #ifdef WITH_MPLS
 bool enable_mpls;
 #endif
-bool report_wide;
 bool endpoint_mode;           // -fa option, i.e. auto, corresponding to TTL of the destination host
 bool cache_mode;              // don't ping known hops
 int cache_timeout = CACHE_TIMEOUT;  // cache timeout in seconds
@@ -225,7 +224,6 @@ static struct option long_options[] = {
   { "timeout",    1, 0, 'T' },  // timeout for TCP sockets
   { "udp",        0, 0, 'u' },  // UDP (default is ICMP)
   { "version",    0, 0, 'v' },
-  { "wide",       0, 0, 'w' },  // wide report (-r)
   { "cache",      1, 0, 'x' },  // enable cache with timeout in seconds (0 means default 60sec)
 #ifdef WITH_IPINFO
   { "ipinfo",     1, 0, 'y' },
@@ -655,11 +653,6 @@ static inline void short_set(char opt, const char *progname) {
       printf("%s\n", FULLNAME);
 #endif
       exit(EXIT_SUCCESS);
-    case 'w':
-      display_mode = DisplayReport;
-      if (max_ping <= 0) max_ping = REPORT_PINGS;
-      report_wide = true;
-      break;
     case 'x':
       cache_mode = true;
       cache_timeout = atoi(optarg);
@@ -882,7 +875,7 @@ static inline bool main_loop(struct addrinfo *ai) {
     if (success) {
       TOS4TOS(dsthost);
       locker(stdout, F_WRLCK);
-      if (display_open(next_target)) display_loop();
+      if (display_open()) display_loop();
       else WARNX("Unable to open display");
       net_end_transit();
       display_close(next_target);
