@@ -1,6 +1,5 @@
 .ds o6 "46
 .ds oe "e
-.ds og "g
 .ds ol "lL
 .ds on "n
 .ds oN "N
@@ -20,7 +19,7 @@
 .Nd a network diagnostic tool
 .Sh SYNOPSIS
 .Nm
-.Op Fl a\*[on b]Bcd\*[oe]fF\*[og]i\*[ol]m\*[on]\*[oN]\*[oo]\*[op]\*[oq]rsStTuvx\*[o6]
+.Op Fl a\*[on b]Bcd\*[oe]fFi\*[ol]m\*[on]\*[oN]\*[oo]\*[op]\*[oq]rsStTuvx\*[o6]
 TARGET[:PORT] ...
 .Sh DESCRIPTION
 .Nm
@@ -138,36 +137,6 @@ Examples:
 .It Cm -F LS_NABWV
 .It Cm -F DR_AGJMXI
 .El
-.ie "g"\*[og]" \{\
-.It Fl g, Fl -graph Ar ARGUMENTS
-Draw simple graphs
-.Pp
-Available arguments by order:
-.Bl -tag -offset Ds
-.It Cm 1st arg: graph type
-1=dot 2=line 3=curve (default 3, curve)
-.It Cm 2nd arg: viewport period
-in 10sec ticks (default 6, i.e. 60sec)
-.It Cm 3rd arg: legend on/off
-0=disable 1=enable (default 1)
-.It Cm 4th arg: multipath on/off
-0=disable 1=enable (default 1)
-.It Cm 5th arg: latency or jitter graph
-0=latency 1=jitter (default 0, latency)
-.El
-.sp
-Note: `,' (comma) is used as the separator
-.sp
-Examples:
-.Bl -tag -width indent-two -offset Ds -compact
-.It Cm -g,
-all args in default (curve, 1min, legend, multipath, latency)
-.It Cm -g2
-line, default, default, default, default
-.It Cm -g,30,,0
-default, 5min, default, disable, default
-.El
-.\}
 .It Fl i, Fl -interval Ar SECONDS
 Set number of seconds between ICMP ECHO requests.  Default is 1.
 .ie "lL"\*[ol]" \{\

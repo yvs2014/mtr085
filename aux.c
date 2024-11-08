@@ -14,7 +14,7 @@
 static const double float_upto = 10;
 static const double float_dec2 = 0.1;
 
-#if defined(CURSESMODE) || defined(GRAPHMODE)
+#ifdef CURSESMODE
 static const char fld_default[MAXFLD + 1] = "LS_NABWV";
 static const char fld_jitter[MAXFLD + 1] = "DR_AGJMXI";
 #endif
@@ -41,8 +41,6 @@ char* trim(char *str) {
 void set_fld_active(const char *str) { STRLCPY(fld_custom, str ? str : fld_default, sizeof(fld_custom)); fld_active = fld_custom; }
 #ifdef CURSESMODE
 bool is_custom_fld(void) { return (strncmp(fld_active, fld_jitter, sizeof(fld_jitter)) != 0) && (strncmp(fld_active, fld_default, sizeof(fld_default)) != 0); }
-#endif
-#if defined(CURSESMODE) || defined(GRAPHMODE)
 void onoff_jitter(void) { int cmp = strncmp(fld_active, fld_jitter, sizeof(fld_jitter)); fld_active = cmp ? fld_jitter : fld_custom; }
 #endif
 

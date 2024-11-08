@@ -23,7 +23,6 @@ EXTRA
 - Internationalized Domain Names
 - Unicode histograms
 - Additional IP address information
-- Graphs with Cairo library
 
 DETAILS
 -------
@@ -42,9 +41,4 @@ SCREENSHOTS
 ## histogram
 ![ch-screenshot02](https://github.com/yvs2014/mtr085/blob/master/img/ch-screenshot02.png)
 ![ch-screenshot01](https://github.com/yvs2014/mtr085/blob/master/img/ch-screenshot01.png)
-
-## graphcairo
-![gc-screenshot01](https://github.com/yvs2014/mtr085/blob/master/img/gc-screenshot01.png)
-![gc-screenshot02](https://github.com/yvs2014/mtr085/blob/master/img/gc-screenshot02.png)
-![gc-screenshot03](https://github.com/yvs2014/mtr085/blob/master/img/gc-screenshot03.png)
 

@@ -26,9 +26,6 @@
 #ifdef SPLITMODE
 #include "split.h"
 #endif
-#ifdef GRAPHMODE
-#include "graphcairo-mtr.h"
-#endif
 
 bool display_open(void) {
   switch (display_mode) {
@@ -37,9 +34,6 @@ bool display_open(void) {
 #endif
 #ifdef SPLITMODE
     case DisplaySplit: split_open(); break;
-#endif
-#ifdef GRAPHMODE
-    case DisplayGraphCairo: return gc_open();
 #endif
 #ifdef OUTPUT_FORMAT_JSON
     case DisplayJSON: // the same as DisplayReport keeping start time
@@ -58,9 +52,6 @@ void display_close(bool next) {
 #endif
 #ifdef SPLITMODE
     case DisplaySplit: split_close(); break;
-#endif
-#ifdef GRAPHMODE
-    case DisplayGraphCairo: gc_close(); break;
 #endif
 #ifdef OUTPUT_FORMAT_TXT
     case DisplayTXT: report_close(next, false); break;
@@ -120,9 +111,6 @@ void display_redraw(void) {
 #ifdef SPLITMODE
     case DisplaySplit: split_redraw(); break;
 #endif
-#ifdef GRAPHMODE
-    case DisplayGraphCairo: gc_redraw(); break;
-#endif
     default: break;
   }
 }
@@ -140,14 +128,6 @@ key_action_t display_key_action(void) {
   return ActionNone;
 }
 
-key_action_t display_ext_action(void) {
-  return
-#ifdef GRAPHMODE
-    (display_mode == DisplayGraphCairo) ? gc_keyaction() :
-#endif
-    ActionNone;
-}
-
 void display_loop(void) {
   switch (display_mode) {
 #ifdef CURSESMODE
@@ -155,9 +135,6 @@ void display_loop(void) {
 #endif
 #ifdef SPLITMODE
     case DisplaySplit:
-#endif
-#ifdef GRAPHMODE
-    case DisplayGraphCairo:
 #endif
     case DisplayReport:
 #ifdef OUTPUT_FORMAT_RAW

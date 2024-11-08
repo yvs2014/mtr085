@@ -31,6 +31,5 @@ void display_redraw(void);
 void display_loop(void);
 void display_clear(void);
 key_action_t display_key_action(void);
-key_action_t display_ext_action(void);
 
 #endif

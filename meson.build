@@ -28,7 +28,6 @@ unicode    = get_option('UNICODE')
 dns        = get_option('DNS')
 ipinfo     = get_option('IPINFO')
 split      = get_option('SPLIT')
-graph      = get_option('GRAPH')
 ipv6       = get_option('IPV6')
 mpls       = get_option('MPLS')
 outfmt = []
@@ -221,40 +220,6 @@ else
   manexcl += 'p'
 endif
 #
-if graph
-  grname = 'graphcairo'
-  grbase = grname / grname
-  add_global_arguments('-I' + meson.current_source_dir() / grname, language: 'c')
-  deps += dependency('cairo')
-  deps += dependency('pango')
-  deps += dependency('pangocairo')
-  lib = 'xcb'
-  libx = cc.find_library(lib, required: false)
-  if libx.found()
-    ksym = 'xcb-keysyms'
-    libksym = cc.find_library(ksym)
-    deps += libksym
-  else
-    lib = 'x11'
-    libx = cc.find_library(lib)
-  endif
-  deps += libx
-  srcn += grbase
-  srcn += '-'.join(grbase, name)
-  srcn += '-'.join(grbase, lib)
-  lib = 'fontconfig'
-  libfc = cc.find_library(lib, required: false)
-  if libfc.found() and cc.has_function('FcFini', dependencies: libfc)
-    deps += libfc
-    config.set('FC_FINI', 1)
-  endif
-  optlist += '+GRAPH'
-  config.set('GRAPHMODE', 1)
-else
-  optlist += '-GRAPH'
-  manexcl += 'g'
-endif
-#
 if ipv6
   optlist += '+IPV6'
   config.set('ENABLE_IPV6', 1)
@@ -405,7 +370,7 @@ endforeach
 
 if meson.version().version_compare('>=0.53')
   summary({'CAP': cap, 'CURSES': curses, 'UNICODE': unicode, 'DNS': dns, 'IDN': idn,
-    'IPINFO': ipinfo, 'SPLIT': split, 'GRAPH': graph, 'IPV6': ipv6, 'MPLS': mpls },
+    'IPINFO': ipinfo, 'SPLIT': split, 'IPV6': ipv6, 'MPLS': mpls },
     bool_yn: true)
 endif
 

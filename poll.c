@@ -43,7 +43,7 @@
 #include "ipinfo.h"
 #endif
 
-#if defined(CURSESMODE) || defined(SPLITMODE) || defined(GRAPHMODE)
+#if defined(CURSESMODE) || defined(SPLITMODE)
 #define SCROLL_LINES 5
 #endif
 
@@ -270,7 +270,7 @@ static key_action_t keyboard_events(key_action_t action) {
       LOGMSG("reset network counters");
       net_reset();
       break;
-#if defined(CURSESMODE) || defined(GRAPHMODE)
+#ifdef CURSESMODE
     case ActionDisplay: {
       int mode = (curses_mode + 1) % curses_mode_max;
       LOGMSG("switch display mode: %d -> %d", curses_mode, mode);
@@ -323,7 +323,7 @@ static key_action_t keyboard_events(key_action_t action) {
         SETBIT(run_args, (action == ActionAS) ? RA_ASN : RA_IPINFO);
       break;
 #endif
-#if defined(CURSESMODE) || defined(SPLITMODE) || defined(GRAPHMODE)
+#if defined(CURSESMODE) || defined(SPLITMODE)
     case ActionScrollDown: {
       LOGMSG("scroll down %d lines", SCROLL_LINES);
       display_offset += SCROLL_LINES;
@@ -523,16 +523,6 @@ int poll_loop(void) {
       }
     } else if (tcpish())
       tcp_timedout(); // not waiting for TCP ETIMEDOUT
-#ifdef GRAPHMODE
-    { // external triggers
-      key_action_t act = display_ext_action();
-      if (act != ActionNone) {
-        act = keyboard_events(act);
-        if (act == ActionQuit) break;
-        if (act == ActionPauseResume) paused = !paused;
-      }
-    }
-#endif
   }
 
   seqfd_free();

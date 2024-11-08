@@ -78,9 +78,6 @@ typedef enum {
   DisplayReport,
   DisplayCurses,
   DisplaySplit,
-#ifdef GRAPHMODE
-  DisplayGraphCairo,
-#endif
 #ifdef OUTPUT_FORMAT_RAW
   DisplayRaw,
 #endif
@@ -113,12 +110,13 @@ typedef enum { ActionNone, ActionQuit, ActionReset, ActionDisplay,
 } key_action_t;
 
 // misc
+#define NOOP ((void)0)
+
 #define MIL   1000
 #define MICRO 1000000
 #define NANO  1000000000
 #define UNKN_ITEM "???"
 #define AT_FMT "%2d."
-#define GCDEBUG  // graphcairo output to console
 
 #define SETBIT(a, n) { (a) |= 1U << (n);}
 #define CLRBIT(a, n) { (a) &= ~(1U << (n));}
@@ -126,7 +124,6 @@ typedef enum { ActionNone, ActionQuit, ActionReset, ActionDisplay,
 #define CHKBIT(a, n) (((a) >> (n)) & 1U)
 #define NEQBIT(a, b, n) (((a) ^ (b)) & (1U << (n)))
 
-#define NOOP ((void)0)
 
 // logging, warnings, errors
 #if defined(__NetBSD__) || defined(__FreeBSD__) || defined(__OpenBSD__)
@@ -259,10 +256,10 @@ extern bool enable_mpls;
 #ifdef ENABLE_DNS
 extern bool show_ips;
 #endif
-#if defined(CURSESMODE) || defined(SPLITMODE) || defined(GRAPHMODE)
+#if defined(CURSESMODE) || defined(SPLITMODE)
 extern int display_offset;
 #endif
-#if defined(CURSESMODE) || defined(GRAPHMODE)
+#ifdef CURSESMODE
 extern int curses_mode;
 extern int curses_mode_max;
 extern bool enable_color;

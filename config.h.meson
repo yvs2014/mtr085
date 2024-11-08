@@ -43,12 +43,6 @@
 /* split-mode */
 #mesondefine SPLITMODE
 
-/* XCB/Xlib cairo graphs */
-#mesondefine GRAPHMODE
-#mesondefine WITH_XCB_GRAPHS
-#mesondefine WITH_X11_GRAPHS
-#mesondefine FC_FINI
-
 /* IPv6 */
 #mesondefine ENABLE_IPV6
 

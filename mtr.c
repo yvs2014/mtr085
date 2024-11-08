@@ -104,9 +104,6 @@
 #ifdef WITH_IPINFO
 #include "ipinfo.h"
 #endif
-#ifdef GRAPHMODE
-#include "graphcairo-mtr.h"
-#endif
 #ifdef OUTPUT_FORMAT_RAW
 #include "report.h"
 #endif
@@ -149,7 +146,7 @@ char neterr_txt[NAMELEN];     // buff for 'last_neterr'
 // chart related
 int display_offset;
 int curses_mode;              // 1st and 2nd bits, 3rd is reserved
-#if defined(CURSESMODE) || defined(GRAPHMODE)
+#ifdef CURSESMODE
 int curses_mode_max = 3;
 #endif
 bool enable_color;            // 4th bit
@@ -190,7 +187,7 @@ static struct option long_options[] = {
 #endif
   { "bitpattern", 1, 0, 'B' },   // in range 0-255, or -1 for random
   { "cycles",     1, 0, 'c' },
-#if defined(CURSESMODE) || defined(GRAPHMODE)
+#ifdef CURSESMODE
   { "display",    1, 0, 'd' },
 #endif
 #ifdef WITH_MPLS
@@ -198,9 +195,6 @@ static struct option long_options[] = {
 #endif
   { "first-ttl",  1, 0, 'f' },   // -f and -m are borrowed from traceroute
   { "fields",     1, 0, 'F' },   // fields to display and their order
-#ifdef GRAPHMODE
-  { "graph",      1, 0, 'g' },
-#endif
   { "help",       0, 0, 'h' },
   { "interval",   1, 0, 'i' },
 #ifdef WITH_IPINFO
@@ -313,9 +307,6 @@ static const char *get_opt_desc(char opt) {
 #endif
     ; return trim(_oopt); }
 #endif
-#ifdef GRAPHMODE
-    case 'g': return "type,period,legend,multipath,jitter";
-#endif
     default: break;
   }
   return NULL;
@@ -426,7 +417,7 @@ static bool split_hostport(char *buff, char* hostport[2]) {
 #define TOS4TOS(what) NOOP
 #endif
 
-#if defined(CURSESMODE) || defined(GRAPHMODE)
+#ifdef CURSESMODE
 static inline void option_d(void) {
   int val = atoi(optarg);
   curses_mode = (val & ~8) % curses_mode_max;
@@ -563,7 +554,7 @@ static inline void short_set(char opt, const char *progname) {
     case 'c':
       max_ping = atol(optarg);
       break;
-#if defined(CURSESMODE) || defined(GRAPHMODE)
+#ifdef CURSESMODE
     case 'd':
       option_d();
       break;
@@ -581,13 +572,6 @@ static inline void short_set(char opt, const char *progname) {
     case 'F':
       option_F(opt);
       break;
-#ifdef GRAPHMODE
-    case 'g':
-      if (!gc_parsearg(optarg))
-        exit(EXIT_FAILURE);
-      display_mode = DisplayGraphCairo;
-      break;
-#endif
     case 'i':
       wait_time = limit_int(1, INT_MAX, atoi(optarg), "interval", opt);
       break;

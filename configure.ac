@@ -126,23 +126,6 @@ AC_ARG_WITH([ipinfo],
 AM_CONDITIONAL([IPINFO], [test "x$ipinfo" = "xyes"])
 AS_IF([test "x$ipinfo" = "xyes"], [AC_DEFINE([WITH_IPINFO], [1], [Define to enable ipinfo lookup])])
 
-AC_ARG_WITH([graphcairo_xcb],
-	AS_HELP_STRING([--with-graphcairo-xcb], [Cairo graph with XCB backend]),
-	[graphcairo_xcb="${withval}"], [graphcairo_xcb=no])
-AS_IF([test "x$curses" = "xno"], [graphcairo_xcb=no])
-AM_CONDITIONAL([GRAPHS_XCB], [test "x$graphcairo_xcb" = "xyes"])
-dnl
-AC_ARG_WITH([graphcairo_xlib],
-	AS_HELP_STRING([--with-graphcairo-xlib], [Cairo graph with Xlib backend]),
-	[graphcairo_xlib="${withval}"], [graphcairo_xlib=no])
-AS_IF([test "x$curses" = "xno"], [graphcairo_xlib=no])
-AM_CONDITIONAL([GRAPHS_XLIB], [test "x$graphcairo_xlib" = "xyes"])
-dnl
-AM_CONDITIONAL([GRAPHS], [test "x$graphcairo_xcb" = "xyes" -o "x$graphcairo_xlib" = "xyes"])
-AS_IF([test "x$graphcairo_xcb" = "xyes" -o "x$graphcairo_xlib" = "xyes"], [
-	AC_SEARCH_LIBS([FcFini], [fontconfig], AC_DEFINE([FC_FINI], 1, [finalize fontconfig library]))
-])
-
 # Extra output formats: raw, txt, csv, json, xml
 # 	"txt, csv, json" are enabled by default, "raw, xml" are disabled
 
@@ -209,39 +192,6 @@ AS_IF([test "x$ipinfo" = "xyes"], [
 		AS_HELP_STRING([--with-syslog-ipinfo], [Enable debug: ipinfo syslog]),
 		[syslog_ipinfo="${withval}"], [syslog_ipinfo=no])
 	AS_IF([test "x$syslog_ipinfo" != "xno"], [AC_DEFINE([LOG_IPINFO], 1, [Enable debug: ipinfo syslog])])
-])
-
-
-AS_IF([test "x$graphcairo_xcb" = "xyes" || test "x$graphcairo_xlib" = "xyes"], [need_pkgconfig=yes])
-
-AS_IF([test "x$need_pkgconfig" = "xyes"], [
-	# don't break anything if pkg-config is absent
-	m4_ifndef([PKG_CHECK_MODULES], [m4_defun([PKG_CHECK_MODULES], [AC_MSG_ERROR([
-  Could not locate the pkg-config automake macros, these are usually located in
-    .../share/aclocal/pkg.m4
-  Before running bootstrap try setting the environment variable
-    ACLOCAL_PATH="/own/dir"
-  or configure --without-graphcairo-*
-	])])])
-	PKG_PROG_PKG_CONFIG
-])
-
-AS_IF([test "x$graphcairo_xcb" = "xyes"], [
-	AC_DEFINE([GRAPHMODE], [1], [Define to enable cairo graph])
-	PKG_CHECK_MODULES([graphcairo], [cairo >= 1.12 pango >= 1.10 pangocairo xcb xcb-keysyms cairo-xcb], [
-		LIBS="$LIBS -lm"
-		AC_SUBST(graphcairo_CFLAGS)
-		AC_SUBST(graphcairo_LIBS)
-	])
-], [
-AS_IF([test "x$graphcairo_xlib" = "xyes"], [
-	AC_DEFINE([GRAPHMODE], [1], [Define to enable cairo graph])
-	PKG_CHECK_MODULES([graphcairo], [cairo pango >= 1.10 pangocairo x11 cairo-xlib], [
-		LIBS="$LIBS -lm"
-		AC_SUBST(graphcairo_CFLAGS)
-		AC_SUBST(graphcairo_LIBS)
-	])
-])
 ])
 
 need_libidn="no"
@@ -335,8 +285,6 @@ AS_IF([test "x$aiidn" = "xyes" -o "x$need_libidn" = "yes"],
 	[_option_list="$_option_list +IDN"], [_option_list="$_option_list -IDN"])
 AS_IF([test "x$ipinfo" = "xyes"],    [_option_list="$_option_list +IPINFO"],  [_option_list="$_option_list -IPINFO"])
 AS_IF([test "x$splitmode" = "xyes"], [_option_list="$_option_list +SPLIT"],   [_option_list="$_option_list -SPLIT"])
-AS_IF([test "x$graphcairo_xcb" = "xyes" -o "x$graphcairo_xlib" = "yes"],
-	[_option_list="$_option_list +GRAPH"], [_option_list="$_option_list -GRAPH"])
 AS_IF([test "x$ipv6" = "xyes"],      [_option_list="$_option_list +IPV6"],    [_option_list="$_option_list -IPV6"])
 AS_IF([test "x$mpls" = "xyes"],      [_option_list="$_option_list +MPLS"],    [_option_list="$_option_list -MPLS"])
 _option_output=""

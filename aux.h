@@ -23,8 +23,6 @@ void set_fld_active(const char *str);
 bool is_custom_fld(void);
 extern char limit_error[NAMELEN];
 int limit_int(int min, int max, int val, const char *what, char fail);
-#endif
-#if defined(CURSESMODE) || defined(GRAPHMODE)
 void onoff_jitter(void);
 #endif
 const struct statf* active_statf(unsigned nth);

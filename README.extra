@@ -10,11 +10,12 @@
 % mtr -d11 ...
 
 
->>> Ipinfo (IP-address information)
+>>> ASN-lookup/Ipinfo (IP-address information)
 
-% mtr -y ...
+% mtr -l ...
+% mtr -L<args> ...
 
- -y ORIGIN,FIELDS
+ -L ORIGIN,FIELDS
 
   1 = origin.asn.cymru.com (both IPv4 and IPv6)
       1=ASN 2=Route 3=CC 4=Registry 5=Allocated
@@ -30,30 +31,10 @@
       1=ASN
 
  Examples:
-   -y5,2,5,7,8   ip-api.com: CC City Lat Long
-   -y2,4,2       riswhois.ripe.net: CC Origin
-   -y,           origin.asn.cymru.com: ASN
+   -L5,2,5,7,8   ip-api.com: CC City Lat Long
+   -L2,4,2       riswhois.ripe.net: CC Origin
+   -L,           origin.asn.cymru.com: ASN
 
 
->>> Graphcairo (XCB/Xlib graphs)
-
-% mtr -g ...
-
-Arguments (-g args):
-  Available arguments:
-    1st argument:  graph type
-      1=dot 2=line 3=curve (default 3, curve)
-    2nd argument:  viewport timeperiod
-      in 10sec ticks (default 6, i.e. 60sec)
-    3rd argument:  enable legend
-      0=disable 1=enable (default 1)
-    4th argument:  enable multipath
-      0=disable 1=enable (default 1)
-    5th argument:	jitter graph instead of latency graph
-      0=latency 1=jitter (default 0, latency)
-
-Examples:
-  -g,       all args in default (curve, 1min, legend, multipath, latency)
-  -g2       line, default, default, default, default
-  -g,30,,0  default, 5min, default, disable, default
+>>> Graphcairo (XCB/Xlib graphs): moved to graphcairo-legacy branch
 

@@ -76,10 +76,10 @@
 #include "ipinfo.h"
 #endif
 
-enum { LINEMAXLEN = 1024 };
-enum { HINT_YPOS = 2 };
+enum { LINEMAXLEN = 1024, HINT_YPOS = 2, HOSTINFOMAX = 30 };
 
 static char mc_title[NAMELEN]; // progname + arguments + destination
+static bool mc_at_quit;
 
 static size_t enter_smth(char *buf, size_t size, int y, int x) {
   move(y, x);
@@ -278,7 +278,9 @@ key_action_t mc_keyaction(void) {
     case ' ':
     case 'p': return ActionPauseResume;
     case  3 : // ^C
-    case 'q': return ActionQuit;
+    case 'q':
+      mc_at_quit = true;
+      return ActionQuit;
 #ifdef IP_TOS
     case 'Q': // qos
       mc_key_Q();
@@ -296,7 +298,7 @@ key_action_t mc_keyaction(void) {
   return ActionNone; // ignore unknown input
 }
 
-int mc_print_at(int at, char *buf, size_t size) {
+static int mc_print_at(int at, char *buf, size_t size) {
   int len = 0;
   for (int i = 0; (i < sizeof(fld_index)) && (len < size); i++) {
     const struct statf *stat = active_statf(i);
@@ -465,7 +467,7 @@ static inline void dmode_init(double *factors, int num) {
   }
 }
 
-void mc_init(void) {
+static void mc_init(void) {
   // display mode 2
   dmode_init(factors2, NUM_FACTORS2);
 #ifdef WITH_UNICODE
@@ -586,7 +588,7 @@ static void histogram(int x, int cols) {
   }
 }
 
-int mc_statf_title(char *buf, size_t size) {
+static int mc_statf_title(char *buf, size_t size) {
   int len = 0;
   for (int i = 0; (i < sizeof(fld_index)) && (len < size); i++) {
     const struct statf *stat = active_statf(i);
@@ -667,7 +669,7 @@ static int snprint_iarg(int bit, char *buf, int size, const char *msg) {
   return len;
 }
 
-int mc_snprint_args(char *buf, size_t size) {
+static int mc_snprint_args(char *buf, size_t size) {
   iargs_sp = false;
   int len = snprintf(buf, size, " (");
   ADD_NTH_BIT_INFO(RA_UDP, "udp");
@@ -832,6 +834,8 @@ bool mc_open(void) {
 }
 
 void mc_final(void) {
+  if (mc_at_quit) return;
+  mc_at_quit = true;
   const char *mesg = "Press any key to quit...";
   int y = getmaxy(stdscr) - 1;
   move(y - 1, 0); clrtoeol();

@@ -23,10 +23,9 @@ GITVERSION=	GIT_HASH
 WRKSRC=		${WRKDIR}/${GITHUB_USER}-${PORTNAME}-${GITVERSION}
 FETCH_ARGS=	-Fpr
 
-OPTIONS_DEFINE=	SETUID IPINFO IDN UNICODE IPV6 GRAPH
+OPTIONS_DEFINE=	SETUID IPINFO IDN UNICODE IPV6
 OPTIONS_DEFAULT=	IPINFO IDN UNICODE IPV6
 IPINFO_DESC=	Extended information like ASN, etc.
-GRAPH_DESC=	Graphs with X11 XCB backend
 SETUID_DESC=	Install with setuid root
 
 USES+=	meson
@@ -48,9 +47,7 @@ MESON_ARGS+=	-DSBIN=true
 MESON_ARGS+=	-DIPINFO=false
 .endif
 
-.if empty(PORT_OPTIONS:MIDN)
-MESON_ARGS+=	-DIDN=false
-.else
+.if !empty(PORT_OPTIONS:MIDN)
 LIB_DEPENDS+=	libidn2.so:dns/libidn2
 .endif
 
@@ -60,14 +57,6 @@ MESON_ARGS+=	-DUNICODE=false
 
 .if empty(PORT_OPTIONS:MIPV6)
 MESON_ARGS+=	-DIPV6=false
-.endif
-
-.if ${PORT_OPTIONS:MGRAPH}
-USE_XORG=	xcb
-MESON_ARGS+=	-DGRAPH=true
-GRAPH_LIB_DEPENDS+=	libcairo.so:graphics/cairo \
-		libpango-1.0.so:x11-toolkits/pango \
-		libxcb-keysyms.so:x11/xcb-util-keysyms
 .endif
 
 .if ${PORT_OPTIONS:MSETUID}

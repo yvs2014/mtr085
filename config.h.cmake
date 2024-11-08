@@ -43,12 +43,6 @@
 /* split-mode */
 #cmakedefine SPLITMODE
 
-/* XCB/Xlib cairo graphs */
-#cmakedefine GRAPHMODE
-#cmakedefine WITH_XCB_GRAPHS
-#cmakedefine WITH_X11_GRAPHS
-#cmakedefine FC_FINI
-
 /* IPv6 */
 #cmakedefine ENABLE_IPV6
 
