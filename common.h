@@ -118,9 +118,9 @@ typedef enum { ActionNone, ActionQuit, ActionReset, ActionDisplay,
 #define UNKN_ITEM "???"
 #define AT_FMT "%2d."
 
-#define SETBIT(a, n) { (a) |= 1U << (n);}
-#define CLRBIT(a, n) { (a) &= ~(1U << (n));}
-#define TGLBIT(a, n) { (a) ^= 1U << (n);}
+#define SETBIT(a, n) do { (a) |= 1U << (n);    } while(0)
+#define CLRBIT(a, n) do { (a) &= ~(1U << (n)); } while(0)
+#define TGLBIT(a, n) do { (a) ^= 1U << (n);    } while(0)
 #define CHKBIT(a, n) (((a) >> (n)) & 1U)
 #define NEQBIT(a, b, n) (((a) ^ (b)) & (1U << (n)))
 
@@ -234,7 +234,10 @@ extern char neterr_txt[];  // ... with this text
 extern pid_t mypid;
 extern char mtr_args[];
 // runtime args' bits
-enum RUN_ARG { RA_UDP, RA_TCP, RA_MPLS, RA_ASN, RA_IPINFO, RA_DNS, RA_JITTER, RA_DM0, RA_DM1, RA_CACHE, RA_PAUSE };
+typedef enum { RA_NA = -1, // upto 32 [unsigned-in-bits]
+  RA_UDP, RA_TCP, RA_MPLS, RA_ASN, RA_IPINFO, RA_DNS, RA_JITTER, RA_DM0, RA_DM1, RA_CACHE, RA_PAUSE,
+  RA_CYCLE, RA_PATT, RA_MINTTL, RA_MAXTTL, RA_TOUT, RA_QOS, RA_SIZE, RA_MAX,
+} ra_t;
 extern unsigned run_args;   // runtime args to display hints
 extern unsigned kept_args;  // kept args mapped in bits
   // bits:

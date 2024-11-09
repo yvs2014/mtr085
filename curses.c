@@ -76,10 +76,15 @@
 #include "ipinfo.h"
 #endif
 
+#define CLRSET_RA(ndx_ra, value_ra) { \
+  bool clr = ((ndx_ra) == RA_NA) || (mc_ra_ints[ndx_ra] == LONG_MIN) || (mc_ra_ints[ndx_ra] == (value_ra)); \
+  if (clr) CLRBIT(run_args, (ndx_ra)); else SETBIT(run_args, (ndx_ra)); }
+
 enum { LINEMAXLEN = 1024, HINT_YPOS = 2, HOSTINFOMAX = 30 };
 
 static char mc_title[NAMELEN]; // progname + arguments + destination
 static bool mc_at_quit;
+static long mc_ra_ints[RA_MAX];
 
 static size_t enter_smth(char *buf, size_t size, int y, int x) {
   move(y, x);
@@ -113,7 +118,7 @@ static void enter_stat_fields(void) {
   if (curs != ERR) curs_set(curs);
 }
 
-static bool mc_get_int(int *val, int min, int max, const char *what, const char *hint) {
+static bool mc_get_int(int *val, int min, int max, const char *what, const char *hint, ra_t ra) {
   bool rc = false;
   if (val) {
     mvprintw(HINT_YPOS, 0, "%s: %d", what, *val);
@@ -128,6 +133,7 @@ static bool mc_get_int(int *val, int min, int max, const char *what, const char 
       printw("%s, press any key to continue ...", limit_error);
       refresh(); getch();
     }
+    CLRSET_RA(ra, *val);
   }
   return rc;
 }
@@ -178,6 +184,7 @@ static inline void mc_key_c(void) { // set number of cycles
   char entered[MAXFLD + 1] = {0};
   if (enter_smth(entered, sizeof(entered), HINT_YPOS, strlen(prompt)))
     max_ping = atol(entered);
+  CLRSET_RA(RA_CYCLE, max_ping);
 }
 
 static inline void mc_key_o(void) { // set fields to display and their order
@@ -200,7 +207,7 @@ static inline void mc_key_Q(void) { // set QoS
   } else
 #endif
   { mc_get_int(&tos, 0, UCHAR_MAX, "Type of Service (ToS)",
-      "bits: lowcost(1), reliability(2), throughput(4), lowdelay(8)"); }
+      "bits: lowcost(1), reliability(2), throughput(4), lowdelay(8)", RA_QOS); }
 }
 #endif
 
@@ -219,6 +226,7 @@ static inline void mc_key_s(void) { // set packet size
     if (s_val < 0)
       cpacketsize = -cpacketsize;
   }
+  CLRSET_RA(RA_SIZE, cpacketsize);
 }
 
 key_action_t mc_keyaction(void) {
@@ -241,7 +249,7 @@ key_action_t mc_keyaction(void) {
       mc_key_h();
       break;
     case 'b': // bit pattern
-      mc_get_int(&cbitpattern, -1, UCHAR_MAX, "Bit Pattern", "range[0-255], random is -1");
+      mc_get_int(&cbitpattern, -1, UCHAR_MAX, "Bit Pattern", "range[0-255], random is -1", RA_PATT);
       break;
     case 'c': // number of cycles
       mc_key_c();
@@ -251,11 +259,11 @@ key_action_t mc_keyaction(void) {
     case 'e': return ActionMPLS;
 #endif
     case 'f': // first ttl
-      mc_get_int(&fstTTL, 1, maxTTL, "First TTL", NULL);
+      mc_get_int(&fstTTL, 1, maxTTL, "First TTL", NULL, RA_MINTTL);
       break;
     case 'i': { // interval
       int tout = wait_time;
-      if (mc_get_int(&tout, 1, INT_MAX, "Interval", NULL))
+      if (mc_get_int(&tout, 1, INT_MAX, "Interval", NULL, RA_TOUT))
         wait_time = tout;
     } break;
     case 'j': // latency OR jitter
@@ -267,7 +275,7 @@ key_action_t mc_keyaction(void) {
     case 'L': return ActionII;
 #endif
     case 'm': // max ttl
-      mc_get_int(&maxTTL, 1, MAXHOST - 1, "Max TTL", NULL);
+      mc_get_int(&maxTTL, 1, MAXHOST - 1, "Max TTL", NULL, RA_MAXTTL);
       break;
 #ifdef ENABLE_DNS
     case 'n': return ActionDNS;
@@ -468,6 +476,18 @@ static inline void dmode_init(double *factors, int num) {
 }
 
 static void mc_init(void) {
+  static bool mc_init_done;
+  if (!mc_init_done) {
+    mc_init_done = true;
+    for (int i = 0; i < (sizeof(mc_ra_ints) / sizeof(mc_ra_ints[0])); i++)
+      mc_ra_ints[i] = LONG_MIN;
+    mc_ra_ints[RA_PATT]   = cbitpattern;
+    mc_ra_ints[RA_CYCLE]  = max_ping;
+    mc_ra_ints[RA_MINTTL] = fstTTL;
+    mc_ra_ints[RA_MAXTTL] = maxTTL;
+    mc_ra_ints[RA_QOS]    = tos;
+    mc_ra_ints[RA_SIZE]   = cpacketsize;
+  }
   // display mode 2
   dmode_init(factors2, NUM_FACTORS2);
 #ifdef WITH_UNICODE
@@ -661,6 +681,11 @@ static void print_scale(void) {
 #define IASP (iargs_sp ? " " : "")
 #define ADD_NTH_BIT_INFO(bit, what) { \
   if (NEQBIT(run_args, kept_args, (bit))) len += snprint_iarg((bit), buf + len, size - len, (what)); }
+#define ADD_INT_INFO(what, value) { \
+  len += snprintf(buf + len, size - len, "%s" what, IASP, (value)); \
+  SET_IASP; }
+#define ADD_BIT_INT_INFO(bit, what, value) { \
+  if (NEQBIT(run_args, kept_args, (bit))) ADD_INT_INFO(what, (value)); }
 
 static bool iargs_sp;
 static int snprint_iarg(int bit, char *buf, int size, const char *msg) {
@@ -688,10 +713,15 @@ static int mc_snprint_args(char *buf, size_t size) {
   int chart = 0;
   if (CHKBIT(run_args, RA_DM0)) chart |= 1;
   if (CHKBIT(run_args, RA_DM1)) chart |= 2;
-  if (chart) {
-    len += snprintf(buf + len, size - len, "%schart%u", IASP, chart);
-    SET_IASP;
-  }
+  if (chart) ADD_INT_INFO("chart%u", chart);
+  //
+  ADD_BIT_INT_INFO(RA_PATT,   "patt=%d", cbitpattern);
+  ADD_BIT_INT_INFO(RA_CYCLE,  "cycles=%ld", max_ping);
+  ADD_BIT_INT_INFO(RA_MINTTL, "ttl>=%d", fstTTL);
+  ADD_BIT_INT_INFO(RA_MAXTTL, "ttl<=%d", maxTTL);
+  ADD_BIT_INT_INFO(RA_QOS,    "qos=%d", tos);
+  ADD_BIT_INT_INFO(RA_SIZE,   "size=%d", cpacketsize);
+  //
   ADD_NTH_BIT_INFO(RA_CACHE, "cache");
   len += snprintf(buf + len, size - len, ")");
   if (strnlen(buf, sizeof(buf)) == 3 /*" ()"*/)

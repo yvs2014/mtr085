@@ -348,7 +348,7 @@ static key_action_t keyboard_events(key_action_t action) {
         SETBIT(run_args, (action == ActionUDP) ? RA_UDP : RA_TCP);
       }
 #ifdef ENABLE_IPV6
-      net_setsock6();
+      if (af == AF_INET6) net_setsock6();
 #endif
       break;
     default: action = ActionNone;

@@ -562,7 +562,7 @@ static inline void short_set(char opt, const char *progname) {
 #ifdef WITH_MPLS
     case 'e':
       enable_mpls = true;
-      SETBIT(kept_args, RA_MPLS)
+      SETBIT(kept_args, RA_MPLS);
       break;
 #endif
     case 'f':
@@ -619,7 +619,7 @@ static inline void short_set(char opt, const char *progname) {
       if (mtrtype == IPPROTO_UDP)
         FAIL("-t and -u are mutually exclusive");
       net_set_type(IPPROTO_TCP);
-      SETBIT(kept_args, RA_TCP)
+      SETBIT(kept_args, RA_TCP);
       break;
     case 'T':
       syn_timeout = limit_int(1, TCPSYN_TOUT_MAX, atoi(optarg), "TCP timeout", opt) * MIL;
@@ -628,7 +628,7 @@ static inline void short_set(char opt, const char *progname) {
       if (mtrtype == IPPROTO_TCP)
         FAIL("-u and -t are mutually exclusive");
       net_set_type(IPPROTO_UDP);
-      SETBIT(kept_args, RA_UDP)
+      SETBIT(kept_args, RA_UDP);
       break;
     case 'v':
 #ifdef BUILD_OPTIONS
@@ -644,13 +644,13 @@ static inline void short_set(char opt, const char *progname) {
         FAIL("-x: Cache timeout %d must be positive", cache_timeout);
       else if (cache_timeout == 0)
         cache_timeout = CACHE_TIMEOUT;  // default 60 seconds
-      SETBIT(kept_args, RA_CACHE)
+      SETBIT(kept_args, RA_CACHE);
       break;
 #ifdef WITH_IPINFO
     case 'L':
-      SETBIT(kept_args, RA_IPINFO)
+      SETBIT(kept_args, RA_IPINFO);
     case 'l':
-      SETBIT(kept_args, RA_ASN)
+      SETBIT(kept_args, RA_ASN);
       if (!ipinfo_init((opt == 'L') ? optarg : ASLOOKUP_DEFAULT))
         exit(EXIT_FAILURE);
       if (!ipinfo_action(ActionNone)) // don't switch at start
