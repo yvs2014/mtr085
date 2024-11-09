@@ -67,6 +67,7 @@
  aux settings
 */
 
+#cmakedefine HAVE_QUICK_EXIT
 #cmakedefine HAVE_CTIME_R
 #cmakedefine HAVE_LOCALTIME_R
 

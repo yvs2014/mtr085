@@ -4,7 +4,7 @@
 
 _bin='mtr'
 _git='commit'
-_rev="number"
+_rev='number'
 _build='_build'
 
 pkgname=mtr085

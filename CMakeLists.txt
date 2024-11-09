@@ -331,7 +331,7 @@ set(FN_MUST warnx)
 fn_checkout()
 #
 set(FN_LIBS c)
-set(FN_LIST ctime_r localtime_r)
+set(FN_LIST ctime_r localtime_r quick_exit)
 set(FN_MUST)
 fn_checkout()
 #

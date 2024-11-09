@@ -67,6 +67,7 @@
  aux settings
 */
 
+#mesondefine HAVE_QUICK_EXIT
 #mesondefine HAVE_CTIME_R
 #mesondefine HAVE_LOCALTIME_R
 

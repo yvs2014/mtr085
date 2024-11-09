@@ -108,6 +108,12 @@
 #include "report.h"
 #endif
 
+#ifdef HAVE_QUICK_EXIT
+#define QEXIT quick_exit
+#else
+#define QEXIT exit
+#endif
+
 enum { REPORT_PINGS    = 100 };
 enum { CACHE_TIMEOUT   = 60  };
 enum { TCPSYN_TOUT_MAX = 60  };
@@ -498,7 +504,7 @@ static inline void option_o(const char *progname) {
 #endif
     default:
       usage(progname);
-      exit(EXIT_FAILURE);
+      QEXIT(EXIT_FAILURE);
   }
 }
 #endif
@@ -636,7 +642,7 @@ static inline void short_set(char opt, const char *progname) {
 #else
       printf("%s\n", FULLNAME);
 #endif
-      exit(EXIT_SUCCESS);
+      QEXIT(EXIT_SUCCESS);
     case 'x':
       cache_mode = true;
       cache_timeout = atoi(optarg);
@@ -652,14 +658,14 @@ static inline void short_set(char opt, const char *progname) {
     case 'l':
       SETBIT(kept_args, RA_ASN);
       if (!ipinfo_init((opt == 'L') ? optarg : ASLOOKUP_DEFAULT))
-        exit(EXIT_FAILURE);
+        QEXIT(EXIT_FAILURE);
       if (!ipinfo_action(ActionNone)) // don't switch at start
-        exit(EXIT_FAILURE);
+        QEXIT(EXIT_FAILURE);
       break;
 #endif
     default:
       usage(progname);
-      exit((opt == 'h') ? EXIT_SUCCESS : EXIT_FAILURE);
+      QEXIT((opt == 'h') ? EXIT_SUCCESS : EXIT_FAILURE);
   }
 }
 
@@ -835,7 +841,7 @@ static inline void main_prep(int argc, char **argv) {
 #endif
   set_fld_active(NULL);
   parse_options(argc, argv);
-  if (optind >= argc) { usage(argv[0]); exit(EXIT_SUCCESS); }
+  if (optind >= argc) { usage(argv[0]); QEXIT(EXIT_SUCCESS); }
 #ifdef WITH_SYSLOG
   openlog(PACKAGE_NAME, LOG_PID, LOG_USER);
 #endif

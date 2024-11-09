@@ -314,8 +314,9 @@ fndesc = {
   'socket': {'libs': ['socket', 'network'], 'hdr': 'sys/socket.h'},
   'strlcpy': {'libs': ['bsd'], 'hdr': 'bsd/stdlib.h', 'libhdr': true, 'req': false},
   'arc4random_uniform': {'libs': ['bsd'], 'hdr': 'bsd/stdlib.h', 'libhdr': true, 'req': false},
-  'ctime_r':     {'libs': [], 'hdr': 'time.h', 'req': false},
-  'localtime_r': {'libs': [], 'hdr': 'time.h', 'req': false},
+  'quick_exit':  {'libs': [], 'hdr': 'stdlib.h', 'req': false},
+  'ctime_r':     {'libs': [], 'hdr': 'time.h',   'req': false},
+  'localtime_r': {'libs': [], 'hdr': 'time.h',   'req': false},
 }
 #
 foreach fn, desc: fndesc
