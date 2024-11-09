@@ -149,12 +149,6 @@ if dns
   if cc.has_function(fn, prefix: incl, dependencies: libres)
     config.set('HAVE_' + fn.underscorify().to_upper(), 1)
   endif
-  fn = 'gethostbyaddr'
-  if not cc.has_function(fn, prefix: incl, dependencies: libres)
-    libnsl = cc.find_library('nsl')
-    assert(cc.has_function(fn, prefix: incl, dependencies: libnsl), 'DNS is enabled, but NSL not found')
-    deps += libnsl
-  endif
   headers += 'sys/types.h'
   headers += 'arpa/nameser.h'
   srcn += 'dns'

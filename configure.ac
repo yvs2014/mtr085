@@ -86,7 +86,6 @@ AM_CONDITIONAL([EXTRESOLV], [test "x$macos" = "xyes"])
 AS_IF([test "x$dns" = "xyes"], [
 	AC_DEFINE([ENABLE_DNS], [], [Define to enable DNS])
 	AC_HEADER_RESOLV
-	AC_SEARCH_LIBS([gethostbyaddr], [nsl],, AC_MSG_ERROR(No nameservice library found))
 	AC_SEARCH_LIBS([dn_expand], [resolv],, AC_SEARCH_LIBS([__dn_expand], [resolv],, AC_MSG_ERROR(No resolv found)))
 	dnl res_xxx is resolved via macros on MacOS, so let's suggest some mkquery() is present there unconditionaly
 	AS_IF([test "x$macos" = "xyes"], [AC_DEFINE([HAVE_RES_NMKQUERY], [1], [Define this if res_nmkquery() is present])], true, [

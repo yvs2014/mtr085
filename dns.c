@@ -316,6 +316,10 @@ int dns_send_query(int at, int ndx, const char *qstr, int type) {
 }
 #undef SENDTONS
 
+inline const char *dns_ptr_cache(int at, int ndx) {
+  return addr_exist(&IP_AT_NDX(at, ndx)) ? RPTR_AT_NDX(at, ndx) : NULL;
+}
+
 const char *dns_ptr_lookup(int at, int ndx) {
   if (!enable_dns) // not enabled
     return NULL;

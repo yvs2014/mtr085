@@ -482,14 +482,11 @@ int poll_loop(void) {
     do {
       if ((anyset != ActionNone) || paused) {
         timeout = paused ? PAUSE_MSEC : 0;
-        if (paused && interactive)
-          display_redraw();
+        if (paused && interactive) display_redraw();
       } else {
-        if (interactive || (display_mode == DisplaySplit))
-          display_redraw();
+        display_redraw();
 #ifdef WITH_IPINFO
-        if (ipinfo_ready())
-          proceed_ipinfo();
+        if (ipinfo_ready()) proceed_ipinfo();
 #endif
         if (!svc(&lasttime, &interval, &timeout)) {
           seqfd_free();
@@ -497,8 +494,7 @@ int poll_loop(void) {
           return true;
         }
       }
-      if (!timeout)
-        usleep(MINSLEEP_USEC);
+      if (!timeout) usleep(MINSLEEP_USEC);
       rv = poll(allfds, maxfd, timeout);
     } while ((rv < 0) && (errno == EINTR));
 

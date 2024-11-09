@@ -31,6 +31,7 @@ void dns_close(void);
 int dns_wait(int family);
 void dns_parse(int fd, int family);
 const char *dns_ptr_lookup(int at, int ndx);
+const char *dns_ptr_cache(int at, int ndx);
 int dns_send_query(int at, int ndx, const char *qstr, int type);
 char* ip2arpa(const t_ipaddr *ipaddr, const char *suff4, const char *suff6);
 

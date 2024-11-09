@@ -20,9 +20,13 @@
 #define REPORT_H
 
 #include <stdbool.h>
+#include "config.h"
 
 void report_started_at(void);
 void report_close(bool next, bool with_header);
+#ifdef ENABLE_DNS
+void report_resolv(void);
+#endif
 #ifdef OUTPUT_FORMAT_RAW
 extern bool enable_raw;
 void raw_rawping(int at, int usec);

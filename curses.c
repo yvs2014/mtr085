@@ -405,13 +405,7 @@ static void print_hops(int statx) {
       break;
     printw(AT_FMT " ", at + 1);
     t_ipaddr *addr = &CURRENT_IP(at);
-    if (!addr_exist(addr)) {
-      printw("%s", UNKN_ITEM);
-      if (move(y + 1, 0) == ERR)
-        break;
-      if ((at < (max - 1)) && (print_stat(at, y, statx, max) == ERR))
-        break;
-    } else {
+    if (addr_exist(addr)) {
       printw_addr(at, host[at].current);
       if (print_stat(at, y, statx, max) == ERR)
         break;
@@ -420,6 +414,12 @@ static void print_hops(int statx) {
         printw_mpls(&CURRENT_MPLS(at));
 #endif
       print_addr_extra(at);
+    } else {
+      printw("%s", UNKN_ITEM);
+      if (move(y + 1, 0) == ERR)
+        break;
+      if ((at < (max - 1)) && (print_stat(at, y, statx, max) == ERR))
+        break;
     }
   }
   move(2, 0);
@@ -819,7 +819,6 @@ void mc_redraw(void) {
     (curses_mode == 0) ? mc_statmode(linebuf, sizeof(linebuf)) : mc_histmode();
   }
   refresh();
-//  move(getmaxy(stdscr) - 3, 0);
 }
 
 

@@ -20,6 +20,9 @@
 #include "common.h"
 #include "display.h"
 #include "report.h"
+#ifdef ENABLE_DNS
+#include "dns.h"
+#endif
 #ifdef CURSESMODE
 #include "mtr-curses.h"
 #endif
@@ -111,6 +114,23 @@ void display_redraw(void) {
 #ifdef SPLITMODE
     case DisplaySplit: split_redraw(); break;
 #endif
+#ifdef OUTPUT_FORMAT_TXT
+    case DisplayTXT:
+#endif
+#ifdef OUTPUT_FORMAT_CSV
+    case DisplayCSV:
+#endif
+#ifdef OUTPUT_FORMAT_JSON
+    case DisplayJSON:
+#endif
+#ifdef OUTPUT_FORMAT_XML
+    case DisplayXML:
+#endif
+    case DisplayReport:
+#ifdef ENABLE_DNS
+      if (enable_dns) report_resolv();
+#endif
+      break;
     default: break;
   }
 }
