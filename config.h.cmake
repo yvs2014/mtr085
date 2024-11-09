@@ -67,6 +67,9 @@
  aux settings
 */
 
+#cmakedefine HAVE_CTIME_R
+#cmakedefine HAVE_LOCALTIME_R
+
 /* BSD functions */
 #cmakedefine HAVE_STRLCPY
 #cmakedefine HAVE_ARC4RANDOM_UNIFORM

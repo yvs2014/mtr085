@@ -76,7 +76,15 @@
 #define RANDUNIFORM(base) ((base - 1) * (rand() / (RAND_MAX + 0.1)))
 #endif
 
-// no common field names
+#if   __STDC_VERSION__ > 202312L
+#define SASSERT  static_assert
+#elif __STDC_VERSION__ > 201112L
+#define SASSERT _Static_assert
+#else
+#define SASSERT(expression, ...) assert(expression)
+#endif
+
+// iphdr, icmphdr are defined because no common field names among OSes
 struct PACKIT _iphdr {
 #if BYTE_ORDER == LITTLE_ENDIAN
   uint8_t ihl:4;
@@ -94,7 +102,6 @@ struct PACKIT _iphdr {
   uint32_t saddr, daddr;
 }; /* must be 20 bytes */
 
-// no common field names
 struct PACKIT _icmphdr {
   uint8_t type, code;
   uint16_t sum, id, seq;
@@ -1206,13 +1213,13 @@ static void save_ptr_answer(int at, int ndx, const char* answer) {
 #endif
 
 void net_assert(void) { // to be sure
-  static_assert(sizeof(struct _iphdr)   == 20, "struct iphdr");
-  static_assert(sizeof(struct _udpph)   == 12, "struct udpph");
-  static_assert(sizeof(struct _icmphdr) == 8,  "struct icmphdr");
+  SASSERT(sizeof(struct _iphdr)   == 20, "struct iphdr");
+  SASSERT(sizeof(struct _udpph)   == 12, "struct udpph");
+  SASSERT(sizeof(struct _icmphdr) == 8,  "struct icmphdr");
 #ifdef WITH_MPLS
-  static_assert(IES_SZ == 4, "mpls ies");
-  static_assert(IEO_SZ == 4, "mpls ieo");
-  static_assert(LAB_SZ == 4, "mpls label");
+  SASSERT(IES_SZ == 4, "mpls ies");
+  SASSERT(IEO_SZ == 4, "mpls ieo");
+  SASSERT(LAB_SZ == 4, "mpls label");
 #endif
   net_settings(IPV6_UNDEF);
 }

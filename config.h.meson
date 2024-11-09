@@ -67,6 +67,9 @@
  aux settings
 */
 
+#mesondefine HAVE_CTIME_R
+#mesondefine HAVE_LOCALTIME_R
+
 /* BSD functions */
 #mesondefine HAVE_STRLCPY
 #mesondefine HAVE_ARC4RANDOM_UNIFORM

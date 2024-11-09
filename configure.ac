@@ -35,6 +35,8 @@ AC_CHECK_FUNC([strlcpy], AC_DEFINE(HAVE_STRLCPY, 1, [Define if strlcpy exists]),
 	AC_SEARCH_LIBS([strlcpy], [bsd], [AC_DEFINE(HAVE_STRLCPY, 1)]))
 AC_CHECK_FUNC([arc4random_uniform], AC_DEFINE(HAVE_ARC4RANDOM_UNIFORM, 1, [Define if arc4random_uniform exists]),
 	AC_SEARCH_LIBS([arc4random_uniform], [bsd], [AC_DEFINE(HAVE_ARC4RANDOM_UNIFORM, 1)]))
+AC_CHECK_FUNC([ctime_r], AC_DEFINE(HAVE_CTIME_R, 1, [Define if ctime_r exists]))
+AC_CHECK_FUNC([localtime_r], AC_DEFINE(HAVE_LOCALTIME_R, 1, [Define if localtime_r exists]))
 
 AC_ARG_ENABLE([ipv6],
 	AS_HELP_STRING([--disable-ipv6], [Do not enable IPv6]),

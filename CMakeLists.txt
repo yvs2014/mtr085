@@ -330,6 +330,11 @@ set(FN_LIST warnx strlcpy arc4random_uniform)
 set(FN_MUST warnx)
 fn_checkout()
 #
+set(FN_LIBS c)
+set(FN_LIST ctime_r localtime_r)
+set(FN_MUST)
+fn_checkout()
+#
 check_symbol_exists(IP_TOS "netinet/in.h" HAVE_IP_TOS)
 if(NOT HAVE_IP_TOS)
   list(APPEND MAN_EXCL q)

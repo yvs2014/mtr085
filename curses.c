@@ -799,8 +799,14 @@ void mc_redraw(void) {
     attron(A_BOLD); addch('q'); attroff(A_BOLD); printw("uit\n");
     time_t now = time(NULL);
     int maxx = getmaxx(stdscr);
+#ifdef HAVE_CTIME_R
+    char str[32];
+    char *tm = (now > 0) ? ctime_r(&now, str) : NULL;
+#else
+    char *tm = (now > 0) ? ctime(&now) : NULL;
+#endif
     int len = snprintf(linebuf, sizeof(linebuf),
-      "%.*s: %s", (int)strnlen(srchost, maxx / 2), srchost, ctime(&now));
+      "%.*s: %s", (int)strnlen(srchost, maxx / 2), srchost, tm ? tm : "");
     mvaddstr(1, maxx - len, linebuf);
   }
   { // main body

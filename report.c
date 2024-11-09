@@ -16,6 +16,10 @@
     Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 */
 
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -51,12 +55,17 @@
 
 static time_t started_at;
 
-static char *at_time_str(time_t at) {
-  static char report_time_str[32];
-  report_time_str[0] = 0;
+static char *at_time_str(time_t at, char *str, size_t size) {
+  if (!str || !size) return NULL;
+  str[0] = 0;
+#ifdef HAVE_LOCALTIME_R
+  struct tm re;
+  struct tm *tm = (at > 0) ? localtime_r(&at, &re) : NULL;
+#else
   struct tm *tm = (at > 0) ? localtime(&at) : NULL;
-  if (tm) strftime(report_time_str, sizeof(report_time_str), "%F %T %z", tm);
-  return report_time_str;
+#endif
+  if (tm) strftime(str, size, "%F %T %z", tm);
+  return str;
 }
 
 inline void report_started_at(void) { started_at = time(NULL); }
@@ -171,7 +180,11 @@ static void report_print_rest(int at, int hostlen, int infolen) {
 void report_close(bool next, bool with_header) {
   if (last_neterr != 0) return;
   if (next) printf("\n");
-  if (with_header) printf("[%s] %s: %s %s %s\n", at_time_str(started_at), srchost, FULLNAME, mtr_args, dsthost);
+  if (with_header) {
+    char str[32];
+    char *tm = at_time_str(started_at, str, sizeof(str));
+    printf("[%s] %s: %s %s %s\n", tm ? tm : "", srchost, FULLNAME, mtr_args, dsthost);
+  }
   int hostlen = get_longest_name(strlen(HOSTTITLE), MAXDNAME);
   int infolen =
 #ifdef WITH_IPINFO
@@ -238,8 +251,10 @@ void json_tail(void) { printf("\n]}\n"); }
 
 void json_close(bool next) {
   if (next) printf(",");
-  printf("\n%*s{\"destination\":\"%s\",\"datetime\":\"%s\",\"data\":[", JSON_MARGIN, "",
-    dsthost, at_time_str(started_at));
+  { char str[32];
+    char *tm = at_time_str(started_at, str, sizeof(str));
+    printf("\n%*s{\"destination\":\"%s\",\"datetime\":\"%s\",\"data\":[",
+      JSON_MARGIN, "", dsthost, tm ? tm : ""); }
   int min = net_min(), max = net_max();
   for (int at = min; at < max; at++) {
     char buf[MAXDNAME] = {0};
