@@ -6,7 +6,7 @@ mtr - a network diagnostic tool
 SYNOPSIS
 --------
 
-**mtr \[-abBcdefFgimnopPqrsStuvwxyzZ46\] HOSTNAME ...**
+**mtr \[-abBcdefFhilLmnNopqrsStTuvx46\] HOSTNAME ...**
 
 DESCRIPTION
 -----------
@@ -20,8 +20,8 @@ The results are usually reported as round-trip-response times in miliseconds and
 EXTRA
 -------
 
-- Internationalized Domain Names
 - Unicode histograms
+- Internationalized Domain Names
 - Additional IP address information
 
 DETAILS
