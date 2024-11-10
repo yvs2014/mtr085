@@ -221,11 +221,13 @@ static void proceed_tcp(struct timespec *polled_at) {
   }
 }
 
+#define PL_GETTIME(tspec) { if (clock_gettime(CLOCK_MONOTONIC, (tspec)) < 0) { \
+  keep_error(errno, __func__); return false; }}
+
 static bool svc(struct timespec *last, const struct timespec *interval, int *timeout) {
   // set 'last' and 'timeout [msec]', return false if it neeeds to stop
   struct timespec now, tv;
-  if (clock_gettime(CLOCK_MONOTONIC, &now) < 0)
-    FAIL_CLOCK_GETTIME;
+  PL_GETTIME(&now);
   timespecadd(last, interval, &tv);
 
   if (timespeccmp(&now, &tv, >)) {
@@ -470,8 +472,7 @@ int poll_loop(void) {
   memset(&grace_started, 0, sizeof(grace_started));
 
   struct timespec lasttime;
-  if (clock_gettime(CLOCK_MONOTONIC, &lasttime) < 0)
-    FAIL_CLOCK_GETTIME;
+  PL_GETTIME(&lasttime);
 
   while (1) {
     set_fds();
@@ -499,14 +500,14 @@ int poll_loop(void) {
     } while ((rv < 0) && (errno == EINTR));
 
     static struct timespec polled_now;
-    if (clock_gettime(CLOCK_MONOTONIC, &polled_now) < 0)
-      FAIL_CLOCK_GETTIME; // break;
+    PL_GETTIME(&polled_now);
 
     if (rv < 0) {
       int e = errno;
       display_close(true);
-      WARN("poll: %s", strerror(e));
-      LOGMSG("poll: %s", strerror(e));
+      const char* str = rstrerror(e);
+      WARN("%s", str);
+      LOGMSG("%s", str);
       break;
     }
     if (rv) {

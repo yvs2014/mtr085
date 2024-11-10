@@ -68,8 +68,10 @@
 */
 
 #mesondefine HAVE_QUICK_EXIT
+#mesondefine HAVE_STRERROR_R
 #mesondefine HAVE_CTIME_R
 #mesondefine HAVE_LOCALTIME_R
+#mesondefine HAVE_USELOCALE
 
 /* BSD functions */
 #mesondefine HAVE_STRLCPY

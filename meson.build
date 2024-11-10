@@ -309,8 +309,10 @@ fndesc = {
   'strlcpy': {'libs': ['bsd'], 'hdr': 'bsd/stdlib.h', 'libhdr': true, 'req': false},
   'arc4random_uniform': {'libs': ['bsd'], 'hdr': 'bsd/stdlib.h', 'libhdr': true, 'req': false},
   'quick_exit':  {'libs': [], 'hdr': 'stdlib.h', 'req': false},
+  'strerror_r':  {'libs': [], 'hdr': 'string.h', 'req': false},
   'ctime_r':     {'libs': [], 'hdr': 'time.h',   'req': false},
   'localtime_r': {'libs': [], 'hdr': 'time.h',   'req': false},
+  'uselocale':   {'libs': [], 'hdr': 'locale.h', 'req': false},
 }
 #
 foreach fn, desc: fndesc

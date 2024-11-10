@@ -159,14 +159,6 @@ extern char localaddr[];
 #define QTXT_TS_AT_NDX(at, ndx) (host[at].eaddr[ndx].q_txt_ts)
 #endif
 
-#define FAIL_POSTPONE(rcode, fmt, ...) { last_neterr = rcode; \
-  WARNX(fmt ": %s", __VA_ARGS__, strerror(last_neterr)); \
-  snprintf(neterr_txt, NAMELEN, fmt ": %s", __VA_ARGS__, strerror(last_neterr)); \
-  LOG_RE(false, fmt ": %s", __VA_ARGS__, strerror(last_neterr)); \
-}
-
-#define FAIL_CLOCK_GETTIME FAIL_POSTPONE(errno, "%s", "clock_gettime()");
-
 enum { IPV6_UNDEF = -1, IPV6_DISABLED = 0, IPV6_ENABLED = 1 };
 
 void net_settings(int ipv6_enabled);
@@ -203,5 +195,7 @@ const char *mpls2str(const mpls_label_t *label, int indent);
 #endif
 uint16_t str2hint(const char* str, uint16_t at, uint16_t ndx);
 void waitspec(struct timespec *tv);
+void keep_error(int rc, const char *prefix);
+const char* rstrerror(int rc);
 
 #endif

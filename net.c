@@ -180,18 +180,23 @@ struct PACKIT icmpext_object { // RFC4884
 #define IPLEN_RAW(sz) sz
 #endif
 
-#define EXIT(s) { int e = errno; display_close(true); ERRX(e, "%s: %s", s, strerror(e)); }
-
 #define CLOSE(fd) if ((fd) >= 0) { close(fd); (fd) = -1; /*summ*/ sum_sock[1]++; }
 
-#define FAIL_WITH_WARNX(rcode, fd, fmt, ...) { last_neterr = rcode; \
-  display_clear(); CLOSE(fd); \
-  WARNX(fmt ": %s", __VA_ARGS__, strerror(last_neterr)); \
-  snprintf(neterr_txt, NAMELEN, fmt ": %s", __VA_ARGS__, strerror(last_neterr)); \
-  LOG_RE(false, fmt ": %s", __VA_ARGS__, strerror(last_neterr)); \
-}
+#define NET_FAIL_WARN(fmt, ...) { \
+  WARNX(fmt ": %s", __VA_ARGS__, strerr_txt); \
+  snprintf(err_fulltxt, sizeof(err_fulltxt), fmt ": %s", __VA_ARGS__, strerr_txt); \
+  LOG_RE(false, fmt ": %s", __VA_ARGS__, strerr_txt); }
 
-#define FAIL_WITH_WARN(fd, fmt, ...) FAIL_WITH_WARNX(errno, fd, fmt, __VA_ARGS__)
+#define FAIL_POSTPONE(rcode, fmt, ...) { \
+  last_neterr = (rcode); rstrerror(rcode); \
+  NET_FAIL_WARN(fmt, __VA_ARGS__); }
+
+#define FAIL_AND_CLOSE(rcode, fd, fmt, ...) { \
+  last_neterr = (rcode); rstrerror(last_neterr); \
+  display_clear(); CLOSE(fd); \
+  NET_FAIL_WARN(fmt, __VA_ARGS__); }
+
+#define FAIL_WITH_WARN(fd, fmt, ...) FAIL_AND_CLOSE(errno, fd, fmt, __VA_ARGS__)
 
 struct sequence {
   int at;
@@ -203,17 +208,20 @@ struct sequence {
 };
 
 // global vars
+int af = AF_INET;     // default address family
 t_ipaddr unspec_addr; // 0
 bool  (*addr_exist)(const void *a); // true if not 0
 bool  (*addr_equal)(const void *a, const void *b);
 void* (*addr_copy)(void *dst, const void *src);
-int af = AF_INET;  // default address family
 nethost_t host[MAXHOST];
 char localaddr[MAX_ADDRSTRLEN];
+int last_neterr;               // last known network error ...
+char err_fulltxt[NAMELEN * 2]; // ... with this text
 enum { QR_SUM = 0 /*sure*/, QR_ICMP, QR_UDP, QR_TCP, QR_MAX };
 unsigned long net_queries[QR_MAX]; // number of queries (sum, icmp, udp, tcp)
 unsigned long net_replies[QR_MAX]; // number of replies (sum, icmp, udp, tcp)
 //
+static char strerr_txt[NAMELEN];   // buff for strerror()
 
 
 /* How many queries to unknown hosts do we send?
@@ -303,10 +311,33 @@ static uint16_t udpsum16(struct _iphdr *ip, void *udata, int udata_len, int dsiz
   return sum1616((uint16_t*)csumpacket, tsize / 2, (tsize % 2) ? (bitpattern & 0xff) : 0);
 }
 
+const char* rstrerror(int rc) {
+  strerr_txt[0] = 0;
+#ifdef HAVE_STRERROR_R
+  strerror_r(rc, strerr_txt, sizeof(strerr_txt));
+#else
+  snprintf(strerr_txt, sizeof(strerr_txt), "%s", strerror(rc));
+#endif
+  return strerr_txt;
+}
+
+static void net_warn(const char *prefix) {
+  char* str = strerr_txt[0] ? strerr_txt : "Unknown error";
+  warnx("%s: %s", prefix, str);
+  snprintf(err_fulltxt, sizeof(err_fulltxt), "%s: %s", prefix, str);
+  LOGMSG("%s: %s", prefix, str);
+}
+
+inline void keep_error(int rc, const char *prefix) {
+  last_neterr = rc;
+  rstrerror(rc);
+  net_warn(prefix);
+}
+
 static inline bool save_send_ts(int seq) {
   int rc = clock_gettime(CLOCK_MONOTONIC, &seqlist[seq].time);
-  if (rc < 0) FAIL_CLOCK_GETTIME;
-  return true;
+  if (rc) keep_error(errno, __func__);
+  return (rc == 0);
 }
 
 static void save_sequence(int seq, int at) {
@@ -419,7 +450,7 @@ static bool net_send_tcp(int at) {
 
   int seq = port % MAXSEQ;
   if (poll_reg_fd(sock, seq) < 0)
-    FAIL_WITH_WARNX(1, sock, "no place in pool for sockets (at=%d)", at);
+    FAIL_AND_CLOSE(1, sock, "no place in pool for sockets (at=%d)", at);
   save_sequence(seq, at);
   if (!save_send_ts(seq)) return false;
   connect(sock, &remote.sa, addrlen); // NOLINT(bugprone-unused-return-value)
@@ -685,8 +716,10 @@ static int net_stat(unsigned port, const void *addr, struct timespec *recv_at, i
   struct timespec tv, stated_now;
   if (!recv_at) { // try again
     recv_at = &stated_now;
-    if (clock_gettime(CLOCK_MONOTONIC, recv_at) < 0)
-      FAIL_CLOCK_GETTIME;
+    if (clock_gettime(CLOCK_MONOTONIC, recv_at) < 0) {
+      keep_error(errno, __func__);
+      return false;
+    }
   }
   timespecsub(recv_at, &seqlist[seq].time, &tv);
   timemsec_t curr = { .ms = time2msec(tv), .frac = time2mfrac(tv) };
@@ -1187,8 +1220,10 @@ void net_tcp_parse(int sock, int seq, int noerr, struct timespec *recv_at) {
 // Clean timed out TCP connection
 bool net_timedout(int seq) {
   struct timespec now, dt;
-  if (clock_gettime(CLOCK_MONOTONIC, &now) < 0)
-    FAIL_CLOCK_GETTIME;
+  if (clock_gettime(CLOCK_MONOTONIC, &now) < 0) {
+    keep_error(errno, __func__);
+    return false;
+  }
   timespecsub(&now, &seqlist[seq].time, &dt);
   if (time2msec(dt) <= syn_timeout)
     return false;

@@ -147,8 +147,6 @@ int cbitpattern;              // payload bit pattern
 int cpacketsize = 64;         // default packet size
 int syn_timeout = MIL;        // for TCP tracing (1sec in msec)
 int sum_sock[2];              // socket summary: open()/close() calls
-int last_neterr;              // last known network error
-char neterr_txt[NAMELEN];     // buff for 'last_neterr'
 // chart related
 int display_offset;
 int curses_mode;              // 1st and 2nd bits, 3rd is reserved
@@ -732,21 +730,41 @@ static bool set_target(const struct addrinfo *res) {
   return true;
 }
 
-#ifdef WITH_UNICODE
-void autotest_unicode_print(void) {
-#if defined(HAVE_LOCALE_H) && defined(HAVE_LANGINFO_H)
+#if defined(WITH_UNICODE) && defined(HAVE_LOCALE_H) && defined(HAVE_LANGINFO_H)
+#ifdef HAVE_USELOCALE
+static locale_t unilocale;
+#endif
+//
+static inline void free_unilocale() {
+#ifdef HAVE_USELOCALE
+  if (unilocale) { freelocale(unilocale); unilocale = NULL; }
+#else
+  setlocale(LC_CTYPE, NULL);
+#endif
+}
+//
+static void new_unilocale(void) {
+#ifdef HAVE_USELOCALE
+  unilocale = newlocale(LC_CTYPE_MASK, "", NULL);
+  if (unilocale) uselocale(unilocale);
+#else
   setlocale(LC_CTYPE, "");
-  if (strcasecmp("UTF-8", nl_langinfo(CODESET)) == 0) {
+#endif
+  if (strcasecmp("UTF-8", nl_langinfo(CODESET)) == 0) { // NOLINT(concurrency-mt-unsafe)
     if (iswprint(L'▁')) {
       curses_mode_max++;
       return;
     }
     WARNX("Unicode block elements are not printable");
   }
-  setlocale(LC_CTYPE, NULL);
-#endif
+  free_unilocale();
 }
-#endif
+#define UNICODE_NEW   new_unilocale()
+#define UNICODE_FREE free_unilocale()
+#else
+#define UNICODE_NEW  NOOP
+#define UNICODE_FREE NOOP
+#endif /* UNICODE stuff */
 
 #ifdef LIBCAP
 static bool reset_caps(void) {
@@ -771,7 +789,7 @@ static void getaddrinfo_e(t_res_rc *rr, const char *name) {
   if (!rr || !name) return;
   rr->rc = getaddrinfo(name, NULL, &rr->hints, &rr->res);
   if (rr->rc) rr->error =
-    (rr->rc == EAI_SYSTEM) ? strerror(errno) : gai_strerror(rr->rc);
+    (rr->rc == EAI_SYSTEM) ? rstrerror(errno) : gai_strerror(rr->rc);
 }
 
 #if !defined(AI_IDN) && (defined(LIBIDN2) || defined(LIBIDN))
@@ -836,9 +854,7 @@ static inline void main_prep(int argc, char **argv) {
 #endif
   for (int i = 0; i < statf_max; i++)
     fld_index[(uint8_t)statf[i].key] = i;
-#ifdef WITH_UNICODE
-  autotest_unicode_print();
-#endif
+  UNICODE_NEW;
   set_fld_active(NULL);
   parse_options(argc, argv);
   if (optind >= argc) { usage(argv[0]); QEXIT(EXIT_SUCCESS); }
@@ -891,7 +907,8 @@ static inline void main_fin(void) {
 #endif
   if (enable_stat_at_exit) stat_fin();
   if (last_neterr && (display_mode == DisplayCurses))
-    warnx("%s", neterr_txt); // duplicate an error cleaned by ncurses
+    warnx("%s", err_fulltxt); // duplicate an error cleaned by ncurses
+  UNICODE_FREE;
 }
 
 

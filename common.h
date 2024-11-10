@@ -229,7 +229,7 @@ extern int syn_timeout;    // timeout for TCP connections
 extern int sum_sock[];     // summary open()/close() calls for sockets
 
 extern int last_neterr;    // last known network error ...
-extern char neterr_txt[];  // ... with this text
+extern char err_fulltxt[]; // ... with this text
 
 extern pid_t mypid;
 extern char mtr_args[];

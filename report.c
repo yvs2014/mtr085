@@ -244,7 +244,7 @@ void xml_close(void) {
     printf("%*s</HOP>\n", XML_MARGIN * 2, "");
   }
   if (last_neterr != 0)
-    printf("%*s<ERROR>%s</ERROR>\n", XML_MARGIN * 2, "", neterr_txt);
+    printf("%*s<ERROR>%s</ERROR>\n", XML_MARGIN * 2, "", err_fulltxt);
   printf("%*s</DST>\n", XML_MARGIN, "");
 }
 #endif
@@ -289,7 +289,7 @@ void json_close(bool next) {
   }
   printf("\n%*s]", JSON_MARGIN, "");
   if (last_neterr != 0)
-    printf(",\"error\":\"%s\"", neterr_txt);
+    printf(",\"error\":\"%s\"", err_fulltxt);
   printf("}");
 }
 #endif
