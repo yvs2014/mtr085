@@ -636,9 +636,9 @@ static inline void short_set(char opt, const char *progname) {
       break;
     case 'v':
 #ifdef BUILD_OPTIONS
-      printf("%s: %s\n", FULLNAME, BUILD_OPTIONS);
+      printf("%s.%s: %s\n", PACKAGE_NAME, GITREV, BUILD_OPTIONS);
 #else
-      printf("%s\n", FULLNAME);
+      printf("%s.%s\n", PACKAGE_NAME, GITREV);
 #endif
       QEXIT(EXIT_SUCCESS);
     case 'x':

@@ -12,7 +12,7 @@ project('mtr085', 'c',
 
 name = 'mtr'
 config = configuration_data()
-config.set_quoted('PACKAGE_NAME', name)
+config.set_quoted('PACKAGE_NAME', meson.project_name())
 version = meson.project_version().split('.')
 if version.length() > 2
   config.set_quoted('GITREV', version[2])

@@ -19,6 +19,11 @@ ddir="debs"
 nra="$ddir/${name}_${rev}_$arch"
 chf="debian/changelog"
 
+command -v lsb_release >/dev/null && \
+lsb_release -i 2>/dev/null | grep -q Debian && \
+lsb_release -r 2>/dev/null | grep '\s9\.' && \
+  cp debian/autoconf/* debian/
+
 mkdir -p "$ddir"
 rm -f "$chf.tmp"
 dch --create -c "$chf.tmp" --package="$name" -v "$rev" -D "$dist" -u "low" -M \

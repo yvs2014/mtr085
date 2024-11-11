@@ -77,6 +77,7 @@
 #cmakedefine HAVE_STRLCPY
 #cmakedefine HAVE_ARC4RANDOM_UNIFORM
 #cmakedefine HAVE_BSD_STDLIB_H
+#cmakedefine HAVE_BSD_STRING_H
 
 /* sys/param.h header */
 #cmakedefine HAVE_SYS_PARAM_H

@@ -2,8 +2,9 @@
 cmake_minimum_required(VERSION 3.12)
 project(mtr085 C)
 set(NAME "mtr")
-set(PACKAGE_NAME "${NAME}")
 set(VERSION "0.85")
+string(REPLACE "." "" NAME_SUFFIX "${VERSION}")
+set(PACKAGE_NAME "${NAME}${NAME_SUFFIX}")
 
 if(EXISTS .git)
   find_package(Git)
@@ -277,6 +278,7 @@ endif()
 check_include_file("netdb.h" HAVE_NETDB_H)
 check_include_file("sys/param.h" HAVE_SYS_PARAM_H)
 check_include_file("bsd/stdlib.h" HAVE_BSD_STDLIB_H)
+check_include_file("bsd/string.h" HAVE_BSD_STRING_H)
 #
 function(fn_checkout)
   foreach(fn IN LISTS FN_LIST)

@@ -498,7 +498,7 @@ static int send_tcp_query(int sock, const char *q) {
   char buf[NETDATA_MAXSIZE] = {0};
   (ORIG_TYPE == OT_WHOIS) ?
     snprintf(buf, sizeof(buf), "%s\r\n", q) :
-    snprintf(buf, sizeof(buf), HTTP_GET, q, ORIG_HOST, FULLNAME);
+    snprintf(buf, sizeof(buf), HTTP_GET, q, ORIG_HOST, PACKAGE_NAME);
   size_t len = strnlen(buf, sizeof(buf));
   int rc = send(sock, buf, len, 0);
   if (rc >= 0) {

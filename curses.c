@@ -864,7 +864,7 @@ bool mc_open(void) {
   }
 
   // init title
-  { int len = snprintf(mc_title, sizeof(mc_title), "%s", FULLNAME);
+  { int len = snprintf(mc_title, sizeof(mc_title), "%s", PACKAGE_NAME);
     if (mtr_args[0]) len += snprintf(mc_title + len, sizeof(mc_title) - len, " %s", mtr_args);
     snprintf(mc_title + len, sizeof(mc_title) - len, " %s", dsthost); }
 

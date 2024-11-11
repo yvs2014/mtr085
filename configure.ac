@@ -1,4 +1,4 @@
-AC_INIT([mtr], [0.85])
+AC_INIT([mtr085], [0.85])
 AC_CONFIG_SRCDIR([mtr.c])
 AC_PROG_RANLIB
 AC_CHECK_PROG(GIT, [git], [yes])
@@ -27,6 +27,7 @@ m4_ifdef([AX_CHECK_COMPILE_FLAG],
 AC_CHECK_HEADERS([netdb.h], AC_DEFINE(HAVE_NETDB_H, 1))
 AC_CHECK_HEADERS([sys/param.h], AC_DEFINE(HAVE_SYS_PARAM_H, 1))
 AC_CHECK_HEADERS([bsd/stdlib.h], AC_DEFINE(HAVE_BSD_STDLIB_H, 1))
+AC_CHECK_HEADERS([bsd/string.h], AC_DEFINE(HAVE_BSD_STRING_H, 1))
 
 AC_SEARCH_LIBS([pow], [m],, AC_MSG_ERROR(No math library found))
 AC_SEARCH_LIBS([warnx], [bsd],, AC_MSG_ERROR(No bsd err/warn library found))

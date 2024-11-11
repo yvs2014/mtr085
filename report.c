@@ -191,7 +191,7 @@ void report_close(bool next, bool with_header) {
   if (with_header) {
     char str[32];
     char *tm = at_time_str(started_at, str, sizeof(str));
-    printf("[%s] %s: %s %s %s\n", tm ? tm : "", srchost, FULLNAME, mtr_args, dsthost);
+    printf("[%s] %s: %s %s %s\n", tm ? tm : "", srchost, PACKAGE_NAME, mtr_args, dsthost);
   }
   int hostlen = get_longest_name(strlen(HOSTTITLE), MAXDNAME);
   int infolen =

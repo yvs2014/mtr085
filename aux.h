@@ -3,16 +3,6 @@
 
 #include "common.h"
 
-#ifdef VERSION
-#ifdef GITREV
-#define FULLNAME PACKAGE_NAME "-" VERSION "." GITREV
-#else
-#define FULLNAME PACKAGE_NAME "-" VERSION
-#endif
-#else
-#define FULLNAME PACKAGE_NAME
-#endif
-
 #define LENVALMIL(val) double _v = (val) / (double)MIL; int _l = val2len(_v);
 
 char* trim(char *str);

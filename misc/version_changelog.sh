@@ -10,6 +10,7 @@ DISTS='noble'
 META='urgency=low'
 EMAIL='yvs <VSYakovetsky@gmail.com>'
 CHANGELOG='debian/changelog'
+CPPDEF='#define\sGITREV\s'
 
 [ $# -lt 1 ] && { echo "Use: $(basename $0) 'string with comment'"; exit 1; }
 
@@ -21,6 +22,8 @@ deb_comments='  * mtr085 fork with whois info, unicode, etc.'
 
 vers="$(git rev-list --count $TAG0..HEAD)"
 next=$(($vers + 1))
+
+sed -i "s/^\($CPPDEF\).*/\1\"$next\"/" common.h
 
 [ -n "$BACKUP" ] && cp "$CHANGELOG" "/tmp/$(basename $CHANGELOG).bk"
 echo "$NAME ($next) $DISTS; $META\n\n$deb_comments\n\n -- $EMAIL  $(date -R)" > "$CHANGELOG"
