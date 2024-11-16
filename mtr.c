@@ -790,6 +790,18 @@ static void getaddrinfo_e(t_res_rc *rr, const char *name) {
   rr->rc = getaddrinfo(name, NULL, &rr->hints, &rr->res);
   if (rr->rc) rr->error =
     (rr->rc == EAI_SYSTEM) ? rstrerror(errno) : gai_strerror(rr->rc);
+#if defined(ENABLE_IPV6) && defined(IN6_IS_ADDR_V4MAPPED)
+  else if (!af_specified && rr->res && (rr->res->ai_family == AF_INET6)) {
+    struct sockaddr_in6 *sa6 = (struct sockaddr_in6 *)rr->res->ai_addr;
+    if (sa6 && IN6_IS_ADDR_V4MAPPED(&sa6->sin6_addr)) { // unmap and set ipv4 address
+      struct sockaddr_in sa4 = { .sin_family = AF_INET,
+        .sin_addr.s_addr = ((uint32_t*)&sa6->sin6_addr)[3] };
+      memcpy(sa6, &sa4, sizeof(sa4));
+      rr->res->ai_addrlen = sizeof(sa4);
+      rr->res->ai_family = AF_INET;
+    }
+  }
+#endif
 }
 
 #if !defined(AI_IDN) && (defined(LIBIDN2) || defined(LIBIDN))
