@@ -272,13 +272,15 @@ void json_close(bool next) {
     for (int i = 0; i < sizeof(fld_index); i++) {
       const struct statf *stat = active_statf(i);
       if (!stat) break;
-      const char *str = net_elem(at, stat->key);
-      if (str) {
-        int len = strnlen(str, MAXDNAME);
-        if ((len > 0) && (str[len - 1] == '%')) // trim '%' at the end
-          printf(",\"%s%%\":%.*s", stat->name, len - 1, str);
-        else
-          printf(",\"%s\":%s", stat->name, str);
+      const char *elem = net_elem(at, stat->key);
+      if (elem) {
+        int len = strnlen(elem, NETELEM_MAXLEN);
+        if (len > 0) {
+          if (elem[len - 1] == '%') // print '%' with name
+            printf(",\"%s%%\":%.*s", stat->name, len - 1, elem);
+          else
+            printf(",\"%s\":%s", stat->name, elem);
+        }
       }
     }
 #ifdef WITH_IPINFO

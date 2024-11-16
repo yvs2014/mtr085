@@ -869,7 +869,7 @@ void net_icmp_parse(struct timespec *recv_at) {
 
 
 const char *net_elem(int at, char ch) {
-  static char elemstr[16];
+  static char elemstr[NETELEM_MAXLEN];
   int ival = -1;
   switch (ch) {
     case 'D':  // Dropped Packets

@@ -49,6 +49,8 @@
 enum { CT_UNKN = -1, CT_UNSENT = -2, CT_SEAL = -3 };
 #endif
 
+#define NETELEM_MAXLEN 16
+
 extern int af;
 
 extern bool  (*addr_exist)(const void *a); // true if not 0
