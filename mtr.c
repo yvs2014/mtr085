@@ -926,11 +926,13 @@ int main(int argc, char **argv) {
 
   main_prep(argc, argv);
 
-  t_res_rc rr_init = {.hints = {.ai_family = AF_UNSPEC, .ai_socktype = SOCK_DGRAM,
+  t_res_rc rr_init = { .hints = {
+    .ai_family = af_specified ? af : AF_UNSPEC,
+    .ai_socktype = SOCK_DGRAM,
 #ifdef AI_IDN
     .ai_flags = AI_IDN,
 #endif
-    }};
+  }};
   int defport = remoteport;
   bool success = false;
   for (; (optind < argc) && argv[optind]; optind++) {
