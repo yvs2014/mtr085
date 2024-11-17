@@ -27,6 +27,6 @@ void mc_close(void);
 void mc_redraw(void);
 key_action_t mc_keyaction(void);
 void mc_clear(void);
-void mc_final(void);
+void mc_confirm(void);
 
 #endif

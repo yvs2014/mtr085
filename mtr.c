@@ -885,7 +885,7 @@ static inline void main_prep(int argc, char **argv) {
   display_start();
 }
 
-static inline bool main_loop(struct addrinfo *ai) {
+static inline bool main_loop(struct addrinfo *ai, bool fin) {
   static bool next_target;
   bool success = false;
   if (ai) {
@@ -896,6 +896,7 @@ static inline bool main_loop(struct addrinfo *ai) {
       if (display_open()) display_loop();
       else WARNX("Unable to open display");
       net_end_transit();
+      if (fin) display_confirm_fin();
       display_close(next_target);
       locker(stdout, F_UNLCK);
       if (!next_target) next_target = true;
@@ -958,7 +959,7 @@ int main(int argc, char **argv) {
     if (rr.rc)
       warnx("Failed to resolve(%s): %s", dsthost, rr.error ? rr.error : "Unknown error");
     else
-      success = main_loop(rr.res);
+      success = main_loop(rr.res, (optind + 1) >= argc);
   }
 
   main_fin();

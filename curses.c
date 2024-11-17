@@ -89,7 +89,7 @@
 enum { LINEMAXLEN = 1024, HINT_YPOS = 2, HOSTINFOMAX = 30 };
 
 static char mc_title[NAMELEN]; // progname + arguments + destination
-static bool mc_at_quit;
+static bool mc_at_quit, mc_screen_ready;
 static long mc_ra_ints[RA_MAX];
 
 static size_t enter_smth(char *buf, size_t size, int y, int x) {
@@ -823,8 +823,9 @@ void mc_redraw(void) {
 
 
 bool mc_open(void) {
-  if (!initscr()) {
-    WARNX("initscr() failed");
+  mc_screen_ready = initscr();
+  if (!mc_screen_ready) {
+    warnx("initscr() failed");
     return false;
   }
   raw();
@@ -874,8 +875,8 @@ bool mc_open(void) {
   return true;
 }
 
-void mc_final(void) {
-  if (mc_at_quit) return;
+void mc_confirm(void) {
+  if (mc_at_quit || !stdscr || !mc_screen_ready) return;
   mc_at_quit = true;
   const char *mesg = "Press any key to quit...";
   int y = getmaxy(stdscr) - 1;
@@ -884,12 +885,13 @@ void mc_final(void) {
   mvaddstr(y - 1, (getmaxx(stdscr) - strlen(mesg)) / 2, mesg);
   flushinp();
   getch();
-  endwin();
 }
 
 void mc_close(void) {
-  addch('\n');
-  endwin();
+  if (stdscr && mc_screen_ready) {
+    endwin();
+    mc_screen_ready = false;
+  }
 }
 
 void mc_clear(void) {

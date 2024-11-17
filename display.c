@@ -91,11 +91,14 @@ void display_start(void) {
   }
 }
 
+void display_confirm_fin(void) {
+#ifdef CURSESMODE
+  if (display_mode == DisplayCurses) mc_confirm();
+#endif
+}
+
 void display_final(void) {
   switch (display_mode) {
-#ifdef CURSESMODE
-    case DisplayCurses: mc_final(); break;
-#endif
 #ifdef OUTPUT_FORMAT_JSON
     case DisplayJSON: json_tail(); break;
 #endif
