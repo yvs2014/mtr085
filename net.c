@@ -328,7 +328,7 @@ static void net_warn(const char *prefix) {
   LOGMSG("%s: %s", prefix, str);
 }
 
-inline void keep_error(int rc, const char *prefix) {
+void keep_error(int rc, const char *prefix) {
   last_neterr = rc;
   rstrerror(rc);
   net_warn(prefix);
@@ -774,7 +774,7 @@ static mpls_data_t *decodempls(const uint8_t *data, int size) {
   static mpls_data_t mplsdata;
   memset(&mplsdata, 0, sizeof(mplsdata));
   // mpls labels
-  while ((mplsdata.n < n) && ((off + LAB_SZ) <= size)) {
+  while ((mplsdata.n < n) && ((off + LAB_SZ) <= (size_t)size)) {
     mplsdata.label[mplsdata.n++].u32 = ntohl(*(uint32_t*)&data[off]);
     off += LAB_SZ;
   }
@@ -792,7 +792,7 @@ void net_icmp_parse(struct timespec *recv_at) {
 
   ssize_t size = recvfrom(recvsock, packet, MAXPACKET, 0, (struct sockaddr *)&sa_in, &sa_len);
   LOGMSG("got %zd bytes", size);
-  if (size < hdr_minsz)
+  if (size < (ssize_t)hdr_minsz)
     LOGRET("incorrect packet size %zd [af=%d proto=%d minsize=%zd]", size, af, mtrtype, hdr_minsz);
 
   struct _icmphdr *icmp = (struct _icmphdr *)(packet + iphdr_sz);
@@ -808,7 +808,7 @@ void net_icmp_parse(struct timespec *recv_at) {
         reason = RE_PONG;
         ICMPSEQID;
       } else if ((icmp->type == time_exceed) || (icmp->type == dst_unreach)) {
-        if (size < minfailsz)
+        if (size < (ssize_t)minfailsz)
           LOGRET("incorrect packet size %zd [af=%d proto=%d expect>=%zd]", size, af, mtrtype, minfailsz);
         reason = (icmp->type == time_exceed) ? RE_EXCEED : RE_UNREACH;
         icmp = (struct _icmphdr *)data;
@@ -946,7 +946,7 @@ inline void net_end_transit(void) { for (int at = 0; at < MAXHOST; at++) host[at
 int net_send_batch(void) {
   if (batch_at < fstTTL) {
     // Randomize bit-pattern and packet-size if requested
-    bitpattern = (cbitpattern < 0) ? RANDUNIFORM(UCHAR_MAX + 1) : cbitpattern;
+    bitpattern = (cbitpattern < 0) ? (int)RANDUNIFORM(UCHAR_MAX + 1) : cbitpattern;
     if (cpacketsize < 0) {
       int base = -cpacketsize - MINPACKET;
       packetsize = base ? (MINPACKET + RANDUNIFORM(base)) : MINPACKET;
@@ -1070,7 +1070,7 @@ static inline int net_getsock6(void) {
   }
   return -1;
 }
-inline void net_setsock6(void) { sendsock = sendsock6 = net_getsock6(); }
+void net_setsock6(void) { sendsock = sendsock6 = net_getsock6(); }
 #endif
 
 bool net_set_host(t_ipaddr *ipaddr) {
@@ -1181,7 +1181,7 @@ void net_close(void) {
       set_new_addr(at, ndx, &unspec_addr MPLSFNTAIL(NULL));
 }
 
-inline int net_wait(void) { return recvsock; }
+int net_wait(void) { return recvsock; }
 
 static int err_slippage(int sock) {
   socklen_t namelen = sizeof(rsa);
@@ -1204,6 +1204,7 @@ void net_tcp_parse(int sock, int seq, int noerr, struct timespec *recv_at) {
     case EHOSTUNREACH:
     case ENETUNREACH:
       reason = RE_UNREACH;
+      // fall through
     case EHOSTDOWN:
     case ECONNREFUSED:
     case 0: // no error

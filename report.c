@@ -68,7 +68,7 @@ static char *at_time_str(time_t at, char *str, size_t size) {
   return str;
 }
 
-inline void report_started_at(void) { started_at = time(NULL); }
+void report_started_at(void) { started_at = time(NULL); }
 
 static size_t snprint_addr(char *buf, size_t size, int at, int ndx) {
   if (!buf || !size) return 0;
@@ -133,7 +133,7 @@ static void report_print_header(int hostlen, int infolen) {
 #endif
   printf(INFOPATT, hostlen, HOSTTITLE);
   // right
-  for (int i = 0; i < sizeof(fld_index); i++) {
+  for (size_t i = 0; i < sizeof(fld_index); i++) {
     const struct statf *stat = active_statf(i);
     if (stat) printf("%*s", stat->len, stat->name); else break;
   }
@@ -150,7 +150,7 @@ static void report_print_body(int at, const char *fmt, int hostlen, int infolen)
     snprint_addr(name, sizeof(name), at, host[at].current);
     printf(INFOPATT, hostlen, name); }
   // body: right
-  for (int i = 0; (i < sizeof(fld_index)); i++) {
+  for (size_t i = 0; i < sizeof(fld_index); i++) {
     const struct statf *stat = active_statf(i);
     if (!stat) break;
     const char *str = net_elem(at, stat->key);
@@ -230,7 +230,7 @@ void xml_close(void) {
     char buf[MAXDNAME] = {0};
     snprint_addr(buf, sizeof(buf), at, host[at].current);
     printf("%*s<HOP TTL=\"%d\" HOST=\"%s\">\n", XML_MARGIN * 2, "", at + 1, buf);
-    for (int i = 0; i < sizeof(fld_index); i++) {
+    for (size_t i = 0; i < sizeof(fld_index); i++) {
       const struct statf *stat = active_statf(i);
       if (!stat) break;
       const char *str = net_elem(at, stat->key);
@@ -269,7 +269,7 @@ void json_close(bool next) {
     printf((at == min) ? "\n" : ",\n");
     snprint_addr(buf, sizeof(buf), at, host[at].current);
     printf("%*s{\"host\":\"%s\",\"hop\":%d,\"up\":%d", JSON_MARGIN * 2, "", buf, at + 1, host[at].up);
-    for (int i = 0; i < sizeof(fld_index); i++) {
+    for (size_t i = 0; i < sizeof(fld_index); i++) {
       const struct statf *stat = active_statf(i);
       if (!stat) break;
       const char *elem = net_elem(at, stat->key);
@@ -299,7 +299,8 @@ void json_close(bool next) {
 
 #ifdef OUTPUT_FORMAT_CSV
 
-enum { CSV_DELIMITER = ';', CSV_HOSTINFO_DELIMITER = ',' };
+static const char CSV_DELIMITER = ';';
+static const char CSV_HOSTINFO_DELIMITER = ',';
 
 static inline void prupper(const char *str) { while (*str) putchar(toupper((int)*str++)); }
 
@@ -313,7 +314,7 @@ static inline void csv_body(int at) {
 #ifdef WITH_IPINFO
   if (ipinfo_ready()) printf("%c%s", CSV_DELIMITER, sep_ipinfo(at, host[at].current, CSV_HOSTINFO_DELIMITER));
 #endif
-  for (int i = 0; i < sizeof(fld_index); i++) {
+  for (size_t i = 0; i < sizeof(fld_index); i++) {
     const struct statf *stat = active_statf(i);
     if (!stat) break;
     const char *str = net_elem(at, stat->key);
@@ -330,7 +331,7 @@ void csv_close(bool next) {
 #ifdef WITH_IPINFO
   if (ipinfo_ready()) printf("%c%s", CSV_DELIMITER, "INFO");
 #endif
-  for (int i = 0; i < sizeof(fld_index); i++) {
+  for (size_t i = 0; i < sizeof(fld_index); i++) {
     const struct statf *stat = active_statf(i);
     if (!stat) break;
     putchar(CSV_DELIMITER);

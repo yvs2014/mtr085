@@ -35,7 +35,7 @@
 #endif
 #include "split.h"
 
-enum { SPLIT_SEP = '\t' };
+static const char SPLIT_SEP = '\t';
 
 static inline void split_multipath(int at) {
   for (int i = 0; i < MAXPATH; i++) { // multipath
@@ -69,7 +69,7 @@ void split_redraw(void) {
       if (show_ips)
 #endif
       { printf("%c%s", SPLIT_SEP, strlongip(ipaddr)); }
-      for (int i = 0; i < sizeof(fields); i++) {
+      for (size_t i = 0; i < sizeof(fields); i++) {
         const char *str = net_elem(at, fields[i]);
         if (str) printf("%c%s", SPLIT_SEP, str);
       }

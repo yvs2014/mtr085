@@ -651,15 +651,15 @@ static inline void short_set(char opt, const char *progname) {
       SETBIT(kept_args, RA_CACHE);
       break;
 #ifdef WITH_IPINFO
-    case 'L':
-      SETBIT(kept_args, RA_IPINFO);
     case 'l':
-      SETBIT(kept_args, RA_ASN);
-      if (!ipinfo_init((opt == 'L') ? optarg : ASLOOKUP_DEFAULT))
+    case 'L': {
+      bool extra = (opt == 'L');
+      SETBIT(kept_args, extra ? RA_IPINFO : RA_ASN);
+      if (!ipinfo_init(extra ? optarg : ASLOOKUP_DEFAULT))
         QEXIT(EXIT_FAILURE);
       if (!ipinfo_action(ActionNone)) // don't switch at start
         QEXIT(EXIT_FAILURE);
-      break;
+    } break;
 #endif
     default:
       usage(progname);
@@ -735,7 +735,7 @@ static bool set_target(const struct addrinfo *res) {
 static locale_t unilocale;
 #endif
 //
-static inline void free_unilocale() {
+static inline void free_unilocale(void) {
 #ifdef HAVE_USELOCALE
   if (unilocale) { freelocale(unilocale); unilocale = NULL; }
 #else

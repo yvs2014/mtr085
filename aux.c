@@ -1,8 +1,9 @@
 
-#include <ctype.h>
-#include <limits.h>
+#include <stddef.h>
 #include <stdint.h>
+#include <limits.h>
 #include <string.h>
+#include <ctype.h>
 
 #include "aux.h"
 #include "common.h"
@@ -21,9 +22,9 @@ static const char fld_jitter[MAXFLD + 1] = "DR_AGJMXI";
 static char fld_custom[MAXFLD + 1];
 
 const char* fld_active;
-unsigned fld_index[UCHAR_MAX + 1] = {-1}; // key->index backresolv
+int fld_index[UCHAR_MAX + 1] = {-1}; // key->index backresolv
 
-inline int val2len(double val) { return ((val > 0) && (val < float_upto)) ? (val < float_dec2 ? 2 : 1) : 0; }
+int val2len(double val) { return ((val > 0) && (val < float_upto)) ? (val < float_dec2 ? 2 : 1) : 0; }
 
 char* trim(char *str) {
   if (str) {
@@ -44,9 +45,9 @@ bool is_custom_fld(void) { return (strncmp(fld_active, fld_jitter, sizeof(fld_ji
 void onoff_jitter(void) { int cmp = strncmp(fld_active, fld_jitter, sizeof(fld_jitter)); fld_active = cmp ? fld_jitter : fld_custom; }
 #endif
 
-const struct statf* active_statf(unsigned nth) {
+const struct statf* active_statf(size_t nth) {
   if (nth > sizeof(fld_index)) return NULL;
-  unsigned ndx = fld_index[(uint8_t)fld_active[nth]];
+  int ndx = fld_index[(uint8_t)fld_active[nth]];
   return ((ndx >= 0) && (ndx < statf_max)) ? &statf[ndx] : NULL;
 }
 

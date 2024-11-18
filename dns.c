@@ -216,8 +216,10 @@ static inline void dns_open_finlog(void) {
   LOGMSG("nscount6=%d", nscount6);
   for (int i = 0; i < nscount6; i++) {
     if (!inet_ntop(nsaddrs6[i].sin6_family, &nsaddrs6[i].sin6_addr, buff, sizeof(buff)))
-      for (int j = 0, l = 0; j < sizeof(nsaddrs6[i].sin6_addr.s6_addr); j++)
-        l += snprintf(buff + l, sizeof(buff) - l, "%02x", nsaddrs6[i].sin6_addr.s6_addr[j]);
+      for (size_t j = 0, l = 0; (j < sizeof(nsaddrs6[i].sin6_addr.s6_addr)) && (l < sizeof(buff)); j++) {
+        int inc = snprintf(buff + l, sizeof(buff) - l, "%02x", nsaddrs6[i].sin6_addr.s6_addr[j]);
+        if (inc > 0) l += inc;
+      }
     LOGMSG("ns6#%d: [%s]:%u (af=%u)", i, buff, ntohs(nsaddrs6[i].sin6_port), nsaddrs6[i].sin6_family);
   }
 }
@@ -355,7 +357,7 @@ static atndx_t *get_qatn(const char* q, int at, int ndx) {
    , QTXT_AT_NDX(at, ndx)
 #endif
   };
-  for (int t = 0; t < sizeof(query) / sizeof(query[0]); t++)
+  for (size_t t = 0; t < sizeof(query) / sizeof(query[0]); t++)
     if (query[t] && !strncasecmp(query[t], q, MAXDNAME)) {
       static atndx_t qatn;
       qatn = (atndx_t){.at = at, .ndx = ndx, .type = t}; // type: 0 - t_ptr, 1 - t_txt
@@ -482,20 +484,22 @@ static void dns_parse_reply(uint8_t *buf, ssize_t len) {
       memset(answer, 0, sizeof(answer));
       if (type == T_TXT) {
         l = *c;
-        if ((l >= size) || !l)
+        if ((l >= size) || (l <= 0))
           LOGRET("Broken TXT record (len=%d, size=%d)", l, size);
+        { const char *data = (char*)(c + 1);
+          int max = l; if ((size_t)max >= sizeof(answer)) max = sizeof(answer) - 1;
 #ifdef HAVE_STRLCPY
-        strlcpy(answer, (char*)(c + 1), sizeof(answer));
+          strlcpy(answer, data, max);
 #else
-        { int max = (l < sizeof(answer)) ? l : (sizeof(answer) - 1);
-          strncpy(answer, (char*)(c + 1), max);
-          answer[max] = 0; }
+          strncpy(answer, data, max);
+          answer[max] = 0;
 #endif
+        }
       } else {
         l = dn_expand(buf, buf + len, c, answer, sizeof(answer) - 1);
         if (l < 0) LOGRET("dn_expand() failed while expanding domain");
       }
-      LOGMSG("Answer %.*s", l, answer);
+      LOGMSG("Answer[%d] %.*s", l, l, answer);
       if      ((atndx->type == 0) && dns_ptr_handler)
         dns_ptr_handler(atndx->at, atndx->ndx, answer);
 #ifdef WITH_IPINFO
@@ -509,7 +513,7 @@ static void dns_parse_reply(uint8_t *buf, ssize_t len) {
 }
 
 
-// Check to see if this server is actually one we sent to
+// Validate if this server is actually one we sent to
 static bool validate_ns(int family) {
 #ifdef ENABLE_IPV6
   if (family == AF_INET6) {

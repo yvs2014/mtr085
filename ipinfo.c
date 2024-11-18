@@ -223,8 +223,9 @@ static char** split_record(char *record) {
 static void adjust_width(char** record) {
   for (int i = 0; (i < MAX_TXT_ITEMS) && record[i]; i++) {
     size_t len = strnlen(record[i], NAMELEN); // utf8 ? strnlen() : mbstowcs(NULL, records[i], 0);
-    if (ORIG_WIDTH(i) < len)
-      ORIG_WIDTH(i) = len;
+    int width = len;
+    if (ORIG_WIDTH(i) < width)
+      ORIG_WIDTH(i) = width;
   }
 }
 
@@ -292,7 +293,7 @@ static char* trim_str(char *str, const char *quotes) {
 static void save_records(atndx_t id, char **record) {
   // save results of parsing
   save_fields(id.at, id.ndx, record);
-  adjust_width(&(RTXT_AT_NDX(id.at, id.ndx, 0)));
+  adjust_width(&RTXT_AT_NDX(id.at, id.ndx, 0));
 }
 
 static int count_records(char **record) {
@@ -598,6 +599,7 @@ static char *get_ipinfo(int at, int ndx, int item_no) {
 #ifdef ENABLE_DNS
     default:  // dns
       ipinfo_lookup(at, ndx, ip2arpa(ipaddr, ORIG_HOST, origins[origin_no].host6));
+      break;
 #endif
   }
   return NULL;
@@ -607,7 +609,7 @@ static char *get_ipinfo(int at, int ndx, int item_no) {
 char* ipinfo_header(void) {
   static char iiheader[NAMELEN];
   iiheader[0] = 0;
-  for (int i = 0, len = 0; (i < MAX_TXT_ITEMS)
+  for (size_t i = 0, len = 0; (i < MAX_TXT_ITEMS)
       && (ipinfo_no[i] >= 0) && (ipinfo_no[i] < itemname_max)
       && ORIG_NAME(ipinfo_no[i]) && (len < sizeof(iiheader)); i++) {
     len += snprintf(iiheader + len, sizeof(iiheader) - len,
@@ -625,34 +627,40 @@ int ipinfo_width(void) {
   return width;
 }
 
-typedef int (*filler_fn)(char *buf, int size, const char *data, int num, char ch);
+typedef struct { int num; char ch; } t_fmtdata;
+typedef int (*filler_fn)(char *buf, int size, const char *str, t_fmtdata fmt);
 
-int fmt_filler(char *buf, int size, const char *data, int width, char ignore) {
-  if (width) return snprintf(buf, size, "%-*s ", width, data);
-  return snprintf(buf, size, "%s ", data);
+static int fmt_filler(char *buf, int size, const char *str, t_fmtdata fmt) {
+  return (fmt.num > 0) ?
+    snprintf(buf, size, "%-*s ", fmt.num, str) :
+    snprintf(buf, size, "%s ", str);
 }
 
-int sep_filler(char *buf, int size, const char *data, int seq, char sep) {
-  return seq ? snprintf(buf, size, "%c\"%s\"", sep, data) : snprintf(buf, size, "\"%s\"", data);
+static int str_filler(char *buf, int size, const char *str, t_fmtdata fmt) {
+  return fmt.num ?
+    snprintf(buf, size, "%c\"%s\"", fmt.ch, str) :
+    snprintf(buf, size, "\"%s\"", str);
 }
 
 static char *fill_ipinfo(int at, int ndx, char sep) {
   static char fmtinfo[NAMELEN];
   fmtinfo[0] = 0;
-  for (int i = 0, len = 0; (i < MAX_TXT_ITEMS)
+  t_fmtdata fmtdata = { .ch = sep };
+  filler_fn filler = fmtdata.ch ? str_filler : fmt_filler;
+  for (size_t i = 0, len = 0; (i < MAX_TXT_ITEMS)
       && (ipinfo_no[i] >= 0) && (ipinfo_no[i] < itemname_max)
       && (len < sizeof(fmtinfo)); i++) {
     const char *rec = addr_exist(&IP_AT_NDX(at, ndx)) ?
       get_ipinfo(at, ndx, ipinfo_no[i]) : NULL;
-    filler_fn filler = sep ? sep_filler : fmt_filler;
-    len += filler(fmtinfo + len, sizeof(fmtinfo) - len,
-      rec ? rec : UNKN, sep ? i : ORIG_WIDTH(ipinfo_no[i]), sep);
+    fmtdata.num = fmtdata.ch ? (int)i : ORIG_WIDTH(ipinfo_no[i]);
+    int inc = filler(fmtinfo + len, sizeof(fmtinfo) - len, rec ? rec : UNKN, fmtdata);
+    if (inc > 0) len += inc;
   }
   return fmtinfo;
 }
 
-inline char *fmt_ipinfo(int at, int ndx) { return fill_ipinfo(at, ndx, 0); }
-inline char *sep_ipinfo(int at, int ndx, char sep) { return fill_ipinfo(at, ndx, sep); }
+char *fmt_ipinfo(int at, int ndx) { return fill_ipinfo(at, ndx, 0); }
+char *sep_ipinfo(int at, int ndx, char sep) { return fill_ipinfo(at, ndx, sep); }
 
 bool ipinfo_ready(void) { return (enable_ipinfo && ii_ready); }
 

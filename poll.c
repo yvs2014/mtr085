@@ -82,7 +82,7 @@ static bool need_dns;
   if (allfds) { close(allfds[ndx].fd); allfds[ndx].fd = -1; allfds[ndx].revents = 0; /*summ*/ sum_sock[1]++;} \
 }
 
-static void set_fds() {
+static void set_fds(void) {
   SET_POLLFD(FD_STDIN, interactive ? 0 : -1);
   SET_POLLFD(FD_NET, net_wait());
 #ifdef ENABLE_DNS
@@ -359,7 +359,7 @@ static key_action_t keyboard_events(key_action_t action) {
 }
 
 #ifdef WITH_IPINFO
-static void proceed_ipinfo() {
+static void proceed_ipinfo(void) {
   switch (display_mode) {
     case DisplayReport:
 #ifdef OUTPUT_FORMAT_TXT

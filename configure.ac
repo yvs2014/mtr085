@@ -271,13 +271,14 @@ AM_CONDITIONAL([IPTOS], [test "x$iptos" = "xyes"])
 # Extra compiler flags
 # Note, AX_CHECK_COMPILE_FLAG comes from autoconf-archive
 m4_ifdef([AX_CHECK_COMPILE_FLAG], [
-	AX_CHECK_COMPILE_FLAG([-Wall], [CFLAGS="$CFLAGS -Wall"])
+	AX_CHECK_COMPILE_FLAG([-Wall],   [CFLAGS="$CFLAGS -Wall"  ])
+	AX_CHECK_COMPILE_FLAG([-Wextra], [CFLAGS="$CFLAGS -Wextra"])
 	AS_IF([test "x$analyzer" != "xno"], AX_CHECK_COMPILE_FLAG([-fanalyzer], [CFLAGS="$CFLAGS -fanalyzer"]))
 ], [ # at least check GNU C compat for -Wall option
 	AC_MSG_CHECKING([for C flags to get more warnings])
 	AS_IF([test "x$ac_cv_c_compiler_gnu" = "xyes"], [
-		CFLAGS="$CFLAGS -Wall"
-		AC_MSG_RESULT([-Wall])
+		CFLAGS="$CFLAGS -Wall -Wextra"
+		AC_MSG_RESULT([-Wall -Wextra])
 	], [AC_MSG_RESULT([none])])
 ])
 

@@ -1,6 +1,8 @@
 #ifndef AUX_H
 #define AUX_H
 
+#include <stddef.h>
+
 #include "common.h"
 
 #define LENVALMIL(val) double _v = (val) / (double)MIL; int _l = val2len(_v);
@@ -15,8 +17,8 @@ extern char limit_error[NAMELEN];
 int limit_int(int min, int max, int val, const char *what, char fail);
 void onoff_jitter(void);
 #endif
-const struct statf* active_statf(unsigned nth);
+const struct statf* active_statf(size_t nth);
 
-extern unsigned fld_index[UCHAR_MAX + 1];
+extern int fld_index[UCHAR_MAX + 1];
 
 #endif

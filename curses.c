@@ -94,9 +94,9 @@ static long mc_ra_ints[RA_MAX];
 
 static size_t enter_smth(char *buf, size_t size, int y, int x) {
   move(y, x);
-  int curs = curs_set(1);
+  int ch = 0, curs = curs_set(1);
   refresh();
-  for (int i = 0, ch = 0; ((ch = getch()) != '\n') && (i < size);) {
+  for (size_t i = 0; ((ch = getch()) != '\n') && (i < size);) {
     addch((unsigned)ch | A_BOLD);
     refresh();
     buf[i++] = ch;
@@ -108,8 +108,8 @@ static size_t enter_smth(char *buf, size_t size, int y, int x) {
 
 static void enter_stat_fields(void) {
   char fields[MAXFLD + 1] = {0};
-  int curs = curs_set(1);
-  for (int i = 0, ch = 0; ((ch = getch()) != '\n') && (i < sizeof(fields));) {
+  int ch = 0, curs = curs_set(1);
+  for (size_t i = 0; ((ch = getch()) != '\n') && (i < sizeof(fields));) {
     int nth = 0;
     for (; nth < statf_max; nth++) if (ch == statf[nth].key) { // only statf[].key allowed
       addch((unsigned)ch | A_BOLD);
@@ -313,13 +313,14 @@ key_action_t mc_keyaction(void) {
 }
 
 static int mc_print_at(int at, char *buf, size_t size) {
-  int len = 0;
-  for (int i = 0; (i < sizeof(fld_index)) && (len < size); i++) {
+  size_t len = 0;
+  for (size_t i = 0; (i < sizeof(fld_index)) && (len < size); i++) {
     const struct statf *stat = active_statf(i);
     if (!stat) break;
     // if there's no replies, show only packet counters
     const char *str = (host[at].recv || strchr("LDRS", stat->key)) ? net_elem(at, stat->key) : "";
-    len += snprintf(buf + len, size - len, "%*s", stat->len, str ? str : "");
+    int inc = snprintf(buf + len, size - len, "%*s", stat->len, str ? str : "");
+    if (inc > 0) len += inc;
   }
   return len;
 }
@@ -485,7 +486,7 @@ static void mc_init(void) {
   static bool mc_init_done;
   if (!mc_init_done) {
     mc_init_done = true;
-    for (int i = 0; i < (sizeof(mc_ra_ints) / sizeof(mc_ra_ints[0])); i++)
+    for (size_t i = 0; i < (sizeof(mc_ra_ints) / sizeof(mc_ra_ints[0])); i++)
       mc_ra_ints[i] = LONG_MIN;
     mc_ra_ints[RA_PATT]   = cbitpattern;
     mc_ra_ints[RA_CYCLE]  = max_ping;
@@ -535,7 +536,7 @@ static void mc_init(void) {
     } else
       map3[NUM_FACTORS3_MONO].CCHAR_chars[0] = map1[1] & A_CHARTEXT;
 
-    for (int i = 0; i < (sizeof(map_na2) / sizeof(map_na2[0])); i++)
+    for (size_t i = 0; i < (sizeof(map_na2) / sizeof(map_na2[0])); i++)
       map_na3[i].CCHAR_chars[0] = map_na2[i] & A_CHARTEXT;
     map_na3[1].CCHAR_attr = enable_color ? map3[NUM_FACTORS3 - 1].CCHAR_attr : A_BOLD;
     map_na3[2].CCHAR_attr = A_BOLD;
@@ -615,11 +616,12 @@ static void histogram(int x, int cols) {
 }
 
 static int mc_statf_title(char *buf, size_t size) {
-  int len = 0;
-  for (int i = 0; (i < sizeof(fld_index)) && (len < size); i++) {
+  size_t len = 0;
+  for (size_t i = 0; (i < sizeof(fld_index)) && (len < size); i++) {
     const struct statf *stat = active_statf(i);
-    if (stat) len += snprintf(buf + len, size - len, "%*s", stat->len, stat->name);
-    else break;
+    if (!stat) break;
+    int inc = snprintf(buf + len, size - len, "%*s", stat->len, stat->name);
+    if (inc > 0) len += inc;
   }
   buf[len] = 0;
   return len;
