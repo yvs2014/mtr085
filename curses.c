@@ -688,9 +688,11 @@ static void print_scale(void) {
 #define SET_IASP { if (!iargs_sp) iargs_sp = true; }
 #define IASP (iargs_sp ? " " : "")
 #define ADD_NTH_BIT_INFO(bit, what) { \
-  if (NEQBIT(run_args, kept_args, (bit))) len += snprint_iarg((bit), buf + len, size - len, (what)); }
+  if (NEQBIT(run_args, kept_args, (bit))) \
+    len += snprint_iarg((bit), buf + len, size - len, (what));  }
 #define ADD_INT_INFO(what, value) { \
-  len += snprintf(buf + len, size - len, "%s" what, IASP, (value)); \
+  int inc = snprintf(buf + len, size - len, "%s" what, IASP, (value)); \
+  if (inc > 0) len += inc; \
   SET_IASP; }
 #define ADD_BIT_INT_INFO(bit, what, value) { \
   if (NEQBIT(run_args, kept_args, (bit))) ADD_INT_INFO(what, (value)); }
@@ -699,12 +701,13 @@ static bool iargs_sp;
 static int snprint_iarg(int bit, char *buf, int size, const char *msg) {
   int len = snprintf(buf, size, "%s%c%s", IASP, CHKBIT(run_args, bit) ? '+' : '-', msg);
   SET_IASP;
-  return len;
+  return (len > 0) ? len : 0;
 }
 
 static int mc_snprint_args(char *buf, size_t size) {
   iargs_sp = false;
   int len = snprintf(buf, size, " (");
+  if (len < 0) len = 0;
   ADD_NTH_BIT_INFO(RA_UDP, "udp");
   ADD_NTH_BIT_INFO(RA_TCP, "tcp");
 #ifdef WITH_MPLS
@@ -731,12 +734,14 @@ static int mc_snprint_args(char *buf, size_t size) {
   ADD_BIT_INT_INFO(RA_SIZE,   "size=%d", cpacketsize);
   //
   ADD_NTH_BIT_INFO(RA_CACHE, "cache");
-  len += snprintf(buf + len, size - len, ")");
+  { int inc = snprintf(buf + len, size - len, ")"); if (inc > 0) len += inc; }
   if (strnlen(buf, sizeof(buf)) == 3 /*" ()"*/)
     len = 0;
-  if (NEQBIT(run_args, kept_args, RA_PAUSE))
-    len += snprintf(buf + len, size - len, ": in pause");
-  return len;
+  if (NEQBIT(run_args, kept_args, RA_PAUSE)) {
+    int inc = snprintf(buf + len, size - len, ": in pause");
+    if (inc > 0) len += inc;
+  }
+  return (len > 0) ? len : 0;
 }
 #undef SET_IASP
 #undef IASP
@@ -758,14 +763,12 @@ static inline void mc_statmode(char *buf, size_t size) {
   mvprintw(staty - 1, statx, "Host");
   int maxx = getmaxx(stdscr);
   int rest = maxx - title_len;
-  int len = rest - 1;
-  mvprintw(staty - 1, (len > 0) ? len : 0, "%s", buf);
-  if (is_custom_fld())
-    len = snprintf(buf, size, "Custom keys: %s", fld_active);
-  else
-    len = snprintf(buf, size, "Packets      Pings");
-  len = (len >= title_len) ? maxx - len : rest;
-  mvprintw(staty - 2, (len > 0) ? len : 0, "%s", buf);
+  { int len = rest - 1; mvprintw(staty - 1, (len > 0) ? len : 0, "%s", buf); }
+  { int len = is_custom_fld() ?
+      snprintf(buf, size, "Custom keys: %s", fld_active) :
+      snprintf(buf, size, "Packets      Pings");
+    len = (len >= title_len) ? maxx - len : rest;
+    mvprintw(staty - 2, (len > 0) ? len : 0, "%s", buf); }
   attroff(A_BOLD);
 
   if (move(staty, 0) != ERR)
@@ -796,7 +799,8 @@ void mc_redraw(void) {
   static char linebuf[LINEMAXLEN];
   erase();
   { // title
-    int len = snprintf(linebuf, sizeof(linebuf), "%s", mc_title);
+    int len = 0, inc = snprintf(linebuf, sizeof(linebuf), "%s", mc_title);
+    if (inc > 0) len += inc;
     if (run_args != kept_args)
       len += mc_snprint_args(linebuf + len, sizeof(linebuf) - len);
     mvprintw(0, 0, "%*s", (getmaxx(stdscr) + len) / 2, linebuf);
@@ -813,8 +817,9 @@ void mc_redraw(void) {
 #else
     char *tm = (now > 0) ? ctime(&now) : NULL;
 #endif
-    int len = snprintf(linebuf, sizeof(linebuf),
+    int inc = snprintf(linebuf, sizeof(linebuf),
       "%.*s: %s", (int)strnlen(srchost, maxx / 2), srchost, tm ? tm : "");
+    int len = (inc > 0) ? inc : 0;
     mvaddstr(1, maxx - len, linebuf);
   }
   { // main body
@@ -867,8 +872,12 @@ bool mc_open(void) {
   }
 
   // init title
-  { int len = snprintf(mc_title, sizeof(mc_title), "%s", PACKAGE_NAME);
-    if (mtr_args[0]) len += snprintf(mc_title + len, sizeof(mc_title) - len, " %s", mtr_args);
+  { int inc = snprintf(mc_title, sizeof(mc_title), "%s", PACKAGE_NAME);
+    int len = (inc > 0) ? inc : 0;
+    if (mtr_args[0]) {
+      inc = snprintf(mc_title + len, sizeof(mc_title) - len, " %s", mtr_args);
+      if (inc > 0) len += inc;
+    }
     snprintf(mc_title + len, sizeof(mc_title) - len, " %s", dsthost); }
 
   mc_init();

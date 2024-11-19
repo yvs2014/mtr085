@@ -234,7 +234,7 @@ bool dns_open(void) {
     dns_nses();
   if (dns_ready) {
     dns_ready = dns_sockets();
-    if (!dns_ready) MYRES_CLOSE(myres);
+    if (!dns_ready) { MYRES_CLOSE(myres); }
   }
 #ifdef LOGMOD
   dns_open_finlog();
@@ -267,7 +267,8 @@ void dns_close(void) {
 static void ip2arpa6(const uint8_t *ptr, char *buf, int size, const char *suff) {
   int len = 0;
   for (int i = HEXMASK; i >= 0; i--) {
-    len += snprintf(buf + len, size - len, "%x.%x.", ptr[i] & HEXMASK, ptr[i] >> 4);
+    int inc = snprintf(buf + len, size - len, "%x.%x.", ptr[i] & HEXMASK, ptr[i] >> 4);
+    if (inc > 0) len += inc;
     if (len >= size) return;
   }
   snprintf(buf + len, size - len, "%s", suff);

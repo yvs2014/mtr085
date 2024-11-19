@@ -77,15 +77,20 @@ static size_t snprint_addr(char *buf, size_t size, int at, int ndx) {
 #ifdef ENABLE_DNS
     const char *name = enable_dns ? dns_ptr_cache(at, ndx) : NULL;
     if (name) {
-      size_t len = snprintf(buf, size, "%s", name);
-      if (show_ips)
-        len += snprintf(buf + len, size - len, " (%s)", strlongip(ipaddr));
+      int inc = snprintf(buf, size, "%s", name);
+      size_t len = (inc > 0) ? inc : 0;
+      if (show_ips) {
+        inc = snprintf(buf + len, size - len, " (%s)", strlongip(ipaddr));
+        if (inc > 0) len += inc;
+      }
       return len;
     }
 #endif
-    return snprintf(buf, size, "%s", strlongip(ipaddr));
+    int inc = snprintf(buf, size, "%s", strlongip(ipaddr));
+    return (inc > 0) ? inc : 0;
   }
-  return snprintf(buf, size, "%s", UNKN_ITEM);
+  int inc = snprintf(buf, size, "%s", UNKN_ITEM);
+  return (inc > 0) ? inc : 0;
 }
 
 #ifdef WITH_MPLS

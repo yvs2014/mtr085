@@ -339,7 +339,7 @@ static void usage(const char *name) {
 }
 
 char limit_error[NAMELEN];
-int limit_int(int min, int max, int val, const char *what, char fail) {
+int limit_int(int min, int max, int val, const char *what, int8_t fail) {
   limit_error[0] = 0;
   int lim = val, len = 0;
   if (val < min) {
@@ -352,7 +352,10 @@ int limit_int(int min, int max, int val, const char *what, char fail) {
   if (val != lim) {
     if (fail > 0) { warnx("%s", limit_error); errx(EXIT_FAILURE, "-%c option failed", fail); }
     else if (fail < 0) warnx("%s", limit_error);
-    else snprintf(limit_error + len, sizeof(limit_error) - len, ", corrected(%d -> %d)", val, lim);
+    else {
+      if (len < 0) len = 0;
+      snprintf(limit_error + len, sizeof(limit_error) - len, ", corrected(%d -> %d)", val, lim);
+    }
   }
   return lim;
 }
@@ -674,8 +677,10 @@ static void parse_options(int argc, char **argv) {
   while ((opt = my_getopt_long(argc, argv, NULL)) >= 0)
     short_set((char)opt, argv[0]);
   run_args = kept_args;      // to display runtime changes
-  for (int i = 1, len = 0; (i < optind) && (len < ARGS_LEN); i++)
-    len += snprintf(mtr_args + len, ARGS_LEN - len, (i > 1) ? " %s" : "%s", argv[i]);
+  for (int i = 1, len = 0; (i < optind) && (len < ARGS_LEN); i++) {
+    int inc = snprintf(mtr_args + len, ARGS_LEN - len, (i > 1) ? " %s" : "%s", argv[i]);
+    if (inc > 0) len += inc;
+  }
   ineractive_modes(display_mode);
 }
 

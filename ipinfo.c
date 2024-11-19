@@ -356,8 +356,10 @@ static void parse_http(char *buf, int recv_size, atndx_t id) {
     int clen = parse_http_content_len(lines_no, lines, recv_size, &cndx);
 
     char txt[clen + 1]; memset(txt, 0, sizeof(txt));
-    for (int i = cndx, len = 0; (i < lines_no) && (len < clen); i++) // combine into one line
-      len += snprintf(txt + len, clen - len, "%s", lines[i]);
+    for (int i = cndx, len = 0; (i < lines_no) && (len < clen); i++) { // combine into one line
+      int inc = snprintf(txt + len, clen - len, "%s", lines[i]);
+      if (inc > 0) len += inc;
+    }
 
     LOGMSG("record line: %s", txt);
     char **records = split_record(trim_str(trim_str(txt, CHAR_QUOTES), CHAR_BRACKETS));
@@ -612,8 +614,9 @@ char* ipinfo_header(void) {
   for (size_t i = 0, len = 0; (i < MAX_TXT_ITEMS)
       && (ipinfo_no[i] >= 0) && (ipinfo_no[i] < itemname_max)
       && ORIG_NAME(ipinfo_no[i]) && (len < sizeof(iiheader)); i++) {
-    len += snprintf(iiheader + len, sizeof(iiheader) - len,
+    int inc = snprintf(iiheader + len, sizeof(iiheader) - len,
       "%-*s ", ORIG_WIDTH(ipinfo_no[i]), ORIG_NAME(ipinfo_no[i]));
+    if (inc > 0) len += inc;
   }
   return iiheader;
 }

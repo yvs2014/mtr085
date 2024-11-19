@@ -314,7 +314,7 @@ static uint16_t udpsum16(struct _iphdr *ip, void *udata, int udata_len, int dsiz
 const char* rstrerror(int rc) {
   strerr_txt[0] = 0;
 #ifdef HAVE_STRERROR_R
-  strerror_r(rc, strerr_txt, sizeof(strerr_txt));
+  (void)strerror_r(rc, strerr_txt, sizeof(strerr_txt));
 #else
   snprintf(strerr_txt, sizeof(strerr_txt), "%s", strerror(rc));
 #endif
