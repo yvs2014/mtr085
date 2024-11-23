@@ -1,4 +1,3 @@
-# SUBDIRS = img
 
 NAME = mtr
 

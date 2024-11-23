@@ -736,25 +736,8 @@ static bool set_target(const struct addrinfo *res) {
 }
 
 #if defined(WITH_UNICODE) && defined(HAVE_LOCALE_H) && defined(HAVE_LANGINFO_H)
-#ifdef HAVE_USELOCALE
-static locale_t unilocale;
-#endif
-//
-static inline void free_unilocale(void) {
-#ifdef HAVE_USELOCALE
-  if (unilocale) { freelocale(unilocale); unilocale = NULL; }
-#else
-  setlocale(LC_CTYPE, NULL);
-#endif
-}
-//
-static void new_unilocale(void) {
-#ifdef HAVE_USELOCALE
-  unilocale = newlocale(LC_CTYPE_MASK, "", NULL);
-  if (unilocale) uselocale(unilocale);
-#else
+static void init_locale(void) {
   setlocale(LC_CTYPE, "");
-#endif
   if (strcasecmp("UTF-8", nl_langinfo(CODESET)) == 0) { // NOLINT(concurrency-mt-unsafe)
     if (iswprint(L'▁')) {
       curses_mode_max++;
@@ -762,12 +745,12 @@ static void new_unilocale(void) {
     }
     WARNX("Unicode block elements are not printable");
   }
-  free_unilocale();
+  setlocale(LC_CTYPE, NULL);
 }
-#define UNICODE_NEW   new_unilocale()
-#define UNICODE_FREE free_unilocale()
+#define UNICODE_INIT init_locale()
+#define UNICODE_FREE setlocale(LC_CTYPE, NULL)
 #else
-#define UNICODE_NEW  NOOP
+#define UNICODE_INIT NOOP
 #define UNICODE_FREE NOOP
 #endif /* UNICODE stuff */
 
@@ -871,7 +854,7 @@ static inline void main_prep(int argc, char **argv) {
 #endif
   for (int i = 0; i < statf_max; i++)
     fld_index[(uint8_t)statf[i].key] = i;
-  UNICODE_NEW;
+  UNICODE_INIT;
   set_fld_active(NULL);
   parse_options(argc, argv);
   if (optind >= argc) { usage(argv[0]); QEXIT(EXIT_SUCCESS); }

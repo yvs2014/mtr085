@@ -40,7 +40,6 @@ AC_CHECK_FUNC([quick_exit],  AC_DEFINE(HAVE_QUICK_EXIT,  1, [Define if quick_exi
 AC_CHECK_FUNC([strerror_r],  AC_DEFINE(HAVE_STRERROR_R,  1, [Define if strerror_r() exists]))
 AC_CHECK_FUNC([ctime_r],     AC_DEFINE(HAVE_CTIME_R,     1, [Define if ctime_r() exists]))
 AC_CHECK_FUNC([localtime_r], AC_DEFINE(HAVE_LOCALTIME_R, 1, [Define if localtime_r() exists]))
-AC_CHECK_FUNC([uselocale],   AC_DEFINE(HAVE_USELOCALE,   1, [Define if uselocale() exists]))
 
 AC_ARG_ENABLE([ipv6],
 	AS_HELP_STRING([--disable-ipv6], [Do not enable IPv6]),

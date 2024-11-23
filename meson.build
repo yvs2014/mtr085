@@ -1,8 +1,8 @@
 project('mtr085', 'c',
   default_options: [
+#    'c_std=gnu11,c11',
 #    'b_sanitize=address,undefined',
-    'c_std=gnu11,c11',
-    'warning_level=3' ],
+    'warning_level=2' ],
   meson_version: '>= 0.49',
   license: 'GPL-2.0-or-later',
   version: '.'.join(['0', '85', find_program('git', required: false).found() ?
