@@ -18,8 +18,8 @@ if(EXISTS .git)
   endif()
 endif()
 
-#set(CMAKE_C_STANDARD 23) # compat test
-#set(CMAKE_EXPORT_COMPILE_COMMANDS ON) # compile_commands.json
+set(CMAKE_C_STANDARD 11)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON) # compile_commands.json
 include(GNUInstallDirs)
 include(CheckIncludeFile)
 include(CheckSymbolExists)
@@ -33,7 +33,7 @@ set(MANUAL "${MAN_PATH}/${MAN_PAGE}")
 # set target
 add_executable("${NAME}" "${NAME}.c" aux.c display.c net.c poll.c report.c)
 target_include_directories("${NAME}" PRIVATE "${CMAKE_CURRENT_BINARY_DIR}")
-target_compile_options("${NAME}" PRIVATE -std=gnu99 -Wall -Wextra)
+target_compile_options("${NAME}" PRIVATE -Wall -Wextra -Wpedantic)
 
 # options
 set(OPTION_LIST)
