@@ -28,7 +28,6 @@
 #include <time.h>
 #include <sys/socket.h>
 
-#include "config.h"
 #if defined(LOG_IPINFO) && !defined(LOGMOD)
 #include <errno.h>
 #define LOGMOD

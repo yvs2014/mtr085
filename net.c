@@ -38,8 +38,6 @@
 #include <arpa/inet.h>
 #include <assert.h>
 
-#include "config.h" // IWYU pragma: keep
-
 #if defined(LOG_NET) && !defined(LOGMOD)
 #define LOGMOD
 #endif

@@ -64,7 +64,7 @@ if cap
   lib = 'cap'
   libcap = dependency('lib' + lib, required: false)
   if not libcap.found()
-    libcap = cc.find_library('cap')
+    libcap = cc.find_library(lib)
   endif
   deps += libcap
   config.set('LIBCAP', 1)
@@ -74,6 +74,13 @@ else
 endif
 #
 if curses
+#  lib = 'tinfo'
+#  libtinfo = dependency('lib' + lib, required: false)
+#  if not libtinfo.found()
+#    libtinfo = cc.find_library(lib)
+#  endif
+#  deps += libtinfo
+  #
   lib = 'ncursesw'
   libcurses = dependency(lib, required: false)
   if not libcurses.found()
@@ -377,6 +384,7 @@ endif
 #
 config_h = 'config.h'
 configure_file(input: config_h + '.meson', output: config_h, configuration: config)
+add_project_arguments('-include', config_h, language: 'c')
 if sbin
   executable(name, srcs, dependencies: deps, c_args: cpps, install: true,
     install_dir: get_option('prefix') / get_option('sbindir'))

@@ -34,7 +34,6 @@
 
 #include "mtr-curses.h"
 #include "common.h"
-#include "config.h"
 
 #ifdef WITH_UNICODE
 #ifndef _XOPEN_SOURCE_EXTENDED

@@ -24,7 +24,6 @@
 #include <time.h>
 #include <poll.h>
 
-#include "config.h" // IWYU pragma: keep
 #if defined(LOG_POLL) && !defined(LOGMOD)
 #define LOGMOD
 #endif

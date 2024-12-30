@@ -22,8 +22,6 @@
 #define __has_attribute(attr) 0
 #endif
 
-#include "config.h"
-
 #ifdef HAVE_SYS_PARAM_H
 #include <sys/param.h>
 #endif
@@ -42,7 +40,7 @@
 #endif
 
 #ifndef GITREV
-#define GITREV "198"
+#define GITREV "199"
 #endif
 
 typedef union inaddr_union {

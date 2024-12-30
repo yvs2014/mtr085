@@ -20,7 +20,6 @@
 #define REPORT_H
 
 #include <stdbool.h>
-#include "config.h"
 
 void report_started_at(void);
 void report_close(bool next, bool with_header);

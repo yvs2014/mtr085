@@ -25,7 +25,6 @@
 #include <time.h>
 #include <sys/socket.h>
 
-#include "config.h"
 #if defined(LOG_DNS) && !defined(LOGMOD)
 #include <errno.h>
 #define LOGMOD

@@ -27,7 +27,6 @@
 #include <limits.h>
 #include <time.h>
 
-#include "config.h"
 #ifdef OUTPUT_FORMAT_CSV
 #include <ctype.h>
 #endif
