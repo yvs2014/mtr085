@@ -360,6 +360,7 @@ list(JOIN OPTION_LIST " " OPTION_LIST)
 set(BUILD_OPTIONS "${OPTION_LIST}")
 set(CONFIG "config.h")
 configure_file("${CONFIG}.cmake" "${CONFIG}" @ONLY)
+target_compile_options("${NAME}" PRIVATE -include "${CONFIG}")
 
 message("")
 message(STATUS "CAP     ${CAP}\t: Linux capabilities")

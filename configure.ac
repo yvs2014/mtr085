@@ -315,6 +315,7 @@ AH_TOP([
 AH_BOTTOM([
 #endif
 ])
+CFLAGS="$CFLAGS -include config.h"
 
 AC_CONFIG_FILES([Makefile])
 
