@@ -1,6 +1,6 @@
 project('mtr085', 'c',
   default_options: [
-    'c_std=gnu99,c99',
+#    'c_std=gnu99,c99',
 #    'b_sanitize=address,undefined',
     'warning_level=3' ],
   meson_version: '>= 0.49',
