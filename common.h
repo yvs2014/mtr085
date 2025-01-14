@@ -40,7 +40,7 @@
 #endif
 
 #ifndef GITREV
-#define GITREV "200"
+#define GITREV "201"
 #endif
 
 typedef union inaddr_union {
@@ -123,12 +123,85 @@ typedef enum { ActionNone, ActionQuit, ActionReset, ActionDisplay,
 #define UNKN_ITEM "???"
 #define AT_FMT "%2d."
 
-#define SETBIT(a, n) do { (a) |= 1U << (n);    } while(0)
-#define CLRBIT(a, n) do { (a) &= ~(1U << (n)); } while(0)
-#define TGLBIT(a, n) do { (a) ^= 1U << (n);    } while(0)
-#define CHKBIT(a, n) (((a) >> (n)) & 1U)
-#define NEQBIT(a, b, n) (((a) ^ (b)) & (1U << (n)))
+// options
+typedef struct opts_s {
+  bool
+    interactive,
+    //
+    ips,      // -b
+    mpls,     // -e
+    jitter,   // -j
+    asn,      // -l
+    dns,      // -n
+    pause,    // -p
+    rawrep,   // -r (raw report mode)
+    tcp,      // -t
+    udp,      // -u
+    oncache,  // -x
+    ipinfo,   // -L
+    endpoint, // -fa
+    lookup,   // -l or -L
+    stat,     // -S
+    //
+    bell,     // -d 7th bit (beep at target)
+    visible,  // -d 6th bit (visible bell: flash)
+    audible,  // -d 5th bit (beep)
+    color;    // -d 4th bit (color mode)
+  uint8_t
+    chart,    // -d 1st and 2nd bits
+    minttl,   // -f first_ttl
+    maxttl,   // -m max_ttl
+    qos;      // -q qos
+  int
+    cycles,   // -c cycles_to_run
+    pattern,  // -b payload_pattern
+    interval, // -i interval
+    size,     // -s packet_size
+    syn,      // -T tcp_timeout
+    cache,    // -x
+    port;     // port from 'target:port' in tcp/udp modes
+} opts_t;
 
+// options' cksum
+typedef union opt_sum_u {
+  unsigned un;
+  unsigned
+    interactive :1,
+    //
+    ips      :1, // -b
+    mpls     :1, // -e
+    jitter   :1, // -j
+    asn      :1, // -l
+    dns      :1, // -n
+    pause    :1, // -p
+    rawrep   :1, // -r (raw report mode)
+    tcp      :1, // -t
+    udp      :1, // -u
+    oncache  :1, // -x
+    ipinfo   :1, // -L
+    endpoint :1, // -fa
+    lookup   :1, // -l or -L
+    stat     :1, // -S
+    //
+    bell     :1, // -d 7th bit (beep at target)
+    visible  :1, // -d 6th bit (visible bell: flash)
+    audible  :1, // -d 5th bit (beep)
+    color    :1, // -d 4th bit (color mode)
+    chart    :1, // -d 1st and 2nd bits
+    //
+    minttl   :1, // -f first_ttl
+    maxttl   :1, // -m max_ttl
+    qos      :1, // -q qos
+    //
+    pattern  :1, // -b payload_pattern
+    cycles   :1, // -c cycles_to_run
+    interval :1, // -i interval
+    size     :1, // -s packet_size
+    syn      :1, // -T tcp_timeout
+    port     :1; // port from 'target:port' in tcp/udp modes
+} opt_sum_t;
+
+#define OPT_SUM(tag) do {opt_sum.tag = (run_opts.tag != ini_opts.tag);} while(0)
 
 // logging, warnings, errors
 #if defined(__NetBSD__) || defined(__FreeBSD__) || defined(__OpenBSD__)
@@ -217,63 +290,23 @@ typedef enum { ActionNone, ActionQuit, ActionReset, ActionDisplay,
 extern int mtrtype;        // default packet type
 
 extern display_mode_t display_mode;
-extern double wait_time;
 
-extern int fstTTL;
-extern int maxTTL;
-
-extern bool hinit;         // make sure that a hashtable already exists or not
-extern int remoteport;     // target port
-extern int tos;            // type of service set in ping packet
-extern bool endpoint_mode; // -fa option
-extern bool cache_mode;    // don't ping known hops
-extern int cache_timeout;  // cache timeout in seconds
-extern int cbitpattern;    // payload bit pattern
-extern int cpacketsize;    // default packet size, or user defined
-extern int syn_timeout;    // timeout for TCP connections
 extern int sum_sock[];     // summary open()/close() calls for sockets
-
 extern int last_neterr;    // last known network error ...
 extern char err_fulltxt[]; // ... with this text
 
 extern pid_t mypid;
 extern char mtr_args[];
-// runtime args' bits
-typedef enum { RA_NA = -1, // upto 32 [unsigned-in-bits]
-  RA_UDP, RA_TCP, RA_MPLS, RA_ASN, RA_IPINFO, RA_DNS, RA_JITTER, RA_DM0, RA_DM1, RA_CACHE, RA_PAUSE,
-  RA_CYCLE, RA_PATT, RA_MINTTL, RA_MAXTTL, RA_TOUT, RA_QOS, RA_SIZE, RA_MAX,
-} ra_t;
-extern unsigned run_args;   // runtime args to display hints
-extern unsigned kept_args;  // kept args mapped in bits
-  // bits:
-  //   0 [u]: udp
-  //   1 [t]: tcp
-  //   2 [e]: mpls
-  //   3 [z]: asn
-  //   4 [y]: ipinfo
-  //   5 [n]: dns
-  //   6 [j]: jitter
-  //   7 [d]: chart (4 modes: 2bits)
-  //   8 [d]: -//-
-  //   9 [x]: cache
-  //  10 [p]: pause
+extern opts_t run_opts;    // runtime options
+extern opts_t ini_opts;    // initial options
+extern opt_sum_t opt_sum;  // checksum changes
 
-#ifdef WITH_MPLS
-extern bool enable_mpls;
-#endif
-#ifdef ENABLE_DNS
-extern bool show_ips;
-#endif
 #if defined(CURSESMODE) || defined(SPLITMODE)
 extern int display_offset;
 #endif
 #ifdef CURSESMODE
 extern int curses_mode;
 extern int curses_mode_max;
-extern bool enable_color;
-extern bool bell_audible;
-extern bool bell_visible;
-extern bool bell_target;
 #endif
 
 // keys: the value in the array is the index number in statf[]
@@ -284,7 +317,5 @@ enum { BLANK_INDICATOR = '_' };
 //
 extern char srchost[];
 extern const char *dsthost;
-extern bool interactive;
-extern long max_ping;
 
 #endif

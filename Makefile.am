@@ -12,7 +12,7 @@ bin_PROGRAMS = $(NAME)
 PROGRAM = $(DESTDIR)$(bindir)/$(NAME)
 endif
 
-POSTINST_HOOK = test "`uname -s`" = "Linux" && `setcap cap_net_raw+ep $(PROGRAM)`
+POSTINST_HOOK = test "`uname -s`" = "Linux" && `setcap cap_net_raw+p $(PROGRAM)`
 if SUID_LAST_RESORT
 POSTINST_HOOK += || chmod u+s $(PROGRAM)
 endif

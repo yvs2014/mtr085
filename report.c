@@ -74,11 +74,11 @@ static size_t snprint_addr(char *buf, size_t size, int at, int ndx) {
   t_ipaddr *ipaddr = &IP_AT_NDX(at, ndx);
   if (addr_exist(ipaddr)) {
 #ifdef ENABLE_DNS
-    const char *name = enable_dns ? dns_ptr_cache(at, ndx) : NULL;
+    const char *name = run_opts.dns ? dns_ptr_cache(at, ndx) : NULL;
     if (name) {
       int inc = snprintf(buf, size, "%s", name);
       size_t len = (inc > 0) ? inc : 0;
-      if (show_ips) {
+      if (run_opts.ips) {
         inc = snprintf(buf + len, size - len, " (%s)", strlongip(ipaddr));
         if (inc > 0) len += inc;
       }
@@ -162,7 +162,7 @@ static void report_print_body(int at, const char *fmt, int hostlen, int infolen)
   }
   printf("\n");
 #ifdef WITH_MPLS
-  if (enable_mpls) print_mpls(&CURRENT_MPLS(at));
+  if (run_opts.mpls) print_mpls(&CURRENT_MPLS(at));
 #endif
 }
 
@@ -180,7 +180,7 @@ static void report_print_rest(int at, int hostlen, int infolen) {
       snprint_addr(name, sizeof(name), at, i);
       printf(INFOPATT "\n", hostlen, name); }
 #ifdef WITH_MPLS
-    if (enable_mpls)
+    if (run_opts.mpls)
       print_mpls(&MPLS_AT_NDX(at, i));
 #endif
   }
@@ -218,11 +218,11 @@ enum { XML_MARGIN = 2 };
 
 void xml_head(void) {
   printf("<?xml version=\"1.0\"?>\n");
-  printf("<MTR SRC=\"%s\"", srchost);
-  printf(" TOS=\"0x%X\"", tos);
-  printf(" PSIZE=\"%d\"", cpacketsize);
-  printf(" BITPATTERN=\"0x%02X\"", abs(cbitpattern));
-  printf(" TESTS=\"%ld\">\n", max_ping);
+  printf("<MTR SRC=\"%s\"",         srchost);
+  printf(" QOS=\"0x%X\"",           run_opts.qos);
+  printf(" PSIZE=\"%d\"",           run_opts.size);
+  printf(" BITPATTERN=\"0x%02X\"",  abs(run_opts.pattern));
+  printf(" TESTS=\"%d\">\n",        run_opts.cycles);
 }
 
 void xml_tail(void) { printf("</MTR>\n"); }
@@ -350,8 +350,6 @@ void csv_close(bool next) {
 
 
 #ifdef OUTPUT_FORMAT_RAW
-
-bool enable_raw; // global var
 
 void raw_rawping(int at, int usec) {
 #ifdef ENABLE_DNS

@@ -36,7 +36,6 @@ char  *sep_ipinfo(int at, int ndx, char sep);
 void query_ipinfo(void);
 
 #define ASLOOKUP_DEFAULT   "2,2" // ripe whois
-extern bool enable_ipinfo;
 extern bool ipinfo_tcpmode;
 extern unsigned ipinfo_queries[];
 extern unsigned ipinfo_replies[];

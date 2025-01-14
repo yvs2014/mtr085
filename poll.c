@@ -51,8 +51,6 @@ enum { FD_BATCHMAX = 30 };
 enum { MINSLEEP_USEC = 10 }; // in microseconds
 enum { PAUSE_MSEC = 100 };   // in milliseconds
 
-long numpings; // global
-
 // base file descriptors
 enum { FD_STDIN, FD_NET,
 #ifdef ENABLE_DNS
@@ -62,6 +60,8 @@ enum { FD_STDIN, FD_NET,
 #endif
 #endif
 FD_MAX };
+
+static long numpings;
 
 enum { NO_GRACE, GRACE_START, GRACE_FINISH }; // state of grace period
 static int grace;
@@ -82,12 +82,12 @@ static bool need_dns;
 }
 
 static void set_fds(void) {
-  SET_POLLFD(FD_STDIN, interactive ? 0 : -1);
+  SET_POLLFD(FD_STDIN, run_opts.interactive ? 0 : -1);
   SET_POLLFD(FD_NET, net_wait());
 #ifdef ENABLE_DNS
-  need_dns = enable_dns
+  need_dns = run_opts.dns
 #ifdef WITH_IPINFO
-          || enable_ipinfo
+          || run_opts.lookup
 #endif
   ;
   SET_POLLFD(FD_DNS, need_dns ? dns_wait(AF_INET) : -1);
@@ -232,7 +232,7 @@ static bool svc(struct timespec *last, const struct timespec *interval, int *tim
   if (timespeccmp(&now, &tv, >)) {
     *last = now;
     if (grace != GRACE_START) {
-      if ((max_ping > 0) && (numpings >= max_ping)) {
+      if ((run_opts.cycles > 0) && (numpings >= run_opts.cycles)) {
         grace = GRACE_START;
         grace_started = now;
       }
@@ -265,10 +265,10 @@ static key_action_t keyboard_events(key_action_t action) {
   LOGMSG("action=%d", action);
   switch (action) {
     case ActionQuit:
-      LOGMSG("quit");
+      LOGMSG("%s", "quit");
       break;
     case ActionReset:
-      LOGMSG("reset network counters");
+      LOGMSG("%s", "reset network counters");
       net_reset();
       break;
 #ifdef CURSESMODE
@@ -276,52 +276,56 @@ static key_action_t keyboard_events(key_action_t action) {
       int mode = (curses_mode + 1) % curses_mode_max;
       LOGMSG("switch display mode: %d -> %d", curses_mode, mode);
       curses_mode = mode;
-      // chart bits
-      CLRBIT(run_args, RA_DM0);
-      CLRBIT(run_args, RA_DM1);
-      if (curses_mode & 1) SETBIT(run_args, RA_DM0);
-      if (curses_mode & 2) SETBIT(run_args, RA_DM1);
+      run_opts.chart = mode & 3; // chart bits
+      OPT_SUM(chart);
       display_clear();
     } break;
 #endif
     case ActionClear:
-      LOGMSG("clear display");
+      LOGMSG("%s", "clear display");
       display_clear();
       break;
     case ActionPauseResume:
-      TGLBIT(run_args, RA_PAUSE);
-      LOGMSG("'pause/resume' pressed");
+      LOGMSG("%s", "'pause/resume' pressed");
+      run_opts.pause = !run_opts.pause;
+      OPT_SUM(pause);
       break;
 #ifdef WITH_MPLS
     case ActionMPLS:
-      enable_mpls = !enable_mpls;
-      LOGMSG("toggle MPLS: %d -> %d", !enable_mpls, enable_mpls);
-      TGLBIT(run_args, RA_MPLS);
+      LOGMSG("toggle %s: %d -> %d", "MPLS", run_opts.mpls, !run_opts.mpls);
+      run_opts.mpls = !run_opts.mpls;
+      OPT_SUM(mpls);
       display_clear();
       break;
 #endif
 #ifdef ENABLE_DNS
     case ActionDNS:
-      enable_dns = !enable_dns;
-      LOGMSG("toggle DNS: %d -> %d", !enable_dns, enable_dns);
-      TGLBIT(run_args, RA_DNS);
+      LOGMSG("toggle %s: %d -> %d", "DNS", run_opts.dns, !run_opts.dns);
+      run_opts.dns = !run_opts.dns;
+      OPT_SUM(dns);
       dns_open();
       break;
 #endif
     case ActionCache:
-      cache_mode = !cache_mode;
-      LOGMSG("toggle cache-mode: %d -> %d", !cache_mode, cache_mode);
-      TGLBIT(run_args, RA_CACHE);
+      LOGMSG("toggle %s: %d -> %d", "cache-mode", run_opts.cache, !run_opts.cache);
+      run_opts.oncache = !run_opts.oncache;
+      OPT_SUM(oncache);
       break;
 #ifdef WITH_IPINFO
     case ActionAS:
     case ActionII:
-      LOGMSG("toggle ipinfo-mode");
+      LOGMSG("toggle %s", "ipinfo-mode");
       ipinfo_action(action);
-      CLRBIT(run_args, RA_ASN);
-      CLRBIT(run_args, RA_IPINFO);
-      if (enable_ipinfo)
-        SETBIT(run_args, (action == ActionAS) ? RA_ASN : RA_IPINFO);
+      run_opts.asn = run_opts.ipinfo = false;
+      if (run_opts.lookup) {
+        if (action == ActionAS)
+          run_opts.asn    = true;
+        else
+          run_opts.ipinfo = true;
+      }
+      OPT_SUM(asn);
+      OPT_SUM(ipinfo);
+      OPT_SUM(lookup);
       break;
 #endif
 #if defined(CURSESMODE) || defined(SPLITMODE)
@@ -342,17 +346,25 @@ static key_action_t keyboard_events(key_action_t action) {
 #endif
     case ActionUDP:
     case ActionTCP:
-      CLRBIT(run_args, RA_UDP); CLRBIT(run_args, RA_TCP);
-      if (mtrtype != IPPROTO_ICMP) net_set_type(IPPROTO_ICMP);
+      run_opts.udp = run_opts.tcp = false;
+      if (mtrtype != IPPROTO_ICMP)
+        net_set_type(IPPROTO_ICMP);
       else {
         net_set_type((action == ActionUDP) ? IPPROTO_UDP : IPPROTO_TCP);
-        SETBIT(run_args, (action == ActionUDP) ? RA_UDP : RA_TCP);
+        if (action == ActionUDP)
+          run_opts.udp = true;
+        else
+          run_opts.tcp = true;
       }
+      OPT_SUM(udp);
+      OPT_SUM(tcp);
 #ifdef ENABLE_IPV6
-      if (af == AF_INET6) net_setsock6();
+      if (af == AF_INET6)
+        net_setsock6();
 #endif
       break;
-    default: action = ActionNone;
+    default:
+      action = ActionNone;
   }
   return action;
 }
@@ -373,7 +385,7 @@ static void proceed_ipinfo(void) {
 #ifdef OUTPUT_FORMAT_XML
     case DisplayXML:
 #endif
-      LOGMSG("query extra IP info");
+      LOGMSG("%s", "query extra IP info");
       query_ipinfo();
       break;
     default: break;
@@ -394,7 +406,7 @@ static inline bool tcpish(void) {
 static int conclude(struct timespec *polled_at) {
   int rc = ActionNone;
   if (IN_ISSET(FD_STDIN)) { // check keyboard events
-    LOGMSG("got stdin event");
+    LOGMSG("got %s", "stdin event");
     key_action_t act = display_key_action();
     if (act != ActionNone) {
       act = keyboard_events(act);
@@ -403,18 +415,18 @@ static int conclude(struct timespec *polled_at) {
     }
   }
   if (IN_ISSET(FD_NET)) { // net packet
-    LOGMSG("got icmp or udp response");
+    LOGMSG("got %s", "icmp or udp response");
     net_icmp_parse(polled_at);
   }
 #ifdef ENABLE_DNS
   if (need_dns) { // dns lookup
     if (IN_ISSET(FD_DNS)) {
-      LOGMSG("got dns response");
+      LOGMSG("got %s", "dns response");
       dns_parse(allfds[FD_DNS].fd, AF_INET);
     }
 #ifdef ENABLE_IPV6
     if (IN_ISSET(FD_DNS6)) {
-      LOGMSG("got dns6 response");
+      LOGMSG("got %s", "dns6 response");
       dns_parse(allfds[FD_DNS6].fd, AF_INET6);
     }
 #endif
@@ -461,7 +473,7 @@ static void seqfd_free(void) {
 
 // main loop
 int poll_loop(void) {
-  LOGMSG("start");
+  LOGMSG("%s", "start");
   if (!seqfd_init())
     return false;
   int anyset = ActionNone;
@@ -482,19 +494,22 @@ int poll_loop(void) {
     do {
       if ((anyset != ActionNone) || paused) {
         timeout = paused ? PAUSE_MSEC : 0;
-        if (paused && interactive) display_redraw();
+        if (paused && run_opts.interactive)
+          display_redraw();
       } else {
         display_redraw();
 #ifdef WITH_IPINFO
-        if (ipinfo_ready()) proceed_ipinfo();
+        if (ipinfo_ready())
+          proceed_ipinfo();
 #endif
         if (!svc(&lasttime, &interval, &timeout)) {
           seqfd_free();
-          LOGMSG("done all pings");
+          LOGMSG("%s", "done all pings");
           return true;
         }
       }
-      if (!timeout) usleep(MINSLEEP_USEC);
+      if (!timeout)
+        usleep(MINSLEEP_USEC);
       rv = poll(allfds, maxfd, timeout);
     } while ((rv < 0) && (errno == EINTR));
 
@@ -515,14 +530,15 @@ int poll_loop(void) {
         break;
       if (anyset == ActionPauseResume) {
         paused = !paused;
-        if (!paused) anyset = ActionNone;
+        if (!paused)
+          anyset = ActionNone;
       }
     } else if (tcpish())
       tcp_timedout(); // not waiting for TCP ETIMEDOUT
   }
 
   seqfd_free();
-  LOGMSG("finish");
+  LOGMSG("%s", "finish");
   return true;
 }
 

@@ -71,7 +71,6 @@ typedef struct { int sock, state, slot; } ipitseq_t;
 enum { TSEQ_CREATED, TSEQ_READY };  // tcp-socket state: created or ready, otherwise -1
 
 // global
-bool enable_ipinfo;   // disabled by default
 bool ipinfo_tcpmode;  // true if ipinfo origin is tcp (http or whois)
 unsigned ipinfo_queries[3];  // number of queries (sum, http, whois)
 unsigned ipinfo_replies[3];  // number of replies (sum, http, whois)
@@ -410,7 +409,8 @@ static void parse_whois(void *txt, atndx_t id) {
         continue; // skip empty lines and comments
       parse_whois_tagvalue(lines[i], record);
     }
-  } else LOGMSG("Skip empty segment");
+  } else
+    LOGMSG("%s", "Skip empty segment");
 
   // save results of parsing
   save_records(id, record);
@@ -526,7 +526,7 @@ void ipinfo_seq_ready(int seq) {
 }
 
 static int ipinfo_lookup(int at, int ndx, const char *qstr) {
-  if (!enable_ipinfo) // not enabled
+  if (!run_opts.lookup) // not enabled
     return -1;
   if (!addr_exist(&IP_AT_NDX(at, ndx))) // on the off chance
     return -1;
@@ -664,7 +664,7 @@ static char *fill_ipinfo(int at, int ndx, char sep) {
 char *fmt_ipinfo(int at, int ndx) { return fill_ipinfo(at, ndx, 0); }
 char *sep_ipinfo(int at, int ndx, char sep) { return fill_ipinfo(at, ndx, sep); }
 
-bool ipinfo_ready(void) { return (enable_ipinfo && ii_ready); }
+bool ipinfo_ready(void) { return (run_opts.lookup && ii_ready); }
 
 static bool alloc_ipitseq(void) {
   size_t size = sizeof(ipitseq_t) * MAXHOST * MAXPATH;
@@ -702,10 +702,10 @@ void ipinfo_close(void) {
       for (int i = 0; i < MAXHOST * MAXPATH; i++)
         close_ipitseq(i);
       free(ipitseq);
-      LOGMSG("free tcp-sockets memory");
+      LOGMSG("%s", "free tcp-sockets memory");
     }
     ii_ready = false;
-    LOGMSG("ok");
+    LOGMSG("%s", "ok");
   }
 #ifdef ENABLE_DNS
   if (ORIG_TYPE == OT_DNS)
@@ -768,21 +768,21 @@ bool ipinfo_action(int action) {
   if (!ii_ready)
     return false;
   switch (action) {
-    case ActionAS: // `z'
-      enable_ipinfo = !enable_ipinfo;
+    case ActionAS: // `l'
+      run_opts.lookup = !run_opts.lookup;
       break;
-    case ActionII: // `y'
-      enable_ipinfo = true;
+    case ActionII: // `L'
+      run_opts.lookup = true;
       for (int i = 0; (i < MAX_TXT_ITEMS) && (ipinfo_no[i] >= 0); i++) {
         ipinfo_no[i]++;
         if (ipinfo_no[i] > itemname_max)
           ipinfo_no[i] = 0;
         if (ipinfo_no[i] == itemname_max)
-          enable_ipinfo = false;
+          run_opts.lookup = false;
       }
       break;
-    case ActionNone: // first time
-      enable_ipinfo = true;
+    case ActionNone: // first time only
+      ini_opts.lookup = true;
     default: break;
   }
   return true;

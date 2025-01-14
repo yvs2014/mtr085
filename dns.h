@@ -21,7 +21,6 @@
 
 #include "common.h"
 
-extern bool enable_dns;
 extern unsigned dns_queries[];
 extern unsigned dns_replies[];
 extern t_sockaddr *custom_res;

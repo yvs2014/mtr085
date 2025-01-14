@@ -123,29 +123,26 @@ int mtrtype = IPPROTO_ICMP;   // ICMP as default packet type
 pid_t mypid;
 #define ARGS_LEN 64 /* seem to be enough */
 char mtr_args[ARGS_LEN + 1];  // display in curses title
-unsigned run_args;            // runtime args to display hints
-unsigned kept_args;           // kept args mapped in bits
+
+opt_sum_t opt_sum;  // checksum options' changes
+
+opts_t run_opts;    // runtime options
+opts_t ini_opts = { // initial bool options
+  .interactive = true,
+  .dns      = true,           // dns is on by default
+  .minttl   =  1,             // start at first hop
+  .maxttl   = 30,             // supposedly enough for today's internet
+  .cycles   = REPORT_PINGS,   // note that 0 should be set explicitly
+  .interval =  1,             // in seconds
+  .size     = 64,             // default packet size
+  .syn      = MIL,            // in ms (tcp timeout)
+  .cache    = CACHE_TIMEOUT,  // in seconds (cache timeout)
+  .port     = -1,             // port from 'target:port' in tcp/udp mode
+};
 
 #ifdef ENABLE_IPV6
-static bool af_specified; // set with -4/-6 options
+static bool af_specified;     // set with -4/-6 options
 #endif
-#ifdef ENABLE_DNS
-bool show_ips;
-#endif
-#ifdef WITH_MPLS
-bool enable_mpls;
-#endif
-bool endpoint_mode;           // -fa option, i.e. auto, corresponding to TTL of the destination host
-bool cache_mode;              // don't ping known hops
-int cache_timeout = CACHE_TIMEOUT;  // cache timeout in seconds
-bool enable_stat_at_exit;
-int fstTTL = 1;               // default start at first hop
-int maxTTL = 30;              // enough?
-int remoteport = -1;          // target port
-int tos;                      // type of service set in ping packet
-int cbitpattern;              // payload bit pattern
-int cpacketsize = 64;         // default packet size
-int syn_timeout = MIL;        // for TCP tracing (1sec in msec)
 int sum_sock[2];              // socket summary: open()/close() calls
 // chart related
 int display_offset;
@@ -153,10 +150,6 @@ int curses_mode;              // 1st and 2nd bits, 3rd is reserved
 #ifdef CURSESMODE
 int curses_mode_max = 3;
 #endif
-bool enable_color;            // 4th bit
-bool bell_audible;            // 5th bit
-bool bell_visible;            // 6th bit
-bool bell_target;             // 7th bit
 //
 const struct statf statf[] = {
 // name     hint                    len key
@@ -234,9 +227,6 @@ static char *short_options;
 char srchost[NAMELEN];
 const char *dsthost;
 display_mode_t display_mode = DisplayAuto;
-double wait_time = 1;
-bool interactive = true;
-long max_ping = REPORT_PINGS;  // 0 should be set explicitly
 //
 
 static const char *iface_addr;
@@ -245,14 +235,25 @@ static const char *iface_addr;
 // If the file stream is associated with a regular file, lock/unlock the file
 // in order coordinate writes to a common file from multiple mtr instances
 static void locker(FILE *file, short type) {
-  if (!file) return;
+  if (!file)
+    return;
   int fd = fileno(file);
-  if (fd < 0) { WARN("fileno()"); return; }
-  { struct stat stat;
-    if (fstat(fd, &stat) < 0) { WARN("fstat(%d)", fd); return; }
-    if (!S_ISREG(stat.st_mode)) return; }
-  { struct flock lock = { .l_whence = SEEK_END, .l_type = type, .l_pid = mypid };
-    if (fcntl(fd, F_SETLKW, &lock) < 0) { WARN("fcntl(fd=%d, type=%d)", fd, type); return; }}
+  if (fd < 0) {
+    WARN("%s", "fileno()");
+    return;
+  }
+  struct stat stat;
+  if (fstat(fd, &stat) < 0) {
+    WARN("fstat(%d)", fd);
+    return;
+  }
+  if (!S_ISREG(stat.st_mode))
+    return;
+  struct flock lock = { .l_whence = SEEK_END, .l_type = type, .l_pid = mypid };
+  if (fcntl(fd, F_SETLKW, &lock) < 0) {
+    WARN("fcntl(fd=%d, type=%d)", fd, type);
+    return;
+  }
 }
 
 static int my_getopt_long(int argc, char *argv[], int *opt_ndx) {
@@ -338,28 +339,6 @@ static void usage(const char *name) {
   free(bname);
 }
 
-char limit_error[NAMELEN];
-int limit_int(int min, int max, int val, const char *what, int8_t fail) {
-  limit_error[0] = 0;
-  int lim = val, len = 0;
-  if (val < min) {
-    lim = min;
-    len = snprintf(limit_error, sizeof(limit_error), "%s is less than %d", what, min);
-  } else if (val > max) {
-    lim = max;
-    len = snprintf(limit_error, sizeof(limit_error), "%s is greater than %d", what, max);
-  }
-  if (val != lim) {
-    if (fail > 0) { warnx("%s", limit_error); errx(EXIT_FAILURE, "-%c option failed", fail); }
-    else if (fail < 0) warnx("%s", limit_error);
-    else {
-      if (len < 0) len = 0;
-      snprintf(limit_error + len, sizeof(limit_error) - len, ", corrected(%d -> %d)", val, lim);
-    }
-  }
-  return lim;
-}
-
 #ifdef ENABLE_DNS
 static bool set_custom_res(struct addrinfo *ns) {
   if (ns && ns->ai_addr && (
@@ -367,7 +346,10 @@ static bool set_custom_res(struct addrinfo *ns) {
        (ns->ai_family == AF_INET6) ? addr6exist(&((struct sockaddr_in6 *)ns->ai_addr)->sin6_addr) :
 #endif
       ((ns->ai_family == AF_INET)  ? addr4exist(&((struct sockaddr_in *)ns->ai_addr)->sin_addr) : false))) {
-    if (custom_res) { free(custom_res); WARNX("NS is aready set, setting a new one ..."); }
+    if (custom_res) {
+      free(custom_res);
+      WARNX("%s", "NS is aready set, setting a new one ...");
+    }
     custom_res = malloc(sizeof(*custom_res));
     if (custom_res) {
       memcpy(custom_res, ns->ai_addr, ns->ai_addrlen);
@@ -425,17 +407,18 @@ static bool split_hostport(char *buff, char* hostport[2]) {
 #endif
 
 #ifdef CURSESMODE
+#define VAL_TRU(nth) ((val & (1u << (nth - 1))) ? true : false)
 static inline void option_d(void) {
-  int val = atoi(optarg);
+  int val = limit_int(0, UINT8_MAX, optarg, "Display mode", 'd');
   curses_mode = (val & ~8) % curses_mode_max;
-  enable_color = val & 8;
-  bell_audible = val & 16;
-  bell_visible = val & 32;
-  bell_target  = val & 64;
-  // chart mode bits
-  if (val & 1) kept_args |= RA_DM0;
-  if (val & 2) kept_args |= RA_DM1;
+  ini_opts.chart   = val & 3;    // first two bits
+                                 // 3rd reserved
+  ini_opts.color   = VAL_TRU(4); // 4th
+  ini_opts.audible = VAL_TRU(5); // 5th
+  ini_opts.visible = VAL_TRU(6); // 6th
+  ini_opts.bell    = VAL_TRU(7); // 7th
 }
+#undef VAL_TRU
 #endif
 
 static inline void option_F(char opt) {
@@ -465,7 +448,8 @@ static inline void option_N(void) {
     .ai_flags    = AI_NUMERICHOST | AI_NUMERICSERV };
   int rc = getaddrinfo(hostport[0], hostport[1], &hints, &ns);
   if (rc || !ns) {
-    if (rc == EAI_SYSTEM) FAIL("getaddrinfo()");
+    if (rc == EAI_SYSTEM)
+      FAIL("%s", "getaddrinfo()");
     FAIL("Failed to set NS(%s): %s", optarg, gai_strerror(rc));
   }
   if (!set_custom_res(ns)) FAIL("Failed to set NS(%s)", optarg);
@@ -475,12 +459,13 @@ static inline void option_N(void) {
 
 #ifdef OUTPUT_FORMAT
 static inline void option_o(const char *progname) {
-  if (max_ping <= 0) max_ping = REPORT_PINGS;
+  if (ini_opts.cycles <= 0)
+    ini_opts.cycles = REPORT_PINGS;
   switch (tolower((int)optarg[0])) {
 #ifdef OUTPUT_FORMAT_RAW
     case 'r':
       display_mode = DisplayRaw;
-      enable_raw = true;
+      ini_opts.rawrep = true;
       break;
 #endif
 #ifdef OUTPUT_FORMAT_TXT
@@ -528,12 +513,11 @@ static inline void ineractive_modes(display_mode_t mode) {
 #ifdef OUTPUT_FORMAT_XML
     case DisplayXML:
 #endif
-      interactive = false;
+      run_opts.interactive = false;
       break;
     default: break;
   }
 }
-
 
 static inline void short_set(char opt, const char *progname) {
   switch (opt) {
@@ -552,14 +536,14 @@ static inline void short_set(char opt, const char *progname) {
       break;
 #ifdef ENABLE_DNS
     case 'b':
-      show_ips = true;
+      ini_opts.ips = true;
       break;
 #endif
     case 'B':
-      cbitpattern = limit_int(-1, UCHAR_MAX, atoi(optarg), "Bit Pattern", opt);
+      ini_opts.pattern = limit_int(-1, UINT8_MAX, optarg, "Bit Pattern", opt);
       break;
     case 'c':
-      max_ping = atol(optarg);
+      ini_opts.cycles = limit_int(-1, INT_MAX, optarg, "Number of cycles", opt);
       break;
 #ifdef CURSESMODE
     case 'd':
@@ -568,27 +552,29 @@ static inline void short_set(char opt, const char *progname) {
 #endif
 #ifdef WITH_MPLS
     case 'e':
-      enable_mpls = true;
-      SETBIT(kept_args, RA_MPLS);
+      ini_opts.mpls = true;
       break;
 #endif
     case 'f':
-      if (optarg[0] == 'a') endpoint_mode = true;
-      else fstTTL = limit_int(1, maxTTL, atoi(optarg), "First TTL", opt);
+      if ((optarg[0] == 'a') && !optarg[1])
+        ini_opts.endpoint = true;
+      else
+        ini_opts.minttl =
+          limit_int(1, ini_opts.maxttl, optarg, "First TTL", opt);
       break;
     case 'F':
       option_F(opt);
       break;
     case 'i':
-      wait_time = limit_int(1, INT_MAX, atoi(optarg), "interval", opt);
+      ini_opts.interval = limit_int(1, INT_MAX, optarg, "Interval", opt);
       break;
     case 'm':
-      maxTTL = limit_int(fstTTL, MAXHOST - 1, atoi(optarg), "Max TTL", opt);
+      ini_opts.maxttl =
+        limit_int(ini_opts.minttl, MAXHOST - 1, optarg, "Max TTL", opt);
       break;
 #ifdef ENABLE_DNS
     case 'n':
-      enable_dns = false;
-      CLRBIT(kept_args, RA_DNS);
+      ini_opts.dns = false;
       break;
     case 'N':
       option_N();
@@ -606,36 +592,42 @@ static inline void short_set(char opt, const char *progname) {
 #endif
 #ifdef IP_TOS
     case 'q':
-      tos = limit_int(0, UCHAR_MAX, atoi(optarg), "Type of Service (ToS)", opt);
+      ini_opts.qos = limit_int(0, UINT8_MAX, optarg, "QoS", opt);
       TOS4TOS("option -q");
       break;
 #endif
     case 'r':
       display_mode = DisplayReport;
-      if (max_ping <= 0) max_ping = REPORT_PINGS;
+      if (ini_opts.cycles <= 0)
+        ini_opts.cycles = REPORT_PINGS;
       break;
     case 's': {
-      int size = atoi(optarg);
-      cpacketsize = limit_int(MINPACKET, MAXPACKET, abs(size), "Packet size", opt);
-      if (size < 0) cpacketsize = -cpacketsize;
+      ini_opts.size =
+        limit_int(-MAXPACKET, MAXPACKET, optarg, "Packet size", opt);
+      if (abs(ini_opts.size) < MINPACKET) {
+        warnx("Packet size less than minimal(%d): %s", MINPACKET, optarg);
+        errno = ERANGE;
+        err(errno, "-%c option failed", opt);
+      }
     } break;
     case 'S':
-      enable_stat_at_exit = true;
+      ini_opts.stat = true;
       break;
     case 't':
       if (mtrtype == IPPROTO_UDP)
-        FAIL("-t and -u are mutually exclusive");
+        FAIL("-%c and -%c are mutually exclusive", 't', 'u');
       net_set_type(IPPROTO_TCP);
-      SETBIT(kept_args, RA_TCP);
+      ini_opts.tcp = true;
       break;
     case 'T':
-      syn_timeout = limit_int(1, TCPSYN_TOUT_MAX, atoi(optarg), "TCP timeout", opt) * MIL;
+      ini_opts.syn =
+        limit_int(1, TCPSYN_TOUT_MAX, optarg, "TCP timeout", opt) * MIL;
       break;
     case 'u':
       if (mtrtype == IPPROTO_TCP)
-        FAIL("-u and -t are mutually exclusive");
+        FAIL("-%c and -%c are mutually exclusive", 'u', 't');
       net_set_type(IPPROTO_UDP);
-      SETBIT(kept_args, RA_UDP);
+      ini_opts.udp = true;
       break;
     case 'v':
 #ifdef BUILD_OPTIONS
@@ -645,22 +637,20 @@ static inline void short_set(char opt, const char *progname) {
 #endif
       QEXIT(EXIT_SUCCESS);
     case 'x':
-      cache_mode = true;
-      cache_timeout = atoi(optarg);
-      if (cache_timeout < 0)
-        FAIL("-x: Cache timeout %d must be positive", cache_timeout);
-      else if (cache_timeout == 0)
-        cache_timeout = CACHE_TIMEOUT;  // default 60 seconds
-      SETBIT(kept_args, RA_CACHE);
+      ini_opts.cache   = limit_int(1, INT_MAX, optarg, "Cache timeout", opt);
+      ini_opts.oncache = true;
       break;
 #ifdef WITH_IPINFO
     case 'l':
     case 'L': {
       bool extra = (opt == 'L');
-      SETBIT(kept_args, extra ? RA_IPINFO : RA_ASN);
+      if (extra)
+        ini_opts.ipinfo = true;
+      else
+        ini_opts.asn    = true;
       if (!ipinfo_init(extra ? optarg : ASLOOKUP_DEFAULT))
         QEXIT(EXIT_FAILURE);
-      if (!ipinfo_action(ActionNone)) // don't switch at start
+      if (!ipinfo_action(ActionNone)) // fail to init
         QEXIT(EXIT_FAILURE);
     } break;
 #endif
@@ -672,11 +662,10 @@ static inline void short_set(char opt, const char *progname) {
 
 
 static void parse_options(int argc, char **argv) {
-  SETBIT(kept_args, RA_DNS); // dns is on by default
   int opt = 0;
   while ((opt = my_getopt_long(argc, argv, NULL)) >= 0)
     short_set((char)opt, argv[0]);
-  run_args = kept_args;      // to display runtime changes
+  run_opts = ini_opts; // to reflect possible interactive changes
   for (int i = 1, len = 0; (i < optind) && (len < ARGS_LEN); i++) {
     int inc = snprintf(mtr_args + len, ARGS_LEN - len, (i > 1) ? " %s" : "%s", argv[i]);
     if (inc > 0) len += inc;
@@ -743,7 +732,7 @@ static void init_locale(void) {
       curses_mode_max++;
       return;
     }
-    WARNX("Unicode block elements are not printable");
+    WARNX("%s", "Unicode block elements are not printable");
   }
   setlocale(LC_CTYPE, NULL);
 }
@@ -755,15 +744,17 @@ static void init_locale(void) {
 #endif /* UNICODE stuff */
 
 #ifdef LIBCAP
-static bool reset_caps(void) {
-  bool set = false;
-  cap_t cap = cap_init();
-  if (cap) {
-    set = cap_set_proc(cap) == 0;
-    if (!set) warn("cap_set_proc()");
-    cap_free(cap);
-  } else warn("cap_init()");
-  return set;
+static bool drop_caps(void) {
+  bool okay = false;
+  cap_t caps = cap_init();
+  if (caps) {
+    okay = (cap_set_proc(caps) == 0);
+    if (!okay)
+      warn("%s", "cap_set_proc()");
+    cap_free(caps);
+  } else
+    warn("%s", "cap_init()");
+  return okay;
 }
 #endif
 
@@ -815,18 +806,24 @@ static void try_to_resolv(t_res_rc *rr) {
 }
 
 static inline void resolv_with_port(t_res_rc *rr, t_res_rc *rr_init) {
-  if (!rr) return;
+  if (!rr)
+    return;
   char buff[MAX_ADDRSTRLEN + 6/*:port*/] = {0};
   STRLCPY(buff, dsthost, sizeof(buff));
   char* hostport[2] = {0};
   if (split_hostport(buff, hostport)) {
     limit_error[0] = 0;
-    if (hostport[1]) remoteport = limit_int(1, USHRT_MAX, atoi(hostport[1]), "port number", -1);
+    if (hostport[1]) {
+      int num = limit_int(1, USHRT_MAX, hostport[1], "port number", -1);
+      if (!limit_error[0])
+        ini_opts.port = num;
+    }
     if (!limit_error[0] && hostport[0] && rr_init) {
       *rr = *rr_init; rr->target = hostport[0];
       try_to_resolv(rr);
     }
-  } else warn("Failed to parse(%s)", buff);
+  } else
+    warn("Failed to parse(%s)", buff);
 }
 
 static inline void stat_fin(void) {
@@ -865,7 +862,7 @@ static inline void main_prep(int argc, char **argv) {
   net_setsock6();
 #endif
 #ifdef ENABLE_DNS
-  if (enable_dns)
+  if (run_opts.dns)
     dns_open();
 #endif
   if (gethostname(srchost, sizeof(srchost)))
@@ -881,16 +878,21 @@ static inline bool main_loop(struct addrinfo *ai, bool fin) {
     if (success) {
       TOS4TOS(dsthost);
       locker(stdout, F_WRLCK);
-      if (display_open()) display_loop();
-      else WARNX("Unable to open display");
+      if (display_open())
+        display_loop();
+      else
+        WARNX("%s", "Unable to open display");
       net_end_transit();
-      if (fin) display_confirm_fin();
+      if (fin)
+        display_confirm_fin();
       display_close(next_target);
       locker(stdout, F_UNLCK);
-      if (!next_target) next_target = true;
+      if (!next_target)
+        next_target = true;
     }
     freeaddrinfo(ai);
-  } else warnx("Cannot get resolv data(%s)", dsthost);
+  } else
+    warnx("No resolved: %s", dsthost);
   return success;
 }
 
@@ -906,7 +908,8 @@ static inline void main_fin(void) {
 #ifdef WITH_SYSLOG
   closelog();
 #endif
-  if (enable_stat_at_exit) stat_fin();
+  if (run_opts.stat)
+    stat_fin();
   if (last_neterr && (display_mode == DisplayCurses))
     warnx("%s", err_fulltxt); // duplicate an error cleaned by ncurses
   UNICODE_FREE;
@@ -915,14 +918,14 @@ static inline void main_fin(void) {
 
 int main(int argc, char **argv) {
   if (!net_open()) // get raw sockets
-    FAIL("Unable to get raw sockets");
+    FAIL("Unable to %s", "get raw sockets");
   if (setgid(getgid()) || setuid(getuid())) // drop permissions if that's set
-    ERRR(EXIT_FAILURE, "Unable to drop permissions");
+    ERRR(EXIT_FAILURE, "Unable to %s", "drop permissions");
   if ((geteuid() != getuid()) || (getegid() != getgid())) // just in case
-    FAIL("Unable to drop permissions");
+    FAIL("Unable to %s", "drop permissions");
 #ifdef LIBCAP
-  if (!reset_caps())
-    FAIL("Unable to reset capabilities");
+  if (!drop_caps())
+    FAIL("Unable to %s", "drop capabilities");
 #endif
 
   main_prep(argc, argv);
@@ -934,11 +937,11 @@ int main(int argc, char **argv) {
     .ai_flags = AI_IDN,
 #endif
   }};
-  int defport = remoteport;
+  int defport = ini_opts.port;
   bool success = false;
   for (; (optind < argc) && argv[optind]; optind++) {
     dsthost = argv[optind];
-    remoteport = defport;
+    ini_opts.port = defport;
     t_res_rc rr = rr_init;
     rr.target = dsthost;
     try_to_resolv(&rr);

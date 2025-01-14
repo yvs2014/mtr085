@@ -21,11 +21,9 @@
 
 #include <poll.h>
 
-int poll_loop(void);
+int  poll_loop(void);
 int  poll_reg_fd(int sock, int seq);
 void poll_dereg_fd(int slot);
 void poll_close_tcpfds(void);
-
-extern long numpings; // to know number of cycles
 
 #endif

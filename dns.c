@@ -116,7 +116,6 @@ extern struct __res_state _res;
 #define ARPA6_SUFFIX "ip6.arpa"
 
 // global
-bool enable_dns = true;  // use DNS by default
 unsigned dns_queries[3]; // number of queries (sum, ptr, txt)
 unsigned dns_replies[3]; // number of replies (sum, ptr, txt)
 t_sockaddr *custom_res;  // -N option
@@ -148,7 +147,7 @@ static bool dns_sockets(void) {
   if (nscount && (resfd < 0)) {
     resfd = socket(AF_INET, SOCK_DGRAM, 0);
     if (resfd < 0)
-      WARN("socket");
+      WARN("%s", "socket");
     else
       /*summ*/ sum_sock[0]++;
   }
@@ -156,7 +155,7 @@ static bool dns_sockets(void) {
   if (nscount6 && (resfd6 < 0)) {
     resfd6 = socket(AF_INET6, SOCK_DGRAM, 0);
     if (resfd6 < 0)
-      LOGMSG("socket6");
+      LOGMSG("%s", "socket6");
     else
       /*summ*/ sum_sock[0]++;
   }
@@ -199,7 +198,10 @@ static inline void dns_nses(void) {
     (nscount6 > 0) ||
 #endif
     (nscount > 0);
-  if (!dns_ready) { WARNX("No nameservers"); MYRES_CLOSE(myres); }
+  if (!dns_ready) {
+    WARNX("%s", "No nameservers");
+    MYRES_CLOSE(myres);
+  }
 }
 
 #ifdef LOGMOD
@@ -228,7 +230,7 @@ bool dns_open(void) {
   if (dns_ready)
     return true;
   if (MYRES_INIT(myres) < 0)
-    WARN("res_init");
+    WARN("%s", "res_init");
   else
     dns_nses();
   if (dns_ready) {
@@ -257,7 +259,7 @@ void dns_close(void) {
 #endif
   if (custom_res) { free(custom_res); custom_res = NULL; }
   MYRES_CLOSE(myres);
-  LOGMSG("ok");
+  LOGMSG("%s", "ok");
 }
 
 #ifdef ENABLE_IPV6
@@ -323,7 +325,7 @@ inline const char *dns_ptr_cache(int at, int ndx) {
 }
 
 const char *dns_ptr_lookup(int at, int ndx) {
-  if (!enable_dns) // not enabled
+  if (!run_opts.dns) // not enabled
     return NULL;
   if (!addr_exist(&IP_AT_NDX(at, ndx))) // on the off chance
     return NULL;
@@ -383,7 +385,7 @@ static atndx_t *find_query(const char* q, uint16_t hint) {
 static atndx_t *expand_query(const uint8_t *packet, ssize_t psize, const uint8_t *dn, char *answer, int asize, uint16_t id, int *r) {
   *r = dn_expand(packet, packet + psize, dn, answer, asize);
   if (*r < 0)
-    LOG_RE(NULL, "dn_expand() failed while expanding query domain");
+    LOG_RE(NULL, "dn_expand() %s", "failed while expanding query");
   atndx_t *an = find_query(answer, id); // id as a hint
   if (!an)
     LOGMSG("Unknown response with id=%u q=%s", id, answer);
@@ -393,9 +395,9 @@ static atndx_t *expand_query(const uint8_t *packet, ssize_t psize, const uint8_t
 
 static void dns_parse_reply(uint8_t *buf, ssize_t len) {
   if (len < (int)sizeof(HEADER))
-    LOGRET("Packet smaller than standard header size");
+    LOGRET("Packet: %s", "too short");
   if (len == (int)sizeof(HEADER))
-    LOGRET("Packet has empty body");
+    LOGRET("Packet: %s", "no payload");
   HEADER *hp = (HEADER*)buf;
 
   LOGMSG("got %zd bytes, id=%u at=%u ndx=%u", len, hp->id, ID2AT(hp->id), ID2NDX(hp->id));
@@ -407,11 +409,11 @@ static void dns_parse_reply(uint8_t *buf, ssize_t len) {
   hp->arcount = ntohs(hp->arcount);
 //  LOGMSG("qd:%u an:%u ns:%u ar:%u", hp->qdcount, hp->ancount, hp->nscount, hp->arcount);
   if (hp->tc)     // truncated packet
-    LOGRET("Truncated packet");
+    LOGRET("Packet: %s", "truncated");
   if (!hp->qr)    // not a reply
-    LOGRET("Not a reply");
+    LOGRET("Packet: %s", "not a reply");
   if (hp->opcode) // non-standard query
-    LOGRET("Invalid opcode");
+    LOGRET("Packet: %s", "invalid opcode");
   uint8_t *eob = buf + len;
   uint8_t *c = buf + sizeof(HEADER);
   int l = 0;
@@ -437,12 +439,12 @@ static void dns_parse_reply(uint8_t *buf, ssize_t len) {
     return;
   }
 
-  if (!(hp->ancount))
-    LOGRET("No error returned, but no answer given");
+  if (!hp->ancount)
+    LOGRET("Reply: %s", "neither error nor answer");
   if (hp->qdcount != 1)
-    LOGRET("Reply contains %d queries (must be 1)", hp->qdcount);
+    LOGRET("Reply: %d queries (must be 1)", hp->qdcount);
   if (c > eob)
-    LOGRET("Reply too short");
+    LOGRET("Reply: %s", "too short");
 
   memset(answer, 0, sizeof(answer));
   if (!expand_query(buf, len, c, answer, sizeof(answer) - 1, hp->id, &l))
@@ -451,7 +453,7 @@ static void dns_parse_reply(uint8_t *buf, ssize_t len) {
 
   c += l;
   if (c + 4 > eob)
-    LOGRET("Query resource record truncated");
+    LOGRET("%s", "Query resource record truncated");
   { int type = 0; GETSHORT(type, c);
     if (type == T_PTR) dns_replies[1]++; /*summ*/
 #ifdef WITH_IPINFO
@@ -463,12 +465,12 @@ static void dns_parse_reply(uint8_t *buf, ssize_t len) {
 
   for (int i = hp->ancount + hp->nscount + hp->arcount; i; i--) {
     if (c > eob)
-      LOGRET("Packet does not contain all specified records");
+      LOGRET("%s", "Packet does not contain all specified records");
     memset(answer, 0, sizeof(answer));
     atndx_t *atndx = expand_query(buf, len, c, answer, sizeof(answer) - 1, hp->id, &l);
     c += l;
     if (c + 10 > eob)
-      LOGRET("Truncated record");
+      LOGRET("%s", "Truncated record");
     int type = 0;
     GETSHORT(type, c);
     c += INT16SZ; // skip class
@@ -476,9 +478,9 @@ static void dns_parse_reply(uint8_t *buf, ssize_t len) {
     int size = 0;
     GETSHORT(size, c);
     if (!size)
-      LOGRET("Empty rdata");
+      LOGRET("%s", "Empty rdata");
     if (c + size > eob)
-      LOGRET("Specified rdata length exceeds packet size");
+      LOGRET("%s", "Specified rdata length exceeds packet size");
 
     if (atndx && ((type == T_PTR) || (type == T_TXT))) { // answer to us
       memset(answer, 0, sizeof(answer));
@@ -497,7 +499,8 @@ static void dns_parse_reply(uint8_t *buf, ssize_t len) {
         }
       } else {
         l = dn_expand(buf, buf + len, c, answer, sizeof(answer) - 1);
-        if (l < 0) LOGRET("dn_expand() failed while expanding domain");
+        if (l < 0)
+          LOGRET("dn_expand() %s", "failed while expanding domain");
       }
       LOGMSG("Answer[%d] %.*s", l, l, answer);
       if      ((atndx->type == 0) && dns_ptr_handler)
@@ -543,8 +546,11 @@ void dns_parse(int fd, int family) {
   socklen_t fromlen = sizeof(sa_from);
   ssize_t r = recvfrom(fd, buf, sizeof(buf), 0, &sa_from.sa, &fromlen);
   if (r > 0) {
-    if (validate_ns(family)) dns_parse_reply(buf, r);
-    else LOGRET("Reply from unknown source");
-  } else if (r < 0) WARN("recvfrom(fd=%d)", fd);
+    if (validate_ns(family))
+      dns_parse_reply(buf, r);
+    else
+      LOGRET("%s", "Reply from unknown source");
+  } else if (r < 0)
+    WARN("recvfrom(fd=%d)", fd);
 }
 

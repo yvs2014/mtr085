@@ -39,7 +39,7 @@ Main project's location is https://github.com/traviscross/mtr
 %meson_install
 
 %post
-setcap cap_net_raw+ep %{_bindir}/%{binname}
+setcap cap_net_raw+p %{_bindir}/%{binname}
 
 %files
 %defattr(-,root,root,-)

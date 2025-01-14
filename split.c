@@ -46,7 +46,7 @@ static inline void split_multipath(int at) {
 #ifdef ENABLE_DNS
     const char *name = dns_ptr_lookup(at, i);
     printf("%c%s", SPLIT_SEP, name ? name : strlongip(ipaddr));
-    if (show_ips)
+    if (run_opts.ips)
 #endif
     { printf("%c%s", SPLIT_SEP, strlongip(ipaddr)); }
 #ifdef WITH_IPINFO
@@ -66,7 +66,7 @@ void split_redraw(void) {
 #ifdef ENABLE_DNS
       { const char *name = dns_ptr_lookup(at, host[at].current);
         printf("%c%s", SPLIT_SEP, name ? name : strlongip(ipaddr)); }
-      if (show_ips)
+      if (run_opts.ips)
 #endif
       { printf("%c%s", SPLIT_SEP, strlongip(ipaddr)); }
       for (size_t i = 0; i < sizeof(fields); i++) {
@@ -85,9 +85,9 @@ void split_redraw(void) {
 void split_open(void) {
   struct termios termios;
   if (tcgetattr(0, &termios) < 0) {
-    WARN("tcgetattr");
+    WARN("%s", "tcgetattr()");
     warnx("non-interactive mode is ON");
-    interactive = false;
+    run_opts.interactive = false;
     return;
   }
   termios.c_lflag &= ~ICANON;
@@ -95,22 +95,23 @@ void split_open(void) {
   termios.c_cc[VMIN] = 1;
   termios.c_cc[VTIME] = 0;
   if (tcsetattr(0, TCSANOW, &termios) < 0) {
-    WARN("tcsetattr");
-    interactive = false;
+    WARN("%s", "tcsetattr()");
+    run_opts.interactive = false;
   }
 }
 
 void split_close(void) {
-  if (!interactive) return;
+  if (!run_opts.interactive)
+    return;
   struct termios termios;
   if (tcgetattr(0, &termios) < 0) {
-    WARN("tcgetattr");
+    WARN("%s", "tcgetattr()");
     return;
   }
   termios.c_lflag |= ICANON;
   termios.c_lflag |= ECHO;
   if (tcsetattr(0, TCSADRAIN, &termios))
-    WARN("tcsetattr");
+    WARN("%s", "tcsetattr()");
 }
 
 static inline void split_help(void) {
@@ -137,7 +138,10 @@ static inline void split_help(void) {
 
 key_action_t split_keyaction(void) {
   char ch = 0;
-  if (read(0, &ch, 1) < 0) { WARN("read"); return 0; }
+  if (read(0, &ch, 1) < 0) {
+    WARN("%s", "read()");
+    return 0;
+  }
   switch (ch) {
     case '+': return ActionScrollDown;
     case '-': return ActionScrollUp;

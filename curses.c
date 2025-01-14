@@ -27,6 +27,7 @@
 #include <string.h>
 #include <limits.h>
 #include <time.h>
+#include <sys/types.h>
 #include <netinet/in.h>
 #ifdef ENABLE_IPV6
 #include <netinet/ip6.h>
@@ -81,15 +82,10 @@
 #include "ipinfo.h"
 #endif
 
-#define CLRSET_RA(ndx_ra, value_ra) { \
-  bool clr = ((ndx_ra) == RA_NA) || (mc_ra_ints[ndx_ra] == LONG_MIN) || (mc_ra_ints[ndx_ra] == (value_ra)); \
-  if (clr) CLRBIT(run_args, (ndx_ra)); else SETBIT(run_args, (ndx_ra)); }
-
 enum { LINEMAXLEN = 1024, HINT_YPOS = 2, HOSTINFOMAX = 30 };
 
-static char mc_title[NAMELEN]; // progname + arguments + destination
-static bool mc_at_quit, mc_screen_ready;
-static long mc_ra_ints[RA_MAX];
+static char screen_title[NAMELEN]; // progname + arguments + destination
+static bool at_quit, screen_ready;
 
 static size_t enter_smth(char *buf, size_t size, int y, int x) {
   move(y, x);
@@ -123,24 +119,22 @@ static void enter_stat_fields(void) {
   if (curs != ERR) curs_set(curs);
 }
 
-static bool mc_get_int(int *val, int min, int max, const char *what, const char *hint, ra_t ra) {
-  bool rc = false;
-  if (val) {
-    mvprintw(HINT_YPOS, 0, "%s: %d", what, *val);
-    if (hint) mvprintw(HINT_YPOS + 1, 0, "-> %s", hint);
-    int xpos = what ? strlen(what) : 0;
-    char entered[MAXFLD + 1] = {0};
-    if (enter_smth(entered, sizeof(entered), HINT_YPOS, xpos + 2)) {
-      *val = limit_int(min, max, atoi(entered), what, 0);
-      rc = true;
-    }
+static void mc_get_int(int *val, int min, int max,
+    const char *what, const char *hint)
+{
+  mvprintw(HINT_YPOS, 0, "%s: %d", what, *val);
+  if (hint)
+    mvprintw(HINT_YPOS + 1, 0, "-> %s", hint);
+  int xpos = what ? strlen(what) : 0;
+  char entered[MAXFLD + 1] = {0};
+  if (enter_smth(entered, sizeof(entered), HINT_YPOS, xpos + 2)) {
+    int num = limit_int(min, max, entered, what, 0);
     if (limit_error[0]) {
       printw("%s, press any key to continue ...", limit_error);
       refresh(); getch();
-    }
-    CLRSET_RA(ra, *val);
+    } else
+      *val = num;
   }
-  return rc;
 }
 
 static inline void mc_key_h(void) { // help
@@ -184,12 +178,19 @@ static inline void mc_key_h(void) { // help
 }
 
 static inline void mc_key_c(void) { // set number of cycles
-  const char *prompt = "Number (unlimit < 1) of cycles: ";
-  mvaddstr(HINT_YPOS, 0, prompt); printw("%ld", max_ping);
+  const char *prompt = "Number (unlimit 0) of cycles: ";
+  mvaddstr(HINT_YPOS, 0, prompt); printw("%d", run_opts.cycles);
   char entered[MAXFLD + 1] = {0};
-  if (enter_smth(entered, sizeof(entered), HINT_YPOS, strlen(prompt)))
-    max_ping = atol(entered);
-  CLRSET_RA(RA_CYCLE, max_ping);
+  if (enter_smth(entered, sizeof(entered), HINT_YPOS, strlen(prompt))) {
+    int num = limit_int(-1, INT_MAX, entered, "Number of cycles", 0);
+    if (limit_error[0]) {
+      printw("%s, press any key to continue ...", limit_error);
+      refresh(); getch();
+    } else {
+      run_opts.cycles = num;
+      OPT_SUM(cycles);
+    }
+  }
 }
 
 static inline void mc_key_o(void) { // set fields to display and their order
@@ -211,27 +212,34 @@ static inline void mc_key_Q(void) { // set QoS
     getch();
   } else
 #endif
-  { mc_get_int(&tos, 0, UCHAR_MAX, "Type of Service (ToS)",
-      "bits: lowcost(1), reliability(2), throughput(4), lowdelay(8)", RA_QOS); }
+  { int qos = run_opts.qos;
+    mc_get_int(&qos, 0, UINT8_MAX, "QoS",
+      "ToS bits: lowcost(1), reliability(2), throughput(4), lowdelay(8)");
+    run_opts.qos = qos;
+    OPT_SUM(qos);
+  }
 }
 #endif
 
 static inline void mc_key_s(void) { // set packet size
   const char *prompt = "Change Packet Size: ";
-  mvaddstr(HINT_YPOS, 0, prompt); printw("%d", cpacketsize);
-  mvprintw(HINT_YPOS + 1, 0, "-> range[%d-%d], negative values are for random", MINPACKET, MAXPACKET);
+  mvaddstr(HINT_YPOS, 0, prompt);
+  printw("%d", run_opts.size);
+  mvprintw(HINT_YPOS + 1, 0, "-> range[%d-%d], negative values are for randomizing", MINPACKET, MAXPACKET);
   char entered[MAXFLD + 1] = {0};
   if (enter_smth(entered, sizeof(entered), HINT_YPOS, strlen(prompt))) {
-    int s_val = atoi(entered);
-    cpacketsize = limit_int(MINPACKET, MAXPACKET, abs(s_val), "Packet size", 0);
+    int num = limit_int(-MAXPACKET, MAXPACKET, entered, "Packet size", 0);
+    if (abs(num) < MINPACKET)
+      snprintf(limit_error, sizeof(limit_error),
+        "%s: less than %d: %s", "Packet size", MINPACKET, entered);
     if (limit_error[0]) {
       printw("%s, press any key to continue ...", limit_error);
       refresh(); getch();
+    } else {
+      run_opts.size = num;
+      OPT_SUM(size);
     }
-    if (s_val < 0)
-      cpacketsize = -cpacketsize;
   }
-  CLRSET_RA(RA_SIZE, cpacketsize);
 }
 
 key_action_t mc_keyaction(void) {
@@ -254,7 +262,9 @@ key_action_t mc_keyaction(void) {
       mc_key_h();
       break;
     case 'b': // bit pattern
-      mc_get_int(&cbitpattern, -1, UCHAR_MAX, "Bit Pattern", "range[0-255], random is -1", RA_PATT);
+      mc_get_int(&run_opts.pattern, -1, UINT8_MAX,
+        "Bit Pattern", "range[0-255], random is -1");
+      OPT_SUM(pattern);
       break;
     case 'c': // number of cycles
       mc_key_c();
@@ -263,25 +273,31 @@ key_action_t mc_keyaction(void) {
 #ifdef WITH_MPLS
     case 'e': return ActionMPLS;
 #endif
-    case 'f': // first ttl
-      mc_get_int(&fstTTL, 1, maxTTL, "First TTL", NULL, RA_MINTTL);
-      break;
+    case 'f': { // first ttl
+      int minttl = run_opts.minttl;
+      mc_get_int(&minttl, 1, run_opts.maxttl, "First TTL", NULL);
+      run_opts.minttl = minttl;
+      OPT_SUM(minttl);
+    } break;
     case 'i': { // interval
-      int tout = wait_time;
-      if (mc_get_int(&tout, 1, INT_MAX, "Interval", NULL, RA_TOUT))
-        wait_time = tout;
+      mc_get_int(&run_opts.interval, 1, INT_MAX, "Interval", NULL);
+      OPT_SUM(interval);
     } break;
     case 'j': // latency OR jitter
-      TGLBIT(run_args, RA_JITTER);
+      run_opts.jitter = !run_opts.jitter;
+      OPT_SUM(jitter);
       onoff_jitter();
       break;
 #ifdef WITH_IPINFO
     case 'l': return ActionAS;
     case 'L': return ActionII;
 #endif
-    case 'm': // max ttl
-      mc_get_int(&maxTTL, 1, MAXHOST - 1, "Max TTL", NULL, RA_MAXTTL);
-      break;
+    case 'm': { // max ttl
+      int maxttl = run_opts.maxttl;
+      mc_get_int(&maxttl, run_opts.minttl, MAXHOST - 1, "Max TTL", NULL);
+      run_opts.maxttl = maxttl;
+      OPT_SUM(maxttl);
+    } break;
 #ifdef ENABLE_DNS
     case 'n': return ActionDNS;
 #endif
@@ -292,7 +308,7 @@ key_action_t mc_keyaction(void) {
     case 'p': return ActionPauseResume;
     case  3 : // ^C
     case 'q':
-      mc_at_quit = true;
+      at_quit = true;
       return ActionQuit;
 #ifdef IP_TOS
     case 'Q': // qos
@@ -348,7 +364,7 @@ static void printw_addr(int at, int ndx) {
   const char *name = dns_ptr_lookup(at, ndx);
   if (name) {
     printw("%s", name);
-    if (show_ips)
+    if (run_opts.ips)
       printw(" (%s)", strlongip(addr));
   } else
 #endif
@@ -361,11 +377,13 @@ static void seal_n_bell(int at, int max) {
   const int bell_at = SAVED_PINGS - 3; // wait at least -i interval for reliability
   if (host[at].saved[bell_at] == CT_UNKN) {
     host[at].saved[bell_at] = CT_SEAL; // sealed
-    if (bell_target)
+    if (run_opts.bell)
       if (at != (max - 1))
         return;
-    if (bell_audible) beep();
-    if (bell_visible) flash();
+    if (run_opts.audible)
+      beep();
+    if (run_opts.visible)
+      flash();
   }
 }
 
@@ -373,7 +391,7 @@ static int print_stat(int at, int y, int start, int max) { // statistics
   static char statbuf[LINEMAXLEN];
   mc_print_at(at, statbuf, sizeof(statbuf));
   mvprintw(y, start, "%s", statbuf);
-  if (bell_audible || bell_visible)
+  if (run_opts.audible || run_opts.visible)
     seal_n_bell(at, max);
   return move(y + 1, 0);
 }
@@ -390,7 +408,7 @@ static void print_addr_extra(int at) { // mpls + multipath
     if (move(getcury(stdscr) + 1, 0) == ERR)
       break;
 #ifdef WITH_MPLS
-    if (enable_mpls)
+    if (run_opts.mpls)
       if (printw_mpls(&MPLS_AT_NDX(at, ndx)) == ERR)
         break;
 #endif
@@ -410,7 +428,7 @@ static void print_hops(int statx) {
       if (print_stat(at, y, statx, max) == ERR)
         break;
 #ifdef WITH_MPLS
-      if (enable_mpls)
+      if (run_opts.mpls)
         printw_mpls(&CURRENT_MPLS(at));
 #endif
       print_addr_extra(at);
@@ -457,7 +475,7 @@ static void scale_map(int *scale, const double *factors, int num) {
       }
     }
   }
-  if (maxval < 0)
+  if ((maxval < 0) || (minval > maxval))
     return;
   int range = maxval - minval;
   for (int i = 0; i < num; i++)
@@ -467,7 +485,7 @@ static void scale_map(int *scale, const double *factors, int num) {
 static void dmode_scale_map(void) {
 #ifdef WITH_UNICODE
   if (curses_mode == 3)
-    scale_map(scale3, factors3, enable_color ? NUM_FACTORS3 : (NUM_FACTORS3_MONO + 1));
+    scale_map(scale3, factors3, run_opts.color ? NUM_FACTORS3 : (NUM_FACTORS3_MONO + 1));
   else
 #endif
     scale_map(scale2, factors2, NUM_FACTORS2);
@@ -482,23 +500,11 @@ static inline void dmode_init(double *factors, int num) {
 }
 
 static void mc_init(void) {
-  static bool mc_init_done;
-  if (!mc_init_done) {
-    mc_init_done = true;
-    for (size_t i = 0; i < (sizeof(mc_ra_ints) / sizeof(mc_ra_ints[0])); i++)
-      mc_ra_ints[i] = LONG_MIN;
-    mc_ra_ints[RA_PATT]   = cbitpattern;
-    mc_ra_ints[RA_CYCLE]  = max_ping;
-    mc_ra_ints[RA_MINTTL] = fstTTL;
-    mc_ra_ints[RA_MAXTTL] = maxTTL;
-    mc_ra_ints[RA_QOS]    = tos;
-    mc_ra_ints[RA_SIZE]   = cpacketsize;
-  }
   // display mode 2
   dmode_init(factors2, NUM_FACTORS2);
 #ifdef WITH_UNICODE
   // display mode 3
-  dmode_init(factors3, enable_color ? NUM_FACTORS3 : (NUM_FACTORS3_MONO + 1));
+  dmode_init(factors3, run_opts.color ? NUM_FACTORS3 : (NUM_FACTORS3_MONO + 1));
 #endif
 
   { // map2 init
@@ -515,7 +521,7 @@ static void mc_init(void) {
       map2[i] |= COLOR_PAIR(dm2_color_base + i - 1);
     map2[NUM_FACTORS2 - 1] = map1[1] & A_CHARTEXT;
     map2[NUM_FACTORS2 - 1] |= (map2[NUM_FACTORS2 - 2] & A_ATTRIBUTES) | A_BOLD;
-    map_na2[1] |= enable_color ? (map2[NUM_FACTORS2 - 1] & A_ATTRIBUTES) : A_BOLD;
+    map_na2[1] |= run_opts.color ? (map2[NUM_FACTORS2 - 1] & A_ATTRIBUTES) : A_BOLD;
   }
 
 #ifdef WITH_UNICODE
@@ -523,7 +529,7 @@ static void mc_init(void) {
     for (int i = 0; i < NUM_FACTORS3_MONO; i++)
       map3[i].CCHAR_chars[0] = L'▁' + i;
 
-    if (enable_color) {
+    if (run_opts.color) {
       for (int i = 0; i < NUM_FACTORS3 - 1; i++) {
         int base = i / NUM_FACTORS3_MONO;
         map3[i].CCHAR_attr = COLOR_PAIR(dm3_color_base + base);
@@ -537,7 +543,7 @@ static void mc_init(void) {
 
     for (size_t i = 0; i < (sizeof(map_na2) / sizeof(map_na2[0])); i++)
       map_na3[i].CCHAR_chars[0] = map_na2[i] & A_CHARTEXT;
-    map_na3[1].CCHAR_attr = enable_color ? map3[NUM_FACTORS3 - 1].CCHAR_attr : A_BOLD;
+    map_na3[1].CCHAR_attr = run_opts.color ? map3[NUM_FACTORS3 - 1].CCHAR_attr : A_BOLD;
     map_na3[2].CCHAR_attr = A_BOLD;
   }
 #endif
@@ -564,7 +570,7 @@ static chtype get_saved_ch(int saved_int) {
 #ifdef WITH_UNICODE
 static cchar_t* mtr_saved_cc(int saved_int) {
   NA_MAP(&map_na3);
-  int num = enable_color ? NUM_FACTORS3 : (NUM_FACTORS3_MONO + 1);
+  int num = run_opts.color ? NUM_FACTORS3 : (NUM_FACTORS3_MONO + 1);
   for (int i = 0; i < num; i++)
     if (saved_int <= scale3[i])
       return &map3[i];
@@ -598,7 +604,7 @@ static inline void histoaddr(int at, int max, int y, int x, int cols) {
 #endif
       for (int i = SAVED_PINGS - cols; i < SAVED_PINGS; i++)
         addch(get_saved_ch(host[at].saved[i]));
-    if (bell_audible || bell_visible)
+    if (run_opts.audible || run_opts.visible)
       seal_n_bell(at, max);
   } else printw("%s", UNKN_ITEM);
 }
@@ -631,8 +637,10 @@ static void mtr_print_scale3(int min, int max, int step) {
   for (int i = min; i < max; i += step) {
     addstr("  ");
     add_wch(&map3[i]);
-    LENVALMIL(scale3[i]);
-    printw(":%.*fms", _l, _v);
+    if (scale3[i] > 0) {
+      LENVALMIL(scale3[i]);
+      printw(":%.*fms", _l, _v);
+    }
   }
   addstr("  ");
   add_wch(&map3[max]);
@@ -650,33 +658,35 @@ static void print_scale(void) {
     addch(map1[0] | A_BOLD);
     LENVALMIL(scale2[NUM_FACTORS2 - 2]);
     printw(" less than %.*fms   ", _l, _v);
-    addch(map1[1] | (enable_color ? 0 : A_BOLD));
-    addstr(" greater than ");
-    addch(map1[0] | A_BOLD);
-    addstr("   ");
-    addch('?' | (enable_color ? (map2[NUM_FACTORS2 - 1] & A_ATTRIBUTES) : A_BOLD));
+    addch(map1[1] | (run_opts.color ? 0 : A_BOLD));
+    printw(" more than %.*fms   ", _l, _v);
+    addch('?' | (run_opts.color ? (map2[NUM_FACTORS2 - 1] & A_ATTRIBUTES) : A_BOLD));
     addstr(" Unknown");
   } else if (curses_mode == 2) {
-    if (enable_color) {
+    if (run_opts.color) {
       for (int i = 0; i < NUM_FACTORS2 - 1; i++) {
         addstr("  ");
         addch(map2[i]);
-        LENVALMIL(scale2[i]);
-        printw(":%.*fms", _l, _v);
+        if (scale2[i] > 0) {
+          LENVALMIL(scale2[i]);
+          printw(":%.*fms", _l, _v);
+        }
       }
       addstr("  ");
       addch(map2[NUM_FACTORS2 - 1]);
     } else {
       for (int i = 0; i < NUM_FACTORS2 - 1; i++) {
-        LENVALMIL(scale2[i]);
-        printw("  %c:%.*fms", map2ch(i), _l, _v);
+        if (scale2[i] > 0) {
+          LENVALMIL(scale2[i]);
+          printw("  %c:%.*fms", map2ch(i), _l, _v);
+        }
       }
       printw("  %c", map2ch(NUM_FACTORS2 - 1));
     }
   }
 #ifdef WITH_UNICODE
   else if (curses_mode == 3) {
-    if (enable_color)
+    if (run_opts.color)
       mtr_print_scale3(1, NUM_FACTORS3 - 1, 2);
     else
       mtr_print_scale3(0, NUM_FACTORS3_MONO, 1);
@@ -684,59 +694,63 @@ static void print_scale(void) {
 #endif
 }
 
-#define SET_IASP { if (!iargs_sp) iargs_sp = true; }
 #define IASP (iargs_sp ? " " : "")
-#define ADD_NTH_BIT_INFO(bit, what) { \
-  if (NEQBIT(run_args, kept_args, (bit))) \
-    len += snprint_iarg((bit), buf + len, size - len, (what));  }
-#define ADD_INT_INFO(what, value) { \
+#define BOOL_OPT2STR(tag, what) do {  \
+  if (run_opts.tag != ini_opts.tag) { \
+    len += snprint_iarg(run_opts.tag, buf + len, size - len, (what)); } \
+} while (0)
+#define INT_OPT2STR(tag, what) do { \
+  if (run_opts.tag != ini_opts.tag)   \
+    ADD_INT_INFO(what, run_opts.tag); \
+} while (0)
+#define ADD_INT_INFO(what, value) do { \
   int inc = snprintf(buf + len, size - len, "%s" what, IASP, (value)); \
-  if (inc > 0) len += inc; \
-  SET_IASP; }
-#define ADD_BIT_INT_INFO(bit, what, value) { \
-  if (NEQBIT(run_args, kept_args, (bit))) ADD_INT_INFO(what, (value)); }
+  if (inc > 0)     \
+    len += inc;    \
+  iargs_sp = true; \
+} while (0)
 
 static bool iargs_sp;
-static int snprint_iarg(int bit, char *buf, int size, const char *msg) {
-  int len = snprintf(buf, size, "%s%c%s", IASP, CHKBIT(run_args, bit) ? '+' : '-', msg);
-  SET_IASP;
+static int snprint_iarg(bool on, char *buf, int size, const char *msg) {
+  int len = snprintf(buf, size, "%s%c%s", IASP, on ? '+' : '-', msg);
+  iargs_sp = true;
   return (len > 0) ? len : 0;
 }
 
 static int mc_snprint_args(char *buf, size_t size) {
   iargs_sp = false;
   int len = snprintf(buf, size, " (");
-  if (len < 0) len = 0;
-  ADD_NTH_BIT_INFO(RA_UDP, "udp");
-  ADD_NTH_BIT_INFO(RA_TCP, "tcp");
+  if (len < 0)
+    len = 0;
+  BOOL_OPT2STR(udp,    "udp");
+  BOOL_OPT2STR(tcp,    "tcp");
 #ifdef WITH_MPLS
-  ADD_NTH_BIT_INFO(RA_MPLS, "mpls");
+  BOOL_OPT2STR(mpls,   "mpls");
 #endif
 #ifdef WITH_IPINFO
-  ADD_NTH_BIT_INFO(RA_ASN, "asn");
-  ADD_NTH_BIT_INFO(RA_IPINFO, "ipinfo");
+  BOOL_OPT2STR(asn,    "asn");
+  BOOL_OPT2STR(ipinfo, "ipinfo");
 #endif
 #ifdef ENABLE_DNS
-  ADD_NTH_BIT_INFO(RA_DNS, "dns");
+  BOOL_OPT2STR(dns,    "dns");
 #endif
-  ADD_NTH_BIT_INFO(RA_JITTER, "jitter");
-  int chart = 0;
-  if (CHKBIT(run_args, RA_DM0)) chart |= 1;
-  if (CHKBIT(run_args, RA_DM1)) chart |= 2;
-  if (chart) ADD_INT_INFO("chart%u", chart);
+  BOOL_OPT2STR(jitter, "jitter");
+  if (run_opts.chart != ini_opts.chart)
+    ADD_INT_INFO("chart%u", run_opts.chart);
   //
-  ADD_BIT_INT_INFO(RA_PATT,   "patt=%d", cbitpattern);
-  ADD_BIT_INT_INFO(RA_CYCLE,  "cycles=%ld", max_ping);
-  ADD_BIT_INT_INFO(RA_MINTTL, "ttl>=%d", fstTTL);
-  ADD_BIT_INT_INFO(RA_MAXTTL, "ttl<=%d", maxTTL);
-  ADD_BIT_INT_INFO(RA_QOS,    "qos=%d", tos);
-  ADD_BIT_INT_INFO(RA_SIZE,   "size=%d", cpacketsize);
+  INT_OPT2STR(pattern,  "patt=%d");
+  INT_OPT2STR(interval, "dt=%d");
+  INT_OPT2STR(cycles,   "cycles=%d");
+  INT_OPT2STR(minttl,   "ttl>=%u");
+  INT_OPT2STR(maxttl,   "ttl<=%u");
+  INT_OPT2STR(qos,      "qos=%u");
+  INT_OPT2STR(size,     "size=%d");
   //
-  ADD_NTH_BIT_INFO(RA_CACHE, "cache");
+  BOOL_OPT2STR(oncache, "cache");
   { int inc = snprintf(buf + len, size - len, ")"); if (inc > 0) len += inc; }
   if (strnlen(buf, sizeof(buf)) == 3 /*" ()"*/)
     len = 0;
-  if (NEQBIT(run_args, kept_args, RA_PAUSE)) {
+  if (run_opts.pause != ini_opts.pause) {
     int inc = snprintf(buf + len, size - len, ": in pause");
     if (inc > 0) len += inc;
   }
@@ -798,9 +812,9 @@ void mc_redraw(void) {
   static char linebuf[LINEMAXLEN];
   erase();
   { // title
-    int len = 0, inc = snprintf(linebuf, sizeof(linebuf), "%s", mc_title);
+    int len = 0, inc = snprintf(linebuf, sizeof(linebuf), "%s", screen_title);
     if (inc > 0) len += inc;
-    if (run_args != kept_args)
+    if (opt_sum.un)
       len += mc_snprint_args(linebuf + len, sizeof(linebuf) - len);
     mvprintw(0, 0, "%*s", (getmaxx(stdscr) + len) / 2, linebuf);
   }
@@ -829,19 +843,19 @@ void mc_redraw(void) {
 
 
 bool mc_open(void) {
-  mc_screen_ready = initscr();
-  if (!mc_screen_ready) {
+  screen_ready = initscr();
+  if (!screen_ready) {
     warnx("initscr() failed");
     return false;
   }
   raw();
   noecho();
 
-  if (enable_color)
+  if (run_opts.color)
     if (!has_colors())
-      enable_color = false;
+      run_opts.color = false;
 
-  if (enable_color) {
+  if (run_opts.color) {
     start_color();
     short bg_col = 0;
 #ifdef HAVE_USE_DEFAULT_COLORS
@@ -871,13 +885,13 @@ bool mc_open(void) {
   }
 
   // init title
-  { int inc = snprintf(mc_title, sizeof(mc_title), "%s", PACKAGE_NAME);
+  { int inc = snprintf(screen_title, sizeof(screen_title), "%s", PACKAGE_NAME);
     int len = (inc > 0) ? inc : 0;
     if (mtr_args[0]) {
-      inc = snprintf(mc_title + len, sizeof(mc_title) - len, " %s", mtr_args);
+      inc = snprintf(screen_title + len, sizeof(screen_title) - len, " %s", mtr_args);
       if (inc > 0) len += inc;
     }
-    snprintf(mc_title + len, sizeof(mc_title) - len, " %s", dsthost); }
+    snprintf(screen_title + len, sizeof(screen_title) - len, " %s", dsthost); }
 
   mc_init();
   mc_redraw();
@@ -886,8 +900,9 @@ bool mc_open(void) {
 }
 
 void mc_confirm(void) {
-  if (mc_at_quit || !stdscr || !mc_screen_ready) return;
-  mc_at_quit = true;
+  if (at_quit || !stdscr || !screen_ready)
+    return;
+  at_quit = true;
   const char *mesg = "Press any key to quit...";
   int y = getmaxy(stdscr) - 1;
   move(y - 1, 0); clrtoeol();
@@ -898,9 +913,9 @@ void mc_confirm(void) {
 }
 
 void mc_close(void) {
-  if (stdscr && mc_screen_ready) {
+  if (stdscr && screen_ready) {
     endwin();
-    mc_screen_ready = false;
+    screen_ready = false;
   }
 }
 

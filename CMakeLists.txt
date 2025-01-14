@@ -392,7 +392,7 @@ endif()
 
 if(CAP)
   find_program(SETCAP setcap)
-  set(EXECCAPS "cap_net_raw+ep")
+  set(EXECCAPS "cap_net_raw+p")
   set(EXECFILE "${CMAKE_INSTALL_PREFIX}/${EXECDIR}/${NAME}")
   if(SETCAP)
     message(STATUS "Caps for '${EXECDIR}/${NAME}': ${EXECCAPS}")

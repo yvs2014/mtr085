@@ -227,8 +227,8 @@ static char strerr_txt[NAMELEN];   // buff for strerror()
  */
 #define MAX_UNKNOWN_HOSTS 10
 
-static int bitpattern;
-static int packetsize;
+static uint8_t  bitpattern;
+static uint16_t packetsize;
 static struct sequence seqlist[MAXSEQ];
 
 static int sendsock4 = -1;
@@ -271,9 +271,9 @@ void* addr6copy(void *dst, const void *src) { return memcpy(dst, src, sizeof(str
 
 // return in 'tv' waittime before sending the next ping
 void waitspec(struct timespec *tv) {
-  double wait = wait_time;
+  double wait = run_opts.interval;
   int num = numhosts;
-  int first = fstTTL - 1;
+  int first = run_opts.minttl - 1;
   if ((first > 0) && (num > first))
     num -= first;
   wait /= num;
@@ -306,7 +306,7 @@ static uint16_t udpsum16(struct _iphdr *ip, void *udata, int udata_len, int dsiz
   content->uh_dport = data->uh_dport;
   content->uh_ulen  = data->uh_ulen;
   content->uh_sum   = data->uh_sum;
-  return sum1616((uint16_t*)csumpacket, tsize / 2, (tsize % 2) ? (bitpattern & 0xff) : 0);
+  return sum1616((uint16_t*)csumpacket, tsize / 2, (tsize % 2) ? bitpattern : 0);
 }
 
 const char* rstrerror(int rc) {
@@ -368,26 +368,33 @@ static int new_sequence(int at) {
   return seq;
 }
 
-#define NET_SETTOS(PROTO_VERSION, TOS_TYPE) if (tos) \
-  if (setsockopt(sock, PROTO_VERSION, TOS_TYPE, &tos, sizeof(tos)) < 0) \
-    FAIL_WITH_WARN(sock, "%s(sock=%d, tos=%d)", __func__, sock, tos);
-#define NET_SETTTL(PROTO_VERSION, TTL_TYPE) \
+#define NET_SETTOS(PROTO_VERSION, TOS_TYPE) do { \
+  int qos = run_opts.qos; \
+  if (qos)                \
+    if (setsockopt(sock, PROTO_VERSION, TOS_TYPE, &qos, sizeof(qos)) < 0) \
+      FAIL_WITH_WARN(sock, "%s(sock=%d, tos=%d)", __func__, sock, qos);   \
+} while (0)
+#define NET_SETTTL(PROTO_VERSION, TTL_TYPE) do { \
   if (setsockopt(sock, PROTO_VERSION, TTL_TYPE, &ttl, sizeof(ttl)) < 0) \
-    FAIL_WITH_WARN(sock, "%s(sock=%d, ttl=%d)", __func__, sock, ttl);
+    FAIL_WITH_WARN(sock, "%s(sock=%d, ttl=%d)", __func__, sock, ttl);   \
+} while (0)
 
 static bool settosttl(int sock, int ttl) {
   NET_SETTTL(IPPROTO_IP, IP_TTL);
 #ifdef IP_TOS
   NET_SETTOS(IPPROTO_IP, IP_TOS);
 #endif
-  return true; }
+  return true;
+}
+
 #ifdef ENABLE_IPV6
 static bool settosttl6(int sock, int ttl) {
   NET_SETTTL(IPPROTO_IPV6, IPV6_UNICAST_HOPS);
 #ifdef IPV6_TCLASS
   NET_SETTOS(IPPROTO_IPV6, IPV6_TCLASS);
 #endif
-  return true; }
+  return true;
+}
 #endif
 
 #undef NET_SETTOS
@@ -398,7 +405,7 @@ static bool net_send_tcp(int at) {
 #define SET_ADDR_PORT(src_addr, ssa_addr, dst_addr, dst_port) { \
   addr_copy(&(src_addr), &(ssa_addr)); \
   addr_copy(&(dst_addr), remote_ipaddr); \
-  (dst_port) = htons((remoteport > 0) ? remoteport : TCP_DEFAULT_PORT); \
+  (dst_port) = htons((run_opts.port > 0) ? run_opts.port : TCP_DEFAULT_PORT); \
 }
   int sock = socket(af, SOCK_STREAM, 0);
   if (sock < 0)
@@ -469,7 +476,7 @@ static inline void net_fill_icmp_hdr(uint16_t seq, uint8_t type, uint8_t *data, 
   icmp->sum  = 0;
   icmp->id   = mypid;
   icmp->seq  = seq;
-  icmp->sum  = sum1616((uint16_t*)data, size / 2, (size % 2) ? (bitpattern & 0xff) : 0);
+  icmp->sum  = sum1616((uint16_t*)data, size / 2, (size % 2) ? bitpattern : 0);
   LOGMSG("icmp: seq=%d id=%u", icmp->seq, icmp->id);
 }
 
@@ -481,10 +488,10 @@ static inline bool net_fill_udp_hdr(uint16_t seq, uint8_t *data, uint16_t size
   struct udphdr *udp = (struct udphdr *)data;
   udp->uh_sum  = 0;
   udp->uh_ulen = htons(size);
-  if (remoteport < 0)
+  if (run_opts.port < 0)
     SET_UDP_UH_PORTS(udp, portpid, LO_UDPPORT + seq)
   else
-    SET_UDP_UH_PORTS(udp, LO_UDPPORT + seq, remoteport);
+    SET_UDP_UH_PORTS(udp, LO_UDPPORT + seq, run_opts.port);
   LOGMSG("udp: seq=%d port=%u", seq, ntohs(udp->uh_dport));
   switch (af) {
     case AF_INET:
@@ -509,8 +516,10 @@ static inline bool net_fill_udp_hdr(uint16_t seq, uint8_t *data, uint16_t size
 
 // Send packet for hop 'at'
 static bool net_send_icmp_udp(int at) {
-  if (packetsize < MINPACKET) packetsize = MINPACKET;
-  else if (packetsize > MAXPACKET) packetsize = MAXPACKET;
+  if (packetsize < MINPACKET)
+    packetsize = MINPACKET;
+  else if (packetsize > MAXPACKET)
+    packetsize = MAXPACKET;
   static uint8_t packet[MAXPACKET];
   memset(packet, bitpattern, sizeof(packet));
 
@@ -526,7 +535,7 @@ static bool net_send_icmp_udp(int at) {
       iphsize = sizeof(struct _iphdr);
       ip->ver   = 4;
       ip->ihl   = 5;
-      ip->tos   = tos;
+      ip->tos   = run_opts.qos;
       ip->len   = IPLEN_RAW(packetsize);
       ip->id    = 0;
       ip->frag  = 0;
@@ -619,7 +628,7 @@ static void stats(int at, timemsec_t curr) {
 
   host[at].up = true;
   host[at].transit = false;
-  if (cache_mode)
+  if (run_opts.oncache)
     host[at].seen = time(NULL);
 }
 
@@ -668,18 +677,22 @@ static void set_new_addr(int at, int ndx, const t_ipaddr *ipaddr MPLSFNTAIL(cons
 
 
 // Got a return
-static int net_stat(unsigned port, const void *addr, struct timespec *recv_at, int reason MPLSFNTAIL(const mpls_data_t *mpls)) {
+static int net_stat(unsigned port, const void *addr, struct timespec *recv_at,
+    int reason MPLSFNTAIL(const mpls_data_t *mpls))
+{
   unsigned seq = port % MAXSEQ;
   if (!seqlist[seq].transit)
     return true;
-#ifdef WITH_MPLS
-  LOGMSG("at=%d seq=%d (labels=%d)", seqlist[seq].at, seq, mpls ? mpls->n : 0);
-#else
-  LOGMSG("at=%d seq=%d", seqlist[seq].at, seq);
-#endif
-  seqlist[seq].transit = false;
 
+  seqlist[seq].transit = false;
   int at = seqlist[seq].at;
+
+#ifdef WITH_MPLS
+  LOGMSG("at=%d seq=%d (labels=%d)", at, seq, mpls ? mpls->n : 0);
+#else
+  LOGMSG("at=%d seq=%d", at, seq);
+#endif
+
   if (reason == RE_UNREACH) {
     if (at < stopper)
       stopper = at;    // set stopper
@@ -694,13 +707,18 @@ static int net_stat(unsigned port, const void *addr, struct timespec *recv_at, i
   int ndx = addr2ndx(at, &copy);
   if (ndx < 0) {        // new one
     ndx = at2next(at);
-    if (ndx < 0) {      // no free slots? warn about it, and change the last one
-      WARNX("MAXPATH=%d is exceeded at hop=%d", MAXPATH, at);
+    if (ndx < 0) {
+      // no free slots? - warn once, and change the last one
+      static bool warn_exceed_once;
+      if (!warn_exceed_once) {
+        WARNX("MAXPATH=%d is exceeded at hop=%d", MAXPATH, at);
+        warn_exceed_once = true;
+      }
       ndx = MAXPATH - 1;
     }
     set_new_addr(at, ndx, &copy MPLSFNTAIL(mpls));
 #ifdef OUTPUT_FORMAT_RAW
-    if (enable_raw)
+    if (run_opts.rawrep)
       raw_rawhost(at, &IP_AT_NDX(at, ndx));
 #endif
   }
@@ -729,14 +747,16 @@ static int net_stat(unsigned port, const void *addr, struct timespec *recv_at, i
     host[at].saved[n] = time2usec(tv);
 #endif
 #ifdef OUTPUT_FORMAT_RAW
-  if (enable_raw)
+  if (run_opts.rawrep)
     raw_rawping(at, time2usec(tv));
 #endif
   return true;
 }
 
 #ifdef WITH_MPLS
-static inline bool mplslike(int psize, int hsize) { return enable_mpls & ((psize - hsize) >= MPLSMIN); }
+static inline bool mplslike(int psize, int hsize) {
+  return (run_opts.mpls && ((psize - hsize) >= MPLSMIN));
+}
 
 static mpls_data_t *decodempls(const uint8_t *data, int size) {
   // given: icmpext_struct(4) icmpext_object(4) label(4) [label(4) ...]
@@ -825,12 +845,12 @@ void net_icmp_parse(struct timespec *recv_at) {
 
     case IPPROTO_UDP: {
       struct udphdr *uh = (struct udphdr *)data;
-      if (remoteport < 0) {
+      if (run_opts.port < 0) {
         if (ntohs(uh->uh_sport) != portpid)
           return;
         seq = ntohs(uh->uh_dport);
       } else {
-        if (ntohs(uh->uh_dport) != remoteport)
+        if (ntohs(uh->uh_dport) != run_opts.port)
           return;
         seq = ntohs(uh->uh_sport);
       }
@@ -919,64 +939,67 @@ const char *net_elem(int at, char ch) {
 
 int net_max(void) {
   int max = 0;
-  for (int at = 0; at < maxTTL; at++) {
+  for (int at = 0; at < run_opts.maxttl; at++) {
     if (addr_equal(&CURRENT_IP(at), remote_ipaddr)) {
       max = at + 1;
-      if (endpoint_mode)
-        fstTTL = max;
+      if (run_opts.endpoint)
+        run_opts.minttl = max;
       break;
     }
     if (addr_exist(&CURRENT_IP(at))) {
       max = at + 2;
-      if (endpoint_mode)
-        fstTTL = max - 1; // -1: show previous known hop
+      if (run_opts.endpoint)
+        run_opts.minttl = at + 1; // max-1: show previous known hop
     }
   }
-  if (max > maxTTL)
-    max = maxTTL;
+  if (max > run_opts.maxttl)
+    max = run_opts.maxttl;
   return max;
 }
 
-inline int net_min(void) { return (fstTTL - 1); }
+inline int net_min(void) {
+  return (run_opts.minttl > 0) ? (run_opts.minttl - 1) : 0;
+}
 
 inline void net_end_transit(void) { for (int at = 0; at < MAXHOST; at++) host[at].transit = false; }
 
 int net_send_batch(void) {
-  if (batch_at < fstTTL) {
+  if (batch_at < run_opts.minttl) {
     // Randomize bit-pattern and packet-size if requested
-    bitpattern = (cbitpattern < 0) ? (int)RANDUNIFORM(UCHAR_MAX + 1) : cbitpattern;
-    if (cpacketsize < 0) {
-      int base = -cpacketsize - MINPACKET;
+    bitpattern = (run_opts.pattern < 0) ?
+      (uint8_t)RANDUNIFORM(UINT8_MAX + 1) : run_opts.pattern;
+    if (run_opts.size < 0) {
+      int base = -run_opts.size - MINPACKET;
       packetsize = base ? (MINPACKET + RANDUNIFORM(base)) : MINPACKET;
     } else
-      packetsize = cpacketsize;
+      packetsize = run_opts.size;
   }
 
   { // Send packet if needed
     bool ping = true;
-    if (cache_mode)
+    if (run_opts.oncache)
       if (host[batch_at].up && (host[batch_at].seen > 0))
-        if ((time(NULL) - host[batch_at].seen) <= cache_timeout)
+        if ((time(NULL) - host[batch_at].seen) <= run_opts.cache)
           ping = false;
     if (ping && !( (mtrtype == IPPROTO_TCP) ?
         net_send_tcp(batch_at) : net_send_icmp_udp(batch_at) ))
-      LOG_RE(-1, "failed");
+      LOG_RE(-1, "%s", "failed");
   }
 
   { // Calculate rc for caller
     int n_unknown = 0;
-    for (int at = fstTTL - 1; at < batch_at; at++) {
+    for (int at = net_min(); at < batch_at; at++) {
       if (!addr_exist(&CURRENT_IP(at)))
         n_unknown++;
       if (addr_equal(&CURRENT_IP(at), remote_ipaddr))
         n_unknown = MAXHOST; // Make sure we drop into "we should restart"
     }
     if (addr_equal(&CURRENT_IP(batch_at), remote_ipaddr) // success in reaching target
-        || (n_unknown > MAX_UNKNOWN_HOSTS) // fail in consecuitive MAX_UNKNOWN_HOSTS
-        || (batch_at >= (maxTTL - 1))      // or reach limit
-        || (batch_at >= stopper)) {        // or learnt unreachable
+        || (n_unknown > MAX_UNKNOWN_HOSTS)     // fail in consecuitive MAX_UNKNOWN_HOSTS
+        || (batch_at >= (run_opts.maxttl - 1)) // or reach limit
+        || (batch_at >= stopper)) {            // or learnt unreachable
       numhosts = batch_at + 1;
-      batch_at = fstTTL - 1;
+      batch_at = net_min();
       LOGMSG("stop at hop #%d", numhosts);
       return 1;
     }
@@ -997,18 +1020,22 @@ static void net_sock_close(void) {
 }
 
 #ifdef LIBCAP
-void set_rawcap_flag(cap_flag_value_t flag) {
-  static const cap_value_t cap_net_raw = CAP_NET_RAW;
-  cap_t proc = cap_get_proc();
-  if (proc) {
-    cap_flag_value_t perm = flag;
-    cap_get_flag(proc, cap_net_raw, CAP_PERMITTED, &perm);
-    if (perm == flag) {
-      if (cap_set_flag(proc, CAP_EFFECTIVE, 1, &cap_net_raw, flag) < 0) WARN("cap_set_flag");
-      else if (cap_set_proc(proc) < 0) WARN("cap_set_proc");
+void set_rawcap_flag(cap_flag_value_t onoff) {
+  cap_t curr = cap_get_proc();
+  if (curr) {
+    cap_flag_value_t perm = onoff;
+    if (cap_get_flag(curr, CAP_NET_RAW, CAP_PERMITTED, &perm) < 0)
+      WARN("cap_get_flag(%s, raw)", "PERMITTED");
+    else if (perm != CAP_CLEAR) { // permitted to set/clear
+      cap_value_t raw = CAP_NET_RAW;
+      if (cap_set_flag(curr, CAP_EFFECTIVE, 1, &raw, onoff) < 0)
+        WARN("cap_set_flag(%s, raw, %d)", "EFFECTIVE", onoff);
+      else if (cap_set_proc(curr) < 0)
+        WARN("cap_set_proc(%s, raw, %d", "EFFECTIVE", onoff);
     }
-    cap_free(proc);
-  } else WARN("cap_get_proc");
+    cap_free(curr);
+  } else
+    WARN("%s", "cap_get_proc()");
 }
 #define RAWCAP_ON  set_rawcap_flag(CAP_SET)
 #define RAWCAP_OFF set_rawcap_flag(CAP_CLEAR)
@@ -1020,9 +1047,13 @@ void set_rawcap_flag(cap_flag_value_t flag) {
 static int net_socket(int domain, int type, int proto, const char *what) {
   RAWCAP_ON;
   int sock = socket(domain, type, proto);
-  if (sock < 0) warn("%s: %s", __func__, what); else /*summ*/ sum_sock[0]++;
+  if (sock < 0)
+    warn("%s: %s", __func__, what);
+  else
+    /*summ*/ sum_sock[0]++;
   RAWCAP_OFF;
-  if (sock < 0) net_sock_close();
+  if (sock < 0)
+    net_sock_close();
   return sock;
 }
 
@@ -1034,18 +1065,22 @@ bool net_open(void) {
   if (sendsock4 < 0) { // backup
     if ((sendsock4 = net_socket(AF_INET, SOCK_RAW, IPPROTO_ICMP, "send socket")) < 0)
       return false;
-  } else /*summ*/ sum_sock[0]++;
+  } else
+    /*summ*/ sum_sock[0]++;
   if ((recvsock4 = net_socket(AF_INET, SOCK_RAW, IPPROTO_ICMP, "recv socket")) < 0)
     return false;
 #ifdef ENABLE_IPV6
   // optional ipv6: to not fail
   RAWCAP_ON;
   recvsock6 = socket(AF_INET6, SOCK_RAW, IPPROTO_ICMPV6);
-  if (recvsock6 >= 0)      /*summ*/ sum_sock[0]++;
+  if (recvsock6 >= 0)
+    sum_sock[0]++; /*summ*/
   sendsock6_icmp = socket(AF_INET6, SOCK_RAW, IPPROTO_ICMPV6);
-  if (sendsock6_icmp >= 0) /*summ*/ sum_sock[0]++;
+  if (sendsock6_icmp >= 0)
+    sum_sock[0]++; /*summ*/
   sendsock6_udp = socket(AF_INET6, SOCK_RAW, IPPROTO_UDP);
-  if (sendsock6_udp >= 0)  /*summ*/ sum_sock[0]++;
+  if (sendsock6_udp >= 0)
+    sum_sock[0]++; /*summ*/
   RAWCAP_OFF;
 #endif
 #ifdef IP_HDRINCL
@@ -1083,7 +1118,7 @@ bool net_set_host(t_ipaddr *ipaddr) {
 #ifdef ENABLE_IPV6
     case AF_INET6:
       if ((recvsock6 < 0) || ((mtrtype != IPPROTO_TCP) && (sendsock6 < 0))) {
-        WARNX("No IPv6 sockets");
+        WARNX("%s", "No IPv6 sockets");
         return false;
       }
       sendsock = sendsock6;
@@ -1092,7 +1127,8 @@ bool net_set_host(t_ipaddr *ipaddr) {
       remote_ipaddr = (t_ipaddr*)&rsa.S6ADDR;
     break;
 #endif
-    default: return false;
+    default:
+      return false;
   }
 
   if (!af || !addr_exist(remote_ipaddr)) {
@@ -1104,16 +1140,19 @@ bool net_set_host(t_ipaddr *ipaddr) {
   { struct sockaddr_storage ss[1];
     socklen_t len = sizeof(*ss);
     if (!getsockname(recvsock, (struct sockaddr *)ss, &len)) {
-      if (len > sizeof(*ss)) WARNX("Address of recv socket is truncated");
+      if (len > sizeof(*ss))
+        WARNX("%s", "Address of recv socket is truncated");
       int saf = ss->ss_family;
       char *addr =
 #ifdef ENABLE_IPV6
         (saf == AF_INET6) ? (char*)&((struct sockaddr_in6 *)ss)->sin6_addr :
 #endif
         ((saf == AF_INET) ? (char*)&((struct sockaddr_in  *)ss)->sin_addr  : NULL);
-      if (!addr) WARNX("Unknown address family: %d", saf);
-      else if (!inet_ntop(saf, addr, localaddr, sizeof(localaddr))) WARN("inet_ntop()");
-    } else WARN("getsockname()");
+      if (!addr)
+        WARNX("Unknown address family: %d", saf);
+      else if (!inet_ntop(saf, addr, localaddr, sizeof(localaddr)))
+        WARN("%s", "inet_ntop()");
+    } else WARN("%s", "getsockname()");
   }
   portpid = IPPORT_RESERVED + mypid % (USHRT_MAX - IPPORT_RESERVED);
   return true;
@@ -1134,8 +1173,8 @@ void net_reset(void) {
   poll_close_tcpfds();
   for (int i = 0; i < MAXSEQ; i++)
     seqlist[i].transit = false;
-  batch_at = fstTTL - 1;
-  stopper = MAXHOST;
+  batch_at = net_min();
+  stopper  = MAXHOST;
   numhosts = 10;
 }
 
@@ -1224,9 +1263,9 @@ bool net_timedout(int seq) {
     return false;
   }
   timespecsub(&now, &seqlist[seq].time, &dt);
-  if (time2msec(dt) <= syn_timeout)
+  if (time2msec(dt) <= run_opts.syn)
     return false;
-  LOGMSG("clean tcp seq=%d after %d sec", seq, syn_timeout / MIL);
+  LOGMSG("clean tcp seq=%d after %d sec", seq, run_opts.syn / MIL);
   seqlist[seq].transit = false;
   return true;
 }
@@ -1318,7 +1357,8 @@ const char *strlongip(t_ipaddr *ipaddr) {
 const char *mpls2str(const mpls_label_t *label, int indent) {
   static const char mpls_fmt[] = "%*s[Lbl:%u Exp:%u S:%u TTL:%u]";
   static char mpls2s_buf[64];
-  snprintf(mpls2s_buf, sizeof(mpls2s_buf), mpls_fmt, indent, "", label->lab, label->exp, label->bos, label->ttl);
+  snprintf(mpls2s_buf, sizeof(mpls2s_buf), mpls_fmt, indent, "",
+    label->u.lab, label->u.exp, label->u.bos, label->u.ttl);
   return mpls2s_buf;
 }
 #endif

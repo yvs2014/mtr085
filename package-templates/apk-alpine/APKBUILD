@@ -54,7 +54,7 @@ build() {
 #}
 
 post_install() {
-  setcap 'cap_net_raw+ep' "usr/bin/$_bin" || :
+  setcap 'cap_net_raw+p' "usr/bin/$_bin" || :
 }
 
 package() {

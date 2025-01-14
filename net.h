@@ -96,7 +96,7 @@ typedef union PACKIT mpls_label { // RFC4950
 #else
 #error "Undefined byte order"
 #endif
-  };
+  } u;
   uint32_t u32;
 } mpls_label_t; /* must be 4 bytes */
 

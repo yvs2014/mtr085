@@ -27,7 +27,6 @@ void report_close(bool next, bool with_header);
 void report_resolv(void);
 #endif
 #ifdef OUTPUT_FORMAT_RAW
-extern bool enable_raw;
 void raw_rawping(int at, int usec);
 void raw_rawhost(int at, t_ipaddr *ipaddr);
 #endif

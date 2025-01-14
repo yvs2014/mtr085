@@ -131,7 +131,8 @@ void display_redraw(void) {
 #endif
     case DisplayReport:
 #ifdef ENABLE_DNS
-      if (enable_dns) report_resolv();
+      if (run_opts.dns)
+        report_resolv();
 #endif
       break;
     default: break;
