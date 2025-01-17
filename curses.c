@@ -541,7 +541,7 @@ static void mc_init(void) {
     } else
       map3[NUM_FACTORS3_MONO].CCHAR_chars[0] = map1[1] & A_CHARTEXT;
 
-    for (size_t i = 0; i < (sizeof(map_na2) / sizeof(map_na2[0])); i++)
+    for (size_t i = 0; i < ARRAY_SIZE(map_na2); i++)
       map_na3[i].CCHAR_chars[0] = map_na2[i] & A_CHARTEXT;
     map_na3[1].CCHAR_attr = run_opts.color ? map3[NUM_FACTORS3 - 1].CCHAR_attr : A_BOLD;
     map_na3[2].CCHAR_attr = A_BOLD;

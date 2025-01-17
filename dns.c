@@ -359,7 +359,8 @@ static atndx_t *get_qatn(const char* q, int at, int ndx) {
    , QTXT_AT_NDX(at, ndx)
 #endif
   };
-  for (size_t t = 0; t < sizeof(query) / sizeof(query[0]); t++)
+  size_t qmax = ARRAY_SIZE(query);
+  for (size_t t = 0; t < qmax; t++)
     if (query[t] && !strncasecmp(query[t], q, MAXDNAME)) {
       static atndx_t qatn;
       qatn = (atndx_t){.at = at, .ndx = ndx, .type = t}; // type: 0 - t_ptr, 1 - t_txt

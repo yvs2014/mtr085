@@ -169,7 +169,7 @@ const struct statf statf[] = {
   {"Jmax",  "Worst Jitter",         5,  'X'},
   {"Jint",  "Interarrival Jitter",  5,  'I'},
 };
-const int statf_max = sizeof(statf) / sizeof(statf[0]);
+const int statf_max = ARRAY_SIZE(statf);
 //// end-of-global
 
 static struct option long_options[] = {
@@ -258,7 +258,7 @@ static void locker(FILE *file, short type) {
 
 static int my_getopt_long(int argc, char *argv[], int *opt_ndx) {
   if (!short_options) {
-    short_options = calloc((sizeof(long_options) / sizeof(long_options[0])) * 2 + 1, 1);
+    short_options = calloc(ARRAY_SIZE(long_options) * 2 + 1, 1);
     if (!short_options)
       return -1;
     char *ptr = short_options;
@@ -396,14 +396,16 @@ static bool split_hostport(char *buff, char* hostport[2]) {
 
 #ifdef IP_TOS
 #if defined(ENABLE_IPV6) && !defined(IPV6_TCLASS)
-#define TOS4TOS(what) do { \
-  if ((af == AF_INET6) && tos) \
+#define TOS4TOS(what, tos) do { \
+  if ((af == AF_INET6) && tos) { \
     warnx("%s: tos=%d: IPv6 traffic class is not supported", what, tos); \
+    tos = 0; \
+  } \
 } while (0)
 #endif
 #endif
 #ifndef TOS4TOS
-#define TOS4TOS(what) NOOP
+#define TOS4TOS(what, tos) NOOP
 #endif
 
 #ifdef CURSESMODE
@@ -593,7 +595,7 @@ static inline void short_set(char opt, const char *progname) {
 #ifdef IP_TOS
     case 'q':
       ini_opts.qos = limit_int(0, UINT8_MAX, optarg, "QoS", opt);
-      TOS4TOS("option -q");
+      TOS4TOS("option -q", ini_opts.qos);
       break;
 #endif
     case 'r':
@@ -876,7 +878,7 @@ static inline bool main_loop(struct addrinfo *ai, bool fin) {
   if (ai) {
     success = set_target(ai);
     if (success) {
-      TOS4TOS(dsthost);
+      TOS4TOS(dsthost, run_opts.qos);
       locker(stdout, F_WRLCK);
       if (display_open())
         display_loop();

@@ -720,7 +720,7 @@ bool ipinfo_init(const char *arg) {
   args[0] = strdup(arg);
   if (!args[0]) { WARN("strdup(%s)", arg); return false; }
   split_with_sep(args, MAX_TXT_ITEMS + 1, COMMA, 0);
-  int max = sizeof(origins) / sizeof(origins[0]);
+  int max = ARRAY_SIZE(origins);
   int no = (args[0] && *args[0]) ? atoi(args[0]) : 1;
   if ((no > 0) && (no <= max)) {
     origin_no = no - 1;

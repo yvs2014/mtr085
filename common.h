@@ -40,7 +40,7 @@
 #endif
 
 #ifndef GITREV
-#define GITREV "203"
+#define GITREV "204"
 #endif
 
 typedef union inaddr_union {
@@ -284,6 +284,10 @@ typedef union opt_sum_u {
     (s)->tv_nsec += NANO;                     \
   }                                           \
 } while (0)
+#endif
+
+#ifndef ARRAY_SIZE
+#define ARRAY_SIZE(array) (sizeof(array) / sizeof((array)[0]))
 #endif
 
 // externs
