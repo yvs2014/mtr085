@@ -140,7 +140,7 @@ static void mc_get_int(int *val, int min, int max,
 static inline void mc_key_h(void) { // help
   const char CMODE_HINTS[] =
 "Commands:\n"
-"  b <int>    set bit pattern in range 0..255, or random (<0)\n"
+"  b <int>    set bit pattern in range 0..255, or random if it's negative\n"
 "  c <int>    set number of cycles to run, or unlimit (<1)\n"
 "  d          switch display mode\n"
 #ifdef WITH_MPLS
@@ -164,7 +164,7 @@ static inline void mc_key_h(void) { // help
 "  Q <int>    set ToS/QoS\n"
 #endif
 "  r          reset statistics\n"
-"  s <int>    set packet size (default 64), or random (<0)\n"
+"  s <int>    set payload size (default 56), randomly within size range if it's negative\n"
 "  t          toggle TCP pings\n"
 "  u          toggle UDP pings\n"
 "  x          toggle cache mode\n"
@@ -221,23 +221,22 @@ static inline void mc_key_Q(void) { // set QoS
 }
 #endif
 
-static inline void mc_key_s(void) { // set packet size
-  const char *prompt = "Change Packet Size: ";
+static inline void mc_key_s(void) { // set payload size
+  const char *prompt = "Change payload size: ";
   mvaddstr(HINT_YPOS, 0, prompt);
   printw("%d", run_opts.size);
-  mvprintw(HINT_YPOS + 1, 0, "-> range[%d-%d], negative values are for randomizing", MINPACKET, MAXPACKET);
+  const int max = MAXPACKET - MINPACKET;
+  mvprintw(HINT_YPOS + 1, 0, "-> range[%d-%d], negative value to randomly assign within range", 0, max);
   char entered[MAXFLD + 1] = {0};
   if (enter_smth(entered, sizeof(entered), HINT_YPOS, strlen(prompt))) {
-    int num = limit_int(-MAXPACKET, MAXPACKET, entered, "Packet size", 0);
-    if (abs(num) < MINPACKET)
-      snprintf(limit_error, sizeof(limit_error),
-        "%s: less than %d: %s", "Packet size", MINPACKET, entered);
+    int num = limit_int(-max, max, entered, "Payload size", 0);
     if (limit_error[0]) {
       printw("%s, press any key to continue ...", limit_error);
       refresh(); getch();
     } else {
       run_opts.size = num;
       OPT_SUM(size);
+      reset_pldsize = true;
     }
   }
 }
@@ -265,6 +264,7 @@ key_action_t mc_keyaction(void) {
       mc_get_int(&run_opts.pattern, -1, UINT8_MAX,
         "Bit Pattern", "range[0-255], random is -1");
       OPT_SUM(pattern);
+      reset_pattern = true;
       break;
     case 'c': // number of cycles
       mc_key_c();
@@ -316,7 +316,7 @@ key_action_t mc_keyaction(void) {
       break;
 #endif
     case 'r': return ActionReset;
-    case 's': // packet size
+    case 's': // payload size
       mc_key_s();
       break;
     case 't': return ActionTCP;

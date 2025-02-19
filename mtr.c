@@ -114,9 +114,7 @@
 #define QEXIT exit
 #endif
 
-enum { REPORT_PINGS    = 100 };
-enum { CACHE_TIMEOUT   = 60  };
-enum { TCPSYN_TOUT_MAX = 60  };
+enum { REPORT_PINGS = 100, CACHE_TIMEOUT = 60, TCPSYN_TOUT_MAX = 60 };
 
 //// global vars
 int mtrtype = IPPROTO_ICMP;   // ICMP as default packet type
@@ -134,7 +132,7 @@ opts_t ini_opts = { // initial bool options
   .maxttl   = 30,             // supposedly enough for today's internet
   .cycles   = REPORT_PINGS,   // note that 0 should be set explicitly
   .interval =  1,             // in seconds
-  .size     = 64,             // default packet size
+  .size     = PAYLOAD_SIZE,   // 64 ip payload - 8 byte header
   .syn      = MIL,            // in ms (tcp timeout)
   .cache    = CACHE_TIMEOUT,  // in seconds (cache timeout)
   .port     = -1,             // port from 'target:port' in tcp/udp mode
@@ -213,7 +211,7 @@ static struct option long_options[] = {
   { "tos",        1, 0, 'q' },  // type of service (0..255)
 #endif
   { "report",     0, 0, 'r' },
-  { "psize",      1, 0, 's' },  // packet size
+  { "psize",      1, 0, 's' },  // payload size
   { "summary",    0, 0, 'S' },  // print send/recv summary at exit
   { "tcp",        0, 0, 't' },  // TCP (default is ICMP)
   { "timeout",    1, 0, 'T' },  // timeout for TCP sockets
@@ -604,13 +602,8 @@ static inline void short_set(char opt, const char *progname) {
         ini_opts.cycles = REPORT_PINGS;
       break;
     case 's': {
-      ini_opts.size =
-        limit_int(-MAXPACKET, MAXPACKET, optarg, "Packet size", opt);
-      if (abs(ini_opts.size) < MINPACKET) {
-        warnx("Packet size less than minimal(%d): %s", MINPACKET, optarg);
-        errno = ERANGE;
-        err(errno, "-%c option failed", opt);
-      }
+      int max = MAXPACKET - MINPACKET;
+      ini_opts.size = limit_int(-max, max, optarg, "Payload size", opt);
     } break;
     case 'S':
       ini_opts.stat = true;

@@ -228,7 +228,10 @@ static char strerr_txt[NAMELEN];   // buff for strerror()
 #define MAX_UNKNOWN_HOSTS 10
 
 static uint8_t  bitpattern;
-static uint16_t packetsize;
+static uint16_t payloadsize = PAYLOAD_SIZE;
+bool reset_pattern = true;
+bool reset_pldsize = true;
+
 static struct sequence seqlist[MAXSEQ];
 
 static int sendsock4 = -1;
@@ -247,8 +250,8 @@ static t_ipaddr *remote_ipaddr;
 
 static int echo_reply, time_exceed, dst_unreach;
 
-static size_t ipicmphdr_sz = sizeof(struct _icmphdr);
-static size_t minfailsz = sizeof(struct _icmphdr);
+static size_t ipicmphdr_sz; // set in net_settings()
+static size_t minfailsz;    // set in net_settings:net_set_type()
 static size_t hdr_minsz;
 static size_t iphdr_sz;
 static size_t sa_addr_offset;
@@ -516,27 +519,26 @@ static inline bool net_fill_udp_hdr(uint16_t seq, uint8_t *data, uint16_t size
 
 // Send packet for hop 'at'
 static bool net_send_icmp_udp(int at) {
-  if (packetsize < MINPACKET)
-    packetsize = MINPACKET;
-  else if (packetsize > MAXPACKET)
-    packetsize = MAXPACKET;
   static uint8_t packet[MAXPACKET];
   memset(packet, bitpattern, sizeof(packet));
 
-  int iphsize = 0, echotype = 0, salen = 0;
-#ifdef IP_HDRINCL
-  struct _iphdr *ip = (struct _iphdr *)packet;
-#endif
+  uint8_t *data = packet;
+  uint16_t datasize = 8/*icmp,udp header*/ + payloadsize;
+  uint16_t pktsize  = datasize;
+  int echotype = 0, salen = 0;
   int ttl = at + 1;
 
   switch (af) {
-    case AF_INET:
+    case AF_INET: {
 #ifdef IP_HDRINCL
-      iphsize = sizeof(struct _iphdr);
+      // prepend data with IP header
+      struct _iphdr *ip = (struct _iphdr *)packet;
+      data    += sizeof(*ip);
+      pktsize += sizeof(*ip);
       ip->ver   = 4;
       ip->ihl   = 5;
       ip->tos   = run_opts.qos;
-      ip->len   = IPLEN_RAW(packetsize);
+      ip->len   = IPLEN_RAW(pktsize);
       ip->id    = 0;
       ip->frag  = 0;
       ip->ttl   = ttl;
@@ -547,15 +549,13 @@ static bool net_send_icmp_udp(int at) {
       addr_copy(&ip->daddr, &rsa.S_ADDR);
 #else
       if (!settosttl(sendsock, ttl)) return false;
-      iphsize = 0;
 #endif
       echotype = ICMP_ECHO;
       salen = sizeof(struct sockaddr_in);
-      break;
+    } break;
 #ifdef ENABLE_IPV6
     case AF_INET6:
       if (!settosttl6(sendsock, ttl)) return false;
-      iphsize = 0;
       echotype = ICMP6_ECHO_REQUEST;
       salen = sizeof(struct sockaddr_in6);
       break;
@@ -565,16 +565,14 @@ static bool net_send_icmp_udp(int at) {
   }
 
   int seq = new_sequence(at);
-  uint8_t *ipdata = packet + iphsize;
-  uint16_t ipdatasize = packetsize - iphsize;
   switch (mtrtype) {
     case IPPROTO_ICMP:
-      net_fill_icmp_hdr(seq, echotype, ipdata, ipdatasize);
+      net_fill_icmp_hdr(seq, echotype, data, datasize);
       break;
     case IPPROTO_UDP:
-      if (!net_fill_udp_hdr(seq, ipdata, ipdatasize
+      if (!net_fill_udp_hdr(seq, data, datasize
 #ifdef IP_HDRINCL
-         , ip
+         , (struct _iphdr *)packet
 #endif
       )) return false;
       break;
@@ -583,7 +581,7 @@ static bool net_send_icmp_udp(int at) {
   }
 
   if (!save_send_ts(seq)) return false;
-  if (sendto(sendsock, packet, packetsize, 0, &rsa.sa, salen) < 0) {
+  if (sendto(sendsock, packet, pktsize, 0, &rsa.sa, salen) < 0) {
     int rc = errno; const char *dst = strlongip(remote_ipaddr); errno = rc;
     FAIL_WITH_WARN(sendsock, "sendto(%s)", dst ? dst : "");
   }
@@ -963,17 +961,30 @@ inline int net_min(void) {
 
 inline void net_end_transit(void) { for (int at = 0; at < MAXHOST; at++) host[at].transit = false; }
 
-int net_send_batch(void) {
-  if (batch_at < run_opts.minttl) {
-    // Randomize bit-pattern and packet-size if requested
-    bitpattern = (run_opts.pattern < 0) ?
-      (uint8_t)RANDUNIFORM(UINT8_MAX + 1) : run_opts.pattern;
-    if (run_opts.size < 0) {
-      int base = -run_opts.size - MINPACKET;
-      packetsize = base ? (MINPACKET + RANDUNIFORM(base)) : MINPACKET;
-    } else
-      packetsize = run_opts.size;
+static inline void set_bit_pattern(void) {
+  if (run_opts.pattern < 0)
+    bitpattern = (uint8_t)RANDUNIFORM(UINT8_MAX + 1);
+  else {
+    bitpattern = run_opts.pattern;
+    reset_pattern = false;
   }
+  LOGMSG("%u (0x%02X)", bitpattern, bitpattern);
+}
+
+static inline void set_payload_size(void) {
+  if (run_opts.size < 0)
+    payloadsize = RANDUNIFORM(-run_opts.size);
+  else {
+    payloadsize = run_opts.size;
+    reset_pldsize = false;
+  }
+  if (payloadsize > (MAXPACKET - MINPACKET)) payloadsize = MAXPACKET - MINPACKET;
+  LOGMSG("%u", payloadsize);
+}
+
+int net_send_batch(void) {
+  if (reset_pattern) set_bit_pattern();
+  if (reset_pldsize) set_payload_size();
 
   { // Send packet if needed
     bool ping = true;

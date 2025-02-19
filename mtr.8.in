@@ -230,9 +230,7 @@ generates a significant amount of network traffic.  Using
 .Nm
 to measure the quality of your network may result in decreased network performance.
 .It Fl s, Fl -psize Ar BYTES
-Set packet size used for probing.  It is in bytes inclusive IP and ICMP headers.
-.sp
-Set it to a negative VALUE to randomize in a range of [28, -VALUE].
+Set payload size. A negative value is used to set it randomly within range from 0 to BYTES every cycle. Default is 56 bytes.
 .It Fl S, Fl -summary
 Print send/receive summary at exit
 .It Fl t, Fl -tcp

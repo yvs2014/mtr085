@@ -32,6 +32,7 @@
 #include <netinet/icmp6.h>
 #endif
 
+#define PAYLOAD_SIZE 56     // default ICMP,UDP payload size (64 byte IP payload - 8 byte header)
 #define MAXHOST 64          // if you choose 256, then adjust IDMASK ID2AT AT2ID ID2NDX
 #define MAXPATH 8           // if you change it, then adjust macros
 #define MAXSEQ 16384        // maximum pings in processing
@@ -41,7 +42,7 @@
 #define ID2AT(n)  (((n) >> 3) & 0x003F)
 #define ID2NDX(n) ((n) & 0x7)
 
-#define MAXPACKET 4470 // largest test packet size
+#define MAXPACKET 1500 // limit it to default MTU
 #define MINPACKET 28   // 20 bytes IP and 8 bytes ICMP or UDP
 
 #ifdef CURSESMODE
@@ -181,6 +182,9 @@ const char *net_elem(int at, char ch);
 int net_send_batch(void);
 void net_end_transit(void);
 int net_duplicate(int at, int seq);
+
+extern bool reset_pattern;
+extern bool reset_pldsize;
 
 const char *strlongip(t_ipaddr *ipaddr);
 bool  addr4exist(const void *a);
