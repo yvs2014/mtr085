@@ -25,6 +25,7 @@
 #include <termios.h>
 
 #include "common.h"
+#include "nls.h"
 
 #include "net.h"
 #ifdef ENABLE_DNS
@@ -69,7 +70,7 @@ void split_redraw(void) {
       if (run_opts.ips)
 #endif
       { printf("%c%s", SPLIT_SEP, strlongip(ipaddr)); }
-      for (size_t i = 0; i < sizeof(fields); i++) {
+      for (unsigned i = 0; i < sizeof(fields); i++) {
         const char *str = net_elem(at, fields[i]);
         if (str) printf("%c%s", SPLIT_SEP, str);
       }
@@ -115,24 +116,26 @@ void split_close(void) {
 }
 
 static inline void split_help(void) {
-  const char SMODE_HINTS[] =
-"Command:\n"
-"  h   help\n"
-#ifdef ENABLE_DNS
-"  n   toggle DNS\n"
-#endif
-"  p   pause/resume\n"
-"  q   quit\n"
-"  r   reset all counters\n"
-"  t   toggle TCP pings\n"
-"  u   toggle UDP pings\n"
+  printf(
+"Commands:\n"
+"  e     toggle MPLS info\n"
+"  j     toggle lattency/jitter\n"
 #ifdef WITH_IPINFO
-"  y   switching IP info\n"
-"  z   toggle ASN lookup\n"
+"  l     toggle ASN lookup\n"
+"  L     switch IP info\n"
 #endif
+#ifdef ENABLE_DNS
+"  n     toggle DNS\n"
+#endif
+"  q     quit\n"
+"  r     reset statistics\n"
+"  t     toggle TCP pings\n"
+"  u     toggle UDP pings\n"
+"  x     toggle cache mode\n"
+"  +-    scroll up/down\n"
+"  SPACE pause/resume\n"
 "\n"
-"press SPACE to resume... ";
-  printf("%s", SMODE_HINTS);
+"%s ... ", ANYKEY_STR);
   fflush(stdout);
 }
 
@@ -145,9 +148,11 @@ key_action_t split_keyaction(void) {
   switch (ch) {
     case '+': return ActionScrollDown;
     case '-': return ActionScrollUp;
+    case 'e': return ActionMPLS;
     case 'h':
       split_help();
       return ActionPauseResume;
+    case 'j': return ActionJitter;
 #ifdef WITH_IPINFO
     case 'l': return ActionAS;
     case 'L': return ActionII;
@@ -161,6 +166,7 @@ key_action_t split_keyaction(void) {
     case 'r': return ActionReset;
     case 't': return ActionTCP;
     case 'u': return ActionUDP;
+    case 'x': return ActionCache;
     default: break;
   }
   return ActionNone;

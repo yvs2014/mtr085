@@ -76,6 +76,17 @@ AS_IF([test "x$curses" = "xyes"], [
 	])
 ])
 
+AC_ARG_ENABLE([nls],
+	AS_HELP_STRING([--disable-nls], [Do not enable NLS]),
+	[nls=${enableval}], [nls=yes])
+AM_CONDITIONAL([NLS], [test "x$nls" = "xyes"])
+AS_IF([test "x$nls" = "xyes"], [
+	AC_CHECK_HEADERS([libintl.h])
+	AC_SEARCH_LIBS([gettext], [intl],
+		AC_DEFINE(USE_NLS, 1, [Build with NLS support]),
+		AC_MSG_ERROR([gettext is not found]))
+])
+
 AC_ARG_ENABLE([dns],
 	AS_HELP_STRING([--disable-dns], [Do not enable DNS]),
 	[dns=${enableval}], [dns=yes])
@@ -282,16 +293,17 @@ m4_ifdef([AX_CHECK_COMPILE_FLAG], [
 ])
 
 _option_list=""
-AS_IF([test "x$libcap" = "xyes"],    [_option_list="$_option_list +CAP"],     [_option_list="$_option_list -CAP"])
-AS_IF([test "x$curses" = "xyes"],    [_option_list="$_option_list +CURSES"],  [_option_list="$_option_list -CURSES"])
-AS_IF([test "x$_unicode" = "xyes"],  [_option_list="$_option_list +UNICODE"], [_option_list="$_option_list -UNICODE"])
-AS_IF([test "x$dns" = "xyes"],       [_option_list="$_option_list +DNS"],     [_option_list="$_option_list -DNS"])
-AS_IF([test "x$aiidn" = "xyes" -o "x$need_libidn" = "yes"],
+AS_IF([test "x$libcap" = "xyes"],      [_option_list="$_option_list +CAP"],     [_option_list="$_option_list -CAP"])
+AS_IF([test "x$curses" = "xyes"],      [_option_list="$_option_list +CURSES"],  [_option_list="$_option_list -CURSES"])
+AS_IF([test "x$_unicode" = "xyes"],    [_option_list="$_option_list +UNICODE"], [_option_list="$_option_list -UNICODE"])
+AS_IF([test "x$nls"    = "xyes"],      [_option_list="$_option_list +NLS"],     [_option_list="$_option_list -NLS"])
+AS_IF([test "x$dns"    = "xyes"],      [_option_list="$_option_list +DNS"],     [_option_list="$_option_list -DNS"])
+AS_IF([test "x$aiidn"  = "xyes" -o "x$need_libidn" = "yes"],
 	[_option_list="$_option_list +IDN"], [_option_list="$_option_list -IDN"])
-AS_IF([test "x$ipinfo" = "xyes"],    [_option_list="$_option_list +IPINFO"],  [_option_list="$_option_list -IPINFO"])
-AS_IF([test "x$splitmode" = "xyes"], [_option_list="$_option_list +SPLIT"],   [_option_list="$_option_list -SPLIT"])
-AS_IF([test "x$ipv6" = "xyes"],      [_option_list="$_option_list +IPV6"],    [_option_list="$_option_list -IPV6"])
-AS_IF([test "x$mpls" = "xyes"],      [_option_list="$_option_list +MPLS"],    [_option_list="$_option_list -MPLS"])
+AS_IF([test "x$ipinfo" = "xyes"],      [_option_list="$_option_list +IPINFO"],  [_option_list="$_option_list -IPINFO"])
+AS_IF([test "x$splitmode" = "xyes"],   [_option_list="$_option_list +SPLIT"],   [_option_list="$_option_list -SPLIT"])
+AS_IF([test "x$ipv6"   = "xyes"],      [_option_list="$_option_list +IPV6"],    [_option_list="$_option_list -IPV6"])
+AS_IF([test "x$mpls"   = "xyes"],      [_option_list="$_option_list +MPLS"],    [_option_list="$_option_list -MPLS"])
 _option_output=""
 AS_IF([test "x$output_txt" = "xyes"],  [_option_output="${_option_output}T"])
 AS_IF([test "x$output_csv" = "xyes"],  [_option_output="${_option_output}C"])

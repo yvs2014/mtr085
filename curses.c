@@ -35,6 +35,7 @@
 
 #include "mtr-curses.h"
 #include "common.h"
+#include "nls.h"
 
 #ifdef WITH_UNICODE
 #ifndef _XOPEN_SOURCE_EXTENDED
@@ -86,12 +87,13 @@ enum { LINEMAXLEN = 1024, HINT_YPOS = 2, HOSTINFOMAX = 30 };
 
 static char screen_title[NAMELEN]; // progname + arguments + destination
 static bool at_quit, screen_ready;
+static unsigned title_len;
 
 static size_t enter_smth(char *buf, size_t size, int y, int x) {
   move(y, x);
   int ch = 0, curs = curs_set(1);
   refresh();
-  for (size_t i = 0; ((ch = getch()) != '\n') && (i < size);) {
+  for (unsigned i = 0; ((ch = getch()) != '\n') && (i < size);) {
     addch((unsigned)ch | A_BOLD);
     refresh();
     buf[i++] = ch;
@@ -104,15 +106,15 @@ static size_t enter_smth(char *buf, size_t size, int y, int x) {
 static void enter_stat_fields(void) {
   char fields[MAXFLD + 1] = {0};
   int ch = 0, curs = curs_set(1);
-  for (size_t i = 0; ((ch = getch()) != '\n') && (i < sizeof(fields));) {
+  for (unsigned i = 0; ((ch = getch()) != '\n') && (i < sizeof(fields));) {
     int nth = 0;
-    for (; nth < statf_max; nth++) if (ch == statf[nth].key) { // only statf[].key allowed
+    for (; nth < stat_max; nth++) if (ch == stats[nth].key) {
       addch((unsigned)ch | A_BOLD);
       refresh();
       fields[i++] = ch;
       break;
     }
-    if (nth >= statf_max) // beep on too long
+    if (nth >= stat_max) // beep on too long
       beep();
   }
   if (fields[0]) set_fld_active(fields);
@@ -130,7 +132,7 @@ static void mc_get_int(int *val, int min, int max,
   if (enter_smth(entered, sizeof(entered), HINT_YPOS, xpos + 2)) {
     int num = limit_int(min, max, entered, what, 0);
     if (limit_error[0]) {
-      printw("%s, press any key to continue ...", limit_error);
+      printw("%s. %s ...", limit_error, ANYKEY_STR);
       refresh(); getch();
     } else
       *val = num;
@@ -138,7 +140,8 @@ static void mc_get_int(int *val, int min, int max,
 }
 
 static inline void mc_key_h(void) { // help
-  const char CMODE_HINTS[] =
+  erase();
+  mvprintw(2, 0,
 "Commands:\n"
 "  b <int>    set bit pattern in range 0..255, or random if it's negative\n"
 "  c <int>    set number of cycles to run, or unlimit (<1)\n"
@@ -158,7 +161,6 @@ static inline void mc_key_h(void) { // help
 "  n          toggle DNS\n"
 #endif
 "  o <str>    set fields to display (default 'LRS N BAWV')\n"
-"  p|<space>  pause and resume\n"
 "  q          quit\n"
 #ifdef IP_TOS
 "  Q <int>    set ToS/QoS\n"
@@ -169,11 +171,9 @@ static inline void mc_key_h(void) { // help
 "  u          toggle UDP pings\n"
 "  x          toggle cache mode\n"
 "  +-         scroll up/down\n"
-"  hH?        this help page\n"
+"  SPACE      pause/resume\n"
 "\n"
-"Press any key to resume ...";
-  erase();
-  mvprintw(2, 0, CMODE_HINTS);
+"%s ...", ANYKEY_STR);
   getch();
 }
 
@@ -184,7 +184,7 @@ static inline void mc_key_c(void) { // set number of cycles
   if (enter_smth(entered, sizeof(entered), HINT_YPOS, strlen(prompt))) {
     int num = limit_int(-1, INT_MAX, entered, "Number of cycles", 0);
     if (limit_error[0]) {
-      printw("%s, press any key to continue ...", limit_error);
+      printw("%s. %s ...", limit_error, ANYKEY_STR);
       refresh(); getch();
     } else {
       run_opts.cycles = num;
@@ -196,8 +196,8 @@ static inline void mc_key_c(void) { // set number of cycles
 static inline void mc_key_o(void) { // set fields to display and their order
   const char what[] = "Fields";
   mvprintw(HINT_YPOS, 0, "%s: %s\n\n", what, fld_active);
-  for (int i = 0; i < statf_max; i++) if (statf[i].hint)
-    printw("  %c: %s\n", statf[i].key, statf[i].hint);
+  for (int i = 0; i < stat_max; i++) if (stats[i].hint)
+    printw("  %c: %s\n", stats[i].key, stats[i].hint);
   move(HINT_YPOS, strlen(what) + 2);
   refresh();
   enter_stat_fields();
@@ -208,7 +208,7 @@ static inline void mc_key_Q(void) { // set QoS
 #if defined(ENABLE_IPV6) && !defined(IPV6_TCLASS)
   if (af == AF_INET6) {
     mvprintw(HINT_YPOS,     0, "IPv6 traffic class is not supported");
-    mvprintw(HINT_YPOS + 1, 0, "-> Press any key to continue ...");
+    mvprintw(HINT_YPOS + 1, 0, "-> %s ...", ANYKEY_STR);
     getch();
   } else
 #endif
@@ -226,12 +226,12 @@ static inline void mc_key_s(void) { // set payload size
   mvaddstr(HINT_YPOS, 0, prompt);
   printw("%d", run_opts.size);
   const int max = MAXPACKET - MINPACKET;
-  mvprintw(HINT_YPOS + 1, 0, "-> range[%d-%d], negative value to randomly assign within range", 0, max);
+  mvprintw(HINT_YPOS + 1, 0, "-> range[%d,%d], negative values are for random", -max, max);
   char entered[MAXFLD + 1] = {0};
   if (enter_smth(entered, sizeof(entered), HINT_YPOS, strlen(prompt))) {
     int num = limit_int(-max, max, entered, "Payload size", 0);
     if (limit_error[0]) {
-      printw("%s, press any key to continue ...", limit_error);
+      printw("%s. %s ...", limit_error, ANYKEY_STR);
       refresh(); getch();
     } else {
       run_opts.size = num;
@@ -283,11 +283,7 @@ key_action_t mc_keyaction(void) {
       mc_get_int(&run_opts.interval, 1, INT_MAX, "Interval", NULL);
       OPT_SUM(interval);
     } break;
-    case 'j': // latency OR jitter
-      run_opts.jitter = !run_opts.jitter;
-      OPT_SUM(jitter);
-      onoff_jitter();
-      break;
+    case 'j': return ActionJitter;
 #ifdef WITH_IPINFO
     case 'l': return ActionAS;
     case 'L': return ActionII;
@@ -303,6 +299,7 @@ key_action_t mc_keyaction(void) {
 #endif
     case 'o': // fields to display and their order
       mc_key_o();
+      title_len = 0;
       break;
     case ' ':
     case 'p': return ActionPauseResume;
@@ -325,19 +322,6 @@ key_action_t mc_keyaction(void) {
     default: break;
   }
   return ActionNone; // ignore unknown input
-}
-
-static int mc_print_at(int at, char *buf, size_t size) {
-  size_t len = 0;
-  for (size_t i = 0; (i < sizeof(fld_index)) && (len < size); i++) {
-    const struct statf *stat = active_statf(i);
-    if (!stat) break;
-    // if there's no replies, show only packet counters
-    const char *str = (host[at].recv || strchr("LDRS", stat->key)) ? net_elem(at, stat->key) : "";
-    int inc = snprintf(buf + len, size - len, "%*s", stat->len, str ? str : "");
-    if (inc > 0) len += inc;
-  }
-  return len;
 }
 
 #ifdef WITH_MPLS
@@ -387,10 +371,15 @@ static void seal_n_bell(int at, int max) {
   }
 }
 
-static int print_stat(int at, int y, int start, int max) { // statistics
-  static char statbuf[LINEMAXLEN];
-  mc_print_at(at, statbuf, sizeof(statbuf));
-  mvprintw(y, start, "%s", statbuf);
+static int print_stat(int at, int y, int x, int max) { // statistics
+  if (move(y, x) == ERR) return ERR;
+  for (unsigned i = 0; i < sizeof(fld_index); i++) {
+    const t_stat *stat = active_stats(i);
+    if (!stat) break;
+    // if there's no replies, show only packet counters
+    const char *str = (host[at].recv || strchr("LDRS", stat->key)) ? net_elem(at, stat->key) : "";
+    printw("%*s", stat->min, str ? str : "");
+  }
   if (run_opts.audible || run_opts.visible)
     seal_n_bell(at, max);
   return move(y + 1, 0);
@@ -541,7 +530,7 @@ static void mc_init(void) {
     } else
       map3[NUM_FACTORS3_MONO].CCHAR_chars[0] = map1[1] & A_CHARTEXT;
 
-    for (size_t i = 0; i < ARRAY_SIZE(map_na2); i++)
+    for (unsigned i = 0; i < ARRAY_SIZE(map_na2); i++)
       map_na3[i].CCHAR_chars[0] = map_na2[i] & A_CHARTEXT;
     map_na3[1].CCHAR_attr = run_opts.color ? map3[NUM_FACTORS3 - 1].CCHAR_attr : A_BOLD;
     map_na3[2].CCHAR_attr = A_BOLD;
@@ -620,16 +609,42 @@ static void histogram(int x, int cols) {
   }
 }
 
-static int mc_statf_title(char *buf, size_t size) {
-  size_t len = 0;
-  for (size_t i = 0; (i < sizeof(fld_index)) && (len < size); i++) {
-    const struct statf *stat = active_statf(i);
+static int get_title_len(void) {
+  int len = 0;
+  for (unsigned i = 0; i < sizeof(fld_index); i++) {
+    const t_stat *stat = active_stats(i);
     if (!stat) break;
-    int inc = snprintf(buf + len, size - len, "%*s", stat->len, stat->name);
-    if (inc > 0) len += inc;
+    len += (stat->min > stat->len) ? stat->min : stat->len + 1;
   }
-  buf[len] = 0;
-  return len;
+  return (len < 0) ? 0 : len;
+}
+
+static int mc_fit_posx(int pos, int len) {
+  return ((pos + len) > (getmaxx(stdscr) - 1)) ? (getmaxx(stdscr) - len - 1) : pos;
+}
+
+static void mc_stat_title(int x, int y) {
+  if (move(y, x) == ERR) return;
+  bool custom = is_custom_fld();
+  for (unsigned i = 0; i < sizeof(fld_index); i++) {
+    const t_stat *stat = active_stats(i);
+    if (!stat) break;
+    int pad = stat->min - stat->len;
+    if (!i || (i == 3)) { // add subtitles
+      int curx = getcurx(stdscr);
+      int pos  = curx + ((pad > 0) ? pad : 1);
+      if (!i && custom) {
+        int len = ustrlen(FIELDS_STR) + 2 + strnlen(fld_active, MAXFLD);
+        mvprintw(y - 1, mc_fit_posx(pos, len), "%s: %s", FIELDS_STR, fld_active);
+      } else if (!custom) {
+        const char *sub = i ? PINGS_STR : PACKETS_STR;
+        int len = ustrlen(sub);
+        mvprintw(y - 1, mc_fit_posx(pos, len), "%s", i ? PINGS_STR : PACKETS_STR);
+      }
+      move(y, curx);
+    }
+    printw("%*s%s", (pad > 0) ? pad : 1, "", stat->name ? stat->name : "");
+  }
 }
 
 #ifdef WITH_UNICODE
@@ -760,10 +775,9 @@ static int mc_snprint_args(char *buf, size_t size) {
 #undef IASP
 #undef ADD_NTH_BIT_INFO
 
-static inline void mc_statmode(char *buf, size_t size) {
+static void mc_statmode(void) {
   int statx = 4; // x-indent: "NN. "
   int staty = 4; // y-indent: main_title + hint_line + field_titles[2]
-  int title_len = mc_statf_title(buf, size);
   attron(A_BOLD);
 #ifdef WITH_IPINFO
   if (ipinfo_ready()) {
@@ -774,18 +788,13 @@ static inline void mc_statmode(char *buf, size_t size) {
   }
 #endif
   mvprintw(staty - 1, statx, "Host");
-  int maxx = getmaxx(stdscr);
-  int rest = maxx - title_len;
-  { int len = rest - 1; mvprintw(staty - 1, (len > 0) ? len : 0, "%s", buf); }
-  { int len = is_custom_fld() ?
-      snprintf(buf, size, "Custom keys: %s", fld_active) :
-      snprintf(buf, size, "Packets      Pings");
-    len = (len >= title_len) ? maxx - len : rest;
-    mvprintw(staty - 2, (len > 0) ? len : 0, "%s", buf); }
+  if (!title_len) title_len = get_title_len();
+  int x = getmaxx(stdscr) - title_len - 1;
+  if (x < 0) x = 0;
+  mc_stat_title(x, staty - 1);
   attroff(A_BOLD);
-
   if (move(staty, 0) != ERR)
-    print_hops(rest - 1);
+    print_hops(x);
 }
 
 static inline void mc_histmode(void) {
@@ -819,7 +828,7 @@ void mc_redraw(void) {
     mvprintw(0, 0, "%*s", (getmaxx(stdscr) + len) / 2, linebuf);
   }
   { // hints and time
-    mvprintw(1, 0, "Keys: ");
+    mvprintw(1, 0, "%s: ", OPTS_STR);
     attron(A_BOLD); addch('h'); attroff(A_BOLD); printw("ints ");
     attron(A_BOLD); addch('q'); attroff(A_BOLD); printw("uit\n");
     time_t now = time(NULL);
@@ -835,9 +844,8 @@ void mc_redraw(void) {
     int len = (inc > 0) ? inc : 0;
     mvaddstr(1, maxx - len, linebuf);
   }
-  { // main body
-    (curses_mode == 0) ? mc_statmode(linebuf, sizeof(linebuf)) : mc_histmode();
-  }
+  // main body
+  (curses_mode == 0) ? mc_statmode() : mc_histmode();
   refresh();
 }
 

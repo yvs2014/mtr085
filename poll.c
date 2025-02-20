@@ -31,6 +31,7 @@
 #undef LOGMOD
 #endif
 #include "common.h"
+#include "aux.h"
 
 #include "mtr-poll.h"
 #include "net.h"
@@ -289,6 +290,11 @@ static key_action_t keyboard_events(key_action_t action) {
       LOGMSG("%s", "'pause/resume' pressed");
       run_opts.pause = !run_opts.pause;
       OPT_SUM(pause);
+      break;
+    case ActionJitter: // latency OR jitter
+      run_opts.jitter = !run_opts.jitter;
+      OPT_SUM(jitter);
+      onoff_jitter();
       break;
 #ifdef WITH_MPLS
     case ActionMPLS:

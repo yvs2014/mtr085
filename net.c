@@ -590,7 +590,7 @@ static bool net_send_icmp_udp(int at) {
 }
 
 
-static void stats(int at, timemsec_t curr) {
+static void hop_stats(int at, timemsec_t curr) {
   double curr_f = msec2float(curr);
   LOGMSG("prev=%lld.%09ld curr=%lld.%09ld", (long long)host[at].last.ms, host[at].last.frac, (long long)curr.ms, curr.frac);
 
@@ -737,7 +737,7 @@ static int net_stat(unsigned port, const void *addr, struct timespec *recv_at,
   }
   timespecsub(recv_at, &seqlist[seq].time, &tv);
   timemsec_t curr = { .ms = time2msec(tv), .frac = time2mfrac(tv) };
-  stats(at, curr);
+  hop_stats(at, curr);
 
 #ifdef CURSESMODE
   int n = seqlist[seq].saved_seq - host[at].saved_seq_offset;

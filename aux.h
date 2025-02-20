@@ -3,6 +3,8 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include <limits.h>
+
 #include "common.h"
 
 #define LENVALMIL(val) double _v = (val) / (double)MIL; int _l = val2len(_v);
@@ -16,9 +18,10 @@ void set_fld_active(const char *str);
 bool is_custom_fld(void);
 void onoff_jitter(void);
 #endif
-const struct statf* active_statf(size_t nth);
+const t_stat* active_stats(size_t nth);
 
 extern char limit_error[NAMELEN];
 int limit_int(int min, int max, const char *arg, const char *what, int8_t fail);
+unsigned ustrlen(const char *str);
 
 #endif

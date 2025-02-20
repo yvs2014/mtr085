@@ -40,7 +40,7 @@
 #endif
 
 #ifndef GITREV
-#define GITREV "205"
+#define GITREV "206"
 #endif
 
 typedef union inaddr_union {
@@ -65,12 +65,10 @@ typedef union sockaddr_union {
 } t_sockaddr;
 
 // stat fields description
-typedef struct statf {
-  const char *name;
-  const char *hint;
-  int len;
-  const char key;
-} t_statf;
+typedef struct s_stat {
+  unsigned len, min;
+  const char *name, *hint, key;
+} t_stat;
 
 enum {
   MAXLABELS = 8, // mpls labels
@@ -102,7 +100,7 @@ typedef enum {
 
 typedef enum { ActionNone, ActionQuit, ActionReset, ActionDisplay,
   ActionClear, ActionPauseResume, ActionScrollDown, ActionScrollUp,
-  ActionUDP, ActionTCP, ActionCache,
+  ActionUDP, ActionTCP, ActionCache, ActionJitter,
 #ifdef WITH_MPLS
   ActionMPLS,
 #endif
@@ -313,10 +311,10 @@ extern int curses_mode;
 extern int curses_mode_max;
 #endif
 
-// keys: the value in the array is the index number in statf[]
+// keys: the value in the array is the index number in stats[]
 extern const char *fld_active;
-extern const t_statf statf[];
-extern const int statf_max;
+extern t_stat stats[];
+extern const int stat_max;
 enum { BLANK_INDICATOR = '_' };
 //
 extern char srchost[];

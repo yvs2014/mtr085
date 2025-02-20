@@ -280,7 +280,7 @@ static char trim_c(char *str, const char *quotes) {
 static char* trim_str(char *str, const char *quotes) {
   { size_t len = strlen(str);
     char *ptr = str + len - 1;
-    for (size_t i = len; i > 0; i--, ptr--)
+    for (int i = len; i > 0; i--, ptr--)
       if (trim_c(ptr, quotes)) break; }
   { char *ptr = str;
     for (; ptr; ptr++)
@@ -610,7 +610,7 @@ static char *get_ipinfo(int at, int ndx, int item_no) {
 char* ipinfo_header(void) {
   static char iiheader[NAMELEN];
   iiheader[0] = 0;
-  for (size_t i = 0, len = 0; (i < MAX_TXT_ITEMS)
+  for (unsigned i = 0, len = 0; (i < MAX_TXT_ITEMS)
       && (ipinfo_no[i] >= 0) && (ipinfo_no[i] < itemname_max)
       && ORIG_NAME(ipinfo_no[i]) && (len < sizeof(iiheader)); i++) {
     int inc = snprintf(iiheader + len, sizeof(iiheader) - len,
@@ -649,7 +649,7 @@ static char *fill_ipinfo(int at, int ndx, char sep) {
   fmtinfo[0] = 0;
   t_fmtdata fmtdata = { .ch = sep };
   filler_fn filler = fmtdata.ch ? str_filler : fmt_filler;
-  for (size_t i = 0, len = 0; (i < MAX_TXT_ITEMS)
+  for (unsigned i = 0, len = 0; (i < MAX_TXT_ITEMS)
       && (ipinfo_no[i] >= 0) && (ipinfo_no[i] < itemname_max)
       && (len < sizeof(fmtinfo)); i++) {
     const char *rec = addr_exist(&IP_AT_NDX(at, ndx)) ?

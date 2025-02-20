@@ -47,7 +47,11 @@ endif
 
 if LIBIDN
 AM_CPPFLAGS += @libidn_CFLAGS@ @libidn2_CFLAGS@
-mtr_LDADD += @libidn_LIBS@ @libidn2_LIBS@
+mtr_LDADD   += @libidn_LIBS@ @libidn2_LIBS@
+endif
+
+if NLS
+AM_CPPFLAGS += -DLOCALEDIR='"$(localedir)"'
 endif
 
 AM_CFLAGS	= -fcommon	# GCC-10

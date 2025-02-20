@@ -25,6 +25,7 @@ optlist = []
 cap        = get_option('CAP')
 curses     = get_option('CURSES')
 unicode    = get_option('UNICODE')
+nls        = get_option('NLS')
 dns        = get_option('DNS')
 ipinfo     = get_option('IPINFO')
 split      = get_option('SPLIT')
@@ -44,6 +45,7 @@ debipinfo = get_option('DEBIPINFO')
 sbin      = get_option('SBIN')
 manexcl = []
 
+os   = host_machine.system()
 cc   = meson.get_compiler('c')
 deps = []
 cpps = []
@@ -58,6 +60,20 @@ srcn += 'display'
 srcn += 'report'
 srcn += 'poll'
 srcn += 'aux'
+
+# probes
+fndesc = {
+  'pow': {'libs': ['m'], 'hdr': 'math.h'},
+  'warnx': {'libs': ['bsd'], 'hdr': 'err.h'},
+  'socket': {'libs': ['socket', 'network'], 'hdr': 'sys/socket.h'},
+  'strlcpy': {'libs': ['bsd'], 'hdr': 'bsd/stdlib.h', 'libhdr': true, 'req': false},
+  'arc4random_uniform': {'libs': ['bsd'], 'hdr': 'bsd/stdlib.h', 'libhdr': true, 'req': false},
+  'quick_exit':  {'libs': [], 'hdr': 'stdlib.h', 'req': false},
+  'strerror_r':  {'libs': [], 'hdr': 'string.h', 'req': false},
+  'ctime_r':     {'libs': [], 'hdr': 'time.h',   'req': false},
+  'localtime_r': {'libs': [], 'hdr': 'time.h',   'req': false},
+  'uselocale':   {'libs': [], 'hdr': 'locale.h', 'req': false},
+}
 
 # optional: CAP (default yes)
 if cap
@@ -131,6 +147,21 @@ if unicode
   config.set('WITH_UNICODE', 1)
 else
   optlist += '-UNICODE'
+endif
+#
+if nls
+  config.set('USE_NLS', 1)
+  config.set_quoted('LOCALEDIR', join_paths(get_option('prefix'), get_option('localedir')))
+  if os == 'freebsd' or os == 'openbsd'
+    deps += cc.find_library('intl', has_headers: ['libintl.h'],
+      dirs: ['/usr/local/lib'], header_args: ['-isystem/usr/local/include'])
+  else
+    fndesc += {'gettext': {'libs': ['intl'], 'hdr': 'libintl.h', 'req': true}}
+  endif
+  subdir('po')
+  optlist += '+NLS'
+else
+  optlist += '-NLS'
 endif
 #
 if dns
@@ -308,19 +339,7 @@ srcs = []
 foreach c: srcn
   srcs += c + '.c'
 endforeach
-#
-fndesc = {
-  'pow': {'libs': ['m'], 'hdr': 'math.h'},
-  'warnx': {'libs': ['bsd'], 'hdr': 'err.h'},
-  'socket': {'libs': ['socket', 'network'], 'hdr': 'sys/socket.h'},
-  'strlcpy': {'libs': ['bsd'], 'hdr': 'bsd/stdlib.h', 'libhdr': true, 'req': false},
-  'arc4random_uniform': {'libs': ['bsd'], 'hdr': 'bsd/stdlib.h', 'libhdr': true, 'req': false},
-  'quick_exit':  {'libs': [], 'hdr': 'stdlib.h', 'req': false},
-  'strerror_r':  {'libs': [], 'hdr': 'string.h', 'req': false},
-  'ctime_r':     {'libs': [], 'hdr': 'time.h',   'req': false},
-  'localtime_r': {'libs': [], 'hdr': 'time.h',   'req': false},
-  'uselocale':   {'libs': [], 'hdr': 'locale.h', 'req': false},
-}
+
 #
 foreach fn, desc: fndesc
   libs   = desc['libs']
@@ -375,15 +394,15 @@ endforeach
 #
 
 if meson.version().version_compare('>=0.53')
-  summary({'CAP': cap, 'CURSES': curses, 'UNICODE': unicode, 'DNS': dns, 'IDN': idn,
-    'IPINFO': ipinfo, 'SPLIT': split, 'IPV6': ipv6, 'MPLS': mpls },
+  summary({'CAP': cap, 'CURSES': curses, 'UNICODE': unicode, 'NLS': nls,
+   'DNS': dns, 'IDN': idn, 'IPINFO': ipinfo, 'SPLIT': split, 'IPV6': ipv6, 'MPLS': mpls},
     bool_yn: true)
 endif
 
 # fin
 #
 config_h = 'config.h'
-configure_file(input: config_h + '.meson', output: config_h, configuration: config)
+configure_file(output: config_h, configuration: config)
 add_project_arguments('-include', config_h, language: 'c')
 if sbin
   executable(name, srcs, dependencies: deps, c_args: cpps, install: true,

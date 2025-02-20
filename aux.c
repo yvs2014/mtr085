@@ -43,22 +43,24 @@ bool is_custom_fld(void) { return (strncmp(fld_active, fld_jitter, sizeof(fld_ji
 void onoff_jitter(void) { int cmp = strncmp(fld_active, fld_jitter, sizeof(fld_jitter)); fld_active = cmp ? fld_jitter : fld_custom; }
 #endif
 
-const struct statf* active_statf(size_t nth) {
+const t_stat* active_stats(size_t nth) {
   if (nth > sizeof(fld_index)) return NULL;
   int ndx = fld_index[(uint8_t)fld_active[nth]];
-  return ((ndx >= 0) && (ndx < statf_max)) ? &statf[ndx] : NULL;
+  return ((ndx >= 0) && (ndx < stat_max)) ? &stats[ndx] : NULL;
 }
 
 static inline long str2long(const char *arg) {
+#define STR2L_FAILED (errno || (end && *end) || (arg == end))
   char *end = NULL; errno = 0;
   long num = strtol(arg, &end, 10);
-  if (errno || *end) {
+  if (STR2L_FAILED) { // try hex
     end = NULL; errno = 0;
     num = strtol(arg, &end, 16);
-    if (!errno && *end)
+    if (STR2L_FAILED && !errno)
       errno = EINVAL;
   }
   return num;
+#undef STR2L_FAILED
 }
 
 char limit_error[NAMELEN];
@@ -66,33 +68,26 @@ int limit_int(int min, int max, const char *arg, const char *what, int8_t fail) 
   limit_error[0] = 0;
   int val = str2long(arg);
   int lim = val;
-  if (errno) {
+  if (errno)
     snprintf(limit_error, sizeof(limit_error), "%s", strerror(errno));
-    lim = INT_MIN;
-  }
-  int len = 0;
-  if (val < min) {
+  if ((val < min) || (val > max)) {
     errno = ERANGE;
-    lim = min;
-    len = snprintf(limit_error, sizeof(limit_error), "%s: less than %d: %s", what, min, arg);
-  } else if (val > max) {
-    errno = ERANGE;
-    lim = max;
-    len = snprintf(limit_error, sizeof(limit_error), "%s: greater than %d: %s", what, max, arg);
+    lim = (val < min) ? min : max;
+    snprintf(limit_error, sizeof(limit_error),
+      "%s: %s: %s [%d,%d]", what, arg, strerror(errno), min, max);
   }
-  if (val != lim) {
-    if (fail > 0) {
+  if (errno && fail) {
+    if (fail > 0)
+      err(errno ? errno : EXIT_FAILURE, "-%c", fail);
+    else
       warnx("%s", limit_error);
-      err(errno ? errno : EXIT_FAILURE, "-%c option failed", fail);
-    } else if (fail < 0) {
-      warnx("%s", limit_error);
-    } else {
-      if (len < 0)
-        len = 0;
-      snprintf(limit_error + len, sizeof(limit_error) - len,
-        ", corrected(%d -> %d)", val, lim);
-    }
   }
   return lim;
+}
+
+unsigned ustrlen(const char *str) {
+  unsigned len = 0;
+  if (str) for (; *str; str++) if ((*str & 0xc0) != 0x80) len++;
+  return len;
 }
 

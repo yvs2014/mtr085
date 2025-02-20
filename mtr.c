@@ -43,6 +43,7 @@
 #include <netinet/in.h>
 
 #include "common.h"
+#include "nls.h"
 
 #ifdef ENABLE_IPV6
 #include <netinet/ip6.h>
@@ -149,25 +150,24 @@ int curses_mode;              // 1st and 2nd bits, 3rd is reserved
 int curses_mode_max = 3;
 #endif
 //
-const struct statf statf[] = {
-// name     hint                    len key
-  {" ",     "Space between fields", 1,  BLANK_INDICATOR},
-  {"Loss",  "Loss Ratio",           6,  'L'},
-  {"Drop",  "Dropped Packets",      5,  'D'},
-  {"Rcv",   "Received Packets",     6,  'R'},
-  {"Snt",   "Sent Packets",         6,  'S'},
-  {"Last",  "Newest RTT(ms)",       6,  'N'},
-  {"Best",  "Min/Best RTT(ms)",     6,  'B'},
-  {"Avg",   "Average RTT(ms)",      6,  'A'},
-  {"Wrst",  "Max/Worst RTT(ms)",    6,  'W'},
-  {"StDev", "Standard Deviation",   6,  'V'},
-  {"Gmean", "Geometric Mean",       6,  'G'},
-  {"Jttr",  "Current Jitter",       5,  'J'},
-  {"Javg",  "Jitter Mean/Avg.",     5,  'M'},
-  {"Jmax",  "Worst Jitter",         5,  'X'},
-  {"Jint",  "Interarrival Jitter",  5,  'I'},
+t_stat stats[] = {
+  {.name = "",      .min = 1, .key = BLANK_INDICATOR, .hint = "Space between fields"},
+  {.name = "Loss",  .min = 6, .key = 'L', .hint = "Loss Ratio"},
+  {.name = "Drop",  .min = 5, .key = 'D', .hint = "Dropped Packets"},
+  {.name = "Recv",  .min = 6, .key = 'R', .hint = "Received Packets"},
+  {.name = "Sent",  .min = 6, .key = 'S', .hint = "Sent Packets"},
+  {.name = "Last",  .min = 6, .key = 'N', .hint = "Newest RTT(ms)"},
+  {.name = "Best",  .min = 6, .key = 'B', .hint = "Min/Best RTT(ms)"},
+  {.name = "Avrg",  .min = 6, .key = 'A', .hint = "Average RTT(ms)"},
+  {.name = "Wrst",  .min = 6, .key = 'W', .hint = "Max/Worst RTT(ms)"},
+  {.name = "StDev", .min = 6, .key = 'V', .hint = "Standard Deviation"},
+  {.name = "Mean",  .min = 6, .key = 'G', .hint = "Geometric Mean"},
+  {.name = "Jttr",  .min = 5, .key = 'J', .hint = "Current Jitter"},
+  {.name = "Javg",  .min = 5, .key = 'M', .hint = "Jitter Mean/Avrg"},
+  {.name = "Jmax",  .min = 5, .key = 'X', .hint = "Worst Jitter"},
+  {.name = "Jint",  .min = 5, .key = 'I', .hint = "Interarrival Jitter"},
 };
-const int statf_max = ARRAY_SIZE(statf);
+const int stat_max = ARRAY_SIZE(stats);
 //// end-of-global
 
 static struct option long_options[] = {
@@ -318,8 +318,8 @@ static const char *get_opt_desc(char opt) {
 static void usage(const char *name) {
   char *bname = strdup(name);
   printf("Usage: %s [-", basename(bname));
-  size_t len = strlen(short_options);
-  for (size_t i = 0; i < len; i++)
+  unsigned len = strlen(short_options);
+  for (unsigned i = 0; i < len; i++)
     if (short_options[i] != ':')
       putchar(short_options[i]);
   printf("] TARGET[:PORT] ...\n");
@@ -422,15 +422,15 @@ static inline void option_d(void) {
 #endif
 
 static inline void option_F(char opt) {
-  if (strlen(optarg) >= sizeof(fld_active))
-    FAIL("-%c: Too many fields (max=%zd): %s", opt, sizeof(fld_active) - 1, optarg);
+  if (strlen(optarg) > MAXFLD)
+    errx(ERANGE, "-%c: Too many fields (max=%zd): %s", opt, sizeof(fld_active) - 1, optarg);
   for (int i = 0; optarg[i]; i++) {
     int cnt = 0;
-    for (; cnt < statf_max; cnt++)
-      if (optarg[i] == statf[cnt].key)
+    for (; cnt < stat_max; cnt++)
+      if (optarg[i] == stats[cnt].key)
         break;
-    if (cnt >= statf_max)
-      FAIL("-%c: Unknown field identifier '%c'", opt, optarg[i]);
+    if (cnt >= stat_max)
+      errx(EINVAL, "-%c: Unknown field identifier '%c'", opt, optarg[i]);
   }
   set_fld_active(optarg);
 }
@@ -449,10 +449,11 @@ static inline void option_N(void) {
   int rc = getaddrinfo(hostport[0], hostport[1], &hints, &ns);
   if (rc || !ns) {
     if (rc == EAI_SYSTEM)
-      FAIL("%s", "getaddrinfo()");
-    FAIL("Failed to set NS(%s): %s", optarg, gai_strerror(rc));
+      err(errno, "%s", "getaddrinfo()");
+    errx(EXIT_FAILURE, "ERROR: nameserver: %s: %s", optarg, gai_strerror(rc));
   }
-  if (!set_custom_res(ns)) FAIL("Failed to set NS(%s)", optarg);
+  if (!set_custom_res(ns))
+    errx(EXIT_FAILURE, "ERROR: Failed to set nameserver: %s", optarg);
   freeaddrinfo(ns);
 }
 #endif
@@ -842,10 +843,10 @@ static inline void main_prep(int argc, char **argv) {
   net_assert();
   mypid = getpid();
 #ifndef HAVE_ARC4RANDOM_UNIFORM
-  srand(mypid); // reset the random seed
+  srand(mypid); // reset random seed
 #endif
-  for (int i = 0; i < statf_max; i++)
-    fld_index[(uint8_t)statf[i].key] = i;
+  for (int i = 0; i < stat_max; i++)
+    fld_index[(uint8_t)stats[i].key] = i;
   UNICODE_INIT;
   set_fld_active(NULL);
   parse_options(argc, argv);
@@ -910,18 +911,43 @@ static inline void main_fin(void) {
   UNICODE_FREE;
 }
 
+#ifdef USE_NLS
+static void bind_nls(void) {
+  setlocale(LC_ALL, "");
+  bindtextdomain(PACKAGE_NAME, LOCALEDIR);
+  textdomain(PACKAGE_NAME);
+}
+#define BIND_NLS bind_nls()
+#else
+#define BIND_NLS NOOP
+#endif
+
 
 int main(int argc, char **argv) {
-  if (!net_open()) // get raw sockets
-    FAIL("Unable to %s", "get raw sockets");
-  if (setgid(getgid()) || setuid(getuid())) // drop permissions if that's set
-    ERRR(EXIT_FAILURE, "Unable to %s", "drop permissions");
-  if ((geteuid() != getuid()) || (getegid() != getgid())) // just in case
-    FAIL("Unable to %s", "drop permissions");
+#define EXIT_WITH_MSG(msg) { BIND_NLS; errx(EXIT_FAILURE, "%s", msg); }
+  // get raw sockets
+  if (!net_open())
+    EXIT_WITH_MSG("Unable to get raw sockets");
+  // drop permissions if that's set
+  if (setgid(getgid()) || setuid(getuid()))
+    EXIT_WITH_MSG("Unable to drop permissions");
+  // be sure
+  if ((geteuid() != getuid()) || (getegid() != getgid()))
+    EXIT_WITH_MSG("Unable to drop permissions");
 #ifdef LIBCAP
   if (!drop_caps())
-    FAIL("Unable to %s", "drop capabilities");
+    EXIT_WITH_MSG("Unable to drop capabilities");
 #endif
+#undef EXIT_WITH_MSG
+
+  BIND_NLS;
+  for (unsigned i = 0; i < ARRAY_SIZE(stats); i++) {
+    if (stats[i].name && stats[i].name[0]) {
+      stats[i].name  = _(stats[i].name);
+      stats[i].len   = ustrlen(stats[i].name);
+      if (stats[i].min <= stats[i].len)
+        stats[i].min = stats[i].len + 1;
+  }}
 
   main_prep(argc, argv);
 

@@ -26,6 +26,10 @@
 #cmakedefine HAVE_LOCALE_H
 #cmakedefine HAVE_LANGINFO_H
 
+/* NLS messages */
+#cmakedefine USE_NLS
+#cmakedefine LOCALEDIR "@LOCALEDIR@"
+
 /* DNS stuff */
 #cmakedefine ENABLE_DNS
 #cmakedefine HAVE_RES_NMKQUERY
