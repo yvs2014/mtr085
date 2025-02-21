@@ -152,20 +152,20 @@ int curses_mode_max = 3;
 //
 t_stat stats[] = {
   {.name = "",      .min = 1, .key = BLANK_INDICATOR, .hint = "Space between fields"},
-  {.name = "Loss",  .min = 6, .key = 'L', .hint = "Loss Ratio"},
-  {.name = "Drop",  .min = 5, .key = 'D', .hint = "Dropped Packets"},
-  {.name = "Recv",  .min = 6, .key = 'R', .hint = "Received Packets"},
-  {.name = "Sent",  .min = 6, .key = 'S', .hint = "Sent Packets"},
+  {.name = "Loss",  .min = 6, .key = 'L', .hint = "Loss ratio"},
+  {.name = "Drop",  .min = 5, .key = 'D', .hint = "Dropped packets"},
+  {.name = "Recv",  .min = 6, .key = 'R', .hint = "Received packets"},
+  {.name = "Sent",  .min = 6, .key = 'S', .hint = "Sent packets"},
   {.name = "Last",  .min = 6, .key = 'N', .hint = "Newest RTT(ms)"},
   {.name = "Best",  .min = 6, .key = 'B', .hint = "Min/Best RTT(ms)"},
   {.name = "Avrg",  .min = 6, .key = 'A', .hint = "Average RTT(ms)"},
   {.name = "Wrst",  .min = 6, .key = 'W', .hint = "Max/Worst RTT(ms)"},
-  {.name = "StDev", .min = 6, .key = 'V', .hint = "Standard Deviation"},
-  {.name = "Mean",  .min = 6, .key = 'G', .hint = "Geometric Mean"},
-  {.name = "Jttr",  .min = 5, .key = 'J', .hint = "Current Jitter"},
-  {.name = "Javg",  .min = 5, .key = 'M', .hint = "Jitter Mean/Avrg"},
-  {.name = "Jmax",  .min = 5, .key = 'X', .hint = "Worst Jitter"},
-  {.name = "Jint",  .min = 5, .key = 'I', .hint = "Interarrival Jitter"},
+  {.name = "StDev", .min = 6, .key = 'V', .hint = "Standard deviation"},
+  {.name = "Mean",  .min = 6, .key = 'G', .hint = "Geometric mean"},
+  {.name = "Jttr",  .min = 5, .key = 'J', .hint = "Current jitter"},
+  {.name = "Javg",  .min = 5, .key = 'M', .hint = "Jitter mean/avrg"},
+  {.name = "Jmax",  .min = 5, .key = 'X', .hint = "Worst jitter"},
+  {.name = "Jint",  .min = 5, .key = 'I', .hint = "Interarrival jitter"},
 };
 const int stat_max = ARRAY_SIZE(stats);
 //// end-of-global
@@ -276,20 +276,20 @@ static const char *get_opt_desc(char opt) {
 #ifdef IP_TOS
     case 'q':
 #endif
-    case 'B': return "NUMBER";
+    case 'B': return CLI_NUM_STR;
     case 'i':
     case 'x':
-    case 'T': return "SECONDS";
-    case 'a': return "IP.ADD.RE.SS";
-    case 'c': return "COUNT";
-    case 'd': return "MODE";
-    case 's': return "BYTES";
-    case 'F': return "FIELDS";
+    case 'T': return CLI_SEC_STR;
+    case 'a': return CLI_ADDR_STR;
+    case 'c': return CLI_CNT_STR;
+    case 'd': return CLI_MODE_STR;
+    case 's': return CLI_BYTE_STR;
+    case 'F': return CLI_FLD_STR;
 #ifdef WITH_IPINFO
-    case 'L': return "ORIGIN,FIELDS";
+    case 'L': return CLI_IINFO_STR;
 #endif
 #ifdef ENABLE_DNS
-    case 'N': return "NS.ADD.RE.SS";
+    case 'N': return CLI_ADDR_STR;
 #endif
 #ifdef OUTPUT_FORMAT
     case 'o': { static char _oopt[] =
@@ -316,25 +316,24 @@ static const char *get_opt_desc(char opt) {
 }
 
 static void usage(const char *name) {
-  char *bname = strdup(name);
-  printf("Usage: %s [-", basename(bname));
+ { char *bname = strdup(name);
+   printf("%s: %s [-", CLI_USAGE_STR, bname ? basename(bname) : name);
+   if (bname) free(bname); }
   unsigned len = strlen(short_options);
   for (unsigned i = 0; i < len; i++)
     if (short_options[i] != ':')
       putchar(short_options[i]);
-  printf("] TARGET[:PORT] ...\n");
+  printf("] %s[:%s] ...\n", CLI_TGT_STR, CLI_PORT_STR);
   for (int i = 0; long_options[i].name; i++) {
     printf("\t[");
     char opt = (char)long_options[i].val;
     if (opt)
       printf("-%c|", opt);
     printf("--%s", long_options[i].name);
-    const char *desc = long_options[i].has_arg ? get_opt_desc(opt) : NULL;
-    if (desc)
-      printf(" %s", desc);
+    if (long_options[i].has_arg)
+      printf(" %s", get_opt_desc(opt));
     printf("]\n");
   }
-  free(bname);
 }
 
 #ifdef ENABLE_DNS
@@ -947,7 +946,10 @@ int main(int argc, char **argv) {
       stats[i].len   = ustrlen(stats[i].name);
       if (stats[i].min <= stats[i].len)
         stats[i].min = stats[i].len + 1;
-  }}
+    }
+    if (stats[i].hint && stats[i].hint[0])
+      stats[i].hint  = _(stats[i].hint);
+  }
 
   main_prep(argc, argv);
 

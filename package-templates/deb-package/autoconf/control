@@ -2,7 +2,7 @@ Source: mtr085
 Section: net
 Priority: optional
 Maintainer: yvs <VSYakovetsky@gmail.com>
-Build-Depends: libncurses-dev | libncursesw5-dev, libcap-dev, debhelper, dpkg-dev, devscripts, autoconf, automake, make, git, sed, pkgconf | pkg-config, libcap2-bin, libbsd-dev
+Build-Depends: libncurses-dev | libncursesw5-dev, libcap-dev, debhelper, dpkg-dev, devscripts, autoconf, automake, make, git, sed, pkgconf | pkg-config, gettext-base | gettext, libcap2-bin, libbsd-dev
 Standards-Version: 4.6.2
 Homepage: https://github.com/yvs2014/mtr085
 

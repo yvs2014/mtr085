@@ -16,12 +16,6 @@
     Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 */
 
-#ifdef __sun /* ctime_r() */
-#ifndef _POSIX_PTHREAD_SEMANTICS
-#define _POSIX_PTHREAD_SEMANTICS
-#endif
-#endif
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -132,7 +126,7 @@ static void mc_get_int(int *val, int min, int max,
   if (enter_smth(entered, sizeof(entered), HINT_YPOS, xpos + 2)) {
     int num = limit_int(min, max, entered, what, 0);
     if (limit_error[0]) {
-      printw("%s. %s ...", limit_error, ANYKEY_STR);
+      printw("%s. %s ...", limit_error, ANYCONT_STR);
       refresh(); getch();
     } else
       *val = num;
@@ -140,40 +134,50 @@ static void mc_get_int(int *val, int min, int max,
 }
 
 static inline void mc_key_h(void) { // help
-  erase();
-  mvprintw(2, 0,
-"Commands:\n"
-"  b <int>    set bit pattern in range 0..255, or random if it's negative\n"
-"  c <int>    set number of cycles to run, or unlimit (<1)\n"
-"  d          switch display mode\n"
+  t_cmd_hint cmd[] = {
+    {.key = "b", .hint = CMD_B_STR,  .type = CH_INT},
+    {.key = "c", .hint = CMD_C_STR},
+    {.key = "d", .hint = CMD_D_STR},
 #ifdef WITH_MPLS
-"  e          toggle MPLS info\n"
+    {.key = "e", .hint = CMD_E_STR},
 #endif
-"  f <int>    set first TTL (default 1)\n"
-"  i <int>    set interval in seconds (default 1)\n"
-"  j          toggle lattency/jitter stats (default latency)\n"
+    {.key = "f", .hint = CMD_F_STR,  .type = CH_INT},
+    {.key = "i", .hint = CMD_I_STR,  .type = CH_INT},
+    {.key = "j", .hint = CMD_J_STR},
 #ifdef WITH_IPINFO
-"  l          toggle ASN lookup\n"
-"  L          switch IP info\n"
+    {.key = "l", .hint = CMD_L_STR},
+    {.key = "L", .hint = CMD_LL_STR},
 #endif
-"  m <int>    set max TTL (default 30)\n"
-#ifdef ENABLE_DNS
-"  n          toggle DNS\n"
-#endif
-"  o <str>    set fields to display (default 'LRS N BAWV')\n"
-"  q          quit\n"
+    {.key = "m", .hint = CMD_M_STR,  .type = CH_INT},
+    {.key = "n", .hint = CMD_N_STR},
+    {.key = "o", .hint = CMD_O_STR,  .type = CH_STR},
+    {.key = "q", .hint = CMD_Q_STR},
 #ifdef IP_TOS
-"  Q <int>    set ToS/QoS\n"
+    {.key = "Q", .hint = CMD_QQ_STR, .type = CH_INT},
 #endif
-"  r          reset statistics\n"
-"  s <int>    set payload size (default 56), randomly within size range if it's negative\n"
-"  t          toggle TCP pings\n"
-"  u          toggle UDP pings\n"
-"  x          toggle cache mode\n"
-"  +-         scroll up/down\n"
-"  SPACE      pause/resume\n"
-"\n"
-"%s ...", ANYKEY_STR);
+    {.key = "r", .hint = CMD_R_STR},
+    {.key = "s", .hint = CMD_S_STR,  .type = CH_INT},
+    {.key = "t", .hint = CMD_T_STR},
+    {.key = "u", .hint = CMD_U_STR},
+    {.key = "x", .hint = CMD_X_STR},
+    {.key = "+-",      .hint = CMD_PM_STR},
+    {.key = SPACE_STR, .hint = CMD_SP_STR},
+  };
+  erase();
+  int x = 2; int y = 2, indent = 12;
+  mvprintw(x++, 0, "%s:", COMMANDS_STR);
+  for (unsigned i = 0; i < ARRAY_SIZE(cmd); i++) {
+    int pad = indent - ustrlen(cmd[i].key);
+    const char *type = cmd[i].type == CH_INT ? CH_INT_STR :
+                       cmd[i].type == CH_STR ? CH_STR_STR : NULL;
+    if (type) {
+      pad -= ustrlen(type) + 1;
+      mvprintw(x++, y, "%s %s%*s %s", cmd[i].key, type, (pad < 0) ? 0 : pad, "", cmd[i].hint);
+    } else
+      mvprintw(x++, y, "%s%*s %s", cmd[i].key, (pad < 0) ? 0 : pad, "", cmd[i].hint);
+  }
+  x++;
+  mvprintw(x++, 0, "%s ...", ANYCONT_STR);
   getch();
 }
 
@@ -184,7 +188,7 @@ static inline void mc_key_c(void) { // set number of cycles
   if (enter_smth(entered, sizeof(entered), HINT_YPOS, strlen(prompt))) {
     int num = limit_int(-1, INT_MAX, entered, "Number of cycles", 0);
     if (limit_error[0]) {
-      printw("%s. %s ...", limit_error, ANYKEY_STR);
+      printw("%s. %s ...", limit_error, ANYCONT_STR);
       refresh(); getch();
     } else {
       run_opts.cycles = num;
@@ -194,11 +198,10 @@ static inline void mc_key_c(void) { // set number of cycles
 }
 
 static inline void mc_key_o(void) { // set fields to display and their order
-  const char what[] = "Fields";
-  mvprintw(HINT_YPOS, 0, "%s: %s\n\n", what, fld_active);
+  mvprintw(HINT_YPOS, 0, "%s: %s\n\n", FIELDS_STR, fld_active);
   for (int i = 0; i < stat_max; i++) if (stats[i].hint)
     printw("  %c: %s\n", stats[i].key, stats[i].hint);
-  move(HINT_YPOS, strlen(what) + 2);
+  move(HINT_YPOS, ustrlen(FIELDS_STR) + 2);
   refresh();
   enter_stat_fields();
 }
@@ -208,7 +211,7 @@ static inline void mc_key_Q(void) { // set QoS
 #if defined(ENABLE_IPV6) && !defined(IPV6_TCLASS)
   if (af == AF_INET6) {
     mvprintw(HINT_YPOS,     0, "IPv6 traffic class is not supported");
-    mvprintw(HINT_YPOS + 1, 0, "-> %s ...", ANYKEY_STR);
+    mvprintw(HINT_YPOS + 1, 0, "-> %s ...", ANYCONT_STR);
     getch();
   } else
 #endif
@@ -231,7 +234,7 @@ static inline void mc_key_s(void) { // set payload size
   if (enter_smth(entered, sizeof(entered), HINT_YPOS, strlen(prompt))) {
     int num = limit_int(-max, max, entered, "Payload size", 0);
     if (limit_error[0]) {
-      printw("%s. %s ...", limit_error, ANYKEY_STR);
+      printw("%s. %s ...", limit_error, ANYCONT_STR);
       refresh(); getch();
     } else {
       run_opts.size = num;
@@ -283,7 +286,9 @@ key_action_t mc_keyaction(void) {
       mc_get_int(&run_opts.interval, 1, INT_MAX, "Interval", NULL);
       OPT_SUM(interval);
     } break;
-    case 'j': return ActionJitter;
+    case 'j':
+      title_len = 0;
+      return ActionJitter;
 #ifdef WITH_IPINFO
     case 'l': return ActionAS;
     case 'L': return ActionII;
@@ -634,8 +639,8 @@ static void mc_stat_title(int x, int y) {
       int curx = getcurx(stdscr);
       int pos  = curx + ((pad > 0) ? pad : 1);
       if (!i && custom) {
-        int len = ustrlen(FIELDS_STR) + 2 + strnlen(fld_active, MAXFLD);
-        mvprintw(y - 1, mc_fit_posx(pos, len), "%s: %s", FIELDS_STR, fld_active);
+        int len = ustrlen(USR_FIELDS_STR) + 2 + strnlen(fld_active, MAXFLD);
+        mvprintw(y - 1, mc_fit_posx(pos, len), "%s: %s", USR_FIELDS_STR, fld_active);
       } else if (!custom) {
         const char *sub = i ? PINGS_STR : PACKETS_STR;
         int len = ustrlen(sub);
@@ -787,7 +792,7 @@ static void mc_statmode(void) {
     statx += ipinfo_width(); // indent: "NN. " + IPINFO
   }
 #endif
-  mvprintw(staty - 1, statx, "Host");
+  mvprintw(staty - 1, statx, "%s", HOST_STR);
   if (!title_len) title_len = get_title_len();
   int x = getmaxx(stdscr) - title_len - 1;
   if (x < 0) x = 0;
@@ -829,20 +834,20 @@ void mc_redraw(void) {
   }
   { // hints and time
     mvprintw(1, 0, "%s: ", OPTS_STR);
-    attron(A_BOLD); addch('h'); attroff(A_BOLD); printw("ints ");
-    attron(A_BOLD); addch('q'); attroff(A_BOLD); printw("uit\n");
-    time_t now = time(NULL);
+    attron(A_BOLD); addch('h'); attroff(A_BOLD); printw("%s ", _HINTS_STR);
+    attron(A_BOLD); addch('q'); attroff(A_BOLD); printw("%s\n", _QUIT_STR);
     int maxx = getmaxx(stdscr);
-#ifdef HAVE_CTIME_R
-    char str[32];
-    char *tm = (now > 0) ? ctime_r(&now, str) : NULL;
-#else
-    char *tm = (now > 0) ? ctime(&now) : NULL;
-#endif
-    int inc = snprintf(linebuf, sizeof(linebuf),
-      "%.*s: %s", (int)strnlen(srchost, maxx / 2), srchost, tm ? tm : "");
-    int len = (inc > 0) ? inc : 0;
-    mvaddstr(1, maxx - len, linebuf);
+    int inc = snprintf(linebuf, sizeof(linebuf), "%.*s", (int)strnlen(srchost, maxx / 2), srchost);
+    { // timestamp
+      char str[64];
+      const char *date = datetime(time(NULL), str, sizeof(str));
+      if (date) {
+        if (inc < 0) inc = 0;
+        inc += snprintf(linebuf + inc, sizeof(linebuf) - inc, ": %s", date);
+      }
+    }
+    if ((inc > 0) && linebuf[0])
+      mvaddstr(1, maxx - ustrlen(linebuf) - 1, linebuf);
   }
   // main body
   (curses_mode == 0) ? mc_statmode() : mc_histmode();
@@ -911,11 +916,11 @@ void mc_confirm(void) {
   if (at_quit || !stdscr || !screen_ready)
     return;
   at_quit = true;
-  const char *mesg = "Press any key to quit...";
   int y = getmaxy(stdscr) - 1;
   move(y - 1, 0); clrtoeol();
   move(y,     0); clrtoeol();
-  mvaddstr(y - 1, (getmaxx(stdscr) - strlen(mesg)) / 2, mesg);
+  int len = ustrlen(ANYQUIT_STR) + 4;
+  mvprintw(y - 1, (getmaxx(stdscr) - len) / 2, "%s ...", ANYQUIT_STR);
   flushinp();
   getch();
 }

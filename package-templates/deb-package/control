@@ -3,7 +3,7 @@ Section: net
 Priority: optional
 Maintainer: yvs <VSYakovetsky@gmail.com>
 Rules-Requires-Root: no
-Build-Depends: libncurses-dev, libcap-dev, debhelper, dpkg-dev, devscripts, meson, git, sed, pkgconf | pkg-config, libcap2-bin, libbsd-dev
+Build-Depends: libncurses-dev, libcap-dev, debhelper, dpkg-dev, devscripts, meson, git, sed, pkgconf | pkg-config, gettext-base | gettext, libcap2-bin, libbsd-dev
 Standards-Version: 4.6.2
 Homepage: https://github.com/yvs2014/mtr085
 

@@ -46,6 +46,7 @@ parts:
       - sed
       - meson
       - pkgconf
+      - gettext
       - build-essential
       - libncurses-dev
       - libcap-dev
@@ -56,4 +57,5 @@ parts:
     prime:
       - usr/bin/mtr
       - usr/share/man/man8/mtr.8
+      - usr/share/locale/uk/LC_MESSAGES/mtr085.mo
 

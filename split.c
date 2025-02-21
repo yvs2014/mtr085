@@ -26,6 +26,7 @@
 
 #include "common.h"
 #include "nls.h"
+#include "aux.h"
 
 #include "net.h"
 #ifdef ENABLE_DNS
@@ -115,27 +116,34 @@ void split_close(void) {
     WARN("%s", "tcsetattr()");
 }
 
-static inline void split_help(void) {
-  printf(
-"Commands:\n"
-"  e     toggle MPLS info\n"
-"  j     toggle lattency/jitter\n"
+static void split_help(void) {
+  t_cmd_hint cmd[] = {
+    {.key = "e", .hint = CMD_E_STR},
+    {.key = "j", .hint = CMD_J_STR},
 #ifdef WITH_IPINFO
-"  l     toggle ASN lookup\n"
-"  L     switch IP info\n"
+    {.key = "l", .hint = CMD_L_STR},
+    {.key = "L", .hint = CMD_LL_STR},
 #endif
 #ifdef ENABLE_DNS
-"  n     toggle DNS\n"
+    {.key = "n", .hint = CMD_N_STR},
 #endif
-"  q     quit\n"
-"  r     reset statistics\n"
-"  t     toggle TCP pings\n"
-"  u     toggle UDP pings\n"
-"  x     toggle cache mode\n"
-"  +-    scroll up/down\n"
-"  SPACE pause/resume\n"
-"\n"
-"%s ... ", ANYKEY_STR);
+    {.key = "q", .hint = CMD_Q_STR},
+    {.key = "r", .hint = CMD_R_STR},
+    {.key = "t", .hint = CMD_T_STR},
+    {.key = "u", .hint = CMD_U_STR},
+    {.key = "x", .hint = CMD_X_STR},
+    {.key = "+-",    .hint = CMD_PM_STR},
+    {.key = "SPACE", .hint = CMD_SP_STR},
+  };
+  int indent = 10;
+  //
+  printf("%s:\n", COMMANDS_STR);
+  for (unsigned i = 0; i < ARRAY_SIZE(cmd); i++) {
+    int pad = indent - ustrlen(cmd[i].key);
+    printf("%s%*s %s\n", cmd[i].key, (pad < 0) ? 0 : pad, "", cmd[i].hint);
+  }
+  printf("\n");
+  printf("%s ... ", ANYCONT_STR);
   fflush(stdout);
 }
 

@@ -40,7 +40,7 @@
 #endif
 
 #ifndef GITREV
-#define GITREV "206"
+#define GITREV "207"
 #endif
 
 typedef union inaddr_union {
@@ -69,6 +69,13 @@ typedef struct s_stat {
   unsigned len, min;
   const char *name, *hint, key;
 } t_stat;
+
+// cmd help messages
+typedef enum {CH_NA = 0, CH_INT, CH_STR} t_ch_type;
+typedef struct s_cmd_hint {
+  const char *key, *hint;
+  t_ch_type type;
+} t_cmd_hint;
 
 enum {
   MAXLABELS = 8, // mpls labels

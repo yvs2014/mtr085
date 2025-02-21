@@ -6,6 +6,7 @@
 #include <string.h>
 #include <ctype.h>
 #include <errno.h>
+#include <time.h>
 
 #include "aux.h"
 #include "common.h"
@@ -89,5 +90,18 @@ unsigned ustrlen(const char *str) {
   unsigned len = 0;
   if (str) for (; *str; str++) if ((*str & 0xc0) != 0x80) len++;
   return len;
+}
+
+char *datetime(time_t at, char *buff, size_t size) {
+  if (!buff || !size) return NULL;
+  buff[0] = 0;
+#ifdef HAVE_LOCALTIME_R
+  struct tm re;
+  struct tm *tm = (at > 0) ? localtime_r(&at, &re) : NULL;
+#else
+  struct tm *tm = (at > 0) ? localtime(&at) : NULL;
+#endif
+  if (tm) strftime(buff, size, "%c", tm);
+  return buff;
 }
 

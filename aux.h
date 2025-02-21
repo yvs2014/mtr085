@@ -23,5 +23,6 @@ const t_stat* active_stats(size_t nth);
 extern char limit_error[NAMELEN];
 int limit_int(int min, int max, const char *arg, const char *what, int8_t fail);
 unsigned ustrlen(const char *str);
+char *datetime(time_t at, char *buff, size_t size);
 
 #endif

@@ -5,3 +5,247 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
+
+## TUI
+
+msgid "Keys"
+msgstr "Гар.клавіші"
+
+# [h]ints
+msgid "ints"
+msgstr "(довідка)"
+
+# [q]uit
+msgid "uit"
+msgstr "(вихід)"
+
+msgid "Fields"
+msgstr "Поля"
+
+msgid "Custom fields"
+msgstr "Задані поля"
+
+msgid "Packets"
+msgstr "Пакети"
+
+msgid "Pings"
+msgstr "Пінги"
+
+
+## hop info
+msgid "Host"
+msgstr "Вузол"
+
+
+## stats
+
+msgid "Space between fields"
+msgstr "Проміжок між полями"
+
+msgid "Loss"
+msgstr "Втрат"
+
+msgid "Loss ratio"
+msgstr "Відсоток втрат"
+
+msgid "Drop"
+msgstr "Відх"
+
+msgid "Dropped packets"
+msgstr "Відкинуті пакети"
+
+msgid "Recv"
+msgstr "Отрим"
+
+msgid "Received packets"
+msgstr "Отримані пакети"
+
+msgid "Sent"
+msgstr "Відпр"
+
+msgid "Sent packets"
+msgstr "Надіслані пакети"
+
+msgid "Last"
+msgstr "Остан"
+
+msgid "Newest RTT(ms)"
+msgstr "Останнє RTT(мсек)"
+
+msgid "Best"
+msgstr "Кращ"
+
+msgid "Min/Best RTT(ms)"
+msgstr "Найкраще RTT(мсек)"
+
+msgid "Avrg"
+msgstr "Серед"
+
+msgid "Average RTT(ms)"
+msgstr "Середнє RTT(мсек)"
+
+msgid "Wrst"
+msgstr "Гірш"
+
+msgid "Max/Worst RTT(ms)"
+msgstr "Найгірше RTT(мсек)"
+
+msgid "StDev"
+msgstr "CтдВар"
+
+msgid "Standard deviation"
+msgstr "Стандартне відхилення"
+
+msgid "Mean"
+msgstr "Усрд"
+
+msgid "Geometric mean"
+msgstr "Геометрично усереднене"
+
+msgid "Jttr"
+msgstr "Джтр"
+
+msgid "Current jitter"
+msgstr "Поточний джиттер"
+
+msgid "Javg"
+msgstr "ДжСрд"
+
+msgid "Jitter mean/avrg"
+msgstr "Усереднений джиттер"
+
+msgid "Jmax"
+msgstr "ДжМакс"
+
+msgid "Worst jitter"
+msgstr "Найгірший джиттер"
+
+msgid "Jint"
+msgstr "ДжІнт"
+
+msgid "Interarrival jitter"
+msgstr "Міжінтервальний джиттер"
+
+
+## messages
+
+msgid "Press any key to continue"
+msgstr "Натисніть будь-яку клавішу для продовження"
+
+msgid "Press any key to quit"
+msgstr "Натисніть будь-яку клавішу для виходу"
+
+
+## cmd help
+
+msgid "Commands"
+msgstr "Команди"
+
+msgid "set bit pattern in range 0..255 (negative value means random)"
+msgstr "встановити бітовий шаблон у діапазоні 0..255 (від'ємне значення означає випадковий)"
+
+msgid "set number of cycles to run (no limit: 0)"
+msgstr "встановити кількість циклів виконання (без обмежень: 0)"
+
+msgid "switch display mode"
+msgstr "перемикання режиму відображення"
+
+msgid "toggle MPLS info"
+msgstr "вкл/викл MPLS відображення"
+
+msgid "set first TTL (default 1)"
+msgstr "встановити початковий TTL (стандартно 1)"
+
+msgid "set interval in seconds (default 1s)"
+msgstr "встановити інтервал у секундах (стандартно 1сек)"
+
+msgid "toggle latency/jitter stats (default: latency)"
+msgstr "перемикання відображення типустатистики, затримка чи джиттер (стандартно: затримка)"
+
+msgid "toggle ASN lookup"
+msgstr "вкл/викл відображення ASN"
+
+msgid "switch IP info"
+msgstr "перемикання режимів IP-інфо"
+
+msgid "set max TTL (default 30)"
+msgstr "встановити максимум для TTL (стандартно 30)"
+
+msgid "toggle DNS"
+msgstr "вкл/викл DNS"
+
+msgid "set stat fields to display (default: LS_NABWV)"
+msgstr "встановити поля статистики у відображенні (стандартно: LS_NABWV)"
+
+msgid "quit"
+msgstr "вихід"
+
+msgid "set ToS/QoS (quality of service)"
+msgstr "встановити ToS/QoS (якість сервісу)"
+
+msgid "reset statistics"
+msgstr "обнулити статистику"
+
+msgid "set payload size (default 56), randomly within size range if it's negative"
+msgstr "встановити розмір данних (стандартно 56), випадково у діапазоні розміру якщо розмір від’ємний"
+
+msgid "toggle TCP pings"
+msgstr "вкл/викл TCP пінги"
+
+msgid "toggle UDP pings"
+msgstr "вкл/викл UDP пінги"
+
+msgid "toggle cache mode"
+msgstr "вкл/викл режим кешування"
+
+msgid "scroll up/down"
+msgstr "прокрутка догори/донизу"
+
+msgid "pause/resume"
+msgstr "призупинити/продовжити"
+
+msgid "SPACE"
+msgstr "ПРОБІЛ"
+
+msgid "<int>"
+msgstr "<число>"
+
+msgid "<string>"
+msgstr "<текст>"
+
+
+## cli help
+
+msgid "Usage"
+msgstr "Використання"
+
+msgid "TARGET"
+msgstr "ЦІЛЬ"
+
+msgid "PORT"
+msgstr "ПОРТ"
+
+msgid "IP.ADD.RE.SS"
+msgstr "IP.АДРЕСА"
+
+msgid "NUMBER"
+msgstr "ЧИСЛО"
+
+msgid "COUNT"
+msgstr "ЧИСЛО"
+
+msgid "MODE"
+msgstr "РЕЖИМ"
+
+msgid "FIELDS"
+msgstr "ПОЛЯ"
+
+msgid "SECONDS"
+msgstr "СЕКУНДИ"
+
+msgid "SERVER,FIELDS"
+msgstr "СЕРВЕР,ПОЛЯ"
+
+msgid "BYTES"
+msgstr "БАЙТИ"
+

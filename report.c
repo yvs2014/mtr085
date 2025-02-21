@@ -25,7 +25,6 @@
 #include <string.h>
 #include <assert.h>
 #include <limits.h>
-#include <time.h>
 
 #ifdef OUTPUT_FORMAT_CSV
 #include <ctype.h>
@@ -35,6 +34,7 @@
 #endif
 
 #include "common.h"
+#include "nls.h"
 
 #include "aux.h"
 #include "report.h"
@@ -50,22 +50,7 @@
 #define MAXDNAME 1025
 #endif
 
-#define HOSTTITLE "Host"
-
 static time_t started_at;
-
-static char *at_time_str(time_t at, char *str, size_t size) {
-  if (!str || !size) return NULL;
-  str[0] = 0;
-#ifdef HAVE_LOCALTIME_R
-  struct tm re;
-  struct tm *tm = (at > 0) ? localtime_r(&at, &re) : NULL;
-#else
-  struct tm *tm = (at > 0) ? localtime(&at) : NULL;
-#endif
-  if (tm) strftime(str, size, "%F %T %z", tm);
-  return str;
-}
 
 void report_started_at(void) { started_at = time(NULL); }
 
@@ -126,16 +111,28 @@ void report_resolv(void) {
 }
 #endif
 
-#define INFOPATT "%-*s"
 #define INDENT "    " // 4 x _
+
+#ifdef WITH_IPINFO
+static void report_info(int infolen, const char *info) {
+  if (!infolen) return;
+  if (info) {
+    int len = infolen - ustrlen(info) + 1;
+    printf("%s%*s", info, (len < 0) ? 0 : len, "");
+  } else printf("%*s", infolen + 1, "");
+}
+#define REPORT_INFO(a, b) report_info(a, b)
+#else
+#define REPORT_INFO(a, b) NOOP
+#endif
 
 static void report_print_header(int hostlen, int infolen) {
   printf("%s", INDENT);
   // left
-#ifdef WITH_IPINFO
-  if (infolen) printf(INFOPATT " ", infolen, ipinfo_header());
-#endif
-  printf(INFOPATT, hostlen, HOSTTITLE);
+  REPORT_INFO(infolen, ipinfo_header());
+  { printf("%s", HOST_STR);
+    int len = hostlen - ustrlen(HOST_STR);
+    if (len > 0) printf("%*s", len, ""); }
   // right
   for (unsigned i = 0; i < sizeof(fld_index); i++) {
     const t_stat *stat = active_stats(i);
@@ -151,12 +148,10 @@ static void report_print_header(int hostlen, int infolen) {
 static void report_print_body(int at, const char *fmt, int hostlen, int infolen) {
   // body: left
   if (fmt) printf(fmt, at + 1);
-#ifdef WITH_IPINFO
-  if (infolen) printf(INFOPATT " ", infolen, fmt_ipinfo(at, host[at].current));
-#endif
+  REPORT_INFO(infolen, fmt_ipinfo(at, host[at].current));
   { char name[MAXDNAME] = {0};
     snprint_addr(name, sizeof(name), at, host[at].current);
-    printf(INFOPATT, hostlen, name); }
+    printf("%-*s", hostlen, name); }
   // body: right
   for (unsigned i = 0; i < sizeof(fld_index); i++) {
     const t_stat *stat = active_stats(i);
@@ -180,19 +175,16 @@ static void report_print_rest(int at, int hostlen, int infolen) {
     if (!addr_exist(&IP_AT_NDX(at, i)))
       break; // done
     printf("%s", INDENT);
-#ifdef WITH_IPINFO
-    if (infolen) printf(INFOPATT " ", infolen, fmt_ipinfo(at, i));
-#endif
+    REPORT_INFO(infolen, fmt_ipinfo(at, i));
     { char name[MAXDNAME] = {0};
       snprint_addr(name, sizeof(name), at, i);
-      printf(INFOPATT "\n", hostlen, name); }
+      printf("%-*s\n", hostlen, name); }
 #ifdef WITH_MPLS
     if (run_opts.mpls)
       print_mpls(&MPLS_AT_NDX(at, i));
 #endif
   }
 }
-#undef INFOPATT
 #undef INDENT
 
 
@@ -200,11 +192,11 @@ void report_close(bool next, bool with_header) {
   if (last_neterr != 0) return;
   if (next) printf("\n");
   if (with_header) {
-    char str[32];
-    char *tm = at_time_str(started_at, str, sizeof(str));
-    printf("[%s] %s: %s %s %s\n", tm ? tm : "", srchost, PACKAGE_NAME, mtr_args, dsthost);
+    char str[64];
+    const char *date = datetime(started_at, str, sizeof(str));
+    printf("[%s] %s: %s %s %s\n", date ? date : "", srchost, PACKAGE_NAME, mtr_args, dsthost);
   }
-  int hostlen = get_longest_name(strlen(HOSTTITLE), MAXDNAME) + 1;
+  int hostlen = get_longest_name(ustrlen(HOST_STR), MAXDNAME) + 1;
   int infolen =
 #ifdef WITH_IPINFO
     ipinfo_ready() ? ipinfo_width() :
@@ -270,10 +262,10 @@ void json_tail(void) { printf("\n]}\n"); }
 
 void json_close(bool next) {
   if (next) printf(",");
-  { char str[32];
-    char *tm = at_time_str(started_at, str, sizeof(str));
+  { char str[64];
+    const char *date = datetime(started_at, str, sizeof(str));
     printf("\n%*s{\"destination\":\"%s\",\"datetime\":\"%s\",\"data\":[",
-      JSON_MARGIN, "", dsthost, tm ? tm : ""); }
+      JSON_MARGIN, "", dsthost, date ? date : ""); }
   int min = net_min(), max = net_max();
   for (int at = min; at < max; at++) {
     char buf[MAXDNAME] = {0};
