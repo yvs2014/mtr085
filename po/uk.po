@@ -127,15 +127,6 @@ msgid "Interarrival jitter"
 msgstr "Міжінтервальний джиттер"
 
 
-## messages
-
-msgid "Press any key to continue"
-msgstr "Натисніть будь-яку клавішу для продовження"
-
-msgid "Press any key to quit"
-msgstr "Натисніть будь-яку клавішу для виходу"
-
-
 ## cmd help
 
 msgid "Commands"
@@ -248,4 +239,129 @@ msgstr "СЕРВЕР,ПОЛЯ"
 
 msgid "BYTES"
 msgstr "БАЙТИ"
+
+
+## option hints
+
+msgid "Bit pattern"
+msgstr "Бітовий шаблон"
+
+msgid "Number of cycles"
+msgstr "Кількість циклів"
+
+msgid "First TTL"
+msgstr "Мінімальний TTL"
+
+msgid "Max TTL"
+msgstr "Максимальний TTL"
+
+msgid "Interval"
+msgstr "Інтервал"
+
+msgid "QoS/ToS"
+msgstr "QoS/ToS (якість сервісу)"
+
+msgid "Display mode"
+msgstr "Режим відображення"
+
+msgid "Payload size"
+msgstr "Розмір даних"
+
+msgid "Mutually exclusive options"
+msgstr "Взаємовиключні опції"
+
+msgid "TCP timeout"
+msgstr "Таймаут TCP"
+
+msgid "Cache timeout"
+msgstr "Таймаут кешування"
+
+
+## misc
+
+msgid "target"
+msgstr "ціль"
+
+msgid "port number"
+msgstr "номер порту"
+
+# max=
+msgid "max"
+msgstr "макс"
+
+# n opened
+msgid "opened"
+msgstr "відкрито"
+
+# n closed
+msgid "closed"
+msgstr "закрито"
+
+# n quieries
+msgid "queries"
+msgstr "запитів"
+
+# n replies
+msgid "replies"
+msgstr "відповідей"
+
+msgid "NONE"
+msgstr "НЕМАЄ"
+
+
+## messages
+
+msgid "Press any key to continue"
+msgstr "Натисніть будь-яку клавішу для продовження"
+
+msgid "Press any key to quit"
+msgstr "Натисніть будь-яку клавішу для виходу"
+
+msgid "Unknown error"
+msgstr "Невідома помилка"
+
+msgid "Unable to get raw sockets"
+msgstr "Raw-сокети недоступні"
+
+msgid "Unable to drop permissions"
+msgstr "Не вдалося повернутися до рівня користувача (permissions)"
+
+msgid "Unable to drop capabilities"
+msgstr "Не вдалося повернутися до рівня користувача (capabilities)"
+
+msgid "Failed to resolve"
+msgstr "Не вдалося розпізнати"
+
+msgid "Only one DNS server is used"
+msgstr "Використовується лише один DNS сервер"
+
+msgid "Failed to parse"
+msgstr "Не вдалося розпарсити"
+
+msgid "Failed to set nameserver"
+msgstr "Не вдалося встановити DNS сервер"
+
+msgid "IPv6 traffic class is not supported"
+msgstr "Клас трафіку IPv6 не підтримується"
+
+msgid "Unable to open display"
+msgstr "Неможливо ініціалізувати екран"
+
+msgid "Too many stat fields"
+msgstr "Забагато елементів для статистики"
+
+msgid "Unknown stat field"
+msgstr "Невідомий елемент для статистики"
+
+msgid "Unable to set host entry"
+msgstr "Помилка встановлення хост запису"
+
+msgid "Unable to use address"
+msgstr "Неможливо використати адресу"
+
+msgid "UTF8 is not printable"
+msgstr "UTF8 error: непридатно для друку"
+
+msgid "No address found"
+msgstr "Адресу не знайдено"
 

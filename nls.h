@@ -51,10 +51,6 @@
 #define JINT_STR   _("Jint")
 #define JINT_HINT  _("Interarrival Jitter")
 
-// messages
-#define ANYCONT_STR  _("Press any key to continue")
-#define ANYQUIT_STR  _("Press any key to quit")
-
 // cmd help
 #define COMMANDS_STR _("Commands")
 #define CMD_B_STR    _("set bit pattern in range 0..255 (negative value means random)")
@@ -94,5 +90,48 @@
 #define CLI_SEC_STR   _("SECONDS")
 #define CLI_IINFO_STR _("SERVER,FIELDS")
 #define CLI_BYTE_STR  _("BYTES")
+
+// option hints
+#define BITPATT_STR    _("Bit pattern")
+#define CYCLESNO_STR   _("Number of cycles")
+#define MINTTL_STR     _("First TTL")
+#define MAXTTL_STR     _("Max TTL")
+#define INTERVAL_STR   _("Interval")
+#define QOSTOS_STR     _("QoS/ToS")
+#define PLDSIZE_STR    _("Payload size")
+#define MUTEXCL_ERR    _("Mutually exclusive options")
+#define TCP_TOUT_STR   _("TCP timeout")
+#define CACHE_TOUT_STR _("Cache timeout")
+
+// misc
+#define TARGET_STR     _("target")
+#define PORTNUM_STR    _("port number")
+#define MAX_STR        _("max")
+#define OPENED_STR     _("opened")
+#define CLOSED_STR     _("closed")
+#define QUERIES_STR    _("queries")
+#define REPLIES_STR    _("replies")
+#define NONE_STR       _("NONE")
+
+// messages
+#define ANYCONT_STR  _("Press any key to continue")
+#define ANYQUIT_STR  _("Press any key to quit")
+#define UNKNOWN_ERR  _("Unknown error")
+#define RAWSOCK_ERR  _("Unable to get raw sockets")
+#define DROPPERM_ERR _("Unable to drop permissions")
+#define DROPCAP_ERR  _("Unable to drop capabilities")
+#define RESFAIL_ERR  _("Failed to resolve")
+#define MANYNS_WARN  _("Only one DNS server is used")
+#define PARSE_ERR    _("Failed to parse")
+#define SETNS_ERR    _("Failed to set nameserver")
+#define OPENDISP_ERR _("Unable to open display")
+#define TCLASS6_ERR  _("IPv6 traffic class is not supported")
+#define DISPMODE_ERR _("Display mode")
+#define OVERFLD_ERR  _("Too many stat fields")
+#define UNKNFLD_ERR  _("Unknown stat field")
+#define HOSTENT_ERR  _("Unable to set host entry")
+#define USEADDR_ERR  _("Unable to use address")
+#define UNOPRINT_ERR _("UTF8 is not printable")
+#define NOADDR_ERR   _("No address found")
 
 #endif

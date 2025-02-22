@@ -1059,7 +1059,7 @@ static int net_socket(int domain, int type, int proto, const char *what) {
   RAWCAP_ON;
   int sock = socket(domain, type, proto);
   if (sock < 0)
-    warn("%s: %s", __func__, what);
+    warn("%s", what);
   else
     /*summ*/ sum_sock[0]++;
   RAWCAP_OFF;
@@ -1097,7 +1097,7 @@ bool net_open(void) {
 #ifdef IP_HDRINCL
   int trueopt = 1; // tell that we provide IP header
   if (setsockopt(sendsock4, 0, IP_HDRINCL, &trueopt, sizeof(trueopt)) < 0) {
-    WARN("setsockopt(sock=%d, IP_HDRINCL)", sendsock4);
+    warn("setsockopt(sock=%d, IP_HDRINCL)", sendsock4);
     net_sock_close();
     return false;
   }

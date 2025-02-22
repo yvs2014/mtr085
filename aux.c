@@ -50,13 +50,13 @@ const t_stat* active_stats(size_t nth) {
   return ((ndx >= 0) && (ndx < stat_max)) ? &stats[ndx] : NULL;
 }
 
-static inline long str2long(const char *arg) {
+static inline long long str2ll(const char *arg) {
 #define STR2L_FAILED (errno || (end && *end) || (arg == end))
   char *end = NULL; errno = 0;
-  long num = strtol(arg, &end, 10);
+  long long num = strtoll(arg, &end, 10);
   if (STR2L_FAILED) { // try hex
     end = NULL; errno = 0;
-    num = strtol(arg, &end, 16);
+    num = strtoll(arg, &end, 16);
     if (STR2L_FAILED && !errno)
       errno = EINVAL;
   }
@@ -67,8 +67,8 @@ static inline long str2long(const char *arg) {
 char limit_error[NAMELEN];
 int limit_int(int min, int max, const char *arg, const char *what, int8_t fail) {
   limit_error[0] = 0;
-  int val = str2long(arg);
-  int lim = val;
+  long long val = str2ll(arg);
+  long long lim = val;
   if (errno)
     snprintf(limit_error, sizeof(limit_error), "%s", strerror(errno));
   if ((val < min) || (val > max)) {
@@ -78,9 +78,11 @@ int limit_int(int min, int max, const char *arg, const char *what, int8_t fail) 
       "%s: %s: %s [%d,%d]", what, arg, strerror(errno), min, max);
   }
   if (errno && fail) {
-    if (fail > 0)
-      err(errno ? errno : EXIT_FAILURE, "-%c", fail);
-    else
+    if (fail > 0) {
+      limit_error[0] ?
+        errx(errno ? errno : EXIT_FAILURE, "-%c: %s", fail, limit_error) :
+        err (errno ? errno : EXIT_FAILURE, "-%c", fail);
+    } else
       warnx("%s", limit_error);
   }
   return lim;
