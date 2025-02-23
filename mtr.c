@@ -422,8 +422,7 @@ static inline void option_d(char opt) {
 
 static inline void option_F(char opt) {
   if (strnlen(optarg, MAXFLD + 1) > MAXFLD)
-    errx(EINVAL, "-%c: %s (%s=%zd): %s", opt,
-      OVERFLD_ERR, MAX_STR, sizeof(fld_active) - 1, optarg);
+    errx(EINVAL, "-%c: %s (%s=%d): %s", opt, OVERFLD_ERR, MAX_STR, MAXFLD, optarg);
   for (int i = 0; optarg[i]; i++) {
     int cnt = 0;
     for (; cnt < stat_max; cnt++)
@@ -605,7 +604,7 @@ static inline void short_set(char opt, const char *progname) {
       break;
     case 's': {
       int max = MAXPACKET - MINPACKET;
-      ini_opts.size = limit_int(-max, max, optarg, PLDSIZE_STR, opt);
+      ini_opts.size = limit_int(-max, max, optarg, PSIZE_STR, opt);
     } break;
     case 'S':
       ini_opts.stat = true;

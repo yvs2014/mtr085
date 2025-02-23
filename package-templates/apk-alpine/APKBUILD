@@ -16,9 +16,9 @@ giturl="$url"
 arch='all'
 license='GPL'
 depends='!mtr-*'
-makedepends='git meson pkgconf gcc ncurses-dev libcap-dev libidn-dev'
+makedepends='git meson pkgconf gcc gettext gettext-dev ncurses-dev libcap-dev libidn-dev'
 options='strip !debug !check'
-subpackages="$pkgname-doc"
+subpackages="$pkgname-doc $pkgname-lang"
 
 provides="$_bin"
 install="$pkgname.post-install $pkgname.post-upgrade"

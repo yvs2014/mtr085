@@ -356,11 +356,10 @@ static key_action_t keyboard_events(key_action_t action) {
       if (mtrtype != IPPROTO_ICMP)
         net_set_type(IPPROTO_ICMP);
       else {
-        net_set_type((action == ActionUDP) ? IPPROTO_UDP : IPPROTO_TCP);
-        if (action == ActionUDP)
-          run_opts.udp = true;
-        else
-          run_opts.tcp = true;
+        bool udp = (action == ActionUDP);
+        net_set_type(udp ? IPPROTO_UDP : IPPROTO_TCP);
+        if (udp) run_opts.udp = true;
+        else     run_opts.tcp = true;
       }
       OPT_SUM(udp);
       OPT_SUM(tcp);

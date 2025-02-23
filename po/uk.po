@@ -31,6 +31,98 @@ msgstr "Пакети"
 msgid "Pings"
 msgstr "Пінги"
 
+msgid "0 for unlimit"
+msgstr "0 - безлім"
+
+msgid "ToS bits: lowcost(1), reliability(2), throughput(4), lowdelay(8)"
+msgstr "біти ToS: лоукост(1), надійно(2), прохідний(4), низька-затримка(8)"
+
+msgid "Change payload size"
+msgstr "Змінити розмір даних"
+
+msgid "negative values are for random"
+msgstr "від'ємні значення - вибирати випадково"
+
+msgid "range"
+msgstr "діапазон"
+
+msgid "range[0-255], random is -1"
+msgstr "діапазон[0-255], -1 - вибирати випадково"
+
+msgid "Interval in seconds"
+msgstr "Інтервал в секундах"
+
+msgid "less than"
+msgstr "менше за"
+
+msgid "more than"
+msgstr "більше ніж"
+
+msgid "Unknown"
+msgstr "Невідомо"
+
+msgid "Histogram"
+msgstr "Гістограма"
+
+msgid "pings"
+msgstr "пінги"
+
+msgid "Scale"
+msgstr "Шкала"
+
+msgid "ms"
+msgstr "мсек"
+
+#
+
+msgid "udp"
+msgstr "udp"
+
+msgid "tcp"
+msgstr "tcp"
+
+msgid "mpls"
+msgstr "mpls"
+
+msgid "asn"
+msgstr "asn"
+
+msgid "ipinfo"
+msgstr "інфо"
+
+msgid "dns"
+msgstr "днс"
+
+msgid "jitter"
+msgstr "джиттер"
+
+msgid "chart"
+msgstr "діагр"
+
+msgid "pattern"
+msgstr "шаблон"
+
+msgid "dt"
+msgstr "інтерв"
+
+msgid "cycles"
+msgstr "цикли"
+
+msgid "ttl"
+msgstr "ттл"
+
+msgid "qos"
+msgstr "qos"
+
+msgid "size"
+msgstr "розмір"
+
+msgid "cache"
+msgstr "кеш"
+
+msgid "on pause"
+msgstr "на паузі"
+
 
 ## hop info
 msgid "Host"

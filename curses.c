@@ -77,6 +77,8 @@
 #include "ipinfo.h"
 #endif
 
+#define MSEC_FMT "%.*f %s"
+
 enum { LINEMAXLEN = 1024, HINT_YPOS = 2, HOSTINFOMAX = 30 };
 
 static char screen_title[NAMELEN]; // progname + arguments + destination
@@ -121,7 +123,7 @@ static void mc_get_int(int *val, int min, int max,
   mvprintw(HINT_YPOS, 0, "%s: %d", what, *val);
   if (hint)
     mvprintw(HINT_YPOS + 1, 0, "-> %s", hint);
-  int xpos = what ? strlen(what) : 0;
+  int xpos = what ? ustrlen(what) : 0;
   char entered[MAXFLD + 1] = {0};
   if (enter_smth(entered, sizeof(entered), HINT_YPOS, xpos + 2)) {
     int num = limit_int(min, max, entered, what, 0);
@@ -136,7 +138,7 @@ static void mc_get_int(int *val, int min, int max,
 static inline void mc_key_h(void) { // help
   t_cmd_hint cmd[] = {
     {.key = "b", .hint = CMD_B_STR,  .type = CH_INT},
-    {.key = "c", .hint = CMD_C_STR},
+    {.key = "c", .hint = CMD_C_STR,  .type = CH_INT},
     {.key = "d", .hint = CMD_D_STR},
 #ifdef WITH_MPLS
     {.key = "e", .hint = CMD_E_STR},
@@ -182,11 +184,11 @@ static inline void mc_key_h(void) { // help
 }
 
 static inline void mc_key_c(void) { // set number of cycles
-  const char *prompt = "Number (unlimit 0) of cycles: ";
-  mvaddstr(HINT_YPOS, 0, prompt); printw("%d", run_opts.cycles);
+  mvprintw(HINT_YPOS, 0, "%s (%s): %d", CYCLESNO_STR, CYCLE0NO_STR, run_opts.cycles);
+  int xpos = ustrlen(CYCLESNO_STR) + 2 + ustrlen(CYCLE0NO_STR) + 3;
   char entered[MAXFLD + 1] = {0};
-  if (enter_smth(entered, sizeof(entered), HINT_YPOS, strlen(prompt))) {
-    int num = limit_int(-1, INT_MAX, entered, "Number of cycles", 0);
+  if (enter_smth(entered, sizeof(entered), HINT_YPOS, xpos)) {
+    int num = limit_int(0, INT_MAX, entered, CYCLESNO_STR, 0);
     if (limit_error[0]) {
       printw("%s. %s ...", limit_error, ANYCONT_STR);
       refresh(); getch();
@@ -210,14 +212,13 @@ static inline void mc_key_o(void) { // set fields to display and their order
 static inline void mc_key_Q(void) { // set QoS
 #if defined(ENABLE_IPV6) && !defined(IPV6_TCLASS)
   if (af == AF_INET6) {
-    mvprintw(HINT_YPOS,     0, "IPv6 traffic class is not supported");
+    mvprintw(HINT_YPOS,     0, "%s", TCLASS6_ERR);
     mvprintw(HINT_YPOS + 1, 0, "-> %s ...", ANYCONT_STR);
     getch();
   } else
 #endif
   { int qos = run_opts.qos;
-    mc_get_int(&qos, 0, UINT8_MAX, "QoS",
-      "ToS bits: lowcost(1), reliability(2), throughput(4), lowdelay(8)");
+    mc_get_int(&qos, 0, UINT8_MAX, QOSTOS_STR, TOS_HINT_STR);
     run_opts.qos = qos;
     OPT_SUM(qos);
   }
@@ -225,14 +226,13 @@ static inline void mc_key_Q(void) { // set QoS
 #endif
 
 static inline void mc_key_s(void) { // set payload size
-  const char *prompt = "Change payload size: ";
-  mvaddstr(HINT_YPOS, 0, prompt);
-  printw("%d", run_opts.size);
+  mvprintw(HINT_YPOS, 0, "%s: %d", PSIZE_CHNG_STR, run_opts.size);
   const int max = MAXPACKET - MINPACKET;
-  mvprintw(HINT_YPOS + 1, 0, "-> range[%d,%d], negative values are for random", -max, max);
+  mvprintw(HINT_YPOS + 1, 0, "-> %s[%d,%d], %s", RANGE_STR, -max, max, NEG4RND_STR);
   char entered[MAXFLD + 1] = {0};
-  if (enter_smth(entered, sizeof(entered), HINT_YPOS, strlen(prompt))) {
-    int num = limit_int(-max, max, entered, "Payload size", 0);
+  int xpos = ustrlen(PSIZE_CHNG_STR) + 2;
+  if (enter_smth(entered, sizeof(entered), HINT_YPOS, xpos)) {
+    int num = limit_int(-max, max, entered, PSIZE_STR, 0);
     if (limit_error[0]) {
       printw("%s. %s ...", limit_error, ANYCONT_STR);
       refresh(); getch();
@@ -264,8 +264,7 @@ key_action_t mc_keyaction(void) {
       mc_key_h();
       break;
     case 'b': // bit pattern
-      mc_get_int(&run_opts.pattern, -1, UINT8_MAX,
-        "Bit Pattern", "range[0-255], random is -1");
+      mc_get_int(&run_opts.pattern, -1, UINT8_MAX, BITPATT_STR, RANGENEG_STR);
       OPT_SUM(pattern);
       reset_pattern = true;
       break;
@@ -278,12 +277,12 @@ key_action_t mc_keyaction(void) {
 #endif
     case 'f': { // first ttl
       int minttl = run_opts.minttl;
-      mc_get_int(&minttl, 1, run_opts.maxttl, "First TTL", NULL);
+      mc_get_int(&minttl, 1, run_opts.maxttl, MINTTL_STR, NULL);
       run_opts.minttl = minttl;
       OPT_SUM(minttl);
     } break;
     case 'i': { // interval
-      mc_get_int(&run_opts.interval, 1, INT_MAX, "Interval", NULL);
+      mc_get_int(&run_opts.interval, 1, INT_MAX, GAPINSEC_STR, NULL);
       OPT_SUM(interval);
     } break;
     case 'j':
@@ -295,7 +294,7 @@ key_action_t mc_keyaction(void) {
 #endif
     case 'm': { // max ttl
       int maxttl = run_opts.maxttl;
-      mc_get_int(&maxttl, run_opts.minttl, MAXHOST - 1, "Max TTL", NULL);
+      mc_get_int(&maxttl, run_opts.minttl, MAXHOST - 1, MAXTTL_STR, NULL);
       run_opts.maxttl = maxttl;
       OPT_SUM(maxttl);
     } break;
@@ -522,7 +521,6 @@ static void mc_init(void) {
   { // map3 init
     for (int i = 0; i < NUM_FACTORS3_MONO; i++)
       map3[i].CCHAR_chars[0] = L'▁' + i;
-
     if (run_opts.color) {
       for (int i = 0; i < NUM_FACTORS3 - 1; i++) {
         int base = i / NUM_FACTORS3_MONO;
@@ -659,7 +657,7 @@ static void mtr_print_scale3(int min, int max, int step) {
     add_wch(&map3[i]);
     if (scale3[i] > 0) {
       LENVALMIL(scale3[i]);
-      printw(":%.*fms", _l, _v);
+      printw(":" MSEC_FMT, _l, _v, MSEC_STR);
     }
   }
   addstr("  ");
@@ -671,17 +669,17 @@ static inline int map2ch(int ndx) { return map2[ndx] & A_CHARTEXT; }
 
 static void print_scale(void) {
   attron(A_BOLD);
-  printw("Scale:");
+  printw("%s:", SCALE_STR);
   attroff(A_BOLD);
   if (curses_mode == 1) {
     addstr("  ");
     addch(map1[0] | A_BOLD);
     LENVALMIL(scale2[NUM_FACTORS2 - 2]);
-    printw(" less than %.*fms   ", _l, _v);
+    printw(" %s " MSEC_FMT "   ", LESSTHAN_STR, _l, _v, MSEC_STR);
     addch(map1[1] | (run_opts.color ? 0 : A_BOLD));
-    printw(" more than %.*fms   ", _l, _v);
+    printw(" %s " MSEC_FMT "   ", MORETHAN_STR, _l, _v, MSEC_STR);
     addch('?' | (run_opts.color ? (map2[NUM_FACTORS2 - 1] & A_ATTRIBUTES) : A_BOLD));
-    addstr(" Unknown");
+    printw(" %s", UNKNOWN_STR);
   } else if (curses_mode == 2) {
     if (run_opts.color) {
       for (int i = 0; i < NUM_FACTORS2 - 1; i++) {
@@ -689,7 +687,7 @@ static void print_scale(void) {
         addch(map2[i]);
         if (scale2[i] > 0) {
           LENVALMIL(scale2[i]);
-          printw(":%.*fms", _l, _v);
+          printw(":" MSEC_FMT, _l, _v, MSEC_STR);
         }
       }
       addstr("  ");
@@ -698,7 +696,7 @@ static void print_scale(void) {
       for (int i = 0; i < NUM_FACTORS2 - 1; i++) {
         if (scale2[i] > 0) {
           LENVALMIL(scale2[i]);
-          printw("  %c:%.*fms", map2ch(i), _l, _v);
+          printw("  %c:" MSEC_FMT, map2ch(i), _l, _v, MSEC_STR);
         }
       }
       printw("  %c", map2ch(NUM_FACTORS2 - 1));
@@ -719,15 +717,15 @@ static void print_scale(void) {
   if (run_opts.tag != ini_opts.tag) { \
     len += snprint_iarg(run_opts.tag, buf + len, size - len, (what)); } \
 } while (0)
-#define INT_OPT2STR(tag, what) do { \
-  if (run_opts.tag != ini_opts.tag)   \
-    ADD_INT_INFO(what, run_opts.tag); \
+#define INT_OPT2STR(tag, prfx, fmt) do {   \
+  if (run_opts.tag != ini_opts.tag)        \
+    ADD_INT_INFO(prfx, fmt, run_opts.tag); \
 } while (0)
-#define ADD_INT_INFO(what, value) do { \
-  int inc = snprintf(buf + len, size - len, "%s" what, IASP, (value)); \
-  if (inc > 0)     \
-    len += inc;    \
-  iargs_sp = true; \
+#define ADD_INT_INFO(prfx, fmt, value) do { \
+  int inc = snprintf(buf + len, size - len, \
+    "%s%s" fmt, IASP, prfx, (value));       \
+  if (inc > 0) len += inc;                  \
+  iargs_sp = true;                          \
 } while (0)
 
 static bool iargs_sp;
@@ -742,36 +740,36 @@ static int mc_snprint_args(char *buf, size_t size) {
   int len = snprintf(buf, size, " (");
   if (len < 0)
     len = 0;
-  BOOL_OPT2STR(udp,    "udp");
-  BOOL_OPT2STR(tcp,    "tcp");
+  BOOL_OPT2STR(udp,    PAR_UDP_STR);
+  BOOL_OPT2STR(tcp,    PAR_TCP_STR);
 #ifdef WITH_MPLS
-  BOOL_OPT2STR(mpls,   "mpls");
+  BOOL_OPT2STR(mpls,   PAR_MPLS_STR);
 #endif
 #ifdef WITH_IPINFO
-  BOOL_OPT2STR(asn,    "asn");
-  BOOL_OPT2STR(ipinfo, "ipinfo");
+  BOOL_OPT2STR(asn,    PAR_ASN_STR);
+  BOOL_OPT2STR(ipinfo, PAR_IPINFO_STR);
 #endif
 #ifdef ENABLE_DNS
-  BOOL_OPT2STR(dns,    "dns");
+  BOOL_OPT2STR(dns,    PAR_DNS_STR);
 #endif
-  BOOL_OPT2STR(jitter, "jitter");
+  BOOL_OPT2STR(jitter, PAR_JITTER_STR);
   if (run_opts.chart != ini_opts.chart)
-    ADD_INT_INFO("chart%u", run_opts.chart);
+    ADD_INT_INFO(PAR_CHART_STR, "%u", run_opts.chart);
   //
-  INT_OPT2STR(pattern,  "patt=%d");
-  INT_OPT2STR(interval, "dt=%d");
-  INT_OPT2STR(cycles,   "cycles=%d");
-  INT_OPT2STR(minttl,   "ttl>=%u");
-  INT_OPT2STR(maxttl,   "ttl<=%u");
-  INT_OPT2STR(qos,      "qos=%u");
-  INT_OPT2STR(size,     "size=%d");
+  INT_OPT2STR(pattern,  PAR_PATT_STR, "=%d");
+  INT_OPT2STR(interval, PAR_DT_STR, "=%d");
+  INT_OPT2STR(cycles,   PAR_CYCLES_STR, "=%d");
+  INT_OPT2STR(minttl,   PAR_TTL_STR, ">=%u");
+  INT_OPT2STR(maxttl,   PAR_TTL_STR, "<=%u");
+  INT_OPT2STR(qos,      PAR_QOS_STR, "=%u");
+  INT_OPT2STR(size,     PAR_SIZE_STR, "=%d");
   //
-  BOOL_OPT2STR(oncache, "cache");
+  BOOL_OPT2STR(oncache, PAR_CACHE_STR);
   { int inc = snprintf(buf + len, size - len, ")"); if (inc > 0) len += inc; }
   if (strnlen(buf, sizeof(buf)) == 3 /*" ()"*/)
     len = 0;
   if (run_opts.pause != ini_opts.pause) {
-    int inc = snprintf(buf + len, size - len, ": in pause");
+    int inc = snprintf(buf + len, size - len, ": %s", PAR_PAUSED_STR);
     if (inc > 0) len += inc;
   }
   return (len > 0) ? len : 0;
@@ -812,7 +810,7 @@ static inline void mc_histmode(void) {
   int maxx = getmaxx(stdscr);
   int max_cols = (maxx <= (SAVED_PINGS + statx)) ? (maxx - statx) : SAVED_PINGS;
   statx -= 2;
-  mvprintw(staty - 1, statx, " Last %3d pings", max_cols);
+  mvprintw(staty - 1, statx, "%s: %d %s", HISTOGRAM_STR, max_cols, HPINGS_STR);
   if (move(staty, 0) != ERR) {
     attroff(A_BOLD);
     dmode_scale_map();
