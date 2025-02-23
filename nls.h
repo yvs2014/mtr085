@@ -51,6 +51,7 @@
 
 // hop info
 #define HOST_STR _("Host")
+#define HOP_STR  _("hop")
 
 // stats
 #define GAP_HINT   _("Space between fields")
@@ -165,5 +166,9 @@
 #define USEADDR_ERR  _("Unable to use address")
 #define UNOPRINT_ERR _("UTF8 is not printable")
 #define NOADDR_ERR   _("No address found")
+//
+#define NOPOOLMEM_ERR _("No place in pool for sockets")
+#define NOSOCK6_ERR   _("No IPv6 sockets")
+
 
 #endif

@@ -55,6 +55,7 @@
 #include "common.h"
 #include "net.h"
 #include "aux.h"
+#include "nls.h"
 #include "mtr-poll.h"
 #include "display.h"
 
@@ -185,14 +186,16 @@ struct PACKIT icmpext_object { // RFC4884
   snprintf(err_fulltxt, sizeof(err_fulltxt), fmt ": %s", __VA_ARGS__, strerr_txt); \
   LOG_RE(false, fmt ": %s", __VA_ARGS__, strerr_txt); }
 
-#define FAIL_POSTPONE(rcode, fmt, ...) { \
+#define FAIL_POSTPONE(rcode, rvalue) do  { \
   last_neterr = (rcode); rstrerror(rcode); \
-  NET_FAIL_WARN(fmt, __VA_ARGS__); }
+  NET_FAIL_WARN("%d", rvalue);             \
+} while (0)
 
-#define FAIL_AND_CLOSE(rcode, fd, fmt, ...) { \
+#define FAIL_AND_CLOSE(rcode, fd, fmt, ...) do { \
   last_neterr = (rcode); rstrerror(last_neterr); \
-  display_clear(); CLOSE(fd); \
-  NET_FAIL_WARN(fmt, __VA_ARGS__); }
+  display_clear(); CLOSE(fd);                    \
+  NET_FAIL_WARN(fmt, __VA_ARGS__);               \
+} while (0)
 
 #define FAIL_WITH_WARN(fd, fmt, ...) FAIL_AND_CLOSE(errno, fd, fmt, __VA_ARGS__)
 
@@ -430,7 +433,7 @@ static bool net_send_tcp(int at) {
       break;
 #endif
     default:
-      FAIL_POSTPONE(ENOPROTOOPT, "address family %d", af);
+      FAIL_POSTPONE(EAFNOSUPPORT, af);
   }
   if (bind(sock, &local.sa, addrlen))
     FAIL_WITH_WARN(sock, "bind[at=%d]", at);
@@ -438,7 +441,7 @@ static bool net_send_tcp(int at) {
     FAIL_WITH_WARN(sock, "getsockname[at=%d]", at);
   int flags = fcntl(sock, F_GETFL, 0);
   if (fcntl(sock, F_SETFL, flags | O_NONBLOCK) < 0)
-    FAIL_WITH_WARN(sock, "fcntl(O_NONBLOCK) at=%d", at);
+    FAIL_WITH_WARN(sock, "fcntl(O_NONBLOCK)[at=%d]", at);
 
   int ttl = at + 1, port = 0;
   switch (af) {
@@ -453,19 +456,21 @@ static bool net_send_tcp(int at) {
     break;
 #endif
     default:
-      FAIL_POSTPONE(ENOPROTOOPT, "address family %d", af);
+      FAIL_POSTPONE(EAFNOSUPPORT, af);
   }
 
   int seq = port % MAXSEQ;
   if (poll_reg_fd(sock, seq) < 0)
-    FAIL_AND_CLOSE(1, sock, "no place in pool for sockets (at=%d)", at);
+    FAIL_AND_CLOSE(EOVERFLOW, sock, "at=%d: %s", at, NOPOOLMEM_ERR);
   save_sequence(seq, at);
   if (!save_send_ts(seq)) return false;
   connect(sock, &remote.sa, addrlen); // NOLINT(bugprone-unused-return-value)
 #ifdef LOGMOD
   { struct timespec now;
     int rc = clock_gettime(CLOCK_MONOTONIC, &now); // LOGMOD for debug only
-    LOGMSG("at=%d seq=%d sock=%d: ttl=%d (ts=%lld.%09ld)", at, seq, sock, ttl, rc ? 0 : (long long)now.tv_sec, rc ? 0 : now.tv_nsec); }
+    LOGMSG("at=%d seq=%d sock=%d: ttl=%d (ts=%lld.%09ld)",
+      at, seq, sock, ttl, rc ? 0 : (long long)now.tv_sec, rc ? 0 : now.tv_nsec);
+  }
 #endif
   /*summ*/ net_queries[QR_SUM]++; net_queries[QR_TCP]++;
   return true;
@@ -561,7 +566,7 @@ static bool net_send_icmp_udp(int at) {
       break;
 #endif
     default:
-      FAIL_POSTPONE(ENOPROTOOPT, "address family %d", af);
+      FAIL_POSTPONE(EAFNOSUPPORT, af);
   }
 
   int seq = new_sequence(at);
@@ -577,7 +582,7 @@ static bool net_send_icmp_udp(int at) {
       )) return false;
       break;
     default:
-      FAIL_POSTPONE(EPROTONOSUPPORT, "protocol type %d", mtrtype);
+      FAIL_POSTPONE(EPROTONOSUPPORT, mtrtype);
   }
 
   if (!save_send_ts(seq)) return false;
@@ -709,7 +714,8 @@ static int net_stat(unsigned port, const void *addr, struct timespec *recv_at,
       // no free slots? - warn once, and change the last one
       static bool warn_exceed_once;
       if (!warn_exceed_once) {
-        WARNX("MAXPATH=%d is exceeded at hop=%d", MAXPATH, at);
+        errno = EOVERFLOW;
+        warn("%s=%d (MAXPATH=%d)", HOP_STR, at, MAXPATH);
         warn_exceed_once = true;
       }
       ndx = MAXPATH - 1;
@@ -1045,8 +1051,7 @@ void set_rawcap_flag(cap_flag_value_t onoff) {
         WARN("cap_set_proc(%s, raw, %d", "EFFECTIVE", onoff);
     }
     cap_free(curr);
-  } else
-    WARN("%s", "cap_get_proc()");
+  } else warn("cap_get_proc()");
 }
 #define RAWCAP_ON  set_rawcap_flag(CAP_SET)
 #define RAWCAP_OFF set_rawcap_flag(CAP_CLEAR)
@@ -1074,11 +1079,11 @@ bool net_open(void) {
   sendsock4 = socket(AF_INET, SOCK_RAW, IPPROTO_RAW);
   RAWCAP_OFF;
   if (sendsock4 < 0) { // backup
-    if ((sendsock4 = net_socket(AF_INET, SOCK_RAW, IPPROTO_ICMP, "send socket")) < 0)
+    if ((sendsock4 = net_socket(AF_INET, SOCK_RAW, IPPROTO_ICMP, "icmp-raw-sendsock")) < 0)
       return false;
   } else
     /*summ*/ sum_sock[0]++;
-  if ((recvsock4 = net_socket(AF_INET, SOCK_RAW, IPPROTO_ICMP, "recv socket")) < 0)
+  if ((recvsock4 = net_socket(AF_INET, SOCK_RAW, IPPROTO_ICMP, "icmp-raw-recvsock")) < 0)
     return false;
 #ifdef ENABLE_IPV6
   // optional ipv6: to not fail
@@ -1129,7 +1134,7 @@ bool net_set_host(t_ipaddr *ipaddr) {
 #ifdef ENABLE_IPV6
     case AF_INET6:
       if ((recvsock6 < 0) || ((mtrtype != IPPROTO_TCP) && (sendsock6 < 0))) {
-        WARNX("%s", "No IPv6 sockets");
+        warnx("%s", NOSOCK6_ERR);
         return false;
       }
       sendsock = sendsock6;
@@ -1142,8 +1147,9 @@ bool net_set_host(t_ipaddr *ipaddr) {
       return false;
   }
 
-  if (!af || !addr_exist(remote_ipaddr)) {
-    WARNX("Unspecified destination (af=%d)", af);
+  if (!addr_exist(remote_ipaddr)) {
+    errno = EINVAL;
+    warn("%s", TARGET_STR);
     return false;
   }
 
@@ -1151,19 +1157,22 @@ bool net_set_host(t_ipaddr *ipaddr) {
   { struct sockaddr_storage ss[1];
     socklen_t len = sizeof(*ss);
     if (!getsockname(recvsock, (struct sockaddr *)ss, &len)) {
-      if (len > sizeof(*ss))
-        WARNX("%s", "Address of recv socket is truncated");
+      if (len > sizeof(*ss)) {
+        if (!errno) errno = EINVAL;
+        warn("%s: %d > %zd", "recv-socket", len, sizeof(*ss));
+      }
       int saf = ss->ss_family;
       char *addr =
 #ifdef ENABLE_IPV6
         (saf == AF_INET6) ? (char*)&((struct sockaddr_in6 *)ss)->sin6_addr :
 #endif
         ((saf == AF_INET) ? (char*)&((struct sockaddr_in  *)ss)->sin_addr  : NULL);
-      if (!addr)
-        WARNX("Unknown address family: %d", saf);
-      else if (!inet_ntop(saf, addr, localaddr, sizeof(localaddr)))
-        WARN("%s", "inet_ntop()");
-    } else WARN("%s", "getsockname()");
+      if (!addr) {
+        errno = EAFNOSUPPORT;
+        warn("%d", saf);
+      } else if (!inet_ntop(saf, addr, localaddr, sizeof(localaddr)))
+        warn("inet_ntop()");
+    } else warn("getsockname()");
   }
   portpid = IPPORT_RESERVED + mypid % (USHRT_MAX - IPPORT_RESERVED);
   return true;
@@ -1197,7 +1206,8 @@ bool net_set_ifaddr(const char *ifaddr) {
     case AF_INET:
       lsa.S_PORT = 0;
       if (!inet_aton(ifaddr, &lsa.S_ADDR)) {
-        WARNX("bad address %s", ifaddr);
+        errno = EFAULT;
+        warn("%s", ifaddr);
         return false;
       }
       len = sizeof(lsa.sin);
@@ -1206,7 +1216,8 @@ bool net_set_ifaddr(const char *ifaddr) {
     case AF_INET6:
       lsa.S6PORT = 0;
       if (inet_pton(af, ifaddr, &lsa.S6ADDR) < 1) {
-        WARNX("bad IPv6 address %s", ifaddr);
+        errno = EFAULT;
+        warn("%s", ifaddr);
         return false;
       }
       len = sizeof(lsa.sin6);
@@ -1215,7 +1226,7 @@ bool net_set_ifaddr(const char *ifaddr) {
     default: break;
   }
   if (bind(sendsock, &lsa.sa, len) < 0) {
-    WARN("bind(%d)", sendsock);
+    warn("bind(%d)", sendsock);
     return false;
   }
   return true;
@@ -1316,7 +1327,7 @@ void net_set_type(int type) {
     case IPPROTO_ICMP: hdr_minsz += sizeof(struct _icmphdr); break;
     case IPPROTO_UDP:  hdr_minsz += sizeof(struct udphdr);   break;
     case IPPROTO_TCP:  hdr_minsz += sizeof(struct tcphdr);   break;
-    default: WARN("Unknown proto: %d", type);
+    default: { errno = EPROTONOSUPPORT; warn("%d", type); }
   }
   minfailsz = hdr_minsz + iphdr_sz + sizeof(struct _icmphdr);
 }

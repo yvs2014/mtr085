@@ -128,6 +128,9 @@ msgstr "на паузі"
 msgid "Host"
 msgstr "Вузол"
 
+msgid "hop"
+msgstr "перехід"
+
 
 ## stats
 
@@ -456,4 +459,12 @@ msgstr "UTF8 error: непридатно для друку"
 
 msgid "No address found"
 msgstr "Адресу не знайдено"
+
+#
+
+msgid "No place in pool for sockets"
+msgstr "Немає місця в пулі сокетів"
+
+msgid "No IPv6 sockets"
+msgstr "Немає IPv6 сокетів"
 
