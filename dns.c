@@ -48,6 +48,7 @@
 
 #include "dns.h"
 #include "net.h"
+#include "nls.h"
 
 #ifndef MAXNS
 #define MAXNS 3
@@ -102,12 +103,14 @@ static struct sockaddr_in6 nsaddrs6[MAXNS];
 #ifdef HAVE_RES_NMKQUERY
 static struct __res_state myres;
 #define MYRES_INIT(res) res_ninit(&(res))
+#define MYRES_INIT_STR "res_ninit()"
 #define MYRES_CLOSE(res) res_nclose(&(res))
 #define MYRES_QUERY(res, ...) res_nmkquery(&(res), __VA_ARGS__)
 #else
 extern struct __res_state _res;
 #define myres _res
 #define MYRES_INIT(res) res_init()
+#define MYRES_INIT_STR "res_init()"
 #define MYRES_CLOSE(res)
 #define MYRES_QUERY(res, ...) res_mkquery(__VA_ARGS__)
 #endif
@@ -147,7 +150,7 @@ static bool dns_sockets(void) {
   if (nscount && (resfd < 0)) {
     resfd = socket(AF_INET, SOCK_DGRAM, 0);
     if (resfd < 0)
-      WARN("%s", "socket");
+      warn("%s", "dns-socket");
     else
       /*summ*/ sum_sock[0]++;
   }
@@ -155,7 +158,7 @@ static bool dns_sockets(void) {
   if (nscount6 && (resfd6 < 0)) {
     resfd6 = socket(AF_INET6, SOCK_DGRAM, 0);
     if (resfd6 < 0)
-      LOGMSG("%s", "socket6");
+      LOGMSG("%s", "dns6-socket");
     else
       /*summ*/ sum_sock[0]++;
   }
@@ -199,7 +202,7 @@ static inline void dns_nses(void) {
 #endif
     (nscount > 0);
   if (!dns_ready) {
-    WARNX("%s", "No nameservers");
+    warnx("%s", NODNS_ERR);
     MYRES_CLOSE(myres);
   }
 }
@@ -230,7 +233,7 @@ bool dns_open(void) {
   if (dns_ready)
     return true;
   if (MYRES_INIT(myres) < 0)
-    WARN("%s", "res_init");
+    warn("%s", MYRES_INIT_STR);
   else
     dns_nses();
   if (dns_ready) {
@@ -492,7 +495,7 @@ static void dns_parse_reply(uint8_t *buf, ssize_t len) {
         { const char *data = (char*)(c + 1);
           int max = l; if ((size_t)max >= sizeof(answer)) max = sizeof(answer) - 1;
 #ifdef HAVE_STRLCPY
-          strlcpy(answer, data, max);
+          strlcpy(answer, data, max + 1);
 #else
           strncpy(answer, data, max);
           answer[max] = 0;
@@ -503,7 +506,7 @@ static void dns_parse_reply(uint8_t *buf, ssize_t len) {
         if (l < 0)
           LOGRET("dn_expand() %s", "failed while expanding domain");
       }
-      LOGMSG("Answer[%d] %.*s", l, l, answer);
+      LOGMSG("Answer[%d](%.*s)", l, l, answer);
       if      ((atndx->type == 0) && dns_ptr_handler)
         dns_ptr_handler(atndx->at, atndx->ndx, answer);
 #ifdef WITH_IPINFO

@@ -53,6 +53,28 @@
 #define HOST_STR _("Host")
 #define HOP_STR  _("hop")
 
+// ip info
+#define II_ASN_STR    _("ASN")
+#define II_ROUTE_STR  _("Route")
+#define II_CC_STR     _("CC")
+#define II_REG_STR    _("Registry")
+#define II_ALLOC_STR  _("Allocated")
+#define II_ORIGIN_STR _("Origin")
+#define II_DESC_STR   _("Descr")
+#define II_ASPATH_STR _("AS Path")
+#define II_ORG_STR    _("Org")
+#define II_CNAME_STR  _("Country")
+#define II_RC_STR     _("RC")
+#define II_RNAME_STR  _("Region")
+#define II_CITY_STR   _("City")
+#define II_ZIP_STR    _("Zip")
+#define II_LAT_STR    _("Lat")
+#define II_LNG_STR    _("Long")
+#define II_TZ_STR     _("TZ")
+#define II_ISP_STR    _("ISP")
+#define II_ASNAME_STR _("AS Name")
+#define II_UNKN1_STR  _("Unknown")
+
 // stats
 #define GAP_HINT   _("Space between fields")
 #define LOSS_STR   _("Loss")
@@ -169,6 +191,7 @@
 //
 #define NOPOOLMEM_ERR _("No place in pool for sockets")
 #define NOSOCK6_ERR   _("No IPv6 sockets")
+#define NODNS_ERR     _("No nameservers")
 
 
 #endif

@@ -23,21 +23,13 @@
 #include <string.h>
 #include <strings.h>
 #include <limits.h>
+#include <errno.h>
 #include <fcntl.h>
 #include <poll.h>
 #include <time.h>
 #include <sys/socket.h>
-
-#if defined(LOG_IPINFO) && !defined(LOGMOD)
-#include <errno.h>
-#define LOGMOD
-#endif
-#if !defined(LOG_IPINFO) && defined(LOGMOD)
-#undef LOGMOD
-#endif
-#include "common.h"
-
 #include <netinet/in.h>
+
 #ifdef HAVE_ARPA_NAMESER_H
 #ifndef BIND_8_COMPAT
 #define BIND_8_COMPAT
@@ -49,6 +41,14 @@
 #endif
 #include <resolv.h>
 
+#if defined(LOG_IPINFO) && !defined(LOGMOD)
+#define LOGMOD
+#endif
+#if !defined(LOG_IPINFO) && defined(LOGMOD)
+#undef LOGMOD
+#endif
+#include "common.h"
+
 #include "ipinfo.h"
 #include "mtr-poll.h"
 #include "net.h"
@@ -56,6 +56,7 @@
 #include "dns.h"
 #endif
 #include "aux.h"
+#include "nls.h"
 
 enum { COMMA = ',', VSLASH = '|', WHOIS_COMMENT = '%' };
 #define UNKN "?"
@@ -88,12 +89,13 @@ enum { OT_DNS = 0 /*sure*/, OT_HTTP, OT_WHOIS };
 enum { WHOIS_PORT = 43, HTTP_PORT = 80 };
 
 typedef struct {
-  char* host;
-  char* host6;
-  char* unkn;
-  char* prefix;
-  char* name[MAX_TXT_ITEMS];
-  char* skip_str[MAX_TXT_ITEMS]; // skip by string: "query ip", ...
+  const char* host;
+  const char* host6;
+  const char* unkn;
+  const char* prefix;
+  const char* name[MAX_TXT_ITEMS];
+  const char* uname[MAX_TXT_ITEMS];
+  const char* skip_str[MAX_TXT_ITEMS]; // skip by string: "query ip", ...
   int   type; // 0 - dns, 1 - http, 2 - whois
   int   skip_ndx[MAX_TXT_ITEMS]; // skip by index: 1, ...
   int   width[MAX_TXT_ITEMS];
@@ -106,6 +108,7 @@ typedef struct {
 #define ORIG_SKIP_NDX   (origins[origin_no].skip_ndx)
 #define ORIG_SKIP_STR   (origins[origin_no].skip_str)
 #define ORIG_NAME(num)  (origins[origin_no].name[num])
+#define ORIG_UNAME(num) (origins[origin_no].uname[num])
 #define ORIG_WIDTH(num) (origins[origin_no].width[num])
 
 static int ipinfo_no[MAX_TXT_ITEMS] = {-1}; // max is #8 getcitydetails.geobytes.com
@@ -116,7 +119,7 @@ static origin_t origins[] = {
 // Abbreviations: CC - Country Code, RC - Region Code, MC - Metro Code, Org - Organization, TZ - TimeZone
 // 1
   { .host  = "origin.asn.cymru.com", .host6 = "origin6.asn.cymru.com",
-    .name  = { "ASN", "Route", "CC", "Registry", "Allocated" },
+    .name  = {"ASN", "Route", "CC", "Registry", "Allocated"},
     .sep   = VSLASH,
   },
 // 2
@@ -137,12 +140,12 @@ static origin_t origins[] = {
   },
 // 3
   { .host  = "peer.asn.shadowserver.org",
-    .name  = { "AS Path", "ASN", "Route", /*"AS Name",*/ "CC", "Org" },
+    .name  = {"AS Path", "ASN", "Route", /*"AS Name",*/ "CC", "Org"},
     .sep   = VSLASH, .skip_ndx = {4},
   },
 // 4
   { .host  = "origin.asn.spameatingmonkey.net",
-    .name  = { "Route", "ASN", "Org", "Allocated", "CC" },
+    .name  = {"Route", "ASN", "Org", "Allocated", "CC"},
     .unkn  = "Unknown", .sep = VSLASH,
   },
 // 5
@@ -152,12 +155,12 @@ static origin_t origins[] = {
 #else
       "208.95.112.1",
 #endif
-    .name  = { /* Status, */ "Country", "CC", "RC", "Region", "City", "Zip", "Lat", "Long", "TZ", "ISP", "Org", "AS Name" /*, QueryIP */ },
+    .name  = {/* Status, */ "Country", "CC", "RC", "Region", "City", "Zip", "Lat", "Long", "TZ", "ISP", "Org", "AS Name" /*, QueryIP */},
     .sep   = COMMA, .type = OT_HTTP, .skip_ndx = {IPAPI_STATUS_NDX, IPAPI_QUERYIP_NDX}, .prefix = "/csv/",
   },
 // 6
   { .host  = "asn.routeviews.org",
-    .name  = { "ASN" },
+    .name  = {"ASN"},
     .unkn  = "4294967295",
   },
 };
@@ -169,7 +172,7 @@ static int skip_whois_comments(char** lines, int max) {
   return -1;
 }
 
-static int str_in_skip_list(const char *str, char* const* list) {
+static int str_in_skip_list(const char *str, const char** list) {
     for (int i = 0; (i < MAX_TXT_ITEMS) && list[i]; i++)
         if (strncmp(str, list[i], NAMELEN) == 0)
             return i;
@@ -220,8 +223,8 @@ static char** split_record(char *record) {
 
 static void adjust_width(char** record) {
   for (int i = 0; (i < MAX_TXT_ITEMS) && record[i]; i++) {
-    size_t len = strnlen(record[i], NAMELEN); // utf8 ? strnlen() : mbstowcs(NULL, records[i], 0);
-    int width = len;
+    unsigned len = ustrlen(record[i]); // ? mbstowcs(NULL, records[i], 0);
+    int width = (len > NAMELEN) ? NAMELEN : len;
     if (ORIG_WIDTH(i) < width)
       ORIG_WIDTH(i) = width;
   }
@@ -250,6 +253,7 @@ static void save_fields(int at, int ndx, char **record) {
   }
 }
 
+#ifdef ENABLE_DNS
 void save_txt_answer(int at, int ndx, const char *answer) {
   char *copy = NULL, **data = NULL;
   if (answer && strnlen(answer, NAMELEN)) {
@@ -270,6 +274,7 @@ void save_txt_answer(int at, int ndx, const char *answer) {
     free(copy);
   adjust_width(&(RTXT_AT_NDX(at, ndx, 0)));
 }
+#endif
 
 static char trim_c(char *str, const char *quotes) {
   char ch = 0;
@@ -278,7 +283,7 @@ static char trim_c(char *str, const char *quotes) {
 }
 
 static char* trim_str(char *str, const char *quotes) {
-  { size_t len = strlen(str);
+  { unsigned len = ustrlen(str);
     char *ptr = str + len - 1;
     for (int i = len; i > 0; i--, ptr--)
       if (trim_c(ptr, quotes)) break; }
@@ -307,8 +312,10 @@ static int count_records(char **record) {
   return nth;
 }
 
-static inline int parse_http_content_len(int lines_no, char* lines[TCP_RESP_LINES], int recv_size, int *cndx) {
-  int ndx = 0, len = 0; // content index in tcp response and its length
+static inline int parse_http_content_len(int lines_no, char* lines[TCP_RESP_LINES],
+  size_t recv_size, unsigned *cndx)
+{
+  unsigned ndx = 0, len = 0; // content index in tcp response and its length
   for (int i = 0; i < lines_no; i++) {
     char* tagvalue[2] = { lines[i], NULL };
     if (split_with_sep(tagvalue, 2, ' ', 0) == 2)
@@ -322,14 +329,16 @@ static inline int parse_http_content_len(int lines_no, char* lines[TCP_RESP_LINE
   }
   if (ndx && (len > 0) && (len < recv_size))
     *(lines[ndx] + len) = 0;
-  else
-    len = strnlen(lines[ndx], NAMELEN);
+  else {
+    len = ustrlen(lines[ndx]);
+    if (len > NAMELEN) len = NAMELEN;
+  }
   if (cndx) *cndx = ndx;
   return len;
 }
 
 
-static void parse_http(char *buf, int recv_size, atndx_t id) {
+static void parse_http(char *buf, unsigned recv_size, atndx_t id) {
   static char h11[] = "HTTP/1.1";
   static int h11_ln = sizeof(h11) - 1;
   static char h11ok[] = "HTTP/1.1 200 OK";
@@ -344,17 +353,18 @@ static void parse_http(char *buf, int recv_size, atndx_t id) {
     }
     char* lines[TCP_RESP_LINES] = {0};
     lines[0] = buf;
-    int lines_no = split_with_sep(lines, TCP_RESP_LINES, '\n', 0);
+    unsigned lines_no = split_with_sep(lines, TCP_RESP_LINES, '\n', 0);
     if (lines_no < 4) { // HEADER + NL + NL + DATA
       LOGMSG("No data after header (got %d lines only)", lines_no);
       continue;
     }
 
-    int cndx = 0;
-    int clen = parse_http_content_len(lines_no, lines, recv_size, &cndx);
+    unsigned cndx = 0;
+    unsigned clen = parse_http_content_len(lines_no, lines, recv_size, &cndx);
 
     char txt[clen + 1]; memset(txt, 0, sizeof(txt));
-    for (int i = cndx, len = 0; (i < lines_no) && (len < clen); i++) { // combine into one line
+    // combine into one line
+    for (unsigned i = cndx, len = 0; (i < lines_no) && (len < clen); i++) {
       int inc = snprintf(txt + len, clen - len, "%s", lines[i]);
       if (inc > 0) len += inc;
     }
@@ -434,7 +444,7 @@ static void close_ipitseq(int seq) {
 void ipinfo_parse(int sock, int seq) { // except dns, dns.ack in dns.c
   char buf[NETDATA_MAXSIZE] = {0};
   seq %= MAXSEQ;
-  int received = recv(sock, buf, sizeof(buf), 0);
+  ssize_t received = recv(sock, buf, sizeof(buf), 0);
   if (received > 0) {
     atndx_t id = { .at = seq / MAXPATH, .ndx = seq % MAXPATH };
     switch ORIG_TYPE {
@@ -612,9 +622,13 @@ char* ipinfo_header(void) {
   iiheader[0] = 0;
   for (unsigned i = 0, len = 0; (i < MAX_TXT_ITEMS)
       && (ipinfo_no[i] >= 0) && (ipinfo_no[i] < itemname_max)
-      && ORIG_NAME(ipinfo_no[i]) && (len < sizeof(iiheader)); i++) {
+      && ORIG_UNAME(ipinfo_no[i]) && (len < sizeof(iiheader)); i++) {
     int inc = snprintf(iiheader + len, sizeof(iiheader) - len,
-      "%-*s ", ORIG_WIDTH(ipinfo_no[i]), ORIG_NAME(ipinfo_no[i]));
+      "%s", ORIG_UNAME(ipinfo_no[i]));
+    if (inc > 0) len += inc;
+    int gap = ORIG_WIDTH(ipinfo_no[i]) - ustrlen(ORIG_UNAME(ipinfo_no[i]));
+    if (gap < 0) gap = 0;
+    inc = snprintf(iiheader + len, sizeof(iiheader) - len, "%*s", ++gap, "");
     if (inc > 0) len += inc;
   }
   return iiheader;
@@ -625,7 +639,7 @@ int ipinfo_width(void) {
   for (int i = 0; (i < MAX_TXT_ITEMS)
       && (ipinfo_no[i] >= 0) && (ipinfo_no[i] < itemname_max)
       && (width < NAMELEN); i++)
-    width += 1 + ORIG_WIDTH(ipinfo_no[i]);
+    width += ORIG_WIDTH(ipinfo_no[i]) + 1;
   return width;
 }
 
@@ -727,7 +741,8 @@ bool ipinfo_init(const char *arg) {
     ipinfo_tcpmode = (ORIG_TYPE != OT_DNS);
   } else {
     free(args[0]);
-    WARNX("Out of source range[1..%d]: %d", max, no);
+    errno = ERANGE;
+    warn("%s %s[1..%d]: %d", PAR_IPINFO_STR, RANGE_STR, max, no);
     return false;
   }
 
@@ -746,10 +761,16 @@ bool ipinfo_init(const char *arg) {
   if (args[0])
     free(args[0]);
   itemname_max = 0;
+
   for (int i = 0; i < MAX_TXT_ITEMS; i++, itemname_max++) {
     if (!ORIG_NAME(i))
       break;
-    ORIG_WIDTH(i) = strnlen(ORIG_NAME(i), NAMELEN);
+    ORIG_UNAME(ipinfo_no[i]) = _(ORIG_NAME(ipinfo_no[i]));
+    if (!ORIG_UNAME(ipinfo_no[i]))
+      ORIG_UNAME(ipinfo_no[i]) = ORIG_NAME(ipinfo_no[i]);
+    ORIG_WIDTH(i) = ustrlen(ORIG_UNAME(i));
+    if (ORIG_WIDTH(i) > NAMELEN)
+      ORIG_WIDTH(i) = NAMELEN;
   }
 
   LOGMSG("Source: %s%s%s", ORIG_HOST, origins[origin_no].host6 ? ", " : "",

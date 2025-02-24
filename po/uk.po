@@ -125,11 +125,72 @@ msgstr "на паузі"
 
 
 ## hop info
+
 msgid "Host"
 msgstr "Вузол"
 
 msgid "hop"
 msgstr "перехід"
+
+
+## ip info
+
+msgid "ASN"
+msgstr "АС"
+
+msgid "Route"
+msgstr "Мережа"
+
+msgid "CC"
+msgstr "Країна"
+
+msgid "Registry"
+msgstr "Реєстр"
+
+msgid "Allocated"
+msgstr "Видано"
+
+msgid "Origin"
+msgstr "АС"
+
+msgid "Descr"
+msgstr "Опис"
+
+msgid "AS Path"
+msgstr "АС-Шлях"
+
+msgid "Org"
+msgstr "Компанія"
+
+msgid "Country"
+msgstr "Країна"
+
+msgid "RC"
+msgstr "Код"
+
+msgid "Region"
+msgstr "Регіон"
+
+msgid "City"
+msgstr "Місто"
+
+msgid "Zip"
+msgstr "Індекс"
+
+msgid "Lat"
+msgstr "Широта"
+
+msgid "Long"
+msgstr "Довгота"
+
+msgid "TZ"
+msgstr "Час.пояс"
+
+msgid "ISP"
+msgstr "Інтернет-пров"
+
+msgid "AS Name"
+msgstr "Назва АС"
 
 
 ## stats
@@ -463,8 +524,11 @@ msgstr "Адресу не знайдено"
 #
 
 msgid "No place in pool for sockets"
-msgstr "Немає місця в пулі сокетів"
+msgstr "Нема місця в пулі сокетів"
 
 msgid "No IPv6 sockets"
-msgstr "Немає IPv6 сокетів"
+msgstr "Нема IPv6 сокетів"
+
+msgid "No nameservers"
+msgstr "Нема DNS серверів"
 
