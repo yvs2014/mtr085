@@ -242,7 +242,7 @@ void xml_close(void) {
     }
 #ifdef WITH_IPINFO
     if (ipinfo_ready())
-      printf("%*s<IpInfo>[%s]</IpInfo>\n", XML_MARGIN * 3, "", sep_ipinfo(at, host[at].current, ','));
+      printf("%*s<IPINFO>[%s]</IPINFO>\n", XML_MARGIN * 3, "", sep_ipinfo(at, host[at].current, ','));
 #endif
     printf("%*s</HOP>\n", XML_MARGIN * 2, "");
   }
@@ -257,44 +257,52 @@ void xml_close(void) {
 
 enum { JSON_MARGIN = 4 };
 
-void json_head(void) { printf("{\"source\":\"%s\",\"args\":\"%s\",\"targets\":[", srchost, mtr_args); }
+void json_head(void) {
+  printf("{\"%s\":\"%s\",\"%s\":\"%s\",\"%s\":[",
+    SOURCE_STR, srchost, ARGS_STR, mtr_args, TARGETS_STR);
+}
 void json_tail(void) { printf("\n]}\n"); }
 
 void json_close(bool next) {
   if (next) printf(",");
   { char str[64];
     const char *date = datetime(started_at, str, sizeof(str));
-    printf("\n%*s{\"destination\":\"%s\",\"datetime\":\"%s\",\"data\":[",
-      JSON_MARGIN, "", dsthost, date ? date : ""); }
+    printf("\n%*s{\"%s\":\"%s\",\"%s\":\"%s\",\"%s\":[", JSON_MARGIN, "",
+      TARGET_STR, dsthost, DATETIME_STR, date ? date : "", DATA_STR); }
   int min = net_min(), max = net_max();
   for (int at = min; at < max; at++) {
     char buf[MAXDNAME] = {0};
     printf((at == min) ? "\n" : ",\n");
     snprint_addr(buf, sizeof(buf), at, host[at].current);
-    printf("%*s{\"host\":\"%s\",\"hop\":%d,\"up\":%d", JSON_MARGIN * 2, "", buf, at + 1, host[at].up);
+    printf("%*s{\"%s\":\"%s\",\"%s\":%d,\"%s\":\"%s\"", JSON_MARGIN * 2, "",
+      HOST_STR, buf, HOP_STR, at + 1, ACTIVE_STR, host[at].up ? YES_STR : NO_STR);
     for (unsigned i = 0; i < sizeof(fld_index); i++) {
       const t_stat *stat = active_stats(i);
       if (!stat) break;
       const char *elem = net_elem(at, stat->key);
       if (elem) {
-        int len = strnlen(elem, NETELEM_MAXLEN);
+        int len = strlen(elem);
+        if (len > NETELEM_MAXLEN) len = NETELEM_MAXLEN;
         if (len > 0) {
+          bool quote = strchr(elem, ',') ? true : false;
           if (elem[len - 1] == '%') // print '%' with name
-            printf(",\"%s%%\":%.*s", stat->name, len - 1, elem);
+            printf(",\"%s%%\":%s%.*s%s", stat->name,
+              quote ? "\"" : "", len - 1, elem, quote ? "\"" : "");
           else
-            printf(",\"%s\":%s", stat->name, elem);
+            printf(",\"%s\":%s%s%s", stat->name,
+              quote ? "\"" : "", elem, quote ? "\"" : "");
         }
       }
     }
 #ifdef WITH_IPINFO
     if (ipinfo_ready())
-      printf(",\"ipinfo\":[%s]", sep_ipinfo(at, host[at].current, ','));
+      printf(",\"%s\":[%s]", IPINFO_STR, sep_ipinfo(at, host[at].current, ','));
 #endif
     printf("}");
   }
   printf("\n%*s]", JSON_MARGIN, "");
   if (last_neterr != 0)
-    printf(",\"error\":\"%s\"", err_fulltxt);
+    printf(",\"%s\":\"%s\"", ERROR_STR, err_fulltxt);
   printf("}");
 }
 #endif
@@ -310,7 +318,7 @@ static inline void prupper(const char *str) { while (*str) putchar(toupper((int)
 static inline void csv_body(int at) {
   printf("%s", dsthost);
   printf("%c%d", CSV_DELIMITER, at + 1);
-  printf("%c%s", CSV_DELIMITER, host[at].up ? "up" : "down");
+  printf("%c%d", CSV_DELIMITER, host[at].up ? 1 : 0);
   { char buf[MAXDNAME] = {0};
     snprint_addr(buf, sizeof(buf), at, host[at].current);
     printf("%c%s", CSV_DELIMITER, buf); }
@@ -330,9 +338,11 @@ static inline void csv_body(int at) {
 void csv_close(bool next) {
   if (last_neterr != 0) return;
   if (next) printf("\n");
-  printf("DESTINATION%cHOP%cSTATUS%cHOST", CSV_DELIMITER, CSV_DELIMITER, CSV_DELIMITER);
+  const char* field[] = {TARGET_CAPSTR, CSV_HOP_STR, CSV_STATUS_STR, HOST_STR};
+  for (unsigned i = 0; i < ARRAY_SIZE(field); i++)
+    printf("%s%c", field[i], CSV_DELIMITER);
 #ifdef WITH_IPINFO
-  if (ipinfo_ready()) printf("%c%s", CSV_DELIMITER, "INFO");
+  if (ipinfo_ready()) printf("%c%s", CSV_DELIMITER, CSV_INFO_STR);
 #endif
   for (unsigned i = 0; i < sizeof(fld_index); i++) {
     const t_stat *stat = active_stats(i);

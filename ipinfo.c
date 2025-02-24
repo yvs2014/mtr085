@@ -742,7 +742,7 @@ bool ipinfo_init(const char *arg) {
   } else {
     free(args[0]);
     errno = ERANGE;
-    warn("%s %s[1..%d]: %d", PAR_IPINFO_STR, RANGE_STR, max, no);
+    warn("%s %s[1..%d]: %d", IPINFO_STR, RANGE_STR, max, no);
     return false;
   }
 
@@ -761,13 +761,12 @@ bool ipinfo_init(const char *arg) {
   if (args[0])
     free(args[0]);
   itemname_max = 0;
+  while (ORIG_NAME(itemname_max)) itemname_max++;
 
-  for (int i = 0; i < MAX_TXT_ITEMS; i++, itemname_max++) {
-    if (!ORIG_NAME(i))
-      break;
-    ORIG_UNAME(ipinfo_no[i]) = _(ORIG_NAME(ipinfo_no[i]));
-    if (!ORIG_UNAME(ipinfo_no[i]))
-      ORIG_UNAME(ipinfo_no[i]) = ORIG_NAME(ipinfo_no[i]);
+  for (int i = 0; (i < MAX_TXT_ITEMS) && ORIG_NAME(i); i++) {
+    ORIG_UNAME(i) = _(ORIG_NAME(i));
+    if (!ORIG_UNAME(i))
+      ORIG_UNAME(i) = ORIG_NAME(i);
     ORIG_WIDTH(i) = ustrlen(ORIG_UNAME(i));
     if (ORIG_WIDTH(i) > NAMELEN)
       ORIG_WIDTH(i) = NAMELEN;

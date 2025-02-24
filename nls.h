@@ -35,7 +35,6 @@
 #define PAR_TCP_STR    _("tcp")
 #define PAR_MPLS_STR   _("mpls")
 #define PAR_ASN_STR    _("asn")
-#define PAR_IPINFO_STR _("ipinfo")
 #define PAR_DNS_STR    _("dns")
 #define PAR_JITTER_STR _("jitter")
 #define PAR_CHART_STR  _("chart")
@@ -50,10 +49,7 @@
 
 
 // hop info
-#define HOST_STR _("Host")
-#define HOP_STR  _("hop")
-
-// ip info
+#define HOST_STR      _("Host")
 #define II_ASN_STR    _("ASN")
 #define II_ROUTE_STR  _("Route")
 #define II_CC_STR     _("CC")
@@ -135,8 +131,7 @@
 
 // cli help
 #define CLI_USAGE_STR _("Usage")
-#define CLI_TGT_STR   _("TARGET")
-#define CLI_PORT_STR  _("PORT")
+#define CLI_TGT_STR   _("TARGET[:PORT]")
 #define CLI_ADDR_STR  _("IP.ADD.RE.SS")
 #define CLI_NUM_STR   _("NUMBER")
 #define CLI_CNT_STR   _("COUNT")
@@ -160,6 +155,10 @@
 
 // misc
 #define TARGET_STR     _("target")
+#define TARGETS_STR    _("targets")
+#define TARGET_CAPSTR  _("Target")
+#define SOURCE_STR     _("source")
+#define ARGS_STR       _("args")
 #define PORTNUM_STR    _("port number")
 #define MAX_STR        _("max")
 #define OPENED_STR     _("opened")
@@ -167,6 +166,17 @@
 #define QUERIES_STR    _("queries")
 #define REPLIES_STR    _("replies")
 #define NONE_STR       _("NONE")
+#define DATETIME_STR   _("datetime")
+#define HOP_STR        _("hop")
+#define DATA_STR       _("data")
+#define ACTIVE_STR     _("active")
+#define IPINFO_STR     _("ipinfo")
+#define YES_STR        _("yes")
+#define NO_STR         _("no")
+#define ERROR_STR      _("error")
+#define CSV_HOP_STR    _("Hop")
+#define CSV_STATUS_STR _("Status")
+#define CSV_INFO_STR   _("Info")
 
 // messages
 #define ANYCONT_STR  _("Press any key to continue")

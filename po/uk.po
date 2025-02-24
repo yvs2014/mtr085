@@ -87,9 +87,6 @@ msgstr "mpls"
 msgid "asn"
 msgstr "asn"
 
-msgid "ipinfo"
-msgstr "інфо"
-
 msgid "dns"
 msgstr "днс"
 
@@ -124,16 +121,10 @@ msgid "on pause"
 msgstr "на паузі"
 
 
-## hop info
+## hop/ip info
 
 msgid "Host"
 msgstr "Вузол"
-
-msgid "hop"
-msgstr "перехід"
-
-
-## ip info
 
 msgid "ASN"
 msgstr "АС"
@@ -366,11 +357,8 @@ msgstr "<текст>"
 msgid "Usage"
 msgstr "Використання"
 
-msgid "TARGET"
-msgstr "ЦІЛЬ"
-
-msgid "PORT"
-msgstr "ПОРТ"
+msgid "TARGET[:PORT]"
+msgstr "ЦІЛЬ[:ПОРТ]"
 
 msgid "IP.ADD.RE.SS"
 msgstr "IP.АДРЕСА"
@@ -438,6 +426,18 @@ msgstr "Таймаут кешування"
 msgid "target"
 msgstr "ціль"
 
+msgid "targets"
+msgstr "цілі"
+
+msgid "Target"
+msgstr "Ціль"
+
+msgid "source"
+msgstr "звідки"
+
+msgid "args"
+msgstr "параметри"
+
 msgid "port number"
 msgstr "номер порту"
 
@@ -463,6 +463,42 @@ msgstr "відповідей"
 
 msgid "NONE"
 msgstr "НЕМАЄ"
+
+msgid "datetime"
+msgstr "дата"
+
+msgid "hop"
+msgstr "перехід"
+
+msgid "data"
+msgstr "дані"
+
+msgid "host"
+msgstr "вузол"
+
+msgid "active"
+msgstr "діючий"
+
+msgid "ipinfo"
+msgstr "інфо"
+
+msgid "yes"
+msgstr "так"
+
+msgid "no"
+msgstr "ні"
+
+msgid "error"
+msgstr "помилка"
+
+msgid "Hop"
+msgstr "Перехід"
+
+msgid "Status"
+msgstr "Статус"
+
+msgid "Info"
+msgstr "Інфо"
 
 
 ## messages

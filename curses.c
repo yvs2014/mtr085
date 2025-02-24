@@ -747,7 +747,7 @@ static int mc_snprint_args(char *buf, size_t size) {
 #endif
 #ifdef WITH_IPINFO
   BOOL_OPT2STR(asn,    PAR_ASN_STR);
-  BOOL_OPT2STR(ipinfo, PAR_IPINFO_STR);
+  BOOL_OPT2STR(ipinfo, IPINFO_STR);
 #endif
 #ifdef ENABLE_DNS
   BOOL_OPT2STR(dns,    PAR_DNS_STR);

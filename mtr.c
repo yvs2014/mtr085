@@ -323,7 +323,7 @@ static void usage(const char *name) {
   for (unsigned i = 0; i < len; i++)
     if (short_options[i] != ':')
       putchar(short_options[i]);
-  printf("] %s[:%s] ...\n", CLI_TGT_STR, CLI_PORT_STR);
+  printf("] %s ...\n", CLI_TGT_STR);
   for (int i = 0; long_options[i].name; i++) {
     printf("\t[");
     char opt = (char)long_options[i].val;
