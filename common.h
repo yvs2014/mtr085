@@ -27,12 +27,6 @@
 #endif
 
 #ifdef HAVE_STRLCPY
-#ifdef HAVE_BSD_STDLIB_H
-#include <bsd/stdlib.h>
-#endif
-#ifdef HAVE_BSD_STRING_H
-#include <bsd/string.h>
-#endif
 // note: return size can distinct: src.len() and printed chars
 #define STRLCPY(dst, src, size) strlcpy(dst, src, size)
 #else
@@ -40,7 +34,7 @@
 #endif
 
 #ifndef GITREV
-#define GITREV "212"
+#define GITREV "213"
 #endif
 
 typedef union inaddr_union {

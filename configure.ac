@@ -26,16 +26,12 @@ m4_ifdef([AX_CHECK_COMPILE_FLAG],
 
 AC_CHECK_HEADERS([netdb.h], AC_DEFINE(HAVE_NETDB_H, 1))
 AC_CHECK_HEADERS([sys/param.h], AC_DEFINE(HAVE_SYS_PARAM_H, 1))
-AC_CHECK_HEADERS([bsd/stdlib.h], AC_DEFINE(HAVE_BSD_STDLIB_H, 1))
-AC_CHECK_HEADERS([bsd/string.h], AC_DEFINE(HAVE_BSD_STRING_H, 1))
 
 AC_SEARCH_LIBS([pow], [m],, AC_MSG_ERROR(No math library found))
-AC_SEARCH_LIBS([warnx], [bsd],, AC_MSG_ERROR(No bsd err/warn library found))
+AC_SEARCH_LIBS([warnx],,, AC_MSG_ERROR(No err/warn library found))
 AC_SEARCH_LIBS([socket], [socket network],, AC_MSG_ERROR(No socket library found))
-AC_CHECK_FUNC([strlcpy], AC_DEFINE(HAVE_STRLCPY, 1, [Define if strlcpy exists]),
-	AC_SEARCH_LIBS([strlcpy], [bsd], [AC_DEFINE(HAVE_STRLCPY, 1)]))
-AC_CHECK_FUNC([arc4random_uniform], AC_DEFINE(HAVE_ARC4RANDOM_UNIFORM, 1, [Define if arc4random_uniform exists]),
-	AC_SEARCH_LIBS([arc4random_uniform], [bsd], [AC_DEFINE(HAVE_ARC4RANDOM_UNIFORM, 1)]))
+AC_CHECK_FUNC([strlcpy], AC_DEFINE(HAVE_STRLCPY, 1, [Define if strlcpy exists]))
+AC_CHECK_FUNC([arc4random_uniform], AC_DEFINE(HAVE_ARC4RANDOM_UNIFORM, 1, [Define if arc4random_uniform exists]))
 AC_CHECK_FUNC([quick_exit],  AC_DEFINE(HAVE_QUICK_EXIT,  1, [Define if quick_exit() exists]))
 AC_CHECK_FUNC([strerror_r],  AC_DEFINE(HAVE_STRERROR_R,  1, [Define if strerror_r() exists]))
 AC_CHECK_FUNC([ctime_r],     AC_DEFINE(HAVE_CTIME_R,     1, [Define if ctime_r() exists]))

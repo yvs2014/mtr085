@@ -299,8 +299,6 @@ endif()
 #
 check_include_file("netdb.h" HAVE_NETDB_H)
 check_include_file("sys/param.h" HAVE_SYS_PARAM_H)
-check_include_file("bsd/stdlib.h" HAVE_BSD_STDLIB_H)
-check_include_file("bsd/string.h" HAVE_BSD_STRING_H)
 #
 function(fn_checkout)
   foreach(fn IN LISTS FN_LIST)
@@ -336,7 +334,7 @@ set(FN_LIST socket)
 set(FN_MUST socket)
 fn_checkout()
 #
-set(FN_LIBS bsd)
+set(FN_LIBS c)
 set(FN_LIST warnx strlcpy arc4random_uniform)
 set(FN_MUST warnx)
 fn_checkout()

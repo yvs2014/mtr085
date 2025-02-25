@@ -54,7 +54,7 @@ jobs:
         with:
           ref: master
       - name: Install mandatory packages for building
-        run: brew install meson
+        run: brew install meson gettext
       - name: Create executable with ${{matrix.compiler}}
         env:
           CC: ${{matrix.compiler}}

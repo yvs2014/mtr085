@@ -67,9 +67,6 @@
 #endif
 
 #ifdef HAVE_ARC4RANDOM_UNIFORM
-#ifdef HAVE_BSD_STDLIB_H
-#include <bsd/stdlib.h>
-#endif
 #define RANDUNIFORM(base) arc4random_uniform(base)
 #else // original version
 #define RANDUNIFORM(base) ((base - 1) * (rand() / (RAND_MAX + 0.1)))
