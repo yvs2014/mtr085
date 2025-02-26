@@ -6,7 +6,7 @@ mtr - a network diagnostic tool
 SYNOPSIS
 --------
 
-**mtr \[-abBcdefFhilLmnNopqrsStTuvx46\] HOSTNAME ...**
+**mtr \[-abBcdefFilLmnNopqrsStTuvx46\] HOSTNAME ...**
 
 DESCRIPTION
 -----------
@@ -21,6 +21,7 @@ EXTRA
 -------
 
 - Unicode histograms
+- Native Language Support
 - Internationalized Domain Names
 - Additional IP address information
 
@@ -28,9 +29,10 @@ DETAILS
 -------
 ... *see mtr.8 page*
 
-DEB PACKAGES
------------
-Built at [Launchpad](https://ppa.launchpadcontent.net/lrou2014/mtr085/ubuntu/pool/main/m/mtr085/)
+AUTOBUILD
+---------
+[Launchpad](https://ppa.launchpadcontent.net/lrou2014/mtr085/ubuntu/pool/main/m/mtr085/)
+[OBS](https://build.opensuse.org/package/show/home:yvs/mtr085)
 
 ------------------------------------------------------------------------
 SCREENSHOTS

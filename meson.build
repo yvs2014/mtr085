@@ -64,7 +64,7 @@ srcn += 'aux'
 # probes
 fndesc = {
   'pow': {'libs': ['m'], 'hdr': 'math.h'},
-  'warnx': {'libs': [], 'hdr': 'err.h'},
+  'warnx': {'libs': ['bsd'], 'hdr': 'err.h'},
   'socket': {'libs': ['socket', 'network'], 'hdr': 'sys/socket.h'},
   'strlcpy': {'libs': [], 'hdr': 'stdlib.h', 'libhdr': true, 'req': false},
   'arc4random_uniform': {'libs': [], 'hdr': 'stdlib.h', 'libhdr': true, 'req': false},
@@ -151,7 +151,7 @@ endif
 if nls
   config.set('USE_NLS', 1)
   config.set_quoted('LOCALEDIR', join_paths(get_option('prefix'), get_option('localedir')))
-  if os == 'freebsd' or os == 'openbsd'
+  if os == 'freebsd' or os == 'openbsd' or os == 'darwin'
     deps += cc.find_library('intl', has_headers: ['libintl.h'],
       dirs: ['/usr/local/lib'], header_args: ['-isystem/usr/local/include'])
   else

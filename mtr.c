@@ -151,21 +151,21 @@ int curses_mode_max = 3;
 #endif
 //
 t_stat stats[] = {
-  {.name = "",      .min = 1, .key = BLANK_INDICATOR, .hint = "Space between fields"},
-  {.name = "Loss",  .min = 6, .key = 'L', .hint = "Loss ratio"},
-  {.name = "Drop",  .min = 5, .key = 'D', .hint = "Dropped packets"},
-  {.name = "Recv",  .min = 6, .key = 'R', .hint = "Received packets"},
-  {.name = "Sent",  .min = 6, .key = 'S', .hint = "Sent packets"},
-  {.name = "Last",  .min = 6, .key = 'N', .hint = "Newest RTT(ms)"},
-  {.name = "Best",  .min = 6, .key = 'B', .hint = "Min/Best RTT(ms)"},
-  {.name = "Avrg",  .min = 6, .key = 'A', .hint = "Average RTT(ms)"},
-  {.name = "Wrst",  .min = 6, .key = 'W', .hint = "Max/Worst RTT(ms)"},
-  {.name = "StDev", .min = 6, .key = 'V', .hint = "Standard deviation"},
-  {.name = "Mean",  .min = 6, .key = 'G', .hint = "Geometric mean"},
-  {.name = "Jttr",  .min = 5, .key = 'J', .hint = "Current jitter"},
-  {.name = "Javg",  .min = 5, .key = 'M', .hint = "Jitter mean/avrg"},
-  {.name = "Jmax",  .min = 5, .key = 'X', .hint = "Worst jitter"},
-  {.name = "Jint",  .min = 5, .key = 'I', .hint = "Interarrival jitter"},
+  {.name = "",      .min = 1, .key = BLANK_INDICATOR, .hint = _GAP_HINT},
+  {.name = _LOSS_STR,  .min = 6, .key = 'L', .hint = _LOSS_HINT},
+  {.name = _DROP_STR,  .min = 5, .key = 'D', .hint = _DROP_HINT},
+  {.name = _RECV_STR,  .min = 6, .key = 'R', .hint = _RECV_HINT},
+  {.name = _SENT_STR,  .min = 6, .key = 'S', .hint = _SENT_HINT},
+  {.name = _LAST_STR,  .min = 6, .key = 'N', .hint = _LAST_HINT},
+  {.name = _BEST_STR,  .min = 6, .key = 'B', .hint = _BEST_HINT},
+  {.name = _AVRG_STR,  .min = 6, .key = 'A', .hint = _AVRG_HINT},
+  {.name = _WRST_STR,  .min = 6, .key = 'W', .hint = _WRST_HINT},
+  {.name = _STDEV_STR, .min = 6, .key = 'V', .hint = _STDEV_HINT},
+  {.name = _GAVR_STR,  .min = 6, .key = 'G', .hint = _GAVR_HINT},
+  {.name = _JTTR_STR,  .min = 5, .key = 'J', .hint = _JTTR_HINT},
+  {.name = _JAVG_STR,  .min = 5, .key = 'M', .hint = _JAVG_HINT},
+  {.name = _JMAX_STR,  .min = 5, .key = 'X', .hint = _JMAX_HINT},
+  {.name = _JINT_STR,  .min = 5, .key = 'I', .hint = _JINT_HINT},
 };
 const int stat_max = ARRAY_SIZE(stats);
 //// end-of-global

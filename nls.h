@@ -48,59 +48,58 @@
 #define PAR_PAUSED_STR _("on pause")
 
 
-// hop info
+// hop info with init fields
 #define HOST_STR      _("Host")
-#define II_ASN_STR    _("ASN")
-#define II_ROUTE_STR  _("Route")
-#define II_CC_STR     _("CC")
-#define II_REG_STR    _("Registry")
-#define II_ALLOC_STR  _("Allocated")
-#define II_ORIGIN_STR _("Origin")
-#define II_DESC_STR   _("Descr")
-#define II_ASPATH_STR _("AS Path")
-#define II_ORG_STR    _("Org")
-#define II_CNAME_STR  _("Country")
-#define II_RC_STR     _("RC")
-#define II_RNAME_STR  _("Region")
-#define II_CITY_STR   _("City")
-#define II_ZIP_STR    _("Zip")
-#define II_LAT_STR    _("Lat")
-#define II_LNG_STR    _("Long")
-#define II_TZ_STR     _("TZ")
-#define II_ISP_STR    _("ISP")
-#define II_ASNAME_STR _("AS Name")
-#define II_UNKN1_STR  _("Unknown")
+#define _II_ASN_STR    "ASN"
+#define _II_ROUTE_STR  "Route"
+#define _II_CC_STR     "CC"
+#define _II_REG_STR    "Registry"
+#define _II_ALLOC_STR  "Allocated"
+#define _II_ORIGIN_STR "Origin"
+#define _II_DESC_STR   "Descr"
+#define _II_ASPATH_STR "AS Path"
+#define _II_ORG_STR    "Org"
+#define _II_CNAME_STR  "Country"
+#define _II_RC_STR     "RC"
+#define _II_RNAME_STR  "Region"
+#define _II_CITY_STR   "City"
+#define _II_ZIP_STR    "Zip"
+#define _II_LAT_STR    "Lat"
+#define _II_LNG_STR    "Long"
+#define _II_TZ_STR     "TZ"
+#define _II_ISP_STR    "ISP"
+#define _II_ASNAME_STR "AS Name"
 
-// stats
-#define GAP_HINT   _("Space between fields")
-#define LOSS_STR   _("Loss")
-#define LOSS_HINT  _("Loss Ratio")
-#define DROP_STR   _("Drop")
-#define DROP_HINT  _("Dropped Packets")
-#define RECV_STR   _("Recv")
-#define RECV_HINT  _("Received Packets")
-#define SENT_STR   _("Sent")
-#define SENT_HINT  _("Sent Packets")
-#define LAST_STR   _("Last")
-#define LAST_HINT  _("Newest RTT(ms)")
-#define BEST_STR   _("Best")
-#define BEST_HINT  _("Min/Best RTT(ms)")
-#define AVRG_STR   _("Avrg")
-#define AVRG_HINT  _("Average RTT(ms)")
-#define WRST_STR   _("Wrst")
-#define WRST_HINT  _("Max/Worst RTT(ms)")
-#define STDEV_STR  _("StDev")
-#define STDEV_HINT _("Standard Deviation")
-#define MEAN_STR   _("Mean")
-#define MEAN_HINT  _("Geometric Mean")
-#define JTTR_STR   _("Jttr")
-#define JTTR_HINT  _("Current Jitter")
-#define JAVG_STR   _("Javg")
-#define JAVG_HINT  _("Jitter Mean/Avrg")
-#define JMAX_STR   _("Jmax")
-#define JMAX_HINT  _("Worst Jitter")
-#define JINT_STR   _("Jint")
-#define JINT_HINT  _("Interarrival Jitter")
+// stat init fields
+#define _GAP_HINT   "Space between fields"
+#define _LOSS_STR   "Loss"
+#define _LOSS_HINT  "Loss Ratio"
+#define _DROP_STR   "Drop"
+#define _DROP_HINT  "Dropped Packets"
+#define _RECV_STR   "Recv"
+#define _RECV_HINT  "Received Packets"
+#define _SENT_STR   "Sent"
+#define _SENT_HINT  "Sent Packets"
+#define _LAST_STR   "Last"
+#define _LAST_HINT  "Newest RTT(ms)"
+#define _BEST_STR   "Best"
+#define _BEST_HINT  "Min/Best RTT(ms)"
+#define _AVRG_STR   "Avrg"
+#define _AVRG_HINT  "Average RTT(ms)"
+#define _WRST_STR   "Wrst"
+#define _WRST_HINT  "Max/Worst RTT(ms)"
+#define _STDEV_STR  "StDev"
+#define _STDEV_HINT "Standard Deviation"
+#define _GAVR_STR   "GAvr"
+#define _GAVR_HINT  "Geometric Mean"
+#define _JTTR_STR   "Jttr"
+#define _JTTR_HINT  "Current Jitter"
+#define _JAVG_STR   "Javg"
+#define _JAVG_HINT  "Jitter Mean/Avrg"
+#define _JMAX_STR   "Jmax"
+#define _JMAX_HINT  "Worst Jitter"
+#define _JINT_STR   "Jint"
+#define _JINT_HINT  "Interarrival Jitter"
 
 // cmd help
 #define COMMANDS_STR _("Commands")

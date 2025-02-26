@@ -244,8 +244,8 @@ msgstr "CтдВар"
 msgid "Standard deviation"
 msgstr "Стандартне відхилення"
 
-msgid "Mean"
-msgstr "Усрд"
+msgid "GAvr"
+msgstr "СрдГеом"
 
 msgid "Geometric mean"
 msgstr "Геометрично усереднене"
@@ -281,7 +281,7 @@ msgid "Commands"
 msgstr "Команди"
 
 msgid "set bit pattern in range 0..255 (negative value means random)"
-msgstr "встановити бітовий шаблон у діапазоні 0..255 (від'ємне значення означає випадковий)"
+msgstr "встановити бітовий шаблон у діапазоні 0..255 (випадковий якщо значення від'ємне)"
 
 msgid "set number of cycles to run (no limit: 0)"
 msgstr "встановити кількість циклів виконання (без обмежень: 0)"

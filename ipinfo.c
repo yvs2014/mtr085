@@ -119,7 +119,7 @@ static origin_t origins[] = {
 // Abbreviations: CC - Country Code, RC - Region Code, MC - Metro Code, Org - Organization, TZ - TimeZone
 // 1
   { .host  = "origin.asn.cymru.com", .host6 = "origin6.asn.cymru.com",
-    .name  = {"ASN", "Route", "CC", "Registry", "Allocated"},
+    .name  = {_II_ASN_STR, _II_ROUTE_STR, _II_CC_STR, _II_REG_STR, _II_ALLOC_STR},
     .sep   = VSLASH,
   },
 // 2
@@ -135,17 +135,17 @@ static origin_t origins[] = {
 #else
       "2001:67c:2e8:25::c100:b05",
 #endif
-    .name  = {"Route", "Origin", "Descr", "CC"},
+    .name  = {_II_ROUTE_STR, _II_ORIGIN_STR, _II_DESC_STR, _II_CC_STR},
     .sep   = 0, .type = OT_WHOIS, .prefix = "-m ",
   },
 // 3
   { .host  = "peer.asn.shadowserver.org",
-    .name  = {"AS Path", "ASN", "Route", /*"AS Name",*/ "CC", "Org"},
+    .name  = {_II_ASPATH_STR, _II_ASN_STR, _II_ROUTE_STR, /*_II_ASNAME_STR,*/ _II_CC_STR, _II_ORG_STR},
     .sep   = VSLASH, .skip_ndx = {4},
   },
 // 4
   { .host  = "origin.asn.spameatingmonkey.net",
-    .name  = {"Route", "ASN", "Org", "Allocated", "CC"},
+    .name  = {_II_ROUTE_STR, _II_ASN_STR, _II_ORG_STR, _II_ALLOC_STR, _II_CC_STR},
     .unkn  = "Unknown", .sep = VSLASH,
   },
 // 5
@@ -155,12 +155,13 @@ static origin_t origins[] = {
 #else
       "208.95.112.1",
 #endif
-    .name  = {/* Status, */ "Country", "CC", "RC", "Region", "City", "Zip", "Lat", "Long", "TZ", "ISP", "Org", "AS Name" /*, QueryIP */},
+    .name  = {/*Status,*/ _II_CNAME_STR, _II_CC_STR, _II_RC_STR, _II_RNAME_STR, _II_CITY_STR, _II_ZIP_STR,
+              _II_LAT_STR, _II_LNG_STR, _II_TZ_STR, _II_ISP_STR, _II_ORG_STR, _II_ASNAME_STR /*,QueryIP*/},
     .sep   = COMMA, .type = OT_HTTP, .skip_ndx = {IPAPI_STATUS_NDX, IPAPI_QUERYIP_NDX}, .prefix = "/csv/",
   },
 // 6
   { .host  = "asn.routeviews.org",
-    .name  = {"ASN"},
+    .name  = {_II_ASN_STR},
     .unkn  = "4294967295",
   },
 };

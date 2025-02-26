@@ -244,8 +244,8 @@ msgstr "Desvio"
 msgid "Standard deviation"
 msgstr "Desviación estándar"
 
-msgid "Mean"
-msgstr "Promedio"
+msgid "GAvr"
+msgstr "MedGeom"
 
 msgid "Geometric mean"
 msgstr "Media geométrica"
@@ -326,7 +326,7 @@ msgid "reset statistics"
 msgstr "reiniciar estadística"
 
 msgid "set payload size (default 56), randomly within size range if it's negative"
-msgstr "establecer tamaño de datos (predeterminado: 56), al azar dentro del rango de tamaño si es negativo"
+msgstr "establecer tamaño de datos (predeterminado: 56), al azar si es negativo"
 
 msgid "toggle TCP pings"
 msgstr "(des)activar TCP pings"

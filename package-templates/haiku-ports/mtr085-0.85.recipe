@@ -31,14 +31,14 @@ REQUIRES="
 	haiku$secondaryArchSuffix
 	lib:libncursesw$secondaryArchSuffix
 	lib:libidn2$secondaryArchSuffix
-	lib:gettext_libintl$secondaryArchSuffix
+	lib:libintl$secondaryArchSuffix
 "
 
 BUILD_REQUIRES="
 	haiku${secondaryArchSuffix}_devel
 	devel:libncurses$secondaryArchSuffix
 	devel:libidn2$secondaryArchSuffix
-	devel:gettext_libintl$secondaryArchSuffix
+	devel:libintl$secondaryArchSuffix
 	pkgconfig
 	gettext
 	meson
