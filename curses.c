@@ -170,7 +170,7 @@ static inline void mc_key_h(void) { // help
   mvprintw(x++, 0, "%s:", COMMANDS_STR);
   for (unsigned i = 0; i < ARRAY_SIZE(cmd); i++) {
     int pad = indent - ustrlen(cmd[i].key);
-    const char *type = cmd[i].type == CH_INT ? CH_INT_STR :
+    const char *type = cmd[i].type == CH_INT ? CH_NUM_STR :
                        cmd[i].type == CH_STR ? CH_STR_STR : NULL;
     if (type) {
       pad -= ustrlen(type) + 1;
@@ -810,7 +810,7 @@ static inline void mc_histmode(void) {
   int maxx = getmaxx(stdscr);
   int max_cols = (maxx <= (SAVED_PINGS + statx)) ? (maxx - statx) : SAVED_PINGS;
   statx -= 2;
-  mvprintw(staty - 1, statx, "%s: %d %s", HISTOGRAM_STR, max_cols, HPINGS_STR);
+  mvprintw(staty - 1, statx, "%s: %d %s", HISTOGRAM_STR, max_cols, HCOLS_STR);
   if (move(staty, 0) != ERR) {
     attroff(A_BOLD);
     dmode_scale_map();

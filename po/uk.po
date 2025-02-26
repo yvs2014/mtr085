@@ -64,8 +64,9 @@ msgstr "Невідомо"
 msgid "Histogram"
 msgstr "Гістограма"
 
-msgid "pings"
-msgstr "пінги"
+# n columns
+msgid "cols"
+msgstr "колонок"
 
 msgid "Scale"
 msgstr "Шкала"
@@ -301,7 +302,7 @@ msgid "toggle latency/jitter stats (default: latency)"
 msgstr "перемикання відображення типустатистики, затримка чи джиттер (стандартно: затримка)"
 
 msgid "toggle ASN lookup"
-msgstr "вкл/викл відображення ASN"
+msgstr "вкл/викл відображення АС"
 
 msgid "switch IP info"
 msgstr "перемикання режимів IP-інфо"
@@ -345,7 +346,7 @@ msgstr "призупинити/продовжити"
 msgid "SPACE"
 msgstr "ПРОБІЛ"
 
-msgid "<int>"
+msgid "<number>"
 msgstr "<число>"
 
 msgid "<string>"

@@ -60,6 +60,7 @@ MESON_ARGS+=	-DUNICODE=false
 MESON_ARGS+=	-DNLS=false
 .else
 USES+=	gettext-runtime
+PLIST_FILES+=	share/locale/es/LC_MESSAGES/mtr085.mo
 PLIST_FILES+=	share/locale/uk/LC_MESSAGES/mtr085.mo
 .endif
 

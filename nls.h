@@ -27,7 +27,7 @@
 #define MORETHAN_STR   _("more than")
 #define UNKNOWN_STR    _("Unknown")
 #define HISTOGRAM_STR  _("Histogram")
-#define HPINGS_STR     _("pings")
+#define HCOLS_STR      _("columns")
 #define SCALE_STR      _("Scale")
 #define MSEC_STR       _("ms")
 //
@@ -126,7 +126,7 @@
 #define CMD_PM_STR   _("scroll up/down")
 #define CMD_SP_STR   _("pause/resume")
 #define SPACE_STR    _("SPACE")
-#define CH_INT_STR   _("<int>")
+#define CH_NUM_STR   _("<number>")
 #define CH_STR_STR   _("<string>")
 
 // cli help

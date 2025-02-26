@@ -1,0 +1,571 @@
+msgid ""
+msgstr ""
+"Language: es\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+
+## TUI
+
+msgid "Keys"
+msgstr "Teclas"
+
+# [h]ints
+msgid "ints"
+msgstr "(pistas)"
+
+# [q]uit
+msgid "uit"
+msgstr "(salir)"
+
+msgid "Fields"
+msgstr "Campos"
+
+msgid "Custom fields"
+msgstr "Campos personalizados"
+
+msgid "Packets"
+msgstr "Paquetes"
+
+msgid "Pings"
+msgstr "Pings"
+
+msgid "0 for unlimit"
+msgstr "0 para ilimitado"
+
+msgid "ToS bits: lowcost(1), reliability(2), throughput(4), lowdelay(8)"
+msgstr "Bits de ToS: bajo-costo(1), fiabilidad(2), rendimiento(4), demora-mínima(8)"
+
+msgid "Change payload size"
+msgstr "Cambiar tamaño de la carga útil"
+
+msgid "negative values are for random"
+msgstr "valores negativos son al azar"
+
+msgid "range"
+msgstr "rango"
+
+msgid "range[0-255], random is -1"
+msgstr "rango[0-255], aleatorio es -1"
+
+msgid "Interval in seconds"
+msgstr "Intervalo en segundos"
+
+msgid "less than"
+msgstr "menos que"
+
+msgid "more than"
+msgstr "más que"
+
+msgid "Unknown"
+msgstr "Desconocido"
+
+msgid "Histogram"
+msgstr "Histograma"
+
+# n columns
+msgid "columns"
+msgstr "columnas"
+
+msgid "Scale"
+msgstr "Escala"
+
+msgid "ms"
+msgstr "mseg"
+
+#
+
+msgid "udp"
+msgstr "udp"
+
+msgid "tcp"
+msgstr "tcp"
+
+msgid "mpls"
+msgstr "mpls"
+
+msgid "asn"
+msgstr "asn"
+
+msgid "dns"
+msgstr "dns"
+
+msgid "jitter"
+msgstr "jitter"
+
+msgid "chart"
+msgstr "diagrama"
+
+msgid "pattern"
+msgstr "patrón"
+
+msgid "dt"
+msgstr "dt"
+
+msgid "cycles"
+msgstr "ciclos"
+
+msgid "ttl"
+msgstr "ttl"
+
+msgid "qos"
+msgstr "qos"
+
+msgid "size"
+msgstr "tamaño"
+
+msgid "cache"
+msgstr "caché"
+
+msgid "on pause"
+msgstr "en pausa"
+
+
+## hop/ip info
+
+msgid "Host"
+msgstr "Host"
+
+msgid "ASN"
+msgstr "SA"
+
+msgid "Route"
+msgstr "Red"
+
+msgid "CC"
+msgstr "País"
+
+msgid "Registry"
+msgstr "Registro"
+
+msgid "Allocated"
+msgstr "Asignado"
+
+msgid "Origin"
+msgstr "Origen"
+
+msgid "Descr"
+msgstr "Descr"
+
+msgid "AS Path"
+msgstr "SA-camino"
+
+msgid "Org"
+msgstr "Empresa"
+
+msgid "Country"
+msgstr "País"
+
+msgid "RC"
+msgstr "Código"
+
+msgid "Region"
+msgstr "Región"
+
+msgid "City"
+msgstr "Ciudad"
+
+msgid "Zip"
+msgstr "Postal"
+
+msgid "Lat"
+msgstr "Lat"
+
+msgid "Long"
+msgstr "Long"
+
+msgid "TZ"
+msgstr "TZ"
+
+msgid "ISP"
+msgstr "PSI"
+
+msgid "AS Name"
+msgstr "Nombre de SA"
+
+
+## stats
+
+msgid "Space between fields"
+msgstr "Espacio entre campos"
+
+msgid "Loss"
+msgstr "Pérd"
+
+msgid "Loss ratio"
+msgstr "Ratio de siniestralidad"
+
+msgid "Drop"
+msgstr "Desecho"
+
+msgid "Dropped packets"
+msgstr "Paquetes descartados"
+
+msgid "Recv"
+msgstr "Recb"
+
+msgid "Received packets"
+msgstr "Paquetes recibidos"
+
+msgid "Sent"
+msgstr "Envia"
+
+msgid "Sent packets"
+msgstr "Paquetes enviados"
+
+msgid "Last"
+msgstr "Último"
+
+msgid "Newest RTT(ms)"
+msgstr "RTT(mseg) más reciente"
+
+msgid "Best"
+msgstr "Mejor"
+
+msgid "Min/Best RTT(ms)"
+msgstr "Mín/Mejor RTT(mseg)"
+
+msgid "Avrg"
+msgstr "Medio"
+
+msgid "Average RTT(ms)"
+msgstr "RTT(mseg) promedio"
+
+msgid "Wrst"
+msgstr "Peor"
+
+msgid "Max/Worst RTT(ms)"
+msgstr "Máx/Peor RTT(mseg)"
+
+msgid "StDev"
+msgstr "Desvio"
+
+msgid "Standard deviation"
+msgstr "Desviación estándar"
+
+msgid "Mean"
+msgstr "Promedio"
+
+msgid "Geometric mean"
+msgstr "Media geométrica"
+
+msgid "Jttr"
+msgstr "Jttr"
+
+msgid "Current jitter"
+msgstr "Fluctuación actual"
+
+msgid "Javg"
+msgstr "Jmed"
+
+msgid "Jitter mean/avrg"
+msgstr "Jitter promedio"
+
+msgid "Jmax"
+msgstr "Jmáx"
+
+msgid "Worst jitter"
+msgstr "Jitter peor"
+
+msgid "Jint"
+msgstr "Jint"
+
+msgid "Interarrival jitter"
+msgstr "Jitter de interarribo"
+
+
+## cmd help
+
+msgid "Commands"
+msgstr "Comandos"
+
+msgid "set bit pattern in range 0..255 (negative value means random)"
+msgstr "establecer patrón de bits en rango 0..255 (valor negativo significa aleatorio)"
+
+msgid "set number of cycles to run (no limit: 0)"
+msgstr "establecer número de ciclos a ejecutar (sin límite: 0)"
+
+msgid "switch display mode"
+msgstr "cambiar modo de visualización"
+
+msgid "toggle MPLS info"
+msgstr "(des)activar MPLS info"
+
+msgid "set first TTL (default 1)"
+msgstr "establecer TTL mínimo (predeterminado: 1)"
+
+msgid "set interval in seconds (default 1s)"
+msgstr "establecer intervalo en segundos (predeterminado: 1seg)"
+
+msgid "toggle latency/jitter stats (default: latency)"
+msgstr "alternar latencia/fluctuación (predeterminado: latencia)"
+
+msgid "toggle ASN lookup"
+msgstr "(des)activar búsqueda de SA"
+
+msgid "switch IP info"
+msgstr "(des)activar IP info"
+
+msgid "set max TTL (default 30)"
+msgstr "establecer TTL máximo (predeterminado: 30)"
+
+msgid "toggle DNS"
+msgstr "(des)activar DNS"
+
+msgid "set stat fields to display (default: LS_NABWV)"
+msgstr "Establecer campos de estadística (predeterminado: LS_NABWV)"
+
+msgid "quit"
+msgstr "salir"
+
+msgid "set ToS/QoS (quality of service)"
+msgstr "establecer ToS/QoS (calidad de servicio)"
+
+msgid "reset statistics"
+msgstr "reiniciar estadística"
+
+msgid "set payload size (default 56), randomly within size range if it's negative"
+msgstr "establecer tamaño de datos (predeterminado: 56), al azar dentro del rango de tamaño si es negativo"
+
+msgid "toggle TCP pings"
+msgstr "(des)activar TCP pings"
+
+msgid "toggle UDP pings"
+msgstr "(des)activar UDP pings"
+
+msgid "toggle cache mode"
+msgstr "(des)activar modo caché"
+
+msgid "scroll up/down"
+msgstr "desplazamiento hacia arriba/abajo"
+
+msgid "pause/resume"
+msgstr "pausar/reanudar"
+
+msgid "SPACE"
+msgstr "ESPACIO"
+
+msgid "<number>"
+msgstr "número"
+
+msgid "<string>"
+msgstr "texto"
+
+
+## cli help
+
+msgid "Usage"
+msgstr "Uso"
+
+msgid "TARGET[:PORT]"
+msgstr "OBJETIVO[:PUERTO]"
+
+msgid "IP.ADD.RE.SS"
+msgstr "DI.REC.CI.ÓN"
+
+msgid "NUMBER"
+msgstr "NÚMERO"
+
+msgid "COUNT"
+msgstr "CONTEO"
+
+msgid "MODE"
+msgstr "MODO"
+
+msgid "FIELDS"
+msgstr "CAMPOS"
+
+msgid "SECONDS"
+msgstr "SEGUNDOS"
+
+msgid "SERVER,FIELDS"
+msgstr "SERVIDOR,CAMPOS"
+
+msgid "BYTES"
+msgstr "BYTES"
+
+
+## option hints
+
+msgid "Bit pattern"
+msgstr "Patrón de bits"
+
+msgid "Number of cycles"
+msgstr "Número de ciclos"
+
+msgid "First TTL"
+msgstr "TTL mínimo"
+
+msgid "Max TTL"
+msgstr "TTL máximo"
+
+msgid "Interval"
+msgstr "Intervalo"
+
+msgid "QoS/ToS"
+msgstr "QoS/ToS (calidad de servicio)"
+
+msgid "Display mode"
+msgstr "Modo de visualización"
+
+msgid "Payload size"
+msgstr "Tamaño de datos"
+
+msgid "Mutually exclusive options"
+msgstr "Opciones mutuamente excluyentes"
+
+msgid "TCP timeout"
+msgstr "Tiempo de espera de TCP"
+
+msgid "Cache timeout"
+msgstr "Tiempo de espera de caché"
+
+
+## misc
+
+msgid "target"
+msgstr "objetivo"
+
+msgid "targets"
+msgstr "objetivos"
+
+msgid "Target"
+msgstr "Objetivo"
+
+msgid "source"
+msgstr ""
+
+msgid "args"
+msgstr "argumentos"
+
+msgid "port number"
+msgstr "número de puerto"
+
+# max=
+msgid "max"
+msgstr "máx"
+
+# n opened
+msgid "opened"
+msgstr "abiertos"
+
+# n closed
+msgid "closed"
+msgstr "cerrados"
+
+# n quieries
+msgid "queries"
+msgstr "consultas"
+
+# n replies
+msgid "replies"
+msgstr "respuestas"
+
+msgid "NONE"
+msgstr "NADA"
+
+msgid "datetime"
+msgstr "fecha"
+
+msgid "hop"
+msgstr "nodo"
+
+msgid "data"
+msgstr "dato"
+
+msgid "host"
+msgstr "host"
+
+msgid "active"
+msgstr "activo"
+
+msgid "ipinfo"
+msgstr "info"
+
+msgid "yes"
+msgstr "sí"
+
+msgid "no"
+msgstr "no"
+
+msgid "error"
+msgstr "error"
+
+msgid "Hop"
+msgstr "Nodo"
+
+msgid "Status"
+msgstr "Estado"
+
+msgid "Info"
+msgstr "Info"
+
+
+## messages
+
+msgid "Press any key to continue"
+msgstr "Pulse cualquier tecla para continuar"
+
+msgid "Press any key to quit"
+msgstr "Pulse cualquier tecla para salir"
+
+msgid "Unknown error"
+msgstr "Error desconocido"
+
+msgid "Unable to get raw sockets"
+msgstr "Raw-sockets no están disponibles"
+
+msgid "Unable to drop permissions"
+msgstr "No se puede eliminar permisos"
+
+msgid "Unable to drop capabilities"
+msgstr "No se puede eliminar capacidades"
+
+msgid "Failed to resolve"
+msgstr "No se pudo resolver"
+
+msgid "Only one DNS server is used"
+msgstr "Solo se utiliza un servidor DNS"
+
+msgid "Failed to parse"
+msgstr "No se pudo analizar"
+
+msgid "Failed to set nameserver"
+msgstr "No se pudo establecer servidor DNS"
+
+msgid "IPv6 traffic class is not supported"
+msgstr "Clase de tráfico IPv6 no se soporta"
+
+msgid "Unable to open display"
+msgstr "No se puede inicializar la pantalla"
+
+msgid "Too many stat fields"
+msgstr "Demasiados campos para estadística"
+
+msgid "Unknown stat field"
+msgstr "Campo de estadística desconocido"
+
+msgid "Unable to set host entry"
+msgstr "No se puede establecer registro de host"
+
+msgid "Unable to use address"
+msgstr "No se puede usar la dirección"
+
+msgid "UTF8 is not printable"
+msgstr "UTF8 no es imprimible"
+
+msgid "No address found"
+msgstr "Dirección no encontrada"
+
+#
+
+msgid "No place in pool for sockets"
+msgstr "No hay lugar en conjunto para sockets"
+
+msgid "No IPv6 sockets"
+msgstr "Sin sockets IPv6"
+
+msgid "No nameservers"
+msgstr "Sin servidores DNS"
+
