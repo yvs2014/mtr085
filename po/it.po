@@ -1,6 +1,6 @@
 msgid ""
 msgstr ""
-"Language: es\n"
+"Language: it\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -9,70 +9,70 @@ msgstr ""
 ## TUI
 
 msgid "Keys"
-msgstr "Teclas"
+msgstr "Tasti"
 
 # [h]ints
 msgid "ints"
-msgstr "(pistas)"
+msgstr "(guide)"
 
 # [q]uit
 msgid "uit"
-msgstr "(salir)"
+msgstr "(uscita)"
 
 msgid "Fields"
-msgstr "Campos"
+msgstr "Campi"
 
 msgid "Custom fields"
-msgstr "Campos personalizados"
+msgstr "Campi personalizzati"
 
 msgid "Packets"
-msgstr "Paquetes"
+msgstr "Pacchetti"
 
 msgid "Pings"
-msgstr "Pings"
+msgstr "Ping"
 
 msgid "0 for unlimit"
-msgstr "0 para ilimitado"
+msgstr "0 per illimitato"
 
 msgid "ToS bits: lowcost(1), reliability(2), throughput(4), lowdelay(8)"
-msgstr "Bits de ToS: bajo-costo(1), fiabilidad(2), rendimiento(4), demora-mínima(8)"
+msgstr "Bit di ToS: basso-costo(1), affidabilità(2), produttività(4), ritardo-minimo(8)"
 
 msgid "Change payload size"
-msgstr "Cambiar tamaño de la carga útil"
+msgstr "Cambia dimensione del carico utile"
 
 msgid "negative values are for random"
-msgstr "valores negativos son al azar"
+msgstr "valori negativi sono casuali"
 
 msgid "range"
-msgstr "rango"
+msgstr "gamma"
 
 msgid "range[0-255], random is -1"
-msgstr "rango[0-255], aleatorio es -1"
+msgstr "gamma[0-255], casuale è -1"
 
 msgid "Interval in seconds"
-msgstr "Intervalo en segundos"
+msgstr "Intervallo in secondi"
 
 msgid "less than"
-msgstr "menos que"
+msgstr "meno di"
 
 msgid "more than"
-msgstr "más que"
+msgstr "più di"
 
 msgid "Unknown"
-msgstr "Desconocido"
+msgstr "Sconosciuto"
 
 msgid "Histogram"
-msgstr "Histograma"
+msgstr "Istogramma"
 
 # n columns
 msgid "columns"
-msgstr "columnas"
+msgstr "colonne"
 
 msgid "Scale"
-msgstr "Escala"
+msgstr "Scala"
 
 msgid "ms"
-msgstr "mseg"
+msgstr "msec"
 
 #
 
@@ -92,19 +92,19 @@ msgid "dns"
 msgstr "dns"
 
 msgid "jitter"
-msgstr "jitter"
+msgstr "tremolii"
 
 msgid "chart"
-msgstr "diagrama"
+msgstr "diagramma"
 
 msgid "pattern"
-msgstr "patrón"
+msgstr "modello"
 
 msgid "dt"
 msgstr "dt"
 
 msgid "cycles"
-msgstr "ciclos"
+msgstr "cicli"
 
 msgid "ttl"
 msgstr "ttl"
@@ -113,13 +113,13 @@ msgid "qos"
 msgstr "qos"
 
 msgid "size"
-msgstr "tamaño"
+msgstr "dimensione"
 
 msgid "cache"
-msgstr "caché"
+msgstr "cache"
 
 msgid "on pause"
-msgstr "en pausa"
+msgstr "in pausa"
 
 
 ## hop/ip info
@@ -131,43 +131,43 @@ msgid "ASN"
 msgstr "SA"
 
 msgid "Route"
-msgstr "Red"
+msgstr "Rete"
 
 msgid "CC"
-msgstr "País"
+msgstr "Paese"
 
 msgid "Registry"
 msgstr "Registro"
 
 msgid "Allocated"
-msgstr "Asignado"
+msgstr "Assegnato"
 
 msgid "Origin"
-msgstr "Origen"
+msgstr "Origine"
 
 msgid "Descr"
 msgstr "Descr"
 
 msgid "AS Path"
-msgstr "SA-camino"
+msgstr "SA-percorso"
 
 msgid "Org"
-msgstr "Empresa"
+msgstr "Impresa"
 
 msgid "Country"
-msgstr "País"
+msgstr "Paese"
 
 msgid "RC"
-msgstr "Código"
+msgstr "Codice"
 
 msgid "Region"
-msgstr "Región"
+msgstr "Regione"
 
 msgid "City"
-msgstr "Ciudad"
+msgstr "Città"
 
 msgid "Zip"
-msgstr "Postal"
+msgstr "CAP"
 
 msgid "Lat"
 msgstr "Lat"
@@ -182,175 +182,175 @@ msgid "ISP"
 msgstr "PSI"
 
 msgid "AS Name"
-msgstr "Nombre de SA"
+msgstr "Nome di SA"
 
 
 ## stats
 
 msgid "Space between fields"
-msgstr "Espacio entre campos"
+msgstr "Spazio tra i campi"
 
 msgid "Loss"
-msgstr "Pérd"
+msgstr "Perd"
 
 msgid "Loss ratio"
-msgstr "Tasa de pérdidas"
+msgstr "Tasso di perdite"
 
 msgid "Drop"
-msgstr "Desecho"
+msgstr "Scarto"
 
 msgid "Dropped packets"
-msgstr "Paquetes descartados"
+msgstr "Pacchetti scartati"
 
 msgid "Recv"
-msgstr "Recb"
+msgstr "Ricv"
 
 msgid "Received packets"
-msgstr "Paquetes recibidos"
+msgstr "Pacchetti ricevuti"
 
 msgid "Sent"
-msgstr "Envia"
+msgstr "Invia"
 
 msgid "Sent packets"
-msgstr "Paquetes enviados"
+msgstr "Pacchetti inviati"
 
 msgid "Last"
-msgstr "Último"
+msgstr "Scorso"
 
 msgid "Newest RTT(ms)"
-msgstr "RTT(mseg) más reciente"
+msgstr "RTT(msec) più recente"
 
 msgid "Best"
-msgstr "Mejor"
+msgstr "Meglio"
 
 msgid "Min/Best RTT(ms)"
-msgstr "RTT(mseg) mín/mejor"
+msgstr "RTT(msec) minimo/meglio"
 
 msgid "Avrg"
 msgstr "Medio"
 
 msgid "Average RTT(ms)"
-msgstr "RTT(mseg) promedio"
+msgstr "RTT(msec) medio"
 
 msgid "Wrst"
-msgstr "Peor"
+msgstr "Pegg"
 
 msgid "Max/Worst RTT(ms)"
-msgstr "Máx/Peor RTT(mseg)"
+msgstr "RTT(msec) massimo/peggiore"
 
 msgid "StDev"
-msgstr "Desvio"
+msgstr "DevSt"
 
 msgid "Standard deviation"
-msgstr "Desviación estándar"
+msgstr "Deviazione standard"
 
 msgid "GAvr"
 msgstr "MedGeom"
 
 msgid "Geometric mean"
-msgstr "Media geométrica"
+msgstr "Media geometrica"
 
 msgid "Jttr"
 msgstr "Jttr"
 
 msgid "Current jitter"
-msgstr "Fluctuación actual"
+msgstr "Fluttuazione attuale"
 
 msgid "Javg"
 msgstr "Jmed"
 
 msgid "Jitter mean/avrg"
-msgstr "Jitter promedio"
+msgstr "Jitter medio"
 
 msgid "Jmax"
-msgstr "Jmáx"
+msgstr "Jmas"
 
 msgid "Worst jitter"
-msgstr "Jitter peor"
+msgstr "Jitter peggiore"
 
 msgid "Jint"
 msgstr "Jint"
 
 msgid "Interarrival jitter"
-msgstr "Jitter de interarribo"
+msgstr "Jitter di interarrivo"
 
 
 ## cmd help
 
 msgid "Commands"
-msgstr "Comandos"
+msgstr "Comandi"
 
 msgid "set bit pattern in range 0..255 (negative value means random)"
-msgstr "establecer patrón de bits en rango 0..255 (valor negativo significa aleatorio)"
+msgstr "imposta il modello di bit nell'intervallo 0..255 (valore negativo per casuale)"
 
 msgid "set number of cycles to run (no limit: 0)"
-msgstr "establecer número de ciclos a ejecutar (sin límite: 0)"
+msgstr "imposta il numero di cicli da eseguire (illimitato: 0)"
 
 msgid "switch display mode"
-msgstr "cambiar modo de visualización"
+msgstr "cambia modo di visualizzazione"
 
 msgid "toggle MPLS info"
-msgstr "(des)activar info MPLS"
+msgstr "(dis)attiva info MPLS"
 
 msgid "set first TTL (default 1)"
-msgstr "establecer TTL mínimo (predeterminado: 1)"
+msgstr "imposta il TTL minimo (predefinito: 1)"
 
 msgid "set interval in seconds (default 1s)"
-msgstr "establecer intervalo en segundos (predeterminado: 1seg)"
+msgstr "imposta l'intervallo in secondi (predefinito: 1sec)"
 
 msgid "toggle latency/jitter stats (default: latency)"
-msgstr "alternar latencia/fluctuación (predeterminado: latencia)"
+msgstr "alterna latenza/jitter (predefinito: latenza)"
 
 msgid "toggle ASN lookup"
-msgstr "(des)activar búsqueda de SA"
+msgstr "(dis)attiva ricerca SA"
 
 msgid "switch IP info"
-msgstr "(des)activar IP info"
+msgstr "(dis)attiva info IP"
 
 msgid "set max TTL (default 30)"
-msgstr "establecer TTL máximo (predeterminado: 30)"
+msgstr "imposta il TTL massimo (predefinito: 30)"
 
 msgid "toggle DNS"
-msgstr "(des)activar DNS"
+msgstr "(dis)attiva DNS"
 
 msgid "set stat fields to display (default: LS_NABWV)"
-msgstr "establecer campos de estadística (predeterminado: LS_NABWV)"
+msgstr "imposta i campi delle statistiche (predefinito: LS_NABWV)"
 
 msgid "quit"
-msgstr "salir"
+msgstr "uscita"
 
 msgid "set ToS/QoS (quality of service)"
-msgstr "establecer ToS/QoS (calidad de servicio)"
+msgstr "imposta ToS/QoS (qualità del servizio)"
 
 msgid "reset statistics"
-msgstr "reiniciar estadística"
+msgstr "ripristina statistiche"
 
 msgid "set payload size (default 56), randomly within size range if it's negative"
-msgstr "establecer tamaño de datos (predeterminado: 56), al azar si es negativo"
+msgstr "imposta la dimensione dei dati (predefinita: 56), casuale se negativa"
 
 msgid "toggle TCP pings"
-msgstr "(des)activar pings TCP"
+msgstr "(dis)attiva ping TCP"
 
 msgid "toggle UDP pings"
-msgstr "(des)activar pings UDP"
+msgstr "(dis)attiva ping UDP"
 
 msgid "toggle cache mode"
-msgstr "(des)activar modo caché"
+msgstr "(dis)attiva modo cache"
 
 msgid "scroll up/down"
-msgstr "desplazamiento hacia arriba/abajo"
+msgstr "scorre su o giù"
 
 msgid "pause/resume"
-msgstr "pausar/reanudar"
+msgstr "pausa/ripresa"
 
 msgid "SPACE"
-msgstr "ESPACIO"
+msgstr "SPAZIO"
 
 msgid "<number>"
-msgstr "<número>"
+msgstr "<numero>"
 
 msgid "<string>"
-msgstr "<texto>"
+msgstr "<testo>"
 
 
 ## cli help
@@ -359,144 +359,144 @@ msgid "Usage"
 msgstr "Uso"
 
 msgid "TARGET[:PORT]"
-msgstr "OBJETIVO[:PUERTO]"
+msgstr "OBIETTIVO[:PORTA]"
 
 msgid "IP.ADD.RE.SS"
-msgstr "DI.REC.CI.ÓN"
+msgstr "IN.DI.RI.ZZO"
 
 msgid "NUMBER"
-msgstr "NÚMERO"
+msgstr "NUMERO"
 
 msgid "COUNT"
-msgstr "CONTEO"
+msgstr "CONTEGGIO"
 
 msgid "MODE"
 msgstr "MODO"
 
 msgid "FIELDS"
-msgstr "CAMPOS"
+msgstr "CAMPI"
 
 msgid "SECONDS"
-msgstr "SEGUNDOS"
+msgstr "SECONDI"
 
 msgid "SERVER,FIELDS"
-msgstr "SERVIDOR,CAMPOS"
+msgstr "SERVER,CAMPI"
 
 msgid "BYTES"
-msgstr "BYTES"
+msgstr "BYTE"
 
 
 ## option hints
 
 msgid "Bit pattern"
-msgstr "Patrón de bits"
+msgstr "Modello di bit"
 
 msgid "Number of cycles"
-msgstr "Número de ciclos"
+msgstr "Numero di cicli"
 
 msgid "First TTL"
-msgstr "TTL mínimo"
+msgstr "TTL minimo"
 
 msgid "Max TTL"
-msgstr "TTL máximo"
+msgstr "TTL massimo"
 
 msgid "Interval"
-msgstr "Intervalo"
+msgstr "Intervallo"
 
 msgid "QoS/ToS"
-msgstr "QoS/ToS (calidad de servicio)"
+msgstr "QoS/ToS (qualità del servizio)"
 
 msgid "Display mode"
-msgstr "Modo de visualización"
+msgstr "Modo di visualizzazione"
 
 msgid "Payload size"
-msgstr "Tamaño de datos"
+msgstr "Dimensione di dati"
 
 msgid "Mutually exclusive options"
-msgstr "Opciones mutuamente excluyentes"
+msgstr "Opzioni reciprocamente esclusive"
 
 msgid "TCP timeout"
-msgstr "Tiempo de espera de TCP"
+msgstr "Timeout TCP"
 
 msgid "Cache timeout"
-msgstr "Tiempo de espera de caché"
+msgstr "Timeout cache"
 
 
 ## misc
 
 msgid "target"
-msgstr "objetivo"
+msgstr "OBIETTIVO"
 
 msgid "targets"
-msgstr "objetivos"
+msgstr "obiettivi"
 
 msgid "Target"
-msgstr "Objetivo"
+msgstr "Obiettivo"
 
 msgid "source"
-msgstr "origen"
+msgstr "sorgente"
 
 msgid "args"
-msgstr "argumentos"
+msgstr "argomenti"
 
 msgid "port number"
-msgstr "número de puerto"
+msgstr "numero di porta"
 
 # max=
 msgid "max"
-msgstr "máx"
+msgstr "mass"
 
 # n opened
 msgid "opened"
-msgstr "abiertos"
+msgstr "aperti"
 
 # n closed
 msgid "closed"
-msgstr "cerrados"
+msgstr "chiusi"
 
 # n quieries
 msgid "queries"
-msgstr "consultas"
+msgstr "richieste"
 
 # n replies
 msgid "replies"
-msgstr "respuestas"
+msgstr "risposte"
 
 msgid "NONE"
-msgstr "NADA"
+msgstr "NIENTE"
 
 msgid "datetime"
-msgstr "fecha"
+msgstr "datario"
 
 msgid "hop"
 msgstr "nodo"
 
 msgid "data"
-msgstr "dato"
+msgstr "dati"
 
 msgid "host"
 msgstr "host"
 
 msgid "active"
-msgstr "activo"
+msgstr "attivo"
 
 msgid "ipinfo"
 msgstr "info"
 
 msgid "yes"
-msgstr "sí"
+msgstr "sì"
 
 msgid "no"
 msgstr "no"
 
 msgid "error"
-msgstr "error"
+msgstr "errore"
 
 msgid "Hop"
 msgstr "Nodo"
 
 msgid "Status"
-msgstr "Estado"
+msgstr "Stato"
 
 msgid "Info"
 msgstr "Info"
@@ -505,67 +505,67 @@ msgstr "Info"
 ## messages
 
 msgid "Press any key to continue"
-msgstr "Pulse cualquier tecla para continuar"
+msgstr "Premere un tasto qualsiasi per continuare"
 
 msgid "Press any key to quit"
-msgstr "Pulse cualquier tecla para salir"
+msgstr "Premere un tasto qualsiasi per uscire"
 
 msgid "Unknown error"
-msgstr "Error desconocido"
+msgstr "Errore sconosciuto"
 
 msgid "Unable to get raw sockets"
-msgstr "Raw-sockets no están disponibles"
+msgstr "Socket raw non sono disponibili"
 
 msgid "Unable to drop permissions"
-msgstr "No se puede eliminar permisos"
+msgstr "Impossibile eliminare i permessi"
 
 msgid "Unable to drop capabilities"
-msgstr "No se puede eliminar capacidades"
+msgstr "Impossibile eliminare le capacità"
 
 msgid "Failed to resolve"
-msgstr "No se pudo resolver"
+msgstr "Impossibile risolvere"
 
 msgid "Only one DNS server is used"
-msgstr "Solo se utiliza un servidor DNS"
+msgstr "Viene utilizzato un solo server DNS"
 
 msgid "Failed to parse"
-msgstr "No se pudo analizar"
+msgstr "Impossibile analizzare"
 
 msgid "Failed to set nameserver"
-msgstr "No se pudo establecer servidor DNS"
+msgstr "Impossibile impostare server DNS"
 
 msgid "IPv6 traffic class is not supported"
-msgstr "Clase de tráfico IPv6 no se soporta"
+msgstr "Classe di traffico IPv6 non è supportata"
 
 msgid "Unable to open display"
-msgstr "No se puede inicializar la pantalla"
+msgstr "Impossibile aprire lo schermo"
 
 msgid "Too many stat fields"
-msgstr "Demasiados campos para estadística"
+msgstr "Troppi campi per statistiche"
 
 msgid "Unknown stat field"
-msgstr "Campo de estadística desconocido"
+msgstr "Campo statistiche sconosciuto"
 
 msgid "Unable to set host entry"
-msgstr "No se puede establecer registro de host"
+msgstr "Impossibile impostare host"
 
 msgid "Unable to use address"
-msgstr "No se puede usar la dirección"
+msgstr "Impossibile utilizzare l'indirizzo"
 
 msgid "UTF8 is not printable"
-msgstr "UTF8 no es imprimible"
+msgstr "UTF8 non è stampabile"
 
 msgid "No address found"
-msgstr "Dirección no encontrada"
+msgstr "Indirizzo non trovato"
 
 #
 
 msgid "No place in pool for sockets"
-msgstr "No hay lugar en conjunto para sockets"
+msgstr "Non c'è posto nel set per socket"
 
 msgid "No IPv6 sockets"
-msgstr "Sin sockets IPv6"
+msgstr "Nessun socket IPv6"
 
 msgid "No nameservers"
-msgstr "Sin servidores DNS"
+msgstr "Nessun server DNS"
 

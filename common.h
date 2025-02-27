@@ -34,7 +34,7 @@
 #endif
 
 #ifndef GITREV
-#define GITREV "215"
+#define GITREV "216"
 #endif
 
 typedef union inaddr_union {
@@ -199,10 +199,10 @@ typedef union opt_sum_u {
     size     :1, // -s packet_size
     syn      :1, // -T tcp_timeout
     port     :1; // port from 'target:port' in tcp/udp modes
-  };
+  } s;
 } opt_sum_t;
 
-#define OPT_SUM(tag) do {opt_sum.tag = (run_opts.tag != ini_opts.tag);} while(0)
+#define OPT_SUM(tag) do {opt_sum.s.tag = (run_opts.tag != ini_opts.tag);} while(0)
 
 // logging, warnings, errors
 #if defined(__NetBSD__) || defined(__FreeBSD__) || defined(__OpenBSD__)
