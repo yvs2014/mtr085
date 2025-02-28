@@ -132,7 +132,7 @@ if(NLS)
     target_link_libraries("${NAME}" PRIVATE ${Intl_LIBRARIES})
   endif()
   set(LOCALEDIR "${CMAKE_INSTALL_DATADIR}/locale")
-  set(LINGUAS es it uk)
+  set(LINGUAS es it pt uk)
   foreach(lang ${LINGUAS})
     GETTEXT_PROCESS_PO_FILES("${lang}" ALL INSTALL_DESTINATION "${LOCALEDIR}/"
       PO_FILES "${CMAKE_CURRENT_SOURCE_DIR}/po/${lang}.po")
