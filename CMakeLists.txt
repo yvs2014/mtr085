@@ -133,10 +133,23 @@ if(NLS)
   endif()
   set(LOCALEDIR "${CMAKE_INSTALL_DATADIR}/locale")
   set(LINGUAS es it pt uk)
+  SET(mo_files)
   foreach(lang ${LINGUAS})
-    GETTEXT_PROCESS_PO_FILES("${lang}" ALL INSTALL_DESTINATION "${LOCALEDIR}/"
-      PO_FILES "${CMAKE_CURRENT_SOURCE_DIR}/po/${lang}.po")
+#    GETTEXT_PROCESS_PO_FILES("${lang}" ALL INSTALL_DESTINATION "${LOCALEDIR}/"
+#      PO_FILES "${CMAKE_CURRENT_SOURCE_DIR}/po/${lang}.po")
+    SET(_po "${CMAKE_CURRENT_SOURCE_DIR}/po/${lang}.po")
+    SET(_mo "${CMAKE_CURRENT_BINARY_DIR}/${lang}.mo")
+    ADD_CUSTOM_COMMAND(OUTPUT "${_mo}"
+      COMMAND "${GETTEXT_MSGFMT_EXECUTABLE}" -o "${_mo}" "${_po}"
+      WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+      DEPENDS "${_po}"
+    )
+    INSTALL(FILES "${_mo}"
+      DESTINATION "${LOCALEDIR}/${lang}/LC_MESSAGES/"
+      RENAME "${PACKAGE_NAME}.mo")
+    LIST(APPEND mo_files "${_mo}")
   endforeach()
+  ADD_CUSTOM_TARGET(pofiles ALL DEPENDS ${mo_files})
   list(APPEND OPTION_LIST "+NLS")
 else()
   list(APPEND OPTION_LIST "-NLS")
