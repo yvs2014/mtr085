@@ -9,7 +9,7 @@ msgstr ""
 ## TUI
 
 msgid "Keys"
-msgstr "Гар.клавіші"
+msgstr "Меню"
 
 # [h]ints
 msgid "ints"
