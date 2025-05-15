@@ -268,14 +268,14 @@ void json_close(bool next) {
   { char str[64];
     const char *date = datetime(started_at, str, sizeof(str));
     printf("\n%*s{\"%s\":\"%s\",\"%s\":\"%s\",\"%s\":[", JSON_MARGIN, "",
-      TARGET_STR, dsthost, DATETIME_STR, date ? date : "", DATA_STR); }
+      _(TARGET_STR), dsthost, _(DATETIME_STR), date ? date : "", _(DATA_STR)); }
   int min = net_min(), max = net_max();
   for (int at = min; at < max; at++) {
     char buf[MAXDNAME] = {0};
     printf((at == min) ? "\n" : ",\n");
     snprint_addr(buf, sizeof(buf), at, host[at].current);
     printf("%*s{\"%s\":\"%s\",\"%s\":%d,\"%s\":\"%s\"", JSON_MARGIN * 2, "",
-      HOST_STR, buf, HOP_STR, at + 1, ACTIVE_STR, host[at].up ? YES_STR : NO_STR);
+      _(HOST_STR), buf, _(HOP_STR), at + 1, _(ACTIVE_STR), _(host[at].up ? YES_STR : NO_STR));
     for (unsigned i = 0; i < sizeof(fld_index); i++) {
       const t_stat *stat = active_stats(i);
       if (!stat) break;
@@ -296,13 +296,13 @@ void json_close(bool next) {
     }
 #ifdef WITH_IPINFO
     if (ipinfo_ready())
-      printf(",\"%s\":[%s]", IPINFO_STR, sep_ipinfo(at, host[at].current, ','));
+      printf(",\"%s\":[%s]", _(IPINFO_STR), sep_ipinfo(at, host[at].current, ','));
 #endif
     printf("}");
   }
   printf("\n%*s]", JSON_MARGIN, "");
   if (last_neterr != 0)
-    printf(",\"%s\":\"%s\"", ERROR_STR, err_fulltxt);
+    printf(",\"%s\":\"%s\"", _(ERROR_STR), err_fulltxt);
   printf("}");
 }
 #endif

@@ -299,7 +299,7 @@ msgid "set interval in seconds (default 1s)"
 msgstr "встановити інтервал у секундах (стандартно 1сек)"
 
 msgid "toggle latency/jitter stats (default: latency)"
-msgstr "перемикання відображення типустатистики, затримка чи джиттер (стандартно: затримка)"
+msgstr "перемикання відображення типу статистики, затримка чи джиттер (стандартно: затримка)"
 
 msgid "toggle ASN lookup"
 msgstr "вкл/викл відображення АС"
