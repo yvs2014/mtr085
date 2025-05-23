@@ -17,6 +17,11 @@ BuildRequires: (gcc or clang)
 BuildRequires: glibc-langpack-en
 %else
 BuildRequires: libcap-progs
+%if 0%{?suse_version} == 1600
+%if %{defined source_date_epoch_from_changelog}
+%global source_date_epoch_from_changelog 0
+%endif
+%endif
 %endif
 Conflicts: mtr, mtr-gtk
 

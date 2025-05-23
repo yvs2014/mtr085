@@ -34,7 +34,7 @@
 #endif
 
 #ifndef GITREV
-#define GITREV "221"
+#define GITREV "222"
 #endif
 
 typedef union inaddr_union {
