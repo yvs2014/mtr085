@@ -742,8 +742,7 @@ bool ipinfo_init(const char *arg) {
     ipinfo_tcpmode = (ORIG_TYPE != OT_DNS);
   } else {
     free(args[0]);
-    errno = ERANGE;
-    warn("%s %s[1..%d]: %d", IPINFO_STR, RANGE_STR, max, no);
+    warnx("%s %s[1..%d]: %d: %s", IPINFO_STR, RANGE_STR, max, no, strerror(ERANGE));
     return false;
   }
 

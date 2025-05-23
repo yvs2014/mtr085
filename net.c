@@ -711,8 +711,7 @@ static int net_stat(unsigned port, const void *addr, struct timespec *recv_at,
       // no free slots? - warn once, and change the last one
       static bool warn_exceed_once;
       if (!warn_exceed_once) {
-        errno = EOVERFLOW;
-        warn("%s=%d (MAXPATH=%d)", HOP_STR, at, MAXPATH);
+        warnx("%s=%d (MAXPATH=%d): %s", HOP_STR, at, MAXPATH, strerror(EOVERFLOW));
         warn_exceed_once = true;
       }
       ndx = MAXPATH - 1;
@@ -1145,31 +1144,29 @@ bool net_set_host(t_ipaddr *ipaddr) {
   }
 
   if (!addr_exist(remote_ipaddr)) {
-    errno = EINVAL;
-    warn("%s", TARGET_STR);
+    warnx("%s: %s", TARGET_STR, strerror(EINVAL));
     return false;
   }
 
   net_reset();
   { struct sockaddr_storage ss[1];
     socklen_t len = sizeof(*ss);
-    if (!getsockname(recvsock, (struct sockaddr *)ss, &len)) {
-      if (len > sizeof(*ss)) {
-        if (!errno) errno = EINVAL;
-        warn("%s: %d > %zd", "recv-socket", len, sizeof(*ss));
-      }
+    if (getsockname(recvsock, (struct sockaddr *)ss, &len) < 0)
+      warn("getsockname()");
+    else {
+      if (len > sizeof(*ss))
+        warnx("%s: %d > %zd: %s", "recv-socket", len, sizeof(*ss), strerror(EINVAL));
       int saf = ss->ss_family;
       char *addr =
 #ifdef ENABLE_IPV6
         (saf == AF_INET6) ? (char*)&((struct sockaddr_in6 *)ss)->sin6_addr :
 #endif
         ((saf == AF_INET) ? (char*)&((struct sockaddr_in  *)ss)->sin_addr  : NULL);
-      if (!addr) {
-        errno = EAFNOSUPPORT;
-        warn("%d", saf);
-      } else if (!inet_ntop(saf, addr, localaddr, sizeof(localaddr)))
+      if (!addr)
+        warnx("%d: %s", saf, strerror(EAFNOSUPPORT));
+      else if (!inet_ntop(saf, addr, localaddr, sizeof(localaddr)))
         warn("inet_ntop()");
-    } else warn("getsockname()");
+    }
   }
   portpid = IPPORT_RESERVED + mypid % (USHRT_MAX - IPPORT_RESERVED);
   return true;
@@ -1203,8 +1200,7 @@ bool net_set_ifaddr(const char *ifaddr) {
     case AF_INET:
       lsa.S_PORT = 0;
       if (!inet_aton(ifaddr, &lsa.S_ADDR)) {
-        errno = EFAULT;
-        warn("%s", ifaddr);
+        warnx("%s: %s", ifaddr, strerror(EFAULT));
         return false;
       }
       len = sizeof(lsa.sin);
@@ -1213,8 +1209,7 @@ bool net_set_ifaddr(const char *ifaddr) {
     case AF_INET6:
       lsa.S6PORT = 0;
       if (inet_pton(af, ifaddr, &lsa.S6ADDR) < 1) {
-        errno = EFAULT;
-        warn("%s", ifaddr);
+        warnx("%s: %s", ifaddr, strerror(EFAULT));
         return false;
       }
       len = sizeof(lsa.sin6);
@@ -1324,7 +1319,7 @@ void net_set_type(int type) {
     case IPPROTO_ICMP: hdr_minsz += sizeof(struct _icmphdr); break;
     case IPPROTO_UDP:  hdr_minsz += sizeof(struct udphdr);   break;
     case IPPROTO_TCP:  hdr_minsz += sizeof(struct tcphdr);   break;
-    default: { errno = EPROTONOSUPPORT; warn("%d", type); }
+    default: warnx("%d: %s", type, strerror(EPROTONOSUPPORT));
   }
   minfailsz = hdr_minsz + iphdr_sz + sizeof(struct _icmphdr);
 }

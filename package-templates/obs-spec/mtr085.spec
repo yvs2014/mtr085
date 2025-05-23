@@ -49,4 +49,3 @@ setcap cap_net_raw+p %{_bindir}/%{binname}
 
 %changelog
 # autofill
-

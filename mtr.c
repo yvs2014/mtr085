@@ -687,10 +687,9 @@ static inline const struct addrinfo* find_ai_pref(const struct addrinfo *res) {
   for (ai = res; ai; ai = ai->ai_next) if (ai->ai_family == AF_INET) break;
   if (!ai)
     for (ai = res; ai; ai = ai->ai_next) if (ai->ai_family == AF_INET6) break;
-  if (!ai) {
-    errno = EADDRNOTAVAIL;
-    warn("%s: %s", TARGET_STR, dsthost);
-  } else if (af != ai->ai_family) {
+  if (!ai)
+    warnx("%s: %s: %s", TARGET_STR, dsthost, strerror(EADDRNOTAVAIL));
+  else if (af != ai->ai_family) {
     af = ai->ai_family;
     net_settings((af == AF_INET6) ? IPV6_ENABLED : IPV6_DISABLED);
   }
