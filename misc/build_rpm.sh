@@ -3,7 +3,8 @@
 set -e
 RPM=rpms
 
-cd $(dirname $0)/..
+dir0=$(dirname "$0")
+cd "$dir0/.."
 mkdir -p "$RPM"
 RPMDEST="$(pwd)/$RPM"
 

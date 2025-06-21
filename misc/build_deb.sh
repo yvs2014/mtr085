@@ -39,7 +39,7 @@ dpkg-buildpackage --help | grep -q buildinfo-file && \
 
 export DEBDIR="--destdir=$ddir"
 dpkg-buildpackage -b -tc --no-sign \
-  --buildinfo-option="-u$ddir" $BOUT \
-  --changes-option="-u$ddir" $COUT && \
-  (echo "\nPackages in $ddir/:"; ls -l "$ddir")
+  --buildinfo-option="-u$ddir" "$BOUT" \
+  --changes-option="-u$ddir" "$COUT" && \
+  (printf "\nPackages in %s/:" "$ddir"; ls -l "$ddir")
 

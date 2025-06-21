@@ -12,7 +12,7 @@ EMAIL='yvs <VSYakovetsky@gmail.com>'
 CHANGELOG='debian/changelog'
 CPPDEF='#define\sGITREV\s'
 
-[ $# -lt 1 ] && { echo "Use: $(basename $0) 'string with comment'"; exit 1; }
+[ $# -lt 1 ] && { echo "Use: $(basename "$0") 'string with comment'"; exit 1; }
 
 git_comments=
 for m in "$@"; do
@@ -21,18 +21,22 @@ done
 deb_comments='  * mtr085 fork with whois info, unicode, etc.'
 
 vers="$(git rev-list --count $TAG0..HEAD)"
-next=$(($vers + 1))
+next=$((vers + 1))
 
 sed -i "s/^\($CPPDEF\).*/\1\"$next\"/" common.h
 
 [ -n "$BACKUP" ] && cp "$CHANGELOG" "/tmp/$(basename $CHANGELOG).bk"
-echo "$NAME ($next) $DISTS; $META\n\n$deb_comments\n\n -- $EMAIL  $(date -R)" > "$CHANGELOG"
+printf "%s (%s) %s; %s\n\n%s\n\n -- %s  %s" \
+	"$NAME" "$next" "$DISTS" "$META" "$deb_comments" "$EMAIL" "$(date -R)" \
+> "$CHANGELOG"
 
-echo "Keep in mind to do:"
-echo "	git diff"
-echo "	git status"
-echo "	meson setup _build && meson compile -C _build && rm -rf _build"
-echo "	git add ."
-echo "	git commit $git_comments"
-echo "	git push"
+cat << EOF
+Keep in mind to do:
+	git diff
+	git status
+	just && just clean
+	git add .
+	git commit "$git_comments"
+	git push
+EOF
 

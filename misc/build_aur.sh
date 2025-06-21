@@ -2,7 +2,8 @@
 
 set -e
 AUR=aur
-export PKGDEST="$(pwd)/$AUR"
+PKGDEST="$(pwd)/$AUR"
+export PKGDEST
 
 mkdir -p "$AUR"
 cd package-templates/aur-archlinux
