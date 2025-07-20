@@ -36,7 +36,7 @@ Keep in mind to do:
 	git status
 	just && just clean
 	git add .
-	git commit "$git_comments"
+	git commit $git_comments
 	git push
 EOF
 

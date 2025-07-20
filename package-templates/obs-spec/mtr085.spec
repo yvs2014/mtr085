@@ -13,15 +13,15 @@ Source0:    %{name}-%{version}.tar.gz
 Requires: ncurses
 BuildRequires: meson, git, sed, pkgconf, gettext-runtime, ncurses-devel, libcap-devel
 BuildRequires: (gcc or clang)
-%if 0%{?fedora}
-BuildRequires: glibc-langpack-en
-%else
+%if 0%{?is_opensuse}
 BuildRequires: libcap-progs
-%if 0%{?suse_version} == 1600
+%if 0%{?suse_version} == 1600 && 0%{?is_opensuse}
 %if %{defined source_date_epoch_from_changelog}
 %global source_date_epoch_from_changelog 0
 %endif
 %endif
+%else
+BuildRequires: glibc-langpack-en
 %endif
 Conflicts: mtr, mtr-gtk
 
