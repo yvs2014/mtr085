@@ -339,7 +339,7 @@ static inline int parse_http_content_len(int lines_no, char* lines[TCP_RESP_LINE
 }
 
 
-static void parse_http(char *buf, unsigned recv_size, atndx_t id) {
+static void parse_http(char *buf, ssize_t recv_size, atndx_t id) {
   static char h11[] = "HTTP/1.1";
   static int h11_ln = sizeof(h11) - 1;
   static char h11ok[] = "HTTP/1.1 200 OK";
