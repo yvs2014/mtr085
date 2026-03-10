@@ -9,6 +9,12 @@
 
 #define LENVALMIL(val) double _v = (val) / (double)MIL; int _l = val2len(_v);
 
+#if __has_attribute(unused)
+#define UNUSED __attribute__((unused))
+#else
+#define UNUSED
+#endif
+
 char* trim(char *str);
 int val2len(double val);
 
@@ -19,6 +25,7 @@ bool is_custom_fld(void);
 void onoff_jitter(void);
 #endif
 const t_stat* active_stats(size_t nth);
+void foreach_stat(int at, void (*body)(int at, const t_stat *stat), char fin);
 
 extern char limit_error[NAMELEN];
 int limit_int(int min, int max, const char *arg, const char *what, int8_t fail);

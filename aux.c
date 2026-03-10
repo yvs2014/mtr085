@@ -45,7 +45,7 @@ void onoff_jitter(void) { int cmp = strncmp(fld_active, fld_jitter, sizeof(fld_j
 #endif
 
 const t_stat* active_stats(size_t nth) {
-  if (nth > sizeof(fld_index)) return NULL;
+  if (!fld_active || (nth > MAXFLD)) return NULL;
   int ndx = fld_index[(uint8_t)fld_active[nth]];
   return ((ndx >= 0) && (ndx < stat_max)) ? &stats[ndx] : NULL;
 }
@@ -62,6 +62,14 @@ static inline long long str2ll(const char *arg) {
   }
   return num;
 #undef STR2L_FAILED
+}
+
+void foreach_stat(int at, void (*body)(int at, const t_stat *stat), char fin) {
+  if (body) for (uint i = 0; i < MAXFLD; i++) {
+    const t_stat *stat = active_stats(i);
+    if (stat) body(at, stat); else break;
+  }
+  if (fin) putchar(fin);
 }
 
 char limit_error[NAMELEN];

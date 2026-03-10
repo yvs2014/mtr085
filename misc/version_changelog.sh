@@ -6,7 +6,7 @@ LANG=C
 NAME='mtr085'
 TAG0='97af563'
 BACKUP=yes
-DISTS='noble'
+DISTS='trixie'
 META='urgency=low'
 EMAIL='yvs <VSYakovetsky@gmail.com>'
 CHANGELOG='debian/changelog'

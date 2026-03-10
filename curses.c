@@ -375,15 +375,15 @@ static void seal_n_bell(int at, int max) {
   }
 }
 
+static void print_statline(int at, const t_stat *stat) {
+  // if there's no replies, show only packet counters
+  const char *str = (host[at].recv || strchr("LDRS", stat->key)) ? net_elem(at, stat->key) : "";
+  printw("%*s", stat->min, str ? str : "");
+}
+
 static int print_stat(int at, int y, int x, int max) { // statistics
   if (move(y, x) == ERR) return ERR;
-  for (unsigned i = 0; i < sizeof(fld_index); i++) {
-    const t_stat *stat = active_stats(i);
-    if (!stat) break;
-    // if there's no replies, show only packet counters
-    const char *str = (host[at].recv || strchr("LDRS", stat->key)) ? net_elem(at, stat->key) : "";
-    printw("%*s", stat->min, str ? str : "");
-  }
+  foreach_stat(at, print_statline, 0);
   if (run_opts.audible || run_opts.visible)
     seal_n_bell(at, max);
   return move(y + 1, 0);
@@ -614,10 +614,9 @@ static void histogram(int x, int cols) {
 
 static int get_title_len(void) {
   int len = 0;
-  for (unsigned i = 0; i < sizeof(fld_index); i++) {
+  for (uint i = 0; i < MAXFLD; i++) {
     const t_stat *stat = active_stats(i);
-    if (!stat) break;
-    len += (stat->min > stat->len) ? stat->min : stat->len + 1;
+    if (stat) len += (stat->min > stat->len) ? stat->min : stat->len + 1;
   }
   return (len < 0) ? 0 : len;
 }
@@ -629,7 +628,7 @@ static int mc_fit_posx(int pos, int len) {
 static void mc_stat_title(int x, int y) {
   if (move(y, x) == ERR) return;
   bool custom = is_custom_fld();
-  for (unsigned i = 0; i < sizeof(fld_index); i++) {
+  for (uint i = 0; i < MAXFLD; i++) {
     const t_stat *stat = active_stats(i);
     if (!stat) break;
     int pad = stat->min - stat->len;

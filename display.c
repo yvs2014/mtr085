@@ -20,9 +20,6 @@
 #include "common.h"
 #include "display.h"
 #include "report.h"
-#ifdef ENABLE_DNS
-#include "dns.h"
-#endif
 #ifdef CURSESMODE
 #include "mtr-curses.h"
 #endif

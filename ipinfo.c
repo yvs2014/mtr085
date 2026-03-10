@@ -450,11 +450,11 @@ void ipinfo_parse(int sock, int seq) { // except dns, dns.ack in dns.c
     atndx_t id = { .at = seq / MAXPATH, .ndx = seq % MAXPATH };
     switch ORIG_TYPE {
       case OT_HTTP:
-        LOGMSG( "HTTP: got[%d]: \"%.*s\"", received, received, buf);
+        LOGMSG( "HTTP: got[%zd]: \"%.*s\"", received, (int)received, buf);
         parse_http(buf, received, id);
         return;
       case OT_WHOIS:
-        LOGMSG("WHOIS: got[%d]: \"%.*s\"", received, received, buf);
+        LOGMSG("WHOIS: got[%zd]: \"%.*s\"", received, (int)received, buf);
         parse_whois(buf, id);
         return;
       default: break;
