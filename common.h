@@ -35,7 +35,14 @@
 #endif
 
 #ifndef GITREV
-#define GITREV "228"
+#define GITREV "229"
+#endif
+
+#ifndef HAVE_UINT
+typedef unsigned int uint;
+#endif
+#ifndef HAVE_ULONG
+typedef unsigned long int ulong;
 #endif
 
 typedef union inaddr_union {

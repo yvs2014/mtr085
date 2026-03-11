@@ -85,4 +85,8 @@
 /* sys/param.h header */
 #cmakedefine HAVE_SYS_PARAM_H
 
+/* sys/types.h types */
+#cmakedefine HAVE_UINT
+#cmakedefine HAVE_ULONG
+
 #endif

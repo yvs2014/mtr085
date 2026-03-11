@@ -22,6 +22,7 @@ set(CMAKE_C_STANDARD 11)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON) # compile_commands.json
 include(GNUInstallDirs)
 include(CheckIncludeFile)
+include(CheckTypeSize)
 include(CheckSymbolExists)
 include(CheckFunctionExists)
 include(CheckLibraryExists)
@@ -59,6 +60,8 @@ option(DEBDNS    "Debug dns syslog"      OFF)
 option(DEBIPINFO "Debug ipinfo syslog"   OFF)
 set(MAN_EXCL)
 option(SBIN "Install to sbin"            OFF)
+
+# cmake-lint: disable=C0301
 
 if(CAP OR CURSES)
   find_package(PkgConfig REQUIRED)
@@ -307,6 +310,16 @@ if(DEBIPINFO)
   set(LOG_IPINFO ON)
 endif()
 
+# test types: uint, ulong
+#
+set(UTYPES uint ulong)
+foreach(t ${UTYPES})
+  CHECK_TYPE_SIZE(${t} SIZEOF_T)
+  if(SIZEOF_T)
+    string(TOUPPER "HAVE_${t}" T_DEF)
+    set(${T_DEF} ON)
+  endif()
+endforeach()
 
 # misc aux checkouts
 #
