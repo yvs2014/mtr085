@@ -19,7 +19,6 @@
 #ifndef DISPLAY_H
 #define DISPLAY_H
 
-#include <stdbool.h>
 #include "common.h"
 
 void display_start(void);

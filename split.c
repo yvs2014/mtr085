@@ -21,7 +21,6 @@
 */
 
 #include <stdio.h>
-#include <unistd.h>
 #include <termios.h>
 
 #include "common.h"
@@ -71,7 +70,7 @@ void split_redraw(void) {
       if (run_opts.ips)
 #endif
       { printf("%c%s", SPLIT_SEP, strlongip(ipaddr)); }
-      for (unsigned i = 0; i < sizeof(fields); i++) {
+      for (uint i = 0; i < sizeof(fields); i++) {
         const char *str = net_elem(at, fields[i]);
         if (str) printf("%c%s", SPLIT_SEP, str);
       }
@@ -138,7 +137,7 @@ static void split_help(void) {
   int indent = 10;
   //
   printf("%s:\n", COMMANDS_STR);
-  for (unsigned i = 0; i < ARRAY_SIZE(cmd); i++) {
+  for (uint i = 0; i < ARRAY_SIZE(cmd); i++) {
     int pad = indent - ustrlen(cmd[i].key);
     printf("%s%*s %s\n", cmd[i].key, (pad < 0) ? 0 : pad, "", cmd[i].hint);
   }

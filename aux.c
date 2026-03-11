@@ -1,8 +1,5 @@
 
 #include <stdio.h>
-#include <stddef.h>
-#include <stdint.h>
-#include <limits.h>
 #include <string.h>
 #include <ctype.h>
 #include <errno.h>
@@ -96,8 +93,8 @@ int limit_int(int min, int max, const char *arg, const char *what, int8_t fail) 
   return lim;
 }
 
-unsigned ustrlen(const char *str) {
-  unsigned len = 0;
+uint ustrlen(const char *str) {
+  uint len = 0;
   if (str) for (; *str; str++) if ((*str & 0xc0) != 0x80) len++;
   return len;
 }

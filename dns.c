@@ -17,13 +17,8 @@
 */
 
 #include <stdio.h>
-#include <stdint.h>
-#include <stdlib.h>
-#include <unistd.h>
 #include <string.h>
 #include <strings.h>
-#include <time.h>
-#include <sys/socket.h>
 
 #if defined(LOG_DNS) && !defined(LOGMOD)
 #include <errno.h>
@@ -34,7 +29,6 @@
 #endif
 #include "common.h"
 
-#include <netinet/in.h>
 #ifdef HAVE_ARPA_NAMESER_H
 #ifndef BIND_8_COMPAT
 #define BIND_8_COMPAT
@@ -119,8 +113,8 @@ extern struct __res_state _res;
 #define ARPA6_SUFFIX "ip6.arpa"
 
 // global
-unsigned dns_queries[3]; // number of queries (sum, ptr, txt)
-unsigned dns_replies[3]; // number of replies (sum, ptr, txt)
+uint dns_queries[3];     // number of queries (sum, ptr, txt)
+uint dns_replies[3];     // number of replies (sum, ptr, txt)
 t_sockaddr *custom_res;  // -N option
 
 // external callbacks for T_PTR and T_TXT replies

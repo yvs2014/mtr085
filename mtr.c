@@ -28,26 +28,17 @@
 #endif
 
 #include <stdio.h>
-#include <stdint.h>
-#include <stdlib.h>
-#include <unistd.h>
 #include <string.h>
 #include <strings.h>
 #include <libgen.h>
 #include <getopt.h>
-#include <err.h>
 #include <errno.h>
 #include <fcntl.h>
-#include <limits.h>
 #include <sys/stat.h>
-#include <netinet/in.h>
 
 #include "common.h"
 #include "nls.h"
 
-#ifdef ENABLE_IPV6
-#include <netinet/ip6.h>
-#endif
 #ifdef HAVE_NETDB_H
 #include <netdb.h>
 #endif
@@ -319,8 +310,8 @@ static void usage(const char *name) {
  { char *bname = strdup(name);
    printf("%s: %s [-", CLI_USAGE_STR, bname ? basename(bname) : name);
    if (bname) free(bname); }
-  unsigned len = strlen(short_options);
-  for (unsigned i = 0; i < len; i++)
+  uint len = strlen(short_options);
+  for (uint i = 0; i < len; i++)
     if (short_options[i] != ':')
       putchar(short_options[i]);
   printf("] %s ...\n", CLI_TGT_STR);
@@ -942,7 +933,7 @@ int main(int argc, char **argv) {
 #undef EXIT_WITH_MSG
 
   BIND_NLS;
-  for (unsigned i = 0; i < ARRAY_SIZE(stats); i++) {
+  for (uint i = 0; i < ARRAY_SIZE(stats); i++) {
     if (stats[i].name && stats[i].name[0]) {
       stats[i].name  = _(stats[i].name);
       stats[i].len   = ustrlen(stats[i].name);

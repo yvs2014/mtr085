@@ -21,10 +21,8 @@
 #endif
 
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 #include <assert.h>
-#include <limits.h>
 
 #ifdef OUTPUT_FORMAT_CSV
 #include <ctype.h>
@@ -340,7 +338,7 @@ void csv_close(bool next) {
   if (last_neterr != 0) return;
   if (next) printf("\n");
   const char* field[] = {TARGET_CAPSTR, CSV_HOP_STR, CSV_STATUS_STR, HOST_STR};
-  for (unsigned i = 0; i < ARRAY_SIZE(field); i++)
+  for (uint i = 0; i < ARRAY_SIZE(field); i++)
     printf("%s%c", field[i], CSV_DELIMITER);
 #ifdef WITH_IPINFO
   if (ipinfo_ready()) printf("%s%c", CSV_INFO_STR, CSV_DELIMITER);

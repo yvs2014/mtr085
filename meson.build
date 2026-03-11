@@ -3,7 +3,7 @@ project('mtr085', 'c',
 #    'c_std=gnu99,c99',
 #    'b_sanitize=address,undefined',
     'warning_level=3' ],
-  meson_version: '>= 0.49',
+  meson_version: '>= 0.50',
   license: 'GPL-2.0-or-later',
   version: '.'.join(['0', '85', find_program('git', required: false).found() ?
     run_command('git', 'rev-list', '--count', '97af563..HEAD', check: false).stdout().strip() : ''

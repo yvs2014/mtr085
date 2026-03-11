@@ -20,6 +20,7 @@
 #define IPINFO_H
 
 #include <stdbool.h>
+#include <sys/types.h>
 
 bool  ipinfo_init(const char *arg);
 void  ipinfo_close(void);
@@ -37,7 +38,7 @@ void query_ipinfo(void);
 
 #define ASLOOKUP_DEFAULT   "2,2" // ripe whois
 extern bool ipinfo_tcpmode;
-extern unsigned ipinfo_queries[];
-extern unsigned ipinfo_replies[];
+extern uint ipinfo_queries[];
+extern uint ipinfo_replies[];
 
 #endif

@@ -21,8 +21,6 @@
 
 #include <stdint.h>
 #include <arpa/inet.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
 #include <time.h>
 
 #include "common.h"
@@ -58,8 +56,8 @@ extern bool  (*addr_exist)(const void *a); // true if not 0
 extern bool  (*addr_equal)(const void *a, const void *b);
 extern void* (*addr_copy)(void *dst, const void *src);
 
-extern unsigned long net_queries[];
-extern unsigned long net_replies[];
+extern ulong net_queries[];
+extern ulong net_replies[];
 
 #ifdef WITH_IPINFO
 #define MAX_TXT_ITEMS 25

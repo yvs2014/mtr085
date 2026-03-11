@@ -9,7 +9,7 @@ Homepage: https://github.com/yvs2014/mtr085
 
 Package: mtr085
 Architecture: any
-Depends: ${shlibs:Depends}, ${misc:Depends}, libncursesw6
+Depends: ${shlibs:Depends}, ${misc:Depends}, libncursesw6 | libncursesw5
 Breaks: mtr, mtr-tiny
 Replaces: mtr, mtr-tiny
 Conflicts: mtr, mtr-tiny

@@ -17,25 +17,15 @@
 */
 
 #include <stdio.h>
-#include <stddef.h>
-#include <stdint.h>
-#include <stdlib.h>
-#include <unistd.h>
 #include <string.h>
 #include <errno.h>
-#include <err.h>
-#include <limits.h>
 #include <math.h>
 #include <fcntl.h>
-#include <time.h>
-#include <sys/socket.h>
 #include <netinet/in_systm.h>
-#include <netinet/in.h>
 #include <netinet/ip.h>
 #include <netinet/ip_icmp.h>
 #include <netinet/tcp.h>
 #include <netinet/udp.h>
-#include <arpa/inet.h>
 #include <assert.h>
 
 #if defined(LOG_NET) && !defined(LOGMOD)
@@ -216,8 +206,8 @@ char localaddr[MAX_ADDRSTRLEN];
 int last_neterr;               // last known network error ...
 char err_fulltxt[NAMELEN * 2]; // ... with this text
 enum { QR_SUM = 0 /*sure*/, QR_ICMP, QR_UDP, QR_TCP, QR_MAX };
-unsigned long net_queries[QR_MAX]; // number of queries (sum, icmp, udp, tcp)
-unsigned long net_replies[QR_MAX]; // number of replies (sum, icmp, udp, tcp)
+ulong net_queries[QR_MAX];     // number of queries (sum, icmp, udp, tcp)
+ulong net_replies[QR_MAX];     // number of replies (sum, icmp, udp, tcp)
 //
 static char strerr_txt[NAMELEN];   // buff for strerror()
 
@@ -284,7 +274,7 @@ void waitspec(struct timespec *tv) {
   tv->tv_nsec = (wait - tv->tv_sec) * NANO;
 }
 
-static uint16_t sum1616(const uint16_t *data, unsigned len, unsigned sum) {
+static uint16_t sum1616(const uint16_t *data, uint len, uint sum) {
   for (; len; len--)
     sum += *data++;
   while (sum >> 16)
@@ -294,7 +284,7 @@ static uint16_t sum1616(const uint16_t *data, unsigned len, unsigned sum) {
 
 // Prepend pseudoheader to the udp datagram and calculate checksum
 static uint16_t udpsum16(struct _iphdr *ip, void *udata, int udata_len, int dsize) {
-  unsigned tsize = sizeof(struct _udpph) + dsize;
+  uint tsize = sizeof(struct _udpph) + dsize;
   char csumpacket[tsize];
   memset(csumpacket, bitpattern, sizeof(csumpacket));
   struct _udpph *prepend = (struct _udpph *)csumpacket;
@@ -677,10 +667,10 @@ static void set_new_addr(int at, int ndx, const t_ipaddr *ipaddr MPLSFNTAIL(cons
 
 
 // Got a return
-static int net_stat(unsigned port, const void *addr, struct timespec *recv_at,
+static int net_stat(uint port, const void *addr, struct timespec *recv_at,
     int reason MPLSFNTAIL(const mpls_data_t *mpls))
 {
-  unsigned seq = port % MAXSEQ;
+  uint seq = port % MAXSEQ;
   if (!seqlist[seq].transit)
     return true;
 
@@ -1377,7 +1367,7 @@ const char *mpls2str(const mpls_label_t *label, int indent) {
 }
 #endif
 
-// type must correspond 'id' in resolve HEADER (unsigned id:16)
+// type must correspond 'id' in resolve HEADER (uint id:16)
 // it's used as a hint for fast search, 16bits as [hash:7 at:6 ndx:3]
 uint16_t str2hint(const char* str, uint16_t at, uint16_t ndx) {
   uint16_t hint = 0, ch;

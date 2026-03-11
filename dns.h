@@ -21,8 +21,8 @@
 
 #include "common.h"
 
-extern unsigned dns_queries[];
-extern unsigned dns_replies[];
+extern uint dns_queries[];
+extern uint dns_replies[];
 extern t_sockaddr *custom_res;
 
 bool dns_open(void);

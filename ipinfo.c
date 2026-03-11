@@ -17,18 +17,10 @@
 */
 
 #include <stdio.h>
-#include <stdint.h>
-#include <stdlib.h>
-#include <unistd.h>
 #include <string.h>
 #include <strings.h>
-#include <limits.h>
 #include <errno.h>
 #include <fcntl.h>
-#include <poll.h>
-#include <time.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
 
 #ifdef HAVE_ARPA_NAMESER_H
 #ifndef BIND_8_COMPAT
@@ -72,9 +64,9 @@ typedef struct { int sock, state, slot; } ipitseq_t;
 enum { TSEQ_CREATED, TSEQ_READY };  // tcp-socket state: created or ready, otherwise -1
 
 // global
-bool ipinfo_tcpmode;  // true if ipinfo origin is tcp (http or whois)
-unsigned ipinfo_queries[3];  // number of queries (sum, http, whois)
-unsigned ipinfo_replies[3];  // number of replies (sum, http, whois)
+bool ipinfo_tcpmode;     // true if ipinfo origin is tcp (http or whois)
+uint ipinfo_queries[3];  // number of queries (sum, http, whois)
+uint ipinfo_replies[3];  // number of replies (sum, http, whois)
 //
 
 static bool ii_ready;
@@ -224,7 +216,7 @@ static char** split_record(char *record) {
 
 static void adjust_width(char** record) {
   for (int i = 0; (i < MAX_TXT_ITEMS) && record[i]; i++) {
-    unsigned len = ustrlen(record[i]); // ? mbstowcs(NULL, records[i], 0);
+    uint len = ustrlen(record[i]); // ? mbstowcs(NULL, records[i], 0);
     int width = (len > NAMELEN) ? NAMELEN : len;
     if (ORIG_WIDTH(i) < width)
       ORIG_WIDTH(i) = width;
@@ -284,7 +276,7 @@ static char trim_c(char *str, const char *quotes) {
 }
 
 static char* trim_str(char *str, const char *quotes) {
-  { unsigned len = ustrlen(str);
+  { uint len = ustrlen(str);
     char *ptr = str + len - 1;
     for (int i = len; i > 0; i--, ptr--)
       if (trim_c(ptr, quotes)) break; }
@@ -314,9 +306,9 @@ static int count_records(char **record) {
 }
 
 static inline int parse_http_content_len(int lines_no, char* lines[TCP_RESP_LINES],
-  size_t recv_size, unsigned *cndx)
+  size_t recv_size, uint *cndx)
 {
-  unsigned ndx = 0, len = 0; // content index in tcp response and its length
+  uint ndx = 0, len = 0; // content index in tcp response and its length
   for (int i = 0; i < lines_no; i++) {
     char* tagvalue[2] = { lines[i], NULL };
     if (split_with_sep(tagvalue, 2, ' ', 0) == 2)
@@ -354,18 +346,18 @@ static void parse_http(char *buf, ssize_t recv_size, atndx_t id) {
     }
     char* lines[TCP_RESP_LINES] = {0};
     lines[0] = buf;
-    unsigned lines_no = split_with_sep(lines, TCP_RESP_LINES, '\n', 0);
+    uint lines_no = split_with_sep(lines, TCP_RESP_LINES, '\n', 0);
     if (lines_no < 4) { // HEADER + NL + NL + DATA
       LOGMSG("No data after header (got %d lines only)", lines_no);
       continue;
     }
 
-    unsigned cndx = 0;
-    unsigned clen = parse_http_content_len(lines_no, lines, recv_size, &cndx);
+    uint cndx = 0;
+    uint clen = parse_http_content_len(lines_no, lines, recv_size, &cndx);
 
     char txt[clen + 1]; memset(txt, 0, sizeof(txt));
     // combine into one line
-    for (unsigned i = cndx, len = 0; (i < lines_no) && (len < clen); i++) {
+    for (uint i = cndx, len = 0; (i < lines_no) && (len < clen); i++) {
       int inc = snprintf(txt + len, clen - len, "%s", lines[i]);
       if (inc > 0) len += inc;
     }
@@ -621,7 +613,7 @@ static char *get_ipinfo(int at, int ndx, int item_no) {
 char* ipinfo_header(void) {
   static char iiheader[NAMELEN];
   iiheader[0] = 0;
-  for (unsigned i = 0, len = 0; (i < MAX_TXT_ITEMS)
+  for (uint i = 0, len = 0; (i < MAX_TXT_ITEMS)
       && (ipinfo_no[i] >= 0) && (ipinfo_no[i] < itemname_max)
       && ORIG_UNAME(ipinfo_no[i]) && (len < sizeof(iiheader)); i++) {
     int inc = snprintf(iiheader + len, sizeof(iiheader) - len,
@@ -664,7 +656,7 @@ static char *fill_ipinfo(int at, int ndx, char sep) {
   fmtinfo[0] = 0;
   t_fmtdata fmtdata = { .ch = sep };
   filler_fn filler = fmtdata.ch ? str_filler : fmt_filler;
-  for (unsigned i = 0, len = 0; (i < MAX_TXT_ITEMS)
+  for (uint i = 0, len = 0; (i < MAX_TXT_ITEMS)
       && (ipinfo_no[i] >= 0) && (ipinfo_no[i] < itemname_max)
       && (len < sizeof(fmtinfo)); i++) {
     const char *rec = addr_exist(&IP_AT_NDX(at, ndx)) ?

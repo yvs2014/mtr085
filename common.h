@@ -6,6 +6,7 @@
 #include <unistd.h>
 #include <err.h>
 #include <sys/time.h>
+#include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 
@@ -34,7 +35,7 @@
 #endif
 
 #ifndef GITREV
-#define GITREV "227"
+#define GITREV "228"
 #endif
 
 typedef union inaddr_union {
@@ -60,7 +61,7 @@ typedef union sockaddr_union {
 
 // stat fields description
 typedef struct s_stat {
-  unsigned len, min;
+  uint len, min;
   const char *name, *hint, key;
 } t_stat;
 
@@ -163,9 +164,8 @@ typedef struct opts_s {
 
 // options' cksum
 typedef union opt_sum_u {
-  unsigned un;
-  struct {
-  unsigned
+  uint un;
+  struct { uint
     interactive :1,
     //
     ips      :1, // -b

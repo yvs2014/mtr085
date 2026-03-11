@@ -17,15 +17,8 @@
 */
 
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
-#include <limits.h>
-#include <time.h>
 #include <sys/types.h>
-#include <netinet/in.h>
-#ifdef ENABLE_IPV6
-#include <netinet/ip6.h>
-#endif
 
 #include "mtr-curses.h"
 #include "common.h"
@@ -83,14 +76,14 @@ enum { LINEMAXLEN = 1024, HINT_YPOS = 2, HOSTINFOMAX = 30 };
 
 static char screen_title[NAMELEN]; // progname + arguments + destination
 static bool at_quit, screen_ready;
-static unsigned title_len;
+static uint title_len;
 
 static size_t enter_smth(char *buf, size_t size, int y, int x) {
   move(y, x);
   int ch = 0, curs = curs_set(1);
   refresh();
-  for (unsigned i = 0; ((ch = getch()) != '\n') && (i < size);) {
-    addch((unsigned)ch | A_BOLD);
+  for (uint i = 0; ((ch = getch()) != '\n') && (i < size);) {
+    addch((uint)ch | A_BOLD);
     refresh();
     buf[i++] = ch;
   }
@@ -102,10 +95,10 @@ static size_t enter_smth(char *buf, size_t size, int y, int x) {
 static void enter_stat_fields(void) {
   char fields[MAXFLD + 1] = {0};
   int ch = 0, curs = curs_set(1);
-  for (unsigned i = 0; ((ch = getch()) != '\n') && (i < sizeof(fields));) {
+  for (uint i = 0; ((ch = getch()) != '\n') && (i < sizeof(fields));) {
     int nth = 0;
     for (; nth < stat_max; nth++) if (ch == stats[nth].key) {
-      addch((unsigned)ch | A_BOLD);
+      addch((uint)ch | A_BOLD);
       refresh();
       fields[i++] = ch;
       break;
@@ -168,7 +161,7 @@ static inline void mc_key_h(void) { // help
   erase();
   int x = 2; int y = 2, indent = 12;
   mvprintw(x++, 0, "%s:", COMMANDS_STR);
-  for (unsigned i = 0; i < ARRAY_SIZE(cmd); i++) {
+  for (uint i = 0; i < ARRAY_SIZE(cmd); i++) {
     int pad = indent - ustrlen(cmd[i].key);
     const char *type = cmd[i].type == CH_INT ? CH_NUM_STR :
                        cmd[i].type == CH_STR ? CH_STR_STR : NULL;
@@ -533,7 +526,7 @@ static void mc_init(void) {
     } else
       map3[NUM_FACTORS3_MONO].CCHAR_chars[0] = map1[1] & A_CHARTEXT;
 
-    for (unsigned i = 0; i < ARRAY_SIZE(map_na2); i++)
+    for (uint i = 0; i < ARRAY_SIZE(map_na2); i++)
       map_na3[i].CCHAR_chars[0] = map_na2[i] & A_CHARTEXT;
     map_na3[1].CCHAR_attr = run_opts.color ? map3[NUM_FACTORS3 - 1].CCHAR_attr : A_BOLD;
     map_na3[2].CCHAR_attr = A_BOLD;
