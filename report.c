@@ -57,7 +57,7 @@ void report_started_at(void) { started_at = time(NULL); }
 #define PRINT_DATETIME(fmt, ...) do {                           \
   char str[64] = {0};                                           \
   const char *date = datetime(started_at, str, sizeof(str));    \
-  if (date && date[0]) printf((fmt) ##__VA_ARGS__);             \
+  if (date && date[0]) printf((fmt), ##__VA_ARGS__);            \
 } while(0)
 #endif
 
