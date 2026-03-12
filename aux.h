@@ -14,6 +14,11 @@
 #else
 #define UNUSED
 #endif
+#if __has_attribute(nonnull)
+#define NONNULL(...) __attribute__((nonnull(__VA_ARGS__)))
+#else
+#define NONNULL(...)
+#endif
 
 char* trim(char *str);
 int val2len(double val);
@@ -25,11 +30,11 @@ bool is_custom_fld(void);
 void onoff_jitter(void);
 #endif
 const t_stat* active_stats(size_t nth);
-void foreach_stat(int at, void (*body)(int at, const t_stat *stat), char fin);
+void foreach_stat(int at, void (*body)(int at, const t_stat *stat), char fin) NONNULL(2);
 
 extern char limit_error[NAMELEN];
-int limit_int(int min, int max, const char *arg, const char *what, int8_t fail);
+int limit_int(int min, int max, const char *arg, const char *what, int8_t fail) NONNULL(3);
 uint ustrlen(const char *str);
-char *datetime(time_t at, char *buff, size_t size);
+char *datetime(time_t at, char *buff, size_t size) NONNULL(2);
 
 #endif

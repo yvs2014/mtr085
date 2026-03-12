@@ -62,7 +62,7 @@ static inline long long str2ll(const char *arg) {
 }
 
 void foreach_stat(int at, void (*body)(int at, const t_stat *stat), char fin) {
-  if (body) for (uint i = 0; i < MAXFLD; i++) {
+  for (uint i = 0; i < MAXFLD; i++) {
     const t_stat *stat = active_stats(i);
     if (stat) body(at, stat); else break;
   }
@@ -79,8 +79,12 @@ int limit_int(int min, int max, const char *arg, const char *what, int8_t fail) 
   if ((val < min) || (val > max)) {
     errno = ERANGE;
     lim = (val < min) ? min : max;
-    snprintf(limit_error, sizeof(limit_error),
-      "%s: %s: %s [%d,%d]", what, arg, strerror(errno), min, max);
+    int l = 0;
+    if (what)
+      l += snprintf(limit_error, sizeof(limit_error), "%s: ", what);
+    if (l < 0) l = 0;
+    snprintf(limit_error + l, sizeof(limit_error) - l,
+      "%s: %s [%d,%d]", arg, strerror(errno), min, max);
   }
   if (errno && fail) {
     if (fail > 0) {
@@ -100,7 +104,7 @@ uint ustrlen(const char *str) {
 }
 
 char *datetime(time_t at, char *buff, size_t size) {
-  if (!buff || !size) return NULL;
+  if (!size) return NULL;
   buff[0] = 0;
 #ifdef HAVE_LOCALTIME_R
   struct tm re;

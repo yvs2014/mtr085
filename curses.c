@@ -829,9 +829,9 @@ void mc_redraw(void) {
     int maxx = getmaxx(stdscr);
     int inc = snprintf(linebuf, sizeof(linebuf), "%.*s", (int)strnlen(srchost, maxx / 2), srchost);
     { // timestamp
-      char str[64];
+      char str[64] = {0};
       const char *date = datetime(time(NULL), str, sizeof(str));
-      if (date) {
+      if (date && date[0]) {
         if (inc < 0) inc = 0;
         inc += snprintf(linebuf + inc, sizeof(linebuf) - inc, ": %s", date);
       }
