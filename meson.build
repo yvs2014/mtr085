@@ -10,6 +10,8 @@ project('mtr085', 'c',
   ]).strip('.'),
 )
 
+add_project_arguments('-D_GNU_SOURCE', language: 'c')
+
 name = 'mtr'
 config = configuration_data()
 config.set_quoted('PACKAGE_NAME', meson.project_name())
@@ -70,7 +72,6 @@ fndesc = {
   'strlcpy': {'libs': [], 'hdr': 'stdlib.h', 'libhdr': true, 'req': false},
   'arc4random_uniform': {'libs': [], 'hdr': 'stdlib.h', 'libhdr': true, 'req': false},
   'quick_exit':  {'libs': [], 'hdr': 'stdlib.h', 'req': false},
-  'strerror_r':  {'libs': [], 'hdr': 'string.h', 'req': false},
   'localtime_r': {'libs': [], 'hdr': 'time.h',   'req': false},
   'uselocale':   {'libs': [], 'hdr': 'locale.h', 'req': false},
 }

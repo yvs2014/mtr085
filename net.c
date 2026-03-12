@@ -307,14 +307,9 @@ static uint16_t udpsum16(struct _iphdr *ip, void *udata, int udata_len, int dsiz
 
 const char* rstrerror(int rc) {
   strerr_txt[0] = 0;
-  tgterr_txt[0] = 0;
-#ifdef HAVE_STRERROR_R
-  (void)strerror_r(rc, strerr_txt, sizeof(strerr_txt));
-  (void)strerror_r(rc, tgterr_txt, sizeof(tgterr_txt));
-#else
   snprintf(strerr_txt, sizeof(strerr_txt), "%s", strerror(rc));
+  tgterr_txt[0] = 0;
   snprintf(tgterr_txt, sizeof(tgterr_txt), "%s", strerror(rc));
-#endif
   return tgterr_txt;
 }
 

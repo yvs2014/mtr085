@@ -16,10 +16,7 @@
     Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 */
 
-/* GNU/Mac/Solaris extensions */
-#ifndef _GNU_SOURCE
-#define _GNU_SOURCE 1
-#endif
+/* Mac/Solaris extensions */
 #ifndef _DARWIN_C_SOURCE
 #define _DARWIN_C_SOURCE 1
 #endif

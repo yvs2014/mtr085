@@ -38,7 +38,6 @@ AC_SEARCH_LIBS([socket], [socket network],, AC_MSG_ERROR(No socket library found
 AC_CHECK_FUNC([strlcpy], AC_DEFINE(HAVE_STRLCPY, 1, [Define if strlcpy exists]))
 AC_CHECK_FUNC([arc4random_uniform], AC_DEFINE(HAVE_ARC4RANDOM_UNIFORM, 1, [Define if arc4random_uniform exists]))
 AC_CHECK_FUNC([quick_exit],  AC_DEFINE(HAVE_QUICK_EXIT,  1, [Define if quick_exit() exists]))
-AC_CHECK_FUNC([strerror_r],  AC_DEFINE(HAVE_STRERROR_R,  1, [Define if strerror_r() exists]))
 AC_CHECK_FUNC([ctime_r],     AC_DEFINE(HAVE_CTIME_R,     1, [Define if ctime_r() exists]))
 AC_CHECK_FUNC([localtime_r], AC_DEFINE(HAVE_LOCALTIME_R, 1, [Define if localtime_r() exists]))
 
@@ -337,7 +336,7 @@ AH_TOP([
 AH_BOTTOM([
 #endif
 ])
-CFLAGS="$CFLAGS -include config.h"
+CFLAGS="$CFLAGS -D_GNU_SOURCE -include config.h"
 
 AC_CONFIG_FILES([Makefile])
 

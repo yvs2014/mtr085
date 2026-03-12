@@ -34,7 +34,7 @@ set(MANUAL "${MAN_PATH}/${MAN_PAGE}")
 # set target
 add_executable("${NAME}" "${NAME}.c" aux.c display.c net.c poll.c report.c)
 target_include_directories("${NAME}" PRIVATE "${CMAKE_CURRENT_BINARY_DIR}")
-target_compile_options("${NAME}" PRIVATE -Wall -Wextra -Wpedantic)
+target_compile_options("${NAME}" PRIVATE -Wall -Wextra -Wpedantic -D_GNU_SOURCE)
 
 # options
 set(OPTION_LIST)
@@ -373,7 +373,7 @@ set(FN_MUST warnx)
 fn_checkout()
 #
 set(FN_LIBS c)
-set(FN_LIST quick_exit strerror_r ctime_r localtime_r)
+set(FN_LIST quick_exit ctime_r localtime_r)
 set(FN_MUST)
 fn_checkout()
 #
