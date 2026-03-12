@@ -49,8 +49,21 @@
 #endif
 
 static time_t started_at;
-
 void report_started_at(void) { started_at = time(NULL); }
+
+#if (__GNUC__ >= 8) || (__clang_major__ >= 6) || (__STDC_VERSION__ >= 202311L)
+#define PRINT_DATETIME(fmt, ...) do {                           \
+  char str[64] = {0};                                           \
+  const char *date = datetime(started_at, str, sizeof(str));    \
+  if (date && date[0]) printf((fmt) __VA_OPT__(,) __VA_ARGS__); \
+} while(0)
+#else
+#define PRINT_DATETIME(fmt, ...) do {                           \
+  char str[64] = {0};                                           \
+  const char *date = datetime(started_at, str, sizeof(str));    \
+  if (date && date[0]) printf((fmt) ##__VA_ARGS__);             \
+} while(0)
+#endif
 
 static size_t snprint_addr(char *buf, size_t size, int at, int ndx) {
   if (!buf || !size) return 0;
@@ -184,14 +197,11 @@ static void report_print_rest(int at, int hostlen, int infolen) {
 }
 #undef INDENT
 
-
 void report_close(bool next, bool with_header) {
-  if (last_neterr != 0) return;
   if (next) printf("\n");
   if (with_header) {
-    char str[64];
-    const char *date = datetime(started_at, str, sizeof(str));
-    printf("[%s] %s: %s %s %s\n", date ? date : "", srchost, PACKAGE_NAME, mtr_args, dsthost);
+    PRINT_DATETIME("[%s] ", date);
+    printf("%s: %s %s %s\n", srchost, PACKAGE_NAME, mtr_args, dsthost);
   }
   int hostlen = get_longest_name(ustrlen(HOST_STR), MAXDNAME) + 1;
   int infolen =
@@ -205,6 +215,8 @@ void report_close(bool next, bool with_header) {
     report_print_body(at, AT_FMT " ", hostlen, infolen);
     report_print_rest(at, hostlen, infolen); // multipath, mpls, etc.
   }
+  if (tgterr_txt[0])
+    printf("%s: %s\n", _(ERROR_STR), tgterr_txt);
 }
 
 
@@ -243,8 +255,8 @@ void xml_close(void) {
 #endif
     printf("%*s</HOP>\n", XML_MARGIN * 2, "");
   }
-  if (last_neterr != 0)
-    printf("%*s<ERROR>%s</ERROR>\n", XML_MARGIN * 2, "", err_fulltxt);
+  if (tgterr_txt[0])
+    printf("%*s<ERROR>%s</ERROR>\n", XML_MARGIN * 2, "", tgterr_txt);
   printf("%*s</DST>\n", XML_MARGIN, "");
 }
 #endif
@@ -276,10 +288,9 @@ static void json_statline(int at, const t_stat *stat) {
 
 void json_close(bool next) {
   if (next) printf(",");
-  { char str[64];
-    const char *date = datetime(started_at, str, sizeof(str));
-    printf("\n%*s{\"%s\":\"%s\",\"%s\":\"%s\",\"%s\":[", JSON_MARGIN, "",
-      _(TARGET_STR), dsthost, _(DATETIME_STR), date ? date : "", _(DATA_STR)); }
+  printf("\n%*s{\"%s\":\"%s\"", JSON_MARGIN, "", _(TARGET_STR), dsthost);
+  PRINT_DATETIME(",\"%s\":\"%s\"", _(DATETIME_STR), date);
+  printf(",\"%s\":[", _(DATA_STR));
   int min = net_min(), max = net_max();
   for (int at = min; at < max; at++) {
     char buf[MAXDNAME] = {0};
@@ -295,10 +306,67 @@ void json_close(bool next) {
     printf("}");
   }
   printf("\n%*s]", JSON_MARGIN, "");
-  if (last_neterr != 0)
-    printf(",\"%s\":\"%s\"", _(ERROR_STR), err_fulltxt);
+  if (tgterr_txt[0])
+    printf(",\"%s\":\"%s\"", _(ERROR_STR), tgterr_txt);
   printf("}");
 }
+#endif
+
+
+#ifdef OUTPUT_FORMAT_TOON
+void toon_head(uint n_targets) {
+  printf("%s: %s\n", SOURCE_STR, srchost);
+  printf("%s: \"%s\"\n", ARGS_STR, mtr_args);
+  PRINT_DATETIME("%s: \"%s\"\n", _(DATETIME_STR), date);
+  printf("%s[%d]:\n", TARGETS_STR, n_targets);
+}
+
+static void toon_headline(int at UNUSED, const t_stat *stat) {
+  if (stat->key != BLANK_INDICATOR)
+    printf(",\"%s\"", stat->name);
+}
+
+static void toon_statline(int at, const t_stat *stat) {
+  const char *elem = net_elem(at, stat->key);
+  if (!elem) return;
+  int len = strlen(elem);
+  if (len <= 0) return;
+  if (len > NETELEM_MAXLEN)
+    len = NETELEM_MAXLEN;
+  const char *quote = strchr(elem, ',') ? "\"" : "";
+  if (elem[len - 1] == '%') // print '%' with name
+    printf(",%s%.*s%s", quote, len - 1, elem, quote);
+  else
+    printf(",%s%s%s", quote, elem, quote);
+}
+
+void toon_close(void) {
+  printf("  - %s: %s\n", _(TARGET_STR), dsthost);
+  int min = net_min(), max = net_max();
+  printf("    %s[%d]", _(DATA_STR), max - min);
+  printf("{\"%s\",\"%s\",\"%s\"", _(HOST_STR), _(HOP_STR), _(ACTIVE_STR));
+  foreach_stat(0, toon_headline, 0);
+#ifdef WITH_IPINFO
+    if (ipinfo_ready())
+      printf(",%s", ipinfo_headcsv(','));
+#endif
+  printf("}:\n");
+  for (int at = min; at < max; at++) {
+    char buf[MAXDNAME] = {0};
+    snprint_addr(buf, sizeof(buf), at, host[at].current);
+    printf("      \"%s\",%d,\"%s\"", buf/*HOST_STR*/, at + 1/*HOP_STR*/,
+      _(host[at].up ? YES_STR : NO_STR) /*ACTIVE_STR*/);
+    foreach_stat(at, toon_statline, 0);
+#ifdef WITH_IPINFO
+    if (ipinfo_ready())
+      printf(",%s", sep_ipinfo(at, host[at].current, ','));
+#endif
+    putchar('\n');
+  }
+  if (tgterr_txt[0])
+    printf("    %s: \"%s\"\n", _(ERROR_STR), tgterr_txt);
+}
+
 #endif
 
 
@@ -335,7 +403,6 @@ static void csv_headstat(int at UNUSED, const t_stat *stat) {
 }
 
 void csv_close(bool next) {
-  if (last_neterr != 0) return;
   if (next) printf("\n");
   const char* field[] = {TARGET_CAPSTR, CSV_HOP_STR, CSV_STATUS_STR, HOST_STR};
   for (uint i = 0; i < ARRAY_SIZE(field); i++)
@@ -347,6 +414,8 @@ void csv_close(bool next) {
   int max = net_max();
   for (int at = net_min(); at < max; at++)
     csv_body(at);
+  if (tgterr_txt[0])
+    printf("%s%c%s\n", (ERROR_STR), CSV_DELIMITER, tgterr_txt);
 }
 #endif
 

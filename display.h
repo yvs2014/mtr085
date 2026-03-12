@@ -21,7 +21,13 @@
 
 #include "common.h"
 
-void display_start(void);
+void display_start(
+#ifdef OUTPUT_FORMAT_TOON
+  uint n_targets
+#else
+  void
+#endif
+);
 void display_final(void);
 bool display_open(void);
 void display_close(bool next);

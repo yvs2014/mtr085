@@ -168,18 +168,20 @@ struct PACKIT icmpext_object { // RFC4884
 
 #define CLOSE(fd) if ((fd) >= 0) { close(fd); (fd) = -1; /*summ*/ sum_sock[1]++; }
 
-#define NET_FAIL_WARN(fmt, ...) { \
-  WARNX(fmt ": %s", __VA_ARGS__, strerr_txt); \
-  snprintf(err_fulltxt, sizeof(err_fulltxt), fmt ": %s", __VA_ARGS__, strerr_txt); \
-  LOG_RE(false, fmt ": %s", __VA_ARGS__, strerr_txt); }
+#define NET_FAIL_WARN(fmt, ...) do {                  \
+  WARNX(fmt ": %s", __VA_ARGS__, tgterr_txt);         \
+  snprintf(logerr_txt, sizeof(logerr_txt),            \
+    fmt ": %s", __VA_ARGS__, tgterr_txt);             \
+  LOG_RE(false, fmt ": %s", __VA_ARGS__, tgterr_txt); \
+} while (0)
 
 #define FAIL_POSTPONE(rcode, rvalue) do  { \
-  last_neterr = (rcode); rstrerror(rcode); \
+  rstrerror(rcode);                        \
   NET_FAIL_WARN("%d", rvalue);             \
 } while (0)
 
 #define FAIL_AND_CLOSE(rcode, fd, fmt, ...) do { \
-  last_neterr = (rcode); rstrerror(last_neterr); \
+  rstrerror(rcode);                              \
   display_clear(); CLOSE(fd);                    \
   NET_FAIL_WARN(fmt, __VA_ARGS__);               \
 } while (0)
@@ -203,13 +205,14 @@ bool  (*addr_equal)(const void *a, const void *b);
 void* (*addr_copy)(void *dst, const void *src);
 nethost_t host[MAXHOST];
 char localaddr[MAX_ADDRSTRLEN];
-int last_neterr;               // last known network error ...
-char err_fulltxt[NAMELEN * 2]; // ... with this text
+//
+       char strerr_txt[NAMELEN];     // any target
+       char tgterr_txt[NAMELEN];     // current target
+static char logerr_txt[NAMELEN * 2]; // $func: $tgterr
+//
 enum { QR_SUM = 0 /*sure*/, QR_ICMP, QR_UDP, QR_TCP, QR_MAX };
 ulong net_queries[QR_MAX];     // number of queries (sum, icmp, udp, tcp)
 ulong net_replies[QR_MAX];     // number of replies (sum, icmp, udp, tcp)
-//
-static char strerr_txt[NAMELEN];   // buff for strerror()
 
 
 /* How many queries to unknown hosts do we send?
@@ -304,23 +307,25 @@ static uint16_t udpsum16(struct _iphdr *ip, void *udata, int udata_len, int dsiz
 
 const char* rstrerror(int rc) {
   strerr_txt[0] = 0;
+  tgterr_txt[0] = 0;
 #ifdef HAVE_STRERROR_R
   (void)strerror_r(rc, strerr_txt, sizeof(strerr_txt));
+  (void)strerror_r(rc, tgterr_txt, sizeof(tgterr_txt));
 #else
   snprintf(strerr_txt, sizeof(strerr_txt), "%s", strerror(rc));
+  snprintf(tgterr_txt, sizeof(tgterr_txt), "%s", strerror(rc));
 #endif
-  return strerr_txt;
+  return tgterr_txt;
 }
 
 static void net_warn(const char *prefix) {
-  char* str = strerr_txt[0] ? strerr_txt : "Unknown error";
+  char* str = tgterr_txt[0] ? tgterr_txt : "Unknown error";
   warnx("%s: %s", prefix, str);
-  snprintf(err_fulltxt, sizeof(err_fulltxt), "%s: %s", prefix, str);
+  snprintf(logerr_txt, sizeof(logerr_txt), "%s: %s", prefix, str);
   LOGMSG("%s: %s", prefix, str);
 }
 
 void keep_error(int rc, const char *prefix) {
-  last_neterr = rc;
   rstrerror(rc);
   net_warn(prefix);
 }

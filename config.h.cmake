@@ -58,6 +58,7 @@
 #cmakedefine OUTPUT_FORMAT_TXT
 #cmakedefine OUTPUT_FORMAT_CSV
 #cmakedefine OUTPUT_FORMAT_JSON
+#cmakedefine OUTPUT_FORMAT_TOON
 #cmakedefine OUTPUT_FORMAT_XML
 
 /* debug via syslog */

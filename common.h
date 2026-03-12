@@ -35,7 +35,7 @@
 #endif
 
 #ifndef GITREV
-#define GITREV "229"
+#define GITREV "230"
 #endif
 
 #ifndef HAVE_UINT
@@ -101,6 +101,9 @@ typedef enum {
 #endif
 #ifdef OUTPUT_FORMAT_JSON
   DisplayJSON,
+#endif
+#ifdef OUTPUT_FORMAT_TOON
+  DisplayTOON,
 #endif
 #ifdef OUTPUT_FORMAT_XML
   DisplayXML,
@@ -304,8 +307,8 @@ extern int mtrtype;        // default packet type
 extern display_mode_t display_mode;
 
 extern int sum_sock[];     // summary open()/close() calls for sockets
-extern int last_neterr;    // last known network error ...
-extern char err_fulltxt[]; // ... with this text
+extern char strerr_txt[];  // error text (any target)
+extern char tgterr_txt[];  // error text (per target)
 
 extern pid_t mypid;
 extern char mtr_args[];

@@ -8,6 +8,7 @@
 .ds oot "t
 .ds ooc "c
 .ds ooj "j
+.ds oon "n
 .ds oox "x
 .ds op "p
 .ds oq "q
@@ -196,12 +197,13 @@ Specify nameserver instead of ones defined in
 .\}
 .\}
 .ie "o"\*[oo]" \{\
-.It Fl o, Fl -output Ar \*[oor] \*[oot] \*[ooc] \*[ooj] \*[oox]
+.It Fl o, Fl -output Ar \*[oor] \*[oot] \*[ooc] \*[ooj] \*[oon] \*[oox]
 Use one of these suboptions to get
 .ie "r"\*[oor]" \{RAW\}
 .ie "t"\*[oot]" \{TXT\}
 .ie "c"\*[ooc]" \{CSV\}
 .ie "j"\*[ooj]" \{JSON\}
+.ie "n"\*[oon]" \{TOON\}
 .ie "x"\*[oox]" \{XML\}
 formatted output respectively
 .\}

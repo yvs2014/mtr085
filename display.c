@@ -35,10 +35,6 @@ bool display_open(void) {
 #ifdef SPLITMODE
     case DisplaySplit: split_open(); break;
 #endif
-#ifdef OUTPUT_FORMAT_JSON
-    case DisplayJSON: // the same as DisplayReport keeping start time
-#endif
-    case DisplayReport: report_started_at(); break;
     default: break;
   }
   return true;
@@ -62,6 +58,9 @@ void display_close(bool next) {
 #ifdef OUTPUT_FORMAT_JSON
     case DisplayJSON: json_close(next); break;
 #endif
+#ifdef OUTPUT_FORMAT_TOON
+    case DisplayTOON: toon_close(); break;
+#endif
 #ifdef OUTPUT_FORMAT_XML
     case DisplayXML: xml_close(); break;
 #endif
@@ -69,7 +68,13 @@ void display_close(bool next) {
   }
 }
 
-void display_start(void) {
+void display_start(
+#ifdef OUTPUT_FORMAT_TOON
+  uint n_targets
+#else
+  void
+#endif
+) {
   if (display_mode == DisplayAuto) {
 #ifdef CURSESMODE
     display_mode = DisplayCurses; // default
@@ -79,7 +84,21 @@ void display_start(void) {
   }
   switch (display_mode) {
 #ifdef OUTPUT_FORMAT_JSON
+    case DisplayJSON:
+#endif
+#ifdef OUTPUT_FORMAT_TOON
+    case DisplayTOON:
+#endif
+    case DisplayReport:
+      report_started_at(); break;
+    default: break;
+  }
+  switch (display_mode) {
+#ifdef OUTPUT_FORMAT_JSON
     case DisplayJSON: json_head(); break;
+#endif
+#ifdef OUTPUT_FORMAT_TOON
+    case DisplayTOON: toon_head(n_targets); break;
 #endif
 #ifdef OUTPUT_FORMAT_XML
     case DisplayXML: xml_head(); break;
@@ -122,6 +141,9 @@ void display_redraw(void) {
 #endif
 #ifdef OUTPUT_FORMAT_JSON
     case DisplayJSON:
+#endif
+#ifdef OUTPUT_FORMAT_TOON
+    case DisplayTOON:
 #endif
 #ifdef OUTPUT_FORMAT_XML
     case DisplayXML:
@@ -169,6 +191,9 @@ void display_loop(void) {
 #endif
 #ifdef OUTPUT_FORMAT_JSON
     case DisplayJSON:
+#endif
+#ifdef OUTPUT_FORMAT_TOON
+    case DisplayTOON:
 #endif
 #ifdef OUTPUT_FORMAT_XML
     case DisplayXML:

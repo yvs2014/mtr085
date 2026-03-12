@@ -82,7 +82,7 @@
 #endif
 #endif
 
-#if defined(OUTPUT_FORMAT_RAW) || defined(OUTPUT_FORMAT_TXT) || defined(OUTPUT_FORMAT_CSV) || defined(OUTPUT_FORMAT_JSON) || defined(OUTPUT_FORMAT_XML)
+#if defined(OUTPUT_FORMAT_RAW) || defined(OUTPUT_FORMAT_TXT) || defined(OUTPUT_FORMAT_CSV) || defined(OUTPUT_FORMAT_JSON) || defined(OUTPUT_FORMAT_TOON) || defined(OUTPUT_FORMAT_XML)
 #define OUTPUT_FORMAT
 #include <ctype.h>
 #endif
@@ -193,7 +193,7 @@ static struct option long_options[] = {
   { "ns",         1, 0, 'N' },
 #endif
 #ifdef OUTPUT_FORMAT
-  { "output",     1, 0, 'o' },  // output format: raw, txt, csv, json, xml
+  { "output",     1, 0, 'o' },  // raw, txt, csv, json, toon, xml
 #endif
 #ifdef SPLITMODE
   { "split",      0, 0, 'p' },
@@ -260,6 +260,15 @@ static int my_getopt_long(int argc, char *argv[], int *opt_ndx) {
   return getopt_long(argc, argv, short_options, long_options, opt_ndx);
 }
 
+#ifdef OUTPUT_FORMAT
+#define ADD_OCHAR(ch) do {        \
+  if (len < (sizeof(oopt)) - 1) { \
+    if (len) oopt[len++] = '|';   \
+    oopt[len++] = (ch);           \
+  }                               \
+} while (0)
+#endif
+
 static const char *get_opt_desc(char opt) {
   switch (opt) {
     case 'm':
@@ -283,23 +292,28 @@ static const char *get_opt_desc(char opt) {
     case 'N': return CLI_ADDR_STR;
 #endif
 #ifdef OUTPUT_FORMAT
-    case 'o': { static char _oopt[] =
+    case 'o': {
+      static char oopt[16];
+      uint len = 0;
 #ifdef OUTPUT_FORMAT_RAW
-" RAW"
+      ADD_OCHAR('r');
 #endif
 #ifdef OUTPUT_FORMAT_TXT
-" TXT"
+      ADD_OCHAR('t');
 #endif
 #ifdef OUTPUT_FORMAT_CSV
-" CSV"
+      ADD_OCHAR('c');
 #endif
 #ifdef OUTPUT_FORMAT_JSON
-" JSON"
+      ADD_OCHAR('j');
+#endif
+#ifdef OUTPUT_FORMAT_TOON
+      ADD_OCHAR('n');
 #endif
 #ifdef OUTPUT_FORMAT_XML
-" XML"
+      ADD_OCHAR('x');
 #endif
-    ; return trim(_oopt); }
+      return oopt; }
 #endif
     default: break;
   }
@@ -475,6 +489,11 @@ static inline void option_o(const char *progname) {
       display_mode = DisplayJSON;
       break;
 #endif
+#ifdef OUTPUT_FORMAT_TOON
+    case 'n':
+      display_mode = DisplayTOON;
+      break;
+#endif
 #ifdef OUTPUT_FORMAT_XML
     case 'x':
       display_mode = DisplayXML;
@@ -501,6 +520,9 @@ static inline void ineractive_modes(display_mode_t mode) {
 #endif
 #ifdef OUTPUT_FORMAT_JSON
     case DisplayJSON:
+#endif
+#ifdef OUTPUT_FORMAT_TOON
+    case DisplayTOON:
 #endif
 #ifdef OUTPUT_FORMAT_XML
     case DisplayXML:
@@ -855,10 +877,14 @@ static inline void main_prep(int argc, char **argv) {
 #endif
   if (gethostname(srchost, sizeof(srchost)))
     STRLCPY(srchost, NONE_STR, sizeof(srchost));
-  display_start();
+  display_start(
+#ifdef OUTPUT_FORMAT_TOON
+    (argc > optind) ? (argc - optind) : 0
+#endif
+  );
 }
 
-static inline bool main_loop(struct addrinfo *ai, bool fin) {
+static inline bool main_loop(struct addrinfo *ai, uint nth, uint n_targets) {
   static bool next_target;
   bool success = false;
   if (ai) {
@@ -871,7 +897,7 @@ static inline bool main_loop(struct addrinfo *ai, bool fin) {
       else
         warnx("%s", OPENDISP_ERR);
       net_end_transit();
-      if (fin)
+      if ((nth + 1) >= n_targets)
         display_confirm_fin();
       display_close(next_target);
       locker(stdout, F_UNLCK);
@@ -898,8 +924,8 @@ static inline void main_fin(void) {
 #endif
   if (run_opts.stat)
     stat_fin();
-  if (last_neterr && (display_mode == DisplayCurses))
-    warnx("%s", err_fulltxt); // duplicate an error cleaned by ncurses
+  if (strerr_txt[0] && (display_mode == DisplayCurses))
+    warnx("%s", strerr_txt); // duplicate an error cleaned by ncurses
   UNICODE_FREE;
 }
 
@@ -955,7 +981,9 @@ int main(int argc, char **argv) {
   }};
   int defport = ini_opts.port;
   bool success = false;
-  for (; (optind < argc) && argv[optind]; optind++) {
+  uint n_targets = (argc > optind) ? (argc - optind) : 0;
+  for (uint i = 0; (optind < argc) && argv[optind]; optind++, i++) {
+    tgterr_txt[0] = 0;
     dsthost = argv[optind];
     ini_opts.port = defport;
     t_res_rc rr = rr_init;
@@ -966,10 +994,10 @@ int main(int argc, char **argv) {
     if (rr.rc)
       warnx("%s: %s: %s", RESFAIL_ERR, dsthost, rr.error ? rr.error : UNKNOWN_ERR);
     else
-      success = main_loop(rr.res, (optind + 1) >= argc);
+      success = main_loop(rr.res, i, n_targets);
   }
 
   main_fin();
-  return last_neterr || !success;
+  return strerr_txt[0] ? EXIT_FAILURE : !success;
 }
 

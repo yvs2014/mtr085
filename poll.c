@@ -383,6 +383,9 @@ static void proceed_ipinfo(void) {
 #ifdef OUTPUT_FORMAT_JSON
     case DisplayJSON:
 #endif
+#ifdef OUTPUT_FORMAT_TOON
+    case DisplayTOON:
+#endif
 #ifdef OUTPUT_FORMAT_XML
     case DisplayXML:
 #endif

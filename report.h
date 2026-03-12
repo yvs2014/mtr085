@@ -20,6 +20,7 @@
 #define REPORT_H
 
 #include <stdbool.h>
+#include <sys/types.h>
 
 void report_started_at(void);
 void report_close(bool next, bool with_header);
@@ -42,6 +43,10 @@ void xml_tail(void);
 void json_close(bool next);
 void json_head(void);
 void json_tail(void);
+#endif
+#ifdef OUTPUT_FORMAT_TOON
+void toon_close(void);
+void toon_head(uint n_targets);
 #endif
 
 #endif

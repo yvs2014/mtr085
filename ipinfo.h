@@ -29,6 +29,7 @@ void  ipinfo_parse(int sock, int seq);
 bool  ipinfo_ready(void);
 int   ipinfo_width(void);
 char* ipinfo_header(void);
+char* ipinfo_headcsv(char sep);
 bool  ipinfo_timedout(int seq);
 void  ipinfo_seq_ready(int seq);
 

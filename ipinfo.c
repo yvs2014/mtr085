@@ -609,9 +609,23 @@ static char *get_ipinfo(int at, int ndx, int item_no) {
   return NULL;
 }
 
+static char iiheader[NAMELEN];
+
+char* ipinfo_headcsv(char sep) {
+  iiheader[0] = 0;
+  for (uint i = 0, len = 0; (i < MAX_TXT_ITEMS)
+      && (ipinfo_no[i] >= 0) && (ipinfo_no[i] < itemname_max)
+      && ORIG_UNAME(ipinfo_no[i]) && (len < sizeof(iiheader)); i++) {
+    int inc = 0;
+    if (i) inc += snprintf(iiheader + len, sizeof(iiheader) - len, "%c", sep);
+    if (inc > 0) len+= inc;
+    inc = snprintf(iiheader + len, sizeof(iiheader) - len, "\"%s\"", ORIG_UNAME(ipinfo_no[i]));
+    if (inc > 0) len += inc;
+  }
+  return iiheader;
+}
 
 char* ipinfo_header(void) {
-  static char iiheader[NAMELEN];
   iiheader[0] = 0;
   for (uint i = 0, len = 0; (i < MAX_TXT_ITEMS)
       && (ipinfo_no[i] >= 0) && (ipinfo_no[i] < itemname_max)

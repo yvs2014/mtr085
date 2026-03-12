@@ -142,8 +142,8 @@ AC_ARG_WITH([ipinfo],
 AM_CONDITIONAL([IPINFO], [test "x$ipinfo" = "xyes"])
 AS_IF([test "x$ipinfo" = "xyes"], [AC_DEFINE([WITH_IPINFO], [1], [Define to enable ipinfo lookup])])
 
-# Extra output formats: raw, txt, csv, json, xml
-# 	"txt, csv, json" are enabled by default, "raw, xml" are disabled
+# Extra output formats: raw, txt, csv, json, toon, xml
+# 	"raw" is not enabled by default
 
 AC_ARG_WITH([output_raw],
 	AS_HELP_STRING([--with-output-raw], [RAW output format]),
@@ -169,14 +169,22 @@ AC_ARG_WITH([output_json],
 AM_CONDITIONAL([OUTPUT_JSON], [test "x$output_json" = "xyes"])
 AS_IF([test "x$output_json" != "xno"], [AC_DEFINE([OUTPUT_FORMAT_JSON], 1, [Support JSON output format])])
 
+AC_ARG_WITH([output_toon],
+	AS_HELP_STRING([--with-output-toon], [TOON output format]),
+	[output_toon="${withval}"], [output_toon=yes])
+AM_CONDITIONAL([OUTPUT_TOON], [test "x$output_toon" = "xyes"])
+AS_IF([test "x$output_toon" != "xno"], [AC_DEFINE([OUTPUT_FORMAT_TOON], 1, [Support TOON output format])])
+
 AC_ARG_WITH([output_xml],
 	AS_HELP_STRING([--with-output-xml], [XML output format]),
 	[output_xml="${withval}"], [output_xml=yes])
 AM_CONDITIONAL([OUTPUT_XML], [test "x$output_xml" = "xyes"])
 AS_IF([test "x$output_xml" != "xno"], [AC_DEFINE([OUTPUT_FORMAT_XML], 1, [Support XML output format])])
 
-AM_CONDITIONAL([OUTPUTFMT], [test "x$output_raw" = "xyes" -o "x$output_txt" = "xyes" \
-	-o "x$output_csv" = "xyes" -o "x$output_json" = "xyes" -o "x$output_xml" = "xyes"])
+AM_CONDITIONAL([OUTPUTFMT], [test "x$output_raw" = "xyes" \
+	-o "x$output_txt"  = "xyes" -o "x$output_csv"  = "xyes" \
+	-o "x$output_json" = "xyes" -o "x$output_toon" = "xyes" \
+	-o "x$output_xml"  = "xyes"])
 
 # Add some development options:
 #   syslog debug: poll, net, dns, ipinfo
@@ -306,10 +314,11 @@ AS_IF([test "x$splitmode" = "xyes"],   [_option_list="$_option_list +SPLIT"],   
 AS_IF([test "x$ipv6"   = "xyes"],      [_option_list="$_option_list +IPV6"],    [_option_list="$_option_list -IPV6"])
 AS_IF([test "x$mpls"   = "xyes"],      [_option_list="$_option_list +MPLS"],    [_option_list="$_option_list -MPLS"])
 _option_output=""
+AS_IF([test "x$output_raw" = "xyes"],  [_option_output="${_option_output}R"])
 AS_IF([test "x$output_txt" = "xyes"],  [_option_output="${_option_output}T"])
 AS_IF([test "x$output_csv" = "xyes"],  [_option_output="${_option_output}C"])
 AS_IF([test "x$output_json" = "xyes"], [_option_output="${_option_output}J"])
-AS_IF([test "x$output_raw" = "xyes"],  [_option_output="${_option_output}R"])
+AS_IF([test "x$output_toon" = "xyes"], [_option_output="${_option_output}N"])
 AS_IF([test "x$output_xml" = "xyes"],  [_option_output="${_option_output}X"])
 AS_IF([test "x$_option_output" = "x"], [_option_list="$_option_list -OUTFMT"], [_option_list="$_option_list OUTFMT=$_option_output"])
 _option_syslog=""

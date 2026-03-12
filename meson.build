@@ -3,7 +3,7 @@ project('mtr085', 'c',
 #    'c_std=gnu99,c99',
 #    'b_sanitize=address,undefined',
     'warning_level=3' ],
-  meson_version: '>= 0.50',
+  meson_version: '>= 0.49', # 0.49.2 in deb10
   license: 'GPL-2.0-or-later',
   version: '.'.join(['0', '85', find_program('git', required: false).found() ?
     run_command('git', 'rev-list', '--count', '97af563..HEAD', check: false).stdout().strip() : ''
@@ -36,6 +36,7 @@ outraw     = get_option('OUTRAW')
 outtxt     = get_option('OUTTXT')
 outcsv     = get_option('OUTCSV')
 outjson    = get_option('OUTJSON')
+outtoon    = get_option('OUTTOON')
 outxml     = get_option('OUTXML')
 deblog = []
 debpoll   = get_option('DEBPOLL')
@@ -292,6 +293,12 @@ if outjson
   config.set('OUTPUT_FORMAT_JSON', 1)
 else
   manexcl += 'oj'
+endif
+if outtoon
+  outfmt += 'toon'
+  config.set('OUTPUT_FORMAT_TOON', 1)
+else
+  manexcl += 'on'
 endif
 if outxml
   outfmt += 'xml'
