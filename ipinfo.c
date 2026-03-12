@@ -377,21 +377,30 @@ static void parse_http(char *buf, ssize_t recv_size, atndx_t id) {
 }
 
 
-static inline void parse_whois_tagvalue(char* line, char* record[MAX_TXT_ITEMS]) {
+static void parse_whois_tagvalue(char* line, char* record[MAX_TXT_ITEMS]) {
   char* tagvalue[2] = { line, NULL };
   if (split_with_sep(tagvalue, 2, ':', 0) != 2) return;
-  for (int j = 0; (j < MAX_TXT_ITEMS) && ORIG_NAME(j); j++) {
-    if (!tagvalue[0]) return;
-    if (af == AF_INET6) { // check "*6" fields too
-      size_t end = strnlen(tagvalue[0], NAMELEN) - 1;
-      if ((end > 0) && (tagvalue[0][end] == '6'))
-        tagvalue[0][end] = 0;
-    }
-    if (strcasecmp(ORIG_NAME(j), tagvalue[0]) == 0) record[j] = tagvalue[1];
-    if (j == WHOIS_LAST_NDX) { // split the last item (description, country)
-      char* desc_cc[2] = { record[j], NULL };
-      if (split_with_sep(desc_cc, 2, COMMA, 0) == 2)
-        record[WHOIS_LAST_NDX + 1] = desc_cc[1];
+  if (!(tagvalue[0] && tagvalue[1])) return;
+  LOGMSG("whois-in: %s=\"%s\"", tagvalue[0], tagvalue[1]);
+  if (af == AF_INET6) { // trim trailing '6' to test IPv6 fields as well
+    size_t end = strnlen(tagvalue[0], NAMELEN) - 1;
+    if ((end > 0) && (tagvalue[0][end] == '6'))
+      tagvalue[0][end] = 0;
+  }
+  for (uint j = 0; (j < MAX_TXT_ITEMS) && ORIG_NAME(j); j++) {
+    if (!strcasecmp(ORIG_NAME(j), tagvalue[0])) {
+      record[j] = tagvalue[1];
+      if (j == WHOIS_LAST_NDX) { // split the last item (description, country)
+        char *cc = record[j] ? strrchr(record[j], COMMA) : NULL;
+        if (cc) {
+          *cc++ = 0;
+          uint jc = j + 1;
+          record[jc] = cc;
+          LOGMSG("whois-out: %s=\"%s\"", ORIG_NAME(jc), record[jc]);
+        }
+      }
+      LOGMSG("whois-out: %s=\"%s\"", tagvalue[0], tagvalue[1]);
+      break;
     }
   }
 }
