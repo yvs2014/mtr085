@@ -35,7 +35,7 @@
 #endif
 
 #ifndef GITREV
-#define GITREV "234"
+#define GITREV "235"
 #endif
 
 #ifndef HAVE_UINT
@@ -297,8 +297,8 @@ typedef union opt_sum_u {
 } while (0)
 #endif
 
-#ifndef ARRAY_SIZE
-#define ARRAY_SIZE(array) (sizeof(array) / sizeof((array)[0]))
+#ifndef ARRAY_LEN
+#define ARRAY_LEN(array) (sizeof(array) / sizeof((array)[0]))
 #endif
 
 // externs
@@ -312,6 +312,10 @@ extern char tgterr_txt[];  // error text (per target)
 
 extern pid_t mypid;
 extern char mtr_args[];
+#ifdef OUTPUT_FORMAT_TOON
+extern const char* mtr_optv[]; // cli options
+extern uint mtr_optc;          // number of 'optv'
+#endif
 extern opts_t run_opts;    // runtime options
 extern opts_t ini_opts;    // initial options
 extern opt_sum_t opt_sum;  // checksum changes

@@ -84,6 +84,82 @@
 #include <ctype.h>
 #endif
 
+enum OPTIONS {
+#ifdef ENABLE_IPV6
+  OPT_IPV4     = '4',
+  OPT_IPV6     = '6',
+#endif
+  OPT_ADDR     = 'a',
+#ifdef ENABLE_DNS
+  OPT_BOTH     = 'b',
+#endif
+  OPT_BITS     = 'B',
+  OPT_COUNT    = 'c',
+#ifdef CURSESMODE
+  OPT_DISPLAY  = 'd',
+#endif
+#ifdef WITH_MPLS
+  OPT_MPLS     = 'e',
+#endif
+  OPT_TTLFIRST = 'f',
+  OPT_FIELDS   = 'F',
+  OPT_HELP     = 'h',
+  OPT_INTERVAL = 'i',
+#ifdef WITH_IPINFO
+  OPT_LOOKUP   = 'l',
+  OPT_IPINFO   = 'L',
+#endif
+  OPT_TTLMAX   = 'm',
+#ifdef ENABLE_DNS
+  OPT_NODNS    = 'n',
+  OPT_NS       = 'N',
+#endif
+#ifdef OUTPUT_FORMAT
+  OPT_OUTPUT   = 'o',
+#endif
+#ifdef SPLITMODE
+  OPT_SPLIT    = 'p',
+#endif
+#ifdef IP_TOS
+  OPT_QOS      = 'q',
+#endif
+  OPT_REPORT   = 'r',
+  OPT_SIZE     = 's',
+  OPT_SUMMARY  = 'S',
+  OPT_TCP      = 't',
+  OPT_TIMEOUT  = 'T',
+  OPT_UDP      = 'u',
+  OPT_VERSION  = 'v',
+  OPT_CACHE    = 'x',
+};
+
+enum TTL_OPTS {
+  AUTOTTL = 'a',
+};
+
+#ifdef OUTPUT_FORMAT
+enum OUTPUT_OPTS {
+#ifdef OUTPUT_FORMAT_RAW
+  ORAW  = 'r',
+#endif
+#ifdef OUTPUT_FORMAT_TXT
+  OTXT  = 't',
+#endif
+#ifdef OUTPUT_FORMAT_CSV
+  OCSV  = 'c',
+#endif
+#ifdef OUTPUT_FORMAT_JSON
+  OJSON = 'j',
+#endif
+#ifdef OUTPUT_FORMAT_TOON
+  OTOON = 'n',
+#endif
+#ifdef OUTPUT_FORMAT_XML
+  OXML  = 'x',
+#endif
+};
+#endif
+
 #include "aux.h"
 #include "net.h"
 #include "display.h"
@@ -110,6 +186,10 @@ int mtrtype = IPPROTO_ICMP;   // ICMP as default packet type
 pid_t mypid;
 #define ARGS_LEN 64 /* seem to be enough */
 char mtr_args[ARGS_LEN + 1];  // display in curses title
+#ifdef OUTPUT_FORMAT_TOON
+const char* mtr_optv[32];     // option string array
+uint mtr_optc;
+#endif
 
 opt_sum_t opt_sum;  // checksum options' changes
 
@@ -155,57 +235,59 @@ t_stat stats[] = {
   {.name = _JMAX_STR,  .min = 5, .key = 'X', .hint = _JMAX_HINT},
   {.name = _JINT_STR,  .min = 5, .key = 'I', .hint = _JINT_HINT},
 };
-const int stat_max = ARRAY_SIZE(stats);
+const int stat_max = ARRAY_LEN(stats);
 //// end-of-global
 
 static struct option long_options[] = {
   // Long, HasArgs, Flag, Short
 #ifdef ENABLE_IPV6
-  { "inet",       0, 0, '4' },  // use IPv4
-  { "inet6",      0, 0, '6' },  // use IPv6
+  {"inet",       0, 0, OPT_IPV4},     // use IPv4
+  {"inet6",      0, 0, OPT_IPV6},     // use IPv6
 #endif
-  { "address",    1, 0, 'a' },
+  {"address",    1, 0, OPT_ADDR},
 #ifdef ENABLE_DNS
-  { "show-ips",   0, 0, 'b' },
+  {"show-ips",   0, 0, OPT_BOTH},
 #endif
-  { "bitpattern", 1, 0, 'B' },   // in range 0-255, or -1 for random
-  { "cycles",     1, 0, 'c' },
+  {"bitpattern", 1, 0, OPT_BITS},     // in range 0-255, or -1 for random
+  {"cycles",     1, 0, OPT_COUNT},
 #ifdef CURSESMODE
-  { "display",    1, 0, 'd' },
+  {"display",    1, 0, OPT_DISPLAY},
 #endif
 #ifdef WITH_MPLS
-  { "mpls",       0, 0, 'e' },
+  {"mpls",       0, 0, OPT_MPLS},
 #endif
-  { "first-ttl",  1, 0, 'f' },   // -f and -m are borrowed from traceroute
-  { "fields",     1, 0, 'F' },   // fields to display and their order
-  { "help",       0, 0, 'h' },
-  { "interval",   1, 0, 'i' },
+  {"first-ttl",  1, 0, OPT_TTLFIRST}, // borrowed from traceroute
+  {"fields",     1, 0, OPT_FIELDS},   // fields to display and their order
+  {"help",       0, 0, OPT_HELP},
+  {"interval",   1, 0, OPT_INTERVAL},
 #ifdef WITH_IPINFO
-  { "lookup",     0, 0, 'l' },
-  { "ipinfo",     1, 0, 'L' },
+  {"lookup",     0, 0, OPT_LOOKUP},
+  {"ipinfo",     1, 0, OPT_IPINFO},
 #endif
-  { "max-ttl",    1, 0, 'm' },
+  {"max-ttl",    1, 0, OPT_TTLMAX},   // borrowed from traceroute
 #ifdef ENABLE_DNS
-  { "no-dns",     0, 0, 'n' },
-  { "ns",         1, 0, 'N' },
+  {"no-dns",     0, 0, OPT_NODNS},
+  {"ns",         1, 0, OPT_NS},
 #endif
 #ifdef OUTPUT_FORMAT
-  { "output",     1, 0, 'o' },  // raw, txt, csv, json, toon, xml
+  {"output",     1, 0, OPT_OUTPUT},   // raw, txt, csv, json, toon, xml
 #endif
 #ifdef SPLITMODE
-  { "split",      0, 0, 'p' },
+  {"split",      0, 0, OPT_SPLIT},
 #endif
 #ifdef IP_TOS
-  { "tos",        1, 0, 'q' },  // type of service (0..255)
+  {"tos",        1, 0, OPT_QOS},      // type-of-service (0..255)
+                                      // quality-of-service
 #endif
-  { "report",     0, 0, 'r' },
-  { "psize",      1, 0, 's' },  // payload size
-  { "summary",    0, 0, 'S' },  // print send/recv summary at exit
-  { "tcp",        0, 0, 't' },  // TCP (default is ICMP)
-  { "timeout",    1, 0, 'T' },  // timeout for TCP sockets
-  { "udp",        0, 0, 'u' },  // UDP (default is ICMP)
-  { "version",    0, 0, 'v' },
-  { "cache",      1, 0, 'x' },  // enable cache with timeout in seconds (0 means default 60sec)
+  {"report",     0, 0, OPT_REPORT},
+  {"psize",      1, 0, OPT_SIZE},     // payload size
+  {"summary",    0, 0, OPT_SUMMARY},  // print send/recv summary at exit
+  {"tcp",        0, 0, OPT_TCP},      // TCP (note: default is ICMP)
+  {"timeout",    1, 0, OPT_TIMEOUT},  // timeout for TCP sockets
+  {"udp",        0, 0, OPT_UDP},      // UDP (note: default is ICMP)
+  {"version",    0, 0, OPT_VERSION},
+  {"cache",      1, 0, OPT_CACHE},    // enable cache with timeout in seconds
+                                      // (0 means default 60sec)
   { 0, 0, 0, 0 }
 };
 static char *short_options;
@@ -242,9 +324,9 @@ static void locker(FILE *file, short type) {
   }
 }
 
-static int my_getopt_long(int argc, char *argv[], int *opt_ndx) {
+static int my_getopt_long(int argc, char *argv[]) {
   if (!short_options) {
-    short_options = calloc(ARRAY_SIZE(long_options) * 2 + 1, 1);
+    short_options = calloc(ARRAY_LEN(long_options) * 2 + 1, 1);
     if (!short_options)
       return -1;
     char *ptr = short_options;
@@ -254,7 +336,7 @@ static int my_getopt_long(int argc, char *argv[], int *opt_ndx) {
         *ptr++ = ':';
     }
   }
-  return getopt_long(argc, argv, short_options, long_options, opt_ndx);
+  return getopt_long(argc, argv, short_options, long_options, NULL);
 }
 
 #ifdef OUTPUT_FORMAT
@@ -268,47 +350,49 @@ static int my_getopt_long(int argc, char *argv[], int *opt_ndx) {
 
 static const char *get_opt_desc(char opt) {
   switch (opt) {
-    case 'm':
-    case 'f':
+    case OPT_TTLFIRST:
+    case OPT_TTLMAX:
 #ifdef IP_TOS
-    case 'q':
+    case OPT_QOS:
 #endif
-    case 'B': return CLI_NUM_STR;
-    case 'i':
-    case 'x':
-    case 'T': return CLI_SEC_STR;
-    case 'a': return CLI_ADDR_STR;
-    case 'c': return CLI_CNT_STR;
-    case 'd': return CLI_MODE_STR;
-    case 's': return CLI_BYTE_STR;
-    case 'F': return CLI_FLD_STR;
+    case OPT_BITS:    return STR_NUMBER;
+    case OPT_INTERVAL:
+    case OPT_CACHE:
+    case OPT_TIMEOUT: return STR_IN_SECONDS;
+    case OPT_ADDR:    return STR_IP_ADDRESS;
+    case OPT_COUNT:    return STR_COUNT;
+#ifdef CURSESMODE
+    case OPT_DISPLAY: return STR_MODE;
+#endif
+    case OPT_SIZE:    return STR_IN_BYTES;
+    case OPT_FIELDS:  return STR_FIELDS;
 #ifdef WITH_IPINFO
-    case 'L': return CLI_IINFO_STR;
+    case OPT_IPINFO:  return STR_IP_INFO;
 #endif
 #ifdef ENABLE_DNS
-    case 'N': return CLI_ADDR_STR;
+    case OPT_NS:      return STR_IP_ADDRESS;
 #endif
 #ifdef OUTPUT_FORMAT
-    case 'o': {
+    case OPT_OUTPUT: {
       static char oopt[16];
       uint len = 0;
 #ifdef OUTPUT_FORMAT_RAW
-      ADD_OCHAR('r');
+      ADD_OCHAR(ORAW);
 #endif
 #ifdef OUTPUT_FORMAT_TXT
-      ADD_OCHAR('t');
+      ADD_OCHAR(OTXT);
 #endif
 #ifdef OUTPUT_FORMAT_CSV
-      ADD_OCHAR('c');
+      ADD_OCHAR(OCSV);
 #endif
 #ifdef OUTPUT_FORMAT_JSON
-      ADD_OCHAR('j');
+      ADD_OCHAR(OJSON);
 #endif
 #ifdef OUTPUT_FORMAT_TOON
-      ADD_OCHAR('n');
+      ADD_OCHAR(OTOON);
 #endif
 #ifdef OUTPUT_FORMAT_XML
-      ADD_OCHAR('x');
+      ADD_OCHAR(OXML);
 #endif
       return oopt; }
 #endif
@@ -319,13 +403,13 @@ static const char *get_opt_desc(char opt) {
 
 static void usage(const char *name) {
  { char *bname = strdup(name);
-   printf("%s: %s [-", CLI_USAGE_STR, bname ? basename(bname) : name);
+   printf("%s: %s [-", STR_USAGE, bname ? basename(bname) : name);
    if (bname) free(bname); }
   uint len = strlen(short_options);
   for (uint i = 0; i < len; i++)
     if (short_options[i] != ':')
       putchar(short_options[i]);
-  printf("] %s ...\n", CLI_TGT_STR);
+  printf("] %s ...\n", STR_TARGET);
   for (int i = 0; long_options[i].name; i++) {
     printf("\t[");
     char opt = (char)long_options[i].val;
@@ -409,7 +493,7 @@ static bool split_hostport(char *buff, char* hostport[2]) {
 
 #ifdef CURSESMODE
 #define VAL_TRU(nth) ((val & (1u << (nth - 1))) ? true : false)
-static inline void option_d(char opt) {
+static inline void option_display(char opt) {
   int val = limit_int(0, INT8_MAX, optarg, DISPMODE_ERR, opt);
   curses_mode = (val & ~8) % curses_mode_max;
   ini_opts.chart   = val & 3;    // first two bits
@@ -422,7 +506,7 @@ static inline void option_d(char opt) {
 #undef VAL_TRU
 #endif
 
-static inline void option_F(char opt) {
+static inline void option_fields(char opt) {
   if (strnlen(optarg, MAXFLD + 1) > MAXFLD)
     errx(EINVAL, "-%c: %s (%s=%d): %s", opt, OVERFLD_ERR, MAX_STR, MAXFLD, optarg);
   for (int i = 0; optarg[i]; i++) {
@@ -437,7 +521,7 @@ static inline void option_F(char opt) {
 }
 
 #ifdef ENABLE_DNS
-static inline void option_N(char opt) {
+static inline void option_ns(char opt) {
   char buff[MAX_ADDRSTRLEN + 6/*:port*/] = {0};
   STRLCPY(buff, optarg, sizeof(buff));
   char* hostport[2] = {0};
@@ -461,44 +545,29 @@ static inline void option_N(char opt) {
 #endif
 
 #ifdef OUTPUT_FORMAT
-static inline void option_o(const char *progname) {
+static inline void option_output(const char *progname) {
   if (ini_opts.cycles <= 0)
     ini_opts.cycles = REPORT_PINGS;
   switch (tolower((int)optarg[0])) {
 #ifdef OUTPUT_FORMAT_RAW
-    case 'r':
-      display_mode = DisplayRaw;
-      ini_opts.rawrep = true;
-      break;
+    case ORAW:  display_mode = DisplayRaw; ini_opts.rawrep = true; break;
 #endif
 #ifdef OUTPUT_FORMAT_TXT
-    case 't':
-      display_mode = DisplayTXT;
-      break;
+    case OTXT:  display_mode = DisplayTXT;  break;
 #endif
 #ifdef OUTPUT_FORMAT_CSV
-    case 'c':
-      display_mode = DisplayCSV;
-      break;
+    case OCSV:  display_mode = DisplayCSV;  break;
 #endif
 #ifdef OUTPUT_FORMAT_JSON
-    case 'j':
-      display_mode = DisplayJSON;
-      break;
+    case OJSON: display_mode = DisplayJSON; break;
 #endif
 #ifdef OUTPUT_FORMAT_TOON
-    case 'n':
-      display_mode = DisplayTOON;
-      break;
+    case OTOON: display_mode = DisplayTOON; break;
 #endif
 #ifdef OUTPUT_FORMAT_XML
-    case 'x':
-      display_mode = DisplayXML;
-      break;
+    case OXML:  display_mode = DisplayXML;  break;
 #endif
-    default:
-      usage(progname);
-      QEXIT(EXIT_FAILURE);
+    default: usage(progname); QEXIT(EXIT_FAILURE);
   }
 }
 #endif
@@ -530,126 +599,132 @@ static inline void ineractive_modes(display_mode_t mode) {
   }
 }
 
+#ifdef OUTPUT_FORMAT_TOON
+static void set_optv(int argc, char **argv) {
+  mtr_optc = 0;
+  for (int i = 1; (i < argc) && (mtr_optc < ARRAY_LEN(mtr_optv)); i++)
+    if (argv[i])
+      mtr_optv[mtr_optc++] = argv[i];
+}
+#endif
+
 static inline void short_set(char opt, const char *progname) {
   switch (opt) {
 #ifdef ENABLE_IPV6
-    case '4':
-      net_settings(IPV6_DISABLED);
-      af_specified = true;
-      break;
-    case '6':
-      net_settings(IPV6_ENABLED);
+    case OPT_IPV4:
+    case OPT_IPV6:
+      net_settings((opt == OPT_IPV4) ? IPV6_DISABLED : IPV6_ENABLED);
       af_specified = true;
       break;
 #endif
-    case 'a':
+    case OPT_ADDR:
       iface_addr = optarg;
       break;
 #ifdef ENABLE_DNS
-    case 'b':
+    case OPT_BOTH:
       ini_opts.ips = true;
       break;
 #endif
-    case 'B':
+    case OPT_BITS:
       ini_opts.pattern = limit_int(-1, UINT8_MAX, optarg, BITPATT_STR, opt);
       break;
-    case 'c':
+    case OPT_COUNT:
       ini_opts.cycles = limit_int(-1, INT_MAX, optarg, CYCLESNO_STR, opt);
       break;
 #ifdef CURSESMODE
-    case 'd':
-      option_d(opt);
+    case OPT_DISPLAY:
+      option_display(opt);
       break;
 #endif
 #ifdef WITH_MPLS
-    case 'e':
+    case OPT_MPLS:
       ini_opts.mpls = true;
       break;
 #endif
-    case 'f':
-      if ((optarg[0] == 'a') && !optarg[1])
+    case OPT_TTLFIRST:
+      if ((optarg[0] == AUTOTTL) && !optarg[1])
         ini_opts.endpoint = true;
       else
         ini_opts.minttl =
           limit_int(1, ini_opts.maxttl, optarg, MINTTL_STR, opt);
       break;
-    case 'F':
-      option_F(opt);
+    case OPT_FIELDS:
+      option_fields(opt);
       break;
-    case 'i':
+    case OPT_INTERVAL:
       ini_opts.interval = limit_int(1, INT_MAX, optarg, INTERVAL_STR, opt);
       break;
-    case 'm':
+    case OPT_TTLMAX:
       ini_opts.maxttl =
         limit_int(ini_opts.minttl, MAXHOST - 1, optarg, MAXTTL_STR, opt);
       break;
 #ifdef ENABLE_DNS
-    case 'n':
+    case OPT_NODNS:
       ini_opts.dns = false;
       break;
-    case 'N':
-      option_N(opt);
+    case OPT_NS:
+      option_ns(opt);
       break;
 #endif
 #ifdef OUTPUT_FORMAT
-    case 'o':
-      option_o(progname);
+    case OPT_OUTPUT:
+      option_output(progname);
       break;
 #endif
 #ifdef SPLITMODE
-    case 'p':
+    case OPT_SPLIT:
       display_mode = DisplaySplit;
       break;
 #endif
 #ifdef IP_TOS
-    case 'q':
+    case OPT_QOS:
       ini_opts.qos = limit_int(0, UINT8_MAX, optarg, QOSTOS_STR, opt);
       TOS4TOS(QOSTOS_STR, ini_opts.qos);
       break;
 #endif
-    case 'r':
+    case OPT_REPORT:
       display_mode = DisplayReport;
       if (ini_opts.cycles <= 0)
         ini_opts.cycles = REPORT_PINGS;
       break;
-    case 's': {
+    case OPT_SIZE: {
       int max = MAXPACKET - MINPACKET;
       ini_opts.size = limit_int(-max, max, optarg, PSIZE_STR, opt);
     } break;
-    case 'S':
+    case OPT_SUMMARY:
       ini_opts.stat = true;
       break;
-    case 't':
+    case OPT_TCP:
       if (mtrtype == IPPROTO_UDP)
-        errx(EINVAL, "%s: -%c -%c", MUTEXCL_ERR, 't', 'u');
+        errx(EINVAL, "%s: -%c -%c", MUTEXCL_ERR, OPT_TCP, OPT_UDP);
       net_set_type(IPPROTO_TCP);
       ini_opts.tcp = true;
       break;
-    case 'T':
+    case OPT_TIMEOUT:
       ini_opts.syn =
         limit_int(1, TCPSYN_TOUT_MAX, optarg, TCP_TOUT_STR, opt) * MIL;
       break;
-    case 'u':
+    case OPT_UDP:
       if (mtrtype == IPPROTO_TCP)
-        errx(EINVAL, "%s: -%c -%c", MUTEXCL_ERR, 'u', 't');
+        errx(EINVAL, "%s: -%c -%c", MUTEXCL_ERR, OPT_UDP, OPT_TCP);
       net_set_type(IPPROTO_UDP);
       ini_opts.udp = true;
       break;
-    case 'v':
+    case OPT_VERSION:
 #ifdef BUILD_OPTIONS
       printf("%s.%s: %s\n", PACKAGE_NAME, GITREV, BUILD_OPTIONS);
 #else
       printf("%s.%s\n", PACKAGE_NAME, GITREV);
 #endif
       QEXIT(EXIT_SUCCESS);
-    case 'x':
+    case OPT_CACHE:
       ini_opts.cache   = limit_int(1, INT_MAX, optarg, CACHE_TOUT_STR, opt);
       ini_opts.oncache = true;
       break;
 #ifdef WITH_IPINFO
-    case 'l':
-    case 'L': {
-      bool extra = (opt == 'L');
+    case OPT_LOOKUP:
+    case OPT_IPINFO: {
+      bool extra = (opt == OPT_IPINFO);
       if (extra)
         ini_opts.ipinfo = true;
       else
@@ -662,15 +737,20 @@ static inline void short_set(char opt, const char *progname) {
 #endif
     default:
       usage(progname);
-      QEXIT((opt == 'h') ? EXIT_SUCCESS : EXIT_FAILURE);
+      QEXIT((opt == OPT_HELP) ? EXIT_SUCCESS : EXIT_FAILURE);
   }
 }
 
 
 static void parse_options(int argc, char **argv) {
   int opt = 0;
-  while ((opt = my_getopt_long(argc, argv, NULL)) >= 0)
+  while ((opt = my_getopt_long(argc, argv)) >= 0) {
     short_set((char)opt, argv[0]);
+#ifdef OUTPUT_FORMAT_TOON
+    if ((opt == OPT_OUTPUT) && (tolower((int)optarg[0]) == OTOON))
+      set_optv(argc, argv);
+#endif
+  }
   run_opts = ini_opts; // to reflect possible interactive changes
   for (int i = 1, len = 0; (i < optind) && (len < ARGS_LEN); i++) {
     int inc = snprintf(mtr_args + len, ARGS_LEN - len, (i > 1) ? " %s" : "%s", argv[i]);
@@ -686,7 +766,12 @@ static inline const struct addrinfo* find_ai_af(const struct addrinfo *res) {
       break;
   if (ai && (ai->ai_family != af)) ai = NULL; // unsuitable AF
   if (!ai) // not found
-    warnx("%s: %s: IPv%c: %s", TARGET_STR, dsthost, af == AF_INET ? '4' : '6', NOADDR_ERR);
+#ifdef ENABLE_IPV6
+    warnx("%s: %s: IPv%c: %s", TARGET_STR, dsthost,
+      af == AF_INET ? OPT_IPV4 : OPT_IPV6, NOADDR_ERR);
+#else
+    warnx("%s: %s: %s", TARGET_STR, dsthost, NOADDR_ERR);
+#endif
   return ai;
 }
 
@@ -956,7 +1041,7 @@ int main(int argc, char **argv) {
 #undef EXIT_WITH_MSG
 
   BIND_NLS;
-  for (uint i = 0; i < ARRAY_SIZE(stats); i++) {
+  for (uint i = 0; i < ARRAY_LEN(stats); i++) {
     if (stats[i].name && stats[i].name[0]) {
       stats[i].name  = _(stats[i].name);
       stats[i].len   = ustrlen(stats[i].name);
@@ -970,7 +1055,11 @@ int main(int argc, char **argv) {
   main_prep(argc, argv);
 
   t_res_rc rr_init = { .hints = {
+#ifdef ENABLE_IPV6
     .ai_family = af_specified ? af : AF_UNSPEC,
+#else
+    .ai_family = AF_INET,
+#endif
     .ai_socktype = SOCK_DGRAM,
 #ifdef AI_IDN
     .ai_flags = AI_IDN,
@@ -979,9 +1068,10 @@ int main(int argc, char **argv) {
   int defport = ini_opts.port;
   bool success = false;
   uint n_targets = (argc > optind) ? (argc - optind) : 0;
-  for (uint i = 0; (optind < argc) && argv[optind]; optind++, i++) {
+  int ndx = optind;
+  for (uint i = 0; (ndx < argc) && argv[ndx]; ndx++, i++) {
     tgterr_txt[0] = 0;
-    dsthost = argv[optind];
+    dsthost = argv[ndx];
     ini_opts.port = defport;
     t_res_rc rr = rr_init;
     rr.target = dsthost;

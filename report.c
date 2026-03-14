@@ -311,9 +311,16 @@ void json_close(bool next) {
 
 #ifdef OUTPUT_FORMAT_TOON
 void toon_head(uint n_targets) {
-  printf("%s: %s\n", SOURCE_STR, srchost);
-  printf("%s: \"%s\"\n", ARGS_STR, mtr_args);
   PRINT_DATETIME("%s: \"%s\"\n", _(DATETIME_STR), date);
+  printf("%s: %s\n", SOURCE_STR, srchost);
+  if (mtr_optc > 0) {
+    printf("%s[%d]:", ARGS_STR, mtr_optc);
+    for (uint i = 0; i < mtr_optc; i++) {
+      if (i) putchar(',');
+      printf(" \"%s\"", mtr_optv[i]);
+    }
+    putchar('\n');
+  }
   printf("%s[%d]:\n", TARGETS_STR, n_targets);
 }
 
@@ -401,7 +408,7 @@ static void csv_headstat(int at UNUSED, const t_stat *stat) {
 void csv_close(bool next) {
   if (next) printf("\n");
   const char* field[] = {TARGET_CAPSTR, CSV_HOP_STR, CSV_STATUS_STR, HOST_STR};
-  for (uint i = 0; i < ARRAY_SIZE(field); i++)
+  for (uint i = 0; i < ARRAY_LEN(field); i++)
     printf("%s%c", field[i], CSV_DELIMITER);
 #ifdef WITH_IPINFO
   if (ipinfo_ready()) printf("%s%c", CSV_INFO_STR, CSV_DELIMITER);

@@ -137,7 +137,7 @@ static void split_help(void) {
   int indent = 10;
   //
   printf("%s:\n", COMMANDS_STR);
-  for (uint i = 0; i < ARRAY_SIZE(cmd); i++) {
+  for (uint i = 0; i < ARRAY_LEN(cmd); i++) {
     int pad = indent - ustrlen(cmd[i].key);
     printf("%s%*s %s\n", cmd[i].key, (pad < 0) ? 0 : pad, "", cmd[i].hint);
   }

@@ -4,7 +4,7 @@ set -e
 
 TMPL="package-templates"
 cd "$TMPL/apk-alpine"
-abuild -rc
+abuild -c
 cd -
 ls -lR ~/packages/"$TMPL"
 

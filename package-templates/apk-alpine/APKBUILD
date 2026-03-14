@@ -62,4 +62,4 @@ package() {
   DESTDIR="$pkgdir" meson install -C "$_build"
 }
 
-sha256sums=SKIP
+#sha256sums=SKIP

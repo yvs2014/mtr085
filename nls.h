@@ -129,16 +129,16 @@
 #define CH_STR_STR   _("<string>")
 
 // cli help
-#define CLI_USAGE_STR _("Usage")
-#define CLI_TGT_STR   _("TARGET[:PORT]")
-#define CLI_ADDR_STR  _("IP.ADD.RE.SS")
-#define CLI_NUM_STR   _("NUMBER")
-#define CLI_CNT_STR   _("COUNT")
-#define CLI_MODE_STR  _("MODE")
-#define CLI_FLD_STR   _("FIELDS")
-#define CLI_SEC_STR   _("SECONDS")
-#define CLI_IINFO_STR _("SERVER,FIELDS")
-#define CLI_BYTE_STR  _("BYTES")
+#define STR_USAGE      _("Usage")
+#define STR_TARGET     _("TARGET[:PORT]")
+#define STR_IP_ADDRESS _("IP.ADD.RE.SS")
+#define STR_NUMBER     _("NUMBER")
+#define STR_COUNT      _("COUNT")
+#define STR_MODE       _("MODE")
+#define STR_FIELDS     _("FIELDS")
+#define STR_IN_SECONDS _("SECONDS")
+#define STR_IP_INFO    _("SERVER,FIELDS")
+#define STR_IN_BYTES   _("BYTES")
 
 // option hints
 #define BITPATT_STR    _("Bit pattern")

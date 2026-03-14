@@ -161,7 +161,7 @@ static inline void mc_key_h(void) { // help
   erase();
   int x = 2; int y = 2, indent = 12;
   mvprintw(x++, 0, "%s:", COMMANDS_STR);
-  for (uint i = 0; i < ARRAY_SIZE(cmd); i++) {
+  for (uint i = 0; i < ARRAY_LEN(cmd); i++) {
     int pad = indent - ustrlen(cmd[i].key);
     const char *type = cmd[i].type == CH_INT ? CH_NUM_STR :
                        cmd[i].type == CH_STR ? CH_STR_STR : NULL;
@@ -526,7 +526,7 @@ static void mc_init(void) {
     } else
       map3[NUM_FACTORS3_MONO].CCHAR_chars[0] = map1[1] & A_CHARTEXT;
 
-    for (uint i = 0; i < ARRAY_SIZE(map_na2); i++)
+    for (uint i = 0; i < ARRAY_LEN(map_na2); i++)
       map_na3[i].CCHAR_chars[0] = map_na2[i] & A_CHARTEXT;
     map_na3[1].CCHAR_attr = run_opts.color ? map3[NUM_FACTORS3 - 1].CCHAR_attr : A_BOLD;
     map_na3[2].CCHAR_attr = A_BOLD;

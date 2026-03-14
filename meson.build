@@ -308,7 +308,7 @@ else
   manexcl += 'ox'
 endif
 if outfmt.length() > 0
-  optlist += 'OUTFMT=' + ','.join(outfmt)
+  optlist += '+OUTFMT=' + ','.join(outfmt)
 else
   optlist += '-OUTFMT'
   manexcl += 'o'
