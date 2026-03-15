@@ -336,7 +336,7 @@ static void printw_addr(int at, int ndx) {
   t_ipaddr *addr = &IP_AT_NDX(at, ndx);
 #ifdef WITH_IPINFO
   if (ipinfo_ready())
-    printw("%s", fmt_ipinfo(at, ndx));
+    printw("%s", ipinfo_data_fix(at, ndx));
 #endif
   bool down = !host[at].up;
   if (down)
@@ -570,7 +570,7 @@ static inline void histoaddr(int at, int max, int y, int x, int cols) {
       attron(A_BOLD);
 #ifdef WITH_IPINFO
     if (ipinfo_ready())
-      printw("%s", fmt_ipinfo(at, host[at].current));
+      printw("%s", ipinfo_data_fix(at, host[at].current));
 #endif
 #ifdef ENABLE_DNS
     const char *name = dns_ptr_lookup(at, host[at].current);
@@ -776,7 +776,7 @@ static void mc_statmode(void) {
   attron(A_BOLD);
 #ifdef WITH_IPINFO
   if (ipinfo_ready()) {
-    char *header = ipinfo_header();
+    const char *header = ipinfo_head_fix();
     if (header)
       mvprintw(staty - 1, statx, "%s", header);
     statx += ipinfo_width(); // indent: "NN. " + IPINFO

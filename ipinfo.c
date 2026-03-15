@@ -618,15 +618,26 @@ static char *get_ipinfo(int at, int ndx, int item_no) {
   return NULL;
 }
 
+int ipinfo_width(void) {
+  int width = 0;
+  for (int i = 0; (i < MAX_TXT_ITEMS)
+      && (ipinfo_no[i] >= 0) && (ipinfo_no[i] < itemname_max)
+      && (width < NAMELEN); i++)
+    width += ORIG_WIDTH(ipinfo_no[i]) + 1;
+  return width;
+}
+
+//
 static char iiheader[NAMELEN];
 
-char* ipinfo_headcsv(char sep) {
+// 'div'-separated output
+const char* ipinfo_head_div(char div) {
   iiheader[0] = 0;
   for (uint i = 0, len = 0; (i < MAX_TXT_ITEMS)
       && (ipinfo_no[i] >= 0) && (ipinfo_no[i] < itemname_max)
       && ORIG_UNAME(ipinfo_no[i]) && (len < sizeof(iiheader)); i++) {
     int inc = 0;
-    if (i) inc += snprintf(iiheader + len, sizeof(iiheader) - len, "%c", sep);
+    if (i) inc += snprintf(iiheader + len, sizeof(iiheader) - len, "%c", div);
     if (inc > 0) len+= inc;
     inc = snprintf(iiheader + len, sizeof(iiheader) - len, "\"%s\"", ORIG_UNAME(ipinfo_no[i]));
     if (inc > 0) len += inc;
@@ -634,7 +645,8 @@ char* ipinfo_headcsv(char sep) {
   return iiheader;
 }
 
-char* ipinfo_header(void) {
+// fixed width output
+const char* ipinfo_head_fix(void) {
   iiheader[0] = 0;
   for (uint i = 0, len = 0; (i < MAX_TXT_ITEMS)
       && (ipinfo_no[i] >= 0) && (ipinfo_no[i] < itemname_max)
@@ -650,14 +662,7 @@ char* ipinfo_header(void) {
   return iiheader;
 }
 
-int ipinfo_width(void) {
-  int width = 0;
-  for (int i = 0; (i < MAX_TXT_ITEMS)
-      && (ipinfo_no[i] >= 0) && (ipinfo_no[i] < itemname_max)
-      && (width < NAMELEN); i++)
-    width += ORIG_WIDTH(ipinfo_no[i]) + 1;
-  return width;
-}
+//
 
 typedef struct { int num; char ch; } t_fmtdata;
 typedef int (*filler_fn)(char *buf, int size, const char *str, t_fmtdata fmt);
@@ -674,10 +679,11 @@ static int str_filler(char *buf, int size, const char *str, t_fmtdata fmt) {
     snprintf(buf, size, "\"%s\"", str);
 }
 
-static char *fill_ipinfo(int at, int ndx, char sep) {
+// formatted output
+const char *ipinfo_data_div(int at, int ndx, char div) {
   static char fmtinfo[NAMELEN];
   fmtinfo[0] = 0;
-  t_fmtdata fmtdata = { .ch = sep };
+  t_fmtdata fmtdata = { .ch = div };
   filler_fn filler = fmtdata.ch ? str_filler : fmt_filler;
   for (uint i = 0, len = 0; (i < MAX_TXT_ITEMS)
       && (ipinfo_no[i] >= 0) && (ipinfo_no[i] < itemname_max)
@@ -690,9 +696,7 @@ static char *fill_ipinfo(int at, int ndx, char sep) {
   }
   return fmtinfo;
 }
-
-char *fmt_ipinfo(int at, int ndx) { return fill_ipinfo(at, ndx, 0); }
-char *sep_ipinfo(int at, int ndx, char sep) { return fill_ipinfo(at, ndx, sep); }
+inline const char* ipinfo_data_fix(int at, int ndx) { return ipinfo_data_div(at, ndx, 0); }
 
 bool ipinfo_ready(void) { return (run_opts.lookup && ii_ready); }
 

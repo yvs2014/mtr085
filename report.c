@@ -20,9 +20,6 @@
 #include <string.h>
 #include <assert.h>
 
-#ifdef OUTPUT_FORMAT_CSV
-#include <ctype.h>
-#endif
 #ifdef HAVE_NETDB_H
 #include <netdb.h>
 #endif
@@ -43,6 +40,27 @@
 #ifndef MAXDNAME
 #define MAXDNAME 1025
 #endif
+
+enum INDENTS_N_DIVIDERS {
+  IND_REP     = 4,
+#ifdef OUTPUT_FORMAT_CSV
+  DIV_CSV     = ';',
+#endif
+#ifdef OUTPUT_FORMAT_JSON
+  DIV_JSON    = ',',
+  IND_JSON    = 4,
+#endif
+#ifdef OUTPUT_FORMAT_TOON
+  DIV_TOON    = ',',
+  IND_TOON    = 2,
+#endif
+#ifdef OUTPUT_FORMAT_XML
+  DIV_XML     = ',',
+  IND_XML     = 2,
+#endif
+};
+
+#define QUOTE(str, delim) strchr((str), (delim)) ? "\"" : "";
 
 static time_t started_at;
 void report_started_at(void) { started_at = time(NULL); }
@@ -118,8 +136,6 @@ void report_resolv(void) {
 }
 #endif
 
-#define INDENT "    " // 4 x _
-
 #ifdef WITH_IPINFO
 static void report_info(int infolen, const char *info) {
   if (!infolen) return;
@@ -141,9 +157,9 @@ static void report_headstat(int at UNUSED, const t_stat *stat) {
 }
 
 static void report_print_header(int hostlen, int infolen) {
-  printf("%s", INDENT);
+  printf("%*s", IND_REP, "");
   // left
-  REPORT_INFO(infolen, ipinfo_header());
+  REPORT_INFO(infolen, ipinfo_head_fix());
   { printf("%s", HOST_STR);
     int len = hostlen - ustrlen(HOST_STR);
     if (len > 0) printf("%*s", len, ""); }
@@ -163,7 +179,7 @@ static void report_bodystat(int at, const t_stat *stat) {
 static void report_print_body(int at, const char *fmt, int hostlen, int infolen) {
   // body: left
   if (fmt) printf(fmt, at + 1);
-  REPORT_INFO(infolen, fmt_ipinfo(at, host[at].current));
+  REPORT_INFO(infolen, ipinfo_data_fix(at, host[at].current));
   { char name[MAXDNAME] = {0};
     snprint_addr(name, sizeof(name), at, host[at].current);
     printf("%-*s", hostlen, name); }
@@ -180,8 +196,8 @@ static void report_print_rest(int at, int hostlen, int infolen) {
       continue; // because already printed
     if (!addr_exist(&IP_AT_NDX(at, i)))
       break; // done
-    printf("%s", INDENT);
-    REPORT_INFO(infolen, fmt_ipinfo(at, i));
+    printf("%*s", IND_REP, "");
+    REPORT_INFO(infolen, ipinfo_data_fix(at, i));
     { char name[MAXDNAME] = {0};
       snprint_addr(name, sizeof(name), at, i);
       printf("%-*s\n", hostlen, name); }
@@ -191,7 +207,6 @@ static void report_print_rest(int at, int hostlen, int infolen) {
 #endif
   }
 }
-#undef INDENT
 
 void report_close(bool next, bool with_header) {
   if (next) printf("\n");
@@ -218,8 +233,6 @@ void report_close(bool next, bool with_header) {
 
 #ifdef OUTPUT_FORMAT_XML
 
-enum { XML_MARGIN = 2 };
-
 void xml_head(void) {
   printf("<?xml version=\"1.0\"?>\n");
   printf("<MTR SRC=\"%s\"",         srchost);
@@ -234,37 +247,36 @@ void xml_tail(void) { printf("</MTR>\n"); }
 static void xml_statline(int at, const t_stat *stat) {
   const char *str = net_elem(at, stat->key);
   if (str)
-    printf("%*s<%s>%s</%s>\n", XML_MARGIN * 3, "", stat->name, str, stat->name);
+    printf("%*s<%s>%s</%s>\n", IND_XML * 3, "", stat->name, str, stat->name);
 }
 
 void xml_close(void) {
-  printf("%*s<DST HOST=\"%s\">\n", XML_MARGIN, "", dsthost);
+  printf("%*s<DST HOST=\"%s\">\n", IND_XML, "", dsthost);
   int max = net_max();
   for (int at = net_min(); at < max; at++) {
     char buf[MAXDNAME] = {0};
     snprint_addr(buf, sizeof(buf), at, host[at].current);
-    printf("%*s<HOP TTL=\"%d\" HOST=\"%s\">\n", XML_MARGIN * 2, "", at + 1, buf);
+    printf("%*s<HOP TTL=\"%d\" HOST=\"%s\">\n", IND_XML * 2, "", at + 1, buf);
     foreach_stat(at, xml_statline, 0);
 #ifdef WITH_IPINFO
     if (ipinfo_ready())
-      printf("%*s<IPINFO>[%s]</IPINFO>\n", XML_MARGIN * 3, "", sep_ipinfo(at, host[at].current, ','));
+      printf("%*s<IPINFO>[%s]</IPINFO>\n", IND_XML * 3, "",
+        ipinfo_data_div(at, host[at].current, DIV_XML));
 #endif
-    printf("%*s</HOP>\n", XML_MARGIN * 2, "");
+    printf("%*s</HOP>\n", IND_XML * 2, "");
   }
   if (tgterr_txt[0])
-    printf("%*s<ERROR>%s</ERROR>\n", XML_MARGIN * 2, "", tgterr_txt);
-  printf("%*s</DST>\n", XML_MARGIN, "");
+    printf("%*s<ERROR>%s</ERROR>\n", IND_XML * 2, "", tgterr_txt);
+  printf("%*s</DST>\n", IND_XML, "");
 }
 #endif
 
 
 #ifdef OUTPUT_FORMAT_JSON
 
-enum { JSON_MARGIN = 4 };
-
 void json_head(void) {
-  printf("{\"%s\":\"%s\",\"%s\":\"%s\",\"%s\":[",
-    SOURCE_STR, srchost, ARGS_STR, mtr_args, TARGETS_STR);
+  printf("{\"%s\":\"%s\"%c\"%s\":\"%s\"%c\"%s\":[",
+    SOURCE_STR, srchost, DIV_JSON, ARGS_STR, mtr_args, DIV_JSON, TARGETS_STR);
 }
 void json_tail(void) { printf("\n]}\n"); }
 
@@ -275,48 +287,51 @@ static void json_statline(int at, const t_stat *stat) {
   if (len <= 0) return;
   if (len > NETELEM_MAXLEN)
     len = NETELEM_MAXLEN;
-  const char *quote = strchr(elem, ',') ? "\"" : "";
+  const char *q = QUOTE(elem, DIV_JSON);
   if (elem[len - 1] == '%') // print '%' with name
-    printf(",\"%s%%\":%s%.*s%s", stat->name, quote, len - 1, elem, quote);
+    printf("%c\"%s%%\":%s%.*s%s", DIV_JSON, stat->name, q, len - 1, elem, q);
   else
-    printf(",\"%s\":%s%s%s", stat->name, quote, elem, quote);
+    printf("%c\"%s\":%s%s%s", DIV_JSON, stat->name, q, elem, q);
 }
 
 void json_close(bool next) {
   if (next) printf(",");
-  printf("\n%*s{\"%s\":\"%s\"", JSON_MARGIN, "", _(TARGET_STR), dsthost);
-  PRINT_DATETIME(",\"%s\":\"%s\"", _(DATETIME_STR), date);
-  printf(",\"%s\":[", _(DATA_STR));
+  printf("\n%*s{\"%s\":\"%s\"", IND_JSON, "", _(TARGET_STR), dsthost);
+  PRINT_DATETIME("%c\"%s\":\"%s\"", DIV_JSON, _(DATETIME_STR), date);
+  printf("%c\"%s\":[", DIV_JSON, _(DATA_STR));
   int min = net_min(), max = net_max();
   for (int at = min; at < max; at++) {
     char buf[MAXDNAME] = {0};
     printf((at == min) ? "\n" : ",\n");
     snprint_addr(buf, sizeof(buf), at, host[at].current);
-    printf("%*s{\"%s\":\"%s\",\"%s\":%d,\"%s\":\"%s\"", JSON_MARGIN * 2, "",
-      _(HOST_STR), buf, _(HOP_STR), at + 1, _(ACTIVE_STR), _(host[at].up ? YES_STR : NO_STR));
+    printf("%*s{\"%s\":\"%s\"%c\"%s\":%d%c\"%s\":\"%s\"", IND_JSON * 2, "",
+      _(HOST_STR), buf, DIV_JSON, _(HOP_STR), at + 1, DIV_JSON,
+      _(ACTIVE_STR), _(host[at].up ? YES_STR : NO_STR));
     foreach_stat(at, json_statline, 0);
 #ifdef WITH_IPINFO
     if (ipinfo_ready())
-      printf(",\"%s\":[%s]", _(IPINFO_STR), sep_ipinfo(at, host[at].current, ','));
+      printf("%c\"%s\":[%s]", DIV_JSON, _(IPINFO_STR),
+        ipinfo_data_div(at, host[at].current, DIV_JSON));
 #endif
     printf("}");
   }
-  printf("\n%*s]", JSON_MARGIN, "");
+  printf("\n%*s]", IND_JSON, "");
   if (tgterr_txt[0])
-    printf(",\"%s\":\"%s\"", _(ERROR_STR), tgterr_txt);
+    printf("%c\"%s\":\"%s\"", DIV_JSON, _(ERROR_STR), tgterr_txt);
   printf("}");
 }
 #endif
 
 
 #ifdef OUTPUT_FORMAT_TOON
+
 void toon_head(uint n_targets) {
   PRINT_DATETIME("%s: \"%s\"\n", _(DATETIME_STR), date);
   printf("%s: %s\n", SOURCE_STR, srchost);
   if (mtr_optc > 0) {
     printf("%s[%d]:", ARGS_STR, mtr_optc);
     for (uint i = 0; i < mtr_optc; i++) {
-      if (i) putchar(',');
+      if (i) putchar(DIV_TOON);
       printf(" \"%s\"", mtr_optv[i]);
     }
     putchar('\n');
@@ -326,7 +341,7 @@ void toon_head(uint n_targets) {
 
 static void toon_headline(int at UNUSED, const t_stat *stat) {
   if (stat->key != BLANK_INDICATOR)
-    printf(",\"%s\"", stat->name);
+    printf("%c\"%s\"", DIV_TOON, stat->name);
 }
 
 static void toon_statline(int at, const t_stat *stat) {
@@ -336,38 +351,38 @@ static void toon_statline(int at, const t_stat *stat) {
   if (len <= 0) return;
   if (len > NETELEM_MAXLEN)
     len = NETELEM_MAXLEN;
-  const char *quote = strchr(elem, ',') ? "\"" : "";
+  const char *q = QUOTE(elem, DIV_TOON);
   if (elem[len - 1] == '%') // print '%' with name
-    printf(",%s%.*s%s", quote, len - 1, elem, quote);
+    printf("%c%s%.*s%s", DIV_TOON, q, len - 1, elem, q);
   else
-    printf(",%s%s%s", quote, elem, quote);
+    printf("%c%s%s%s", DIV_TOON, q, elem, q);
 }
 
 void toon_close(void) {
-  printf("  - %s: %s\n", _(TARGET_STR), dsthost);
+  printf("%*s- %s: %s\n", IND_TOON, "", _(TARGET_STR), dsthost);
   int min = net_min(), max = net_max();
-  printf("    %s[%d]", _(DATA_STR), max - min);
-  printf("{\"%s\",\"%s\",\"%s\"", _(HOST_STR), _(HOP_STR), _(ACTIVE_STR));
+  printf("%*s%s[%d]", IND_TOON * 2, "", _(DATA_STR), max - min);
+  printf("{\"%s\"%c\"%s\"%c\"%s\"", _(HOST_STR), DIV_TOON, _(HOP_STR), DIV_TOON, _(ACTIVE_STR));
   foreach_stat(0, toon_headline, 0);
 #ifdef WITH_IPINFO
-    if (ipinfo_ready())
-      printf(",%s", ipinfo_headcsv(','));
+  if (ipinfo_ready())
+    printf("%c%s", DIV_TOON, ipinfo_head_div(DIV_TOON));
 #endif
   printf("}:\n");
   for (int at = min; at < max; at++) {
     char buf[MAXDNAME] = {0};
     snprint_addr(buf, sizeof(buf), at, host[at].current);
-    printf("      \"%s\",%d,\"%s\"", buf/*HOST_STR*/, at + 1/*HOP_STR*/,
-      _(host[at].up ? YES_STR : NO_STR) /*ACTIVE_STR*/);
+    printf("%*s\"%s\"%c%d%c\"%s\"", IND_TOON * 3, "", buf/*HOST_STR*/, DIV_TOON,
+      at + 1/*HOP_STR*/, DIV_TOON, _(host[at].up ? YES_STR : NO_STR) /*ACTIVE_STR*/);
     foreach_stat(at, toon_statline, 0);
 #ifdef WITH_IPINFO
     if (ipinfo_ready())
-      printf(",%s", sep_ipinfo(at, host[at].current, ','));
+      printf("%c%s", DIV_TOON, ipinfo_data_div(at, host[at].current, DIV_TOON));
 #endif
     putchar('\n');
   }
   if (tgterr_txt[0])
-    printf("    %s: \"%s\"\n", _(ERROR_STR), tgterr_txt);
+    printf("%*s%s: \"%s\"\n", IND_TOON * 2, "", _(ERROR_STR), tgterr_txt);
 }
 
 #endif
@@ -375,51 +390,58 @@ void toon_close(void) {
 
 #ifdef OUTPUT_FORMAT_CSV
 
-static const char CSV_DELIMITER = ';';
-static const char CSV_HOSTINFO_DELIMITER = ',';
+void csv_head(void) {
+  PRINT_DATETIME("%s%c\"%s\"\n", _(DATETIME_STR), DIV_CSV, date);
+  printf("%s%c%s\n", SOURCE_STR, DIV_CSV, srchost);
+  if (mtr_args[0]) {
+    const char *q = QUOTE(mtr_args, DIV_CSV);
+    printf("%s%c%s%s%s\n", ARGS_STR, DIV_CSV, q, mtr_args, q);
+  }
+  putchar('\n');
+}
 
-static inline void prupper(const char *str) { while (*str) putchar(toupper((int)*str++)); }
+static void csv_headline(int at UNUSED, const t_stat *stat) {
+  if (stat->key != BLANK_INDICATOR)
+    printf("%c%s", DIV_CSV, stat->name ? stat->name : "");
+}
 
-static void csv_bodystat(int at, const t_stat *stat) {
-  const char *str = net_elem(at, stat->key);
-  if (str) printf("%c%s", CSV_DELIMITER, str);
-  else if (stat->key == BLANK_INDICATOR) putchar(CSV_DELIMITER);
+static void csv_bodyline(int at, const t_stat *stat) {
+  if (stat->key != BLANK_INDICATOR) {
+    const char *str = net_elem(at, stat->key);
+    printf("%c%s", DIV_CSV, str ? str : "");
+  }
 }
 
 static inline void csv_body(int at) {
-  printf("%s", dsthost);
-  printf("%c%d", CSV_DELIMITER, at + 1);
-  printf("%c%d", CSV_DELIMITER, host[at].up ? 1 : 0);
-  { char buf[MAXDNAME] = {0};
-    snprint_addr(buf, sizeof(buf), at, host[at].current);
-    printf("%c%s", CSV_DELIMITER, buf); }
+  char buf[MAXDNAME] = {0};
+  snprint_addr(buf, sizeof(buf), at, host[at].current);
+  printf("%d%c%s", at + 1, DIV_CSV, buf);
+  //
+  foreach_stat(at, csv_bodyline, DIV_CSV);
 #ifdef WITH_IPINFO
-  if (ipinfo_ready()) printf("%c%s", CSV_DELIMITER, sep_ipinfo(at, host[at].current, CSV_HOSTINFO_DELIMITER));
+  if (ipinfo_ready())
+    printf("%s", ipinfo_data_div(at, host[at].current, DIV_CSV));
 #endif
-  putchar(CSV_DELIMITER);
-  foreach_stat(at, csv_bodystat, '\n');
-}
-
-static void csv_headstat(int at UNUSED, const t_stat *stat) {
-  putchar(CSV_DELIMITER);
-  if (stat->key != BLANK_INDICATOR) prupper(stat->name);
+  putchar('\n');
 }
 
 void csv_close(bool next) {
   if (next) printf("\n");
-  const char* field[] = {TARGET_CAPSTR, CSV_HOP_STR, CSV_STATUS_STR, HOST_STR};
-  for (uint i = 0; i < ARRAY_LEN(field); i++)
-    printf("%s%c", field[i], CSV_DELIMITER);
+  printf("%s%c%s\n", TARGET_CAPSTR, DIV_CSV, dsthost);
+  printf("%s%c%s", CSV_HOP_STR, DIV_CSV, HOST_STR);
+  foreach_stat(0, csv_headline, 0);
 #ifdef WITH_IPINFO
-  if (ipinfo_ready()) printf("%s%c", CSV_INFO_STR, CSV_DELIMITER);
+  if (ipinfo_ready())
+    printf("%c%s", DIV_CSV, ipinfo_head_div(DIV_CSV));
 #endif
-  foreach_stat(0, csv_headstat, '\n');
+  putchar('\n');
   int max = net_max();
   for (int at = net_min(); at < max; at++)
     csv_body(at);
   if (tgterr_txt[0])
-    printf("%s%c%s\n", (ERROR_STR), CSV_DELIMITER, tgterr_txt);
+    printf("%s%c%s\n", (ERROR_STR), DIV_CSV, tgterr_txt);
 }
+
 #endif
 
 

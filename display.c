@@ -83,6 +83,9 @@ void display_start(
 #endif
   }
   switch (display_mode) {
+#ifdef OUTPUT_FORMAT_CSV
+    case DisplayCSV:
+#endif
 #ifdef OUTPUT_FORMAT_JSON
     case DisplayJSON:
 #endif
@@ -94,6 +97,9 @@ void display_start(
     default: break;
   }
   switch (display_mode) {
+#ifdef OUTPUT_FORMAT_CSV
+    case DisplayCSV: csv_head(); break;
+#endif
 #ifdef OUTPUT_FORMAT_JSON
     case DisplayJSON: json_head(); break;
 #endif

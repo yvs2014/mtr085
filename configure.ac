@@ -313,13 +313,14 @@ AS_IF([test "x$splitmode" = "xyes"],   [_option_list="$_option_list +SPLIT"],   
 AS_IF([test "x$ipv6"   = "xyes"],      [_option_list="$_option_list +IPV6"],    [_option_list="$_option_list -IPV6"])
 AS_IF([test "x$mpls"   = "xyes"],      [_option_list="$_option_list +MPLS"],    [_option_list="$_option_list -MPLS"])
 _option_output=""
-AS_IF([test "x$output_raw" = "xyes"],  [_option_output="${_option_output}R"])
-AS_IF([test "x$output_txt" = "xyes"],  [_option_output="${_option_output}T"])
-AS_IF([test "x$output_csv" = "xyes"],  [_option_output="${_option_output}C"])
-AS_IF([test "x$output_json" = "xyes"], [_option_output="${_option_output}J"])
-AS_IF([test "x$output_toon" = "xyes"], [_option_output="${_option_output}N"])
-AS_IF([test "x$output_xml" = "xyes"],  [_option_output="${_option_output}X"])
-AS_IF([test "x$_option_output" = "x"], [_option_list="$_option_list -OUTFMT"], [_option_list="$_option_list OUTFMT=$_option_output"])
+AS_IF([test "x$output_raw" = "xyes"],  [_option_output="${_option_output},raw"])
+AS_IF([test "x$output_txt" = "xyes"],  [_option_output="${_option_output},text"])
+AS_IF([test "x$output_csv" = "xyes"],  [_option_output="${_option_output},csv"])
+AS_IF([test "x$output_json" = "xyes"], [_option_output="${_option_output},json"])
+AS_IF([test "x$output_toon" = "xyes"], [_option_output="${_option_output},toon"])
+AS_IF([test "x$output_xml" = "xyes"],  [_option_output="${_option_output},xml"])
+AS_IF([test "x$_option_output" = "x"], [_option_list="$_option_list -OUTFMT"],
+	[_option_list="$_option_list +OUTFMT=${_option_output#?}"])
 _option_syslog=""
 AS_IF([test "x$syslog_poll" = "xyes"],   [_option_syslog="${_option_syslog}P"])
 AS_IF([test "x$syslog_net" = "xyes"],    [_option_syslog="${_option_syslog}N"])

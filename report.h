@@ -32,6 +32,7 @@ void raw_rawping(int at, int usec);
 void raw_rawhost(int at, t_ipaddr *ipaddr);
 #endif
 #ifdef OUTPUT_FORMAT_CSV
+void csv_head(void);
 void csv_close(bool next);
 #endif
 #ifdef OUTPUT_FORMAT_XML

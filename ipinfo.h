@@ -28,13 +28,14 @@ bool  ipinfo_action(int action); // open() if necessary
 void  ipinfo_parse(int sock, int seq);
 bool  ipinfo_ready(void);
 int   ipinfo_width(void);
-char* ipinfo_header(void);
-char* ipinfo_headcsv(char sep);
 bool  ipinfo_timedout(int seq);
 void  ipinfo_seq_ready(int seq);
 
-char  *fmt_ipinfo(int at, int ndx);
-char  *sep_ipinfo(int at, int ndx, char sep);
+const char* ipinfo_head_fix(void);
+const char* ipinfo_head_div(char div);
+const char* ipinfo_data_fix(int at, int ndx);
+const char* ipinfo_data_div(int at, int ndx, char div);
+
 void query_ipinfo(void);
 
 #define ASLOOKUP_DEFAULT   "2,2" // ripe whois
