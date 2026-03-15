@@ -35,7 +35,7 @@
 #endif
 
 #ifndef GITREV
-#define GITREV "236"
+#define GITREV "237"
 #endif
 
 #ifndef HAVE_UINT
@@ -312,7 +312,7 @@ extern char tgterr_txt[];  // error text (per target)
 
 extern pid_t mypid;
 extern char mtr_args[];
-#ifdef OUTPUT_FORMAT_TOON
+#if defined(OUTPUT_FORMAT_JSON) || defined(OUTPUT_FORMAT_TOON)
 extern const char* mtr_optv[]; // cli options
 extern uint mtr_optc;          // number of 'optv'
 #endif

@@ -186,7 +186,10 @@ int mtrtype = IPPROTO_ICMP;   // ICMP as default packet type
 pid_t mypid;
 #define ARGS_LEN 64 /* seem to be enough */
 char mtr_args[ARGS_LEN + 1];  // display in curses title
-#ifdef OUTPUT_FORMAT_TOON
+#if defined(OUTPUT_FORMAT_JSON) || defined(OUTPUT_FORMAT_TOON)
+#define OUTPUT_OPTV
+#endif
+#ifdef OUTPUT_OPTV
 const char* mtr_optv[32];     // option string array
 uint mtr_optc;
 #endif
@@ -599,7 +602,7 @@ static inline void ineractive_modes(display_mode_t mode) {
   }
 }
 
-#ifdef OUTPUT_FORMAT_TOON
+#ifdef OUTPUT_OPTV
 static void set_optv(int argc, char **argv) {
   mtr_optc = 0;
   for (int i = 1; (i < argc) && (mtr_optc < ARRAY_LEN(mtr_optv)); i++)
@@ -746,8 +749,9 @@ static void parse_options(int argc, char **argv) {
   int opt = 0;
   while ((opt = my_getopt_long(argc, argv)) >= 0) {
     short_set((char)opt, argv[0]);
-#ifdef OUTPUT_FORMAT_TOON
-    if ((opt == OPT_OUTPUT) && (tolower((int)optarg[0]) == OTOON))
+#ifdef OUTPUT_OPTV
+    int arg = tolower((int)optarg[0]);
+    if ((opt == OPT_OUTPUT) && ((arg == OTOON) || (arg == OJSON)))
       set_optv(argc, argv);
 #endif
   }

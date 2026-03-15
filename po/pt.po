@@ -425,20 +425,17 @@ msgstr "Tempo limite cache"
 
 ## misc
 
-msgid "target"
-msgstr "alvo"
-
-msgid "targets"
-msgstr "alvos"
+msgid "Source"
+msgstr "Origem"
 
 msgid "Target"
 msgstr "Alvo"
 
-msgid "source"
-msgstr "origem"
+msgid "Targets"
+msgstr "Alvos"
 
-msgid "args"
-msgstr "argumentos"
+msgid "Args"
+msgstr "Argumentos"
 
 msgid "port number"
 msgstr "número de porta"
@@ -463,44 +460,47 @@ msgstr "consultas"
 msgid "replies"
 msgstr "respostas"
 
-msgid "NONE"
-msgstr "NADA"
-
-msgid "datetime"
-msgstr "data"
-
-msgid "hop"
-msgstr "nodo"
-
-msgid "data"
-msgstr "dado"
-
-msgid "host"
-msgstr "host"
-
+#
 msgid "active"
 msgstr "ativo"
 
-msgid "ipinfo"
-msgstr "info"
-
+#
 msgid "yes"
 msgstr "sim"
 
+#
 msgid "no"
 msgstr "não"
 
+#
 msgid "error"
 msgstr "erro"
 
+#
+msgid "NONE"
+msgstr "NADA"
+
+## reports
+
+#
+msgid "Datetime"
+msgstr "Data"
+
+#
 msgid "Hop"
 msgstr "Nodo"
 
-msgid "Status"
-msgstr "Estado"
+#
+msgid "Data"
+msgstr "Dado"
 
-msgid "Info"
-msgstr "Info"
+#
+msgid "Active"
+msgstr "ativo"
+
+#
+msgid "IP-info"
+msgstr "IP-info"
 
 
 ## messages

@@ -424,20 +424,17 @@ msgstr "Tiempo de espera de caché"
 
 ## misc
 
-msgid "target"
-msgstr "objetivo"
-
-msgid "targets"
-msgstr "objetivos"
+msgid "Source"
+msgstr "Origen"
 
 msgid "Target"
 msgstr "Objetivo"
 
-msgid "source"
-msgstr "origen"
+msgid "Targets"
+msgstr "Objetivos"
 
-msgid "args"
-msgstr "argumentos"
+msgid "Args"
+msgstr "Argumentos"
 
 msgid "port number"
 msgstr "número de puerto"
@@ -462,44 +459,44 @@ msgstr "consultas"
 msgid "replies"
 msgstr "respuestas"
 
-msgid "NONE"
-msgstr "NADA"
-
-msgid "datetime"
-msgstr "fecha"
-
-msgid "hop"
-msgstr "nodo"
-
-msgid "data"
-msgstr "dato"
-
-msgid "host"
-msgstr "host"
-
-msgid "active"
-msgstr "activo"
-
-msgid "ipinfo"
-msgstr "info"
-
+#
 msgid "yes"
 msgstr "sí"
 
+#
 msgid "no"
 msgstr "no"
 
+#
 msgid "error"
 msgstr "error"
 
+#
+msgid "NONE"
+msgstr "NADA"
+
+
+## reports
+
+#
+msgid "Datetime"
+msgstr "Fecha"
+
+#
 msgid "Hop"
 msgstr "Nodo"
 
-msgid "Status"
-msgstr "Estado"
+#
+msgid "Data"
+msgstr "Dato"
 
-msgid "Info"
-msgstr "Info"
+#
+msgid "Active"
+msgstr "Activo"
+
+#
+msgid "IP-info"
+msgstr "IP-info"
 
 
 ## messages

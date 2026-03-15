@@ -424,20 +424,17 @@ msgstr "Timeout cache"
 
 ## misc
 
-msgid "target"
-msgstr "OBIETTIVO"
-
-msgid "targets"
-msgstr "obiettivi"
+msgid "Source"
+msgstr "Sorgente"
 
 msgid "Target"
 msgstr "Obiettivo"
 
-msgid "source"
-msgstr "sorgente"
+msgid "Targets"
+msgstr "Obiettivi"
 
-msgid "args"
-msgstr "argomenti"
+msgid "Args"
+msgstr "Argomenti"
 
 msgid "port number"
 msgstr "numero di porta"
@@ -462,44 +459,44 @@ msgstr "richieste"
 msgid "replies"
 msgstr "risposte"
 
-msgid "NONE"
-msgstr "NIENTE"
-
-msgid "datetime"
-msgstr "datario"
-
-msgid "hop"
-msgstr "nodo"
-
-msgid "data"
-msgstr "dati"
-
-msgid "host"
-msgstr "host"
-
-msgid "active"
-msgstr "attivo"
-
-msgid "ipinfo"
-msgstr "info"
-
+#
 msgid "yes"
 msgstr "sì"
 
+#
 msgid "no"
 msgstr "no"
 
+#
 msgid "error"
 msgstr "errore"
 
+#
+msgid "NONE"
+msgstr "NIENTE"
+
+
+## reports
+
+#
+msgid "Datetime"
+msgstr "Datario"
+
+#
 msgid "Hop"
 msgstr "Nodo"
 
-msgid "Status"
-msgstr "Stato"
+#
+msgid "Data"
+msgstr "Dati"
 
-msgid "Info"
-msgstr "Info"
+#
+msgid "Active"
+msgstr "Attivo"
+
+#
+msgid "IP-info"
+msgstr "IP-info"
 
 
 ## messages

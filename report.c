@@ -275,8 +275,17 @@ void xml_close(void) {
 #ifdef OUTPUT_FORMAT_JSON
 
 void json_head(void) {
-  printf("{\"%s\":\"%s\"%c\"%s\":\"%s\"%c\"%s\":[",
-    SOURCE_STR, srchost, DIV_JSON, ARGS_STR, mtr_args, DIV_JSON, TARGETS_STR);
+  printf("{\"%s\":\"%s\"", SOURCE_STR, srchost);
+  PRINT_DATETIME("%c\n\"%s\":\"%s\"", DIV_JSON, _(DATETIME_STR), date);
+  if (mtr_optc > 0) {
+    printf("%c\n\"%s\":[", DIV_JSON, ARGS_STR);
+    for (uint i = 0; i < mtr_optc; i++) {
+      if (i) putchar(DIV_JSON);
+      printf("\"%s\"", mtr_optv[i]);
+    }
+    putchar(']');
+  }
+  printf("%c\n\"%s\":[", DIV_JSON, TARGETS_STR);
 }
 void json_tail(void) { printf("\n]}\n"); }
 
@@ -297,7 +306,6 @@ static void json_statline(int at, const t_stat *stat) {
 void json_close(bool next) {
   if (next) printf(",");
   printf("\n%*s{\"%s\":\"%s\"", IND_JSON, "", _(TARGET_STR), dsthost);
-  PRINT_DATETIME("%c\"%s\":\"%s\"", DIV_JSON, _(DATETIME_STR), date);
   printf("%c\"%s\":[", DIV_JSON, _(DATA_STR));
   int min = net_min(), max = net_max();
   for (int at = min; at < max; at++) {
@@ -427,8 +435,8 @@ static inline void csv_body(int at) {
 
 void csv_close(bool next) {
   if (next) printf("\n");
-  printf("%s%c%s\n", TARGET_CAPSTR, DIV_CSV, dsthost);
-  printf("%s%c%s", CSV_HOP_STR, DIV_CSV, HOST_STR);
+  printf("%s%c%s\n", TARGET_STR, DIV_CSV, dsthost);
+  printf("%s%c%s", HOP_STR, DIV_CSV, HOST_STR);
   foreach_stat(0, csv_headline, 0);
 #ifdef WITH_IPINFO
   if (ipinfo_ready())

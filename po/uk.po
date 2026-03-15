@@ -424,20 +424,17 @@ msgstr "Таймаут кешування"
 
 ## misc
 
-msgid "target"
-msgstr "ціль"
-
-msgid "targets"
-msgstr "цілі"
+msgid "Source"
+msgstr "Звідки"
 
 msgid "Target"
 msgstr "Ціль"
 
-msgid "source"
-msgstr "звідки"
+msgid "Targets"
+msgstr "Цілі"
 
-msgid "args"
-msgstr "параметри"
+msgid "Args"
+msgstr "Параметри"
 
 msgid "port number"
 msgstr "номер порту"
@@ -462,44 +459,44 @@ msgstr "запитів"
 msgid "replies"
 msgstr "відповідей"
 
-msgid "NONE"
-msgstr "НЕМАЄ"
-
-msgid "datetime"
-msgstr "дата"
-
-msgid "hop"
-msgstr "перехід"
-
-msgid "data"
-msgstr "дані"
-
-msgid "host"
-msgstr "вузол"
-
-msgid "active"
-msgstr "діючий"
-
-msgid "ipinfo"
-msgstr "інфо"
-
+#
 msgid "yes"
 msgstr "так"
 
+#
 msgid "no"
 msgstr "ні"
 
+#
 msgid "error"
 msgstr "помилка"
 
+#
+msgid "NONE"
+msgstr "НЕМАЄ"
+
+
+## reports
+
+#
+msgid "Datetime"
+msgstr "Дата"
+
+#
 msgid "Hop"
 msgstr "Перехід"
 
-msgid "Status"
-msgstr "Статус"
+#
+msgid "Data"
+msgstr "Дані"
 
-msgid "Info"
-msgstr "Інфо"
+#
+msgid "Active"
+msgstr "Діючий"
+
+#
+msgid "IP-info"
+msgstr "IP-інфо"
 
 
 ## messages
