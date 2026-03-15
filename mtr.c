@@ -30,6 +30,7 @@
 #include <libgen.h>
 #include <getopt.h>
 #include <errno.h>
+#include <assert.h>
 #include <fcntl.h>
 #include <sys/stat.h>
 
@@ -621,6 +622,7 @@ static inline void short_set(char opt, const char *progname) {
       break;
 #endif
     case OPT_ADDR:
+      assert(optarg);
       iface_addr = optarg;
       break;
 #ifdef ENABLE_DNS
@@ -629,13 +631,16 @@ static inline void short_set(char opt, const char *progname) {
       break;
 #endif
     case OPT_BITS:
+      assert(optarg);
       ini_opts.pattern = limit_int(-1, UINT8_MAX, optarg, BITPATT_STR, opt);
       break;
     case OPT_COUNT:
+      assert(optarg);
       ini_opts.cycles = limit_int(-1, INT_MAX, optarg, CYCLESNO_STR, opt);
       break;
 #ifdef CURSESMODE
     case OPT_DISPLAY:
+      assert(optarg);
       option_display(opt);
       break;
 #endif
@@ -645,6 +650,7 @@ static inline void short_set(char opt, const char *progname) {
       break;
 #endif
     case OPT_TTLFIRST:
+      assert(optarg);
       if ((optarg[0] == AUTOTTL) && !optarg[1])
         ini_opts.endpoint = true;
       else
@@ -652,12 +658,15 @@ static inline void short_set(char opt, const char *progname) {
           limit_int(1, ini_opts.maxttl, optarg, MINTTL_STR, opt);
       break;
     case OPT_FIELDS:
+      assert(optarg);
       option_fields(opt);
       break;
     case OPT_INTERVAL:
+      assert(optarg);
       ini_opts.interval = limit_int(1, INT_MAX, optarg, INTERVAL_STR, opt);
       break;
     case OPT_TTLMAX:
+      assert(optarg);
       ini_opts.maxttl =
         limit_int(ini_opts.minttl, MAXHOST - 1, optarg, MAXTTL_STR, opt);
       break;
@@ -666,11 +675,13 @@ static inline void short_set(char opt, const char *progname) {
       ini_opts.dns = false;
       break;
     case OPT_NS:
+      assert(optarg);
       option_ns(opt);
       break;
 #endif
 #ifdef OUTPUT_FORMAT
     case OPT_OUTPUT:
+      assert(optarg);
       option_output(progname);
       break;
 #endif
@@ -681,6 +692,7 @@ static inline void short_set(char opt, const char *progname) {
 #endif
 #ifdef IP_TOS
     case OPT_QOS:
+      assert(optarg);
       ini_opts.qos = limit_int(0, UINT8_MAX, optarg, QOSTOS_STR, opt);
       TOS4TOS(QOSTOS_STR, ini_opts.qos);
       break;
@@ -691,6 +703,7 @@ static inline void short_set(char opt, const char *progname) {
         ini_opts.cycles = REPORT_PINGS;
       break;
     case OPT_SIZE: {
+      assert(optarg);
       int max = MAXPACKET - MINPACKET;
       ini_opts.size = limit_int(-max, max, optarg, PSIZE_STR, opt);
     } break;
@@ -704,6 +717,7 @@ static inline void short_set(char opt, const char *progname) {
       ini_opts.tcp = true;
       break;
     case OPT_TIMEOUT:
+      assert(optarg);
       ini_opts.syn =
         limit_int(1, TCPSYN_TOUT_MAX, optarg, TCP_TOUT_STR, opt) * MIL;
       break;
@@ -721,6 +735,7 @@ static inline void short_set(char opt, const char *progname) {
 #endif
       QEXIT(EXIT_SUCCESS);
     case OPT_CACHE:
+      assert(optarg);
       ini_opts.cache   = limit_int(1, INT_MAX, optarg, CACHE_TOUT_STR, opt);
       ini_opts.oncache = true;
       break;
@@ -728,9 +743,10 @@ static inline void short_set(char opt, const char *progname) {
     case OPT_LOOKUP:
     case OPT_IPINFO: {
       bool extra = (opt == OPT_IPINFO);
-      if (extra)
+      if (extra) {
+        assert(optarg);
         ini_opts.ipinfo = true;
-      else
+      } else
         ini_opts.asn    = true;
       if (!ipinfo_init(extra ? optarg : ASLOOKUP_DEFAULT))
         QEXIT(EXIT_FAILURE);
@@ -750,9 +766,11 @@ static void parse_options(int argc, char **argv) {
   while ((opt = my_getopt_long(argc, argv)) >= 0) {
     short_set((char)opt, argv[0]);
 #ifdef OUTPUT_OPTV
-    int arg = tolower((int)optarg[0]);
-    if ((opt == OPT_OUTPUT) && ((arg == OTOON) || (arg == OJSON)))
-      set_optv(argc, argv);
+    if (opt == OPT_OUTPUT) {
+      int arg = tolower((int)optarg[0]);
+      if ((arg == OTOON) || (arg == OJSON))
+        set_optv(argc, argv);
+    }
 #endif
   }
   run_opts = ini_opts; // to reflect possible interactive changes
