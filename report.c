@@ -235,11 +235,11 @@ void report_close(bool next, bool with_header) {
 
 void xml_head(void) {
   printf("<?xml version=\"1.0\"?>\n");
-  printf("<MTR SRC=\"%s\"",         srchost);
-  printf(" QOS=\"0x%X\"",           run_opts.qos);
-  printf(" PSIZE=\"%d\"",           run_opts.size);
-  printf(" BITPATTERN=\"0x%02X\"",  abs(run_opts.pattern));
-  printf(" TESTS=\"%d\">\n",        run_opts.cycles);
+  printf("<MTR SRC=\"%s\"", srchost);
+  PRINT_DATETIME(" DATETIME=\"%s\"", date);
+  if (mtr_args[0])
+    printf(" ARGS=\"%s\"", mtr_args);
+  printf(">\n");
 }
 
 void xml_tail(void) { printf("</MTR>\n"); }
@@ -260,8 +260,8 @@ void xml_close(void) {
     foreach_stat(at, xml_statline, 0);
 #ifdef WITH_IPINFO
     if (ipinfo_ready())
-      printf("%*s<IPINFO>[%s]</IPINFO>\n", IND_XML * 3, "",
-        ipinfo_data_div(at, host[at].current, DIV_XML));
+      printf("%*s<%s>[%s]</%s>\n", IND_XML * 3, "", IPINFO_STR,
+        ipinfo_data_div(at, host[at].current, DIV_XML), IPINFO_STR);
 #endif
     printf("%*s</HOP>\n", IND_XML * 2, "");
   }

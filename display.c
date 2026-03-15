@@ -92,6 +92,9 @@ void display_start(
 #ifdef OUTPUT_FORMAT_TOON
     case DisplayTOON:
 #endif
+#ifdef OUTPUT_FORMAT_XML
+    case DisplayXML:
+#endif
     case DisplayReport:
       report_started_at(); break;
     default: break;
