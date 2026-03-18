@@ -122,6 +122,9 @@ int snprints(char str[], size_t size, const char *format, ...) {
   int len = vsnprintf(str, size, format, args);
   va_end(args);
   if (len < 0) str[0] = 0;
-  return (len > (int)size) ? (int)size : len;
+  if (len >= (int)size) {
+    len = (size > 0) ? (size - 1) : 0;
+  }
+  return len;
 }
 
