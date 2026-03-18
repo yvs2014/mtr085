@@ -704,34 +704,36 @@ static void print_scale(void) {
 #endif
 }
 
-#define IASP (iargs_sp ? " " : "")
-#define BOOL_OPT2STR(tag, what) do {  \
-  if (run_opts.tag != ini_opts.tag) { \
-    len += snprint_iarg(run_opts.tag, buf + len, size - len, (what)); } \
-} while (0)
-#define INT_OPT2STR(tag, prfx, fmt) do {   \
-  if (run_opts.tag != ini_opts.tag)        \
-    ADD_INT_INFO(prfx, fmt, run_opts.tag); \
-} while (0)
-#define ADD_INT_INFO(prfx, fmt, value) do { \
-  int inc = snprintf(buf + len, size - len, \
-    "%s%s" fmt, IASP, prfx, (value));       \
-  if (inc > 0) len += inc;                  \
-  iargs_sp = true;                          \
-} while (0)
+#define IASP ((len > iasp) ? " " : "")
 
-static bool iargs_sp;
-static int snprint_iarg(bool on, char *buf, int size, const char *msg) {
-  int len = snprintf(buf, size, "%s%c%s", IASP, on ? '+' : '-', msg);
-  iargs_sp = true;
-  return (len > 0) ? len : 0;
+#define INC_OR_RET {            \
+  if (inc < 0) return len;      \
+  else if (inc > 0) len += inc; \
 }
 
-static int mc_snprint_args(char *buf, size_t size) {
-  iargs_sp = false;
-  int len = snprintf(buf, size, " (");
-  if (len < 0)
-    len = 0;
+#define ADD_FMT_ARG(fmt, ...) do {   \
+  int max = size - len;              \
+  if (max <= 0) return size;         \
+  int inc = snprints(buf + len, max, \
+    fmt, __VA_ARGS__);               \
+  INC_OR_RET;                        \
+} while (0)
+
+#define BOOL_OPT2STR(tag, msg) do {   \
+  if (run_opts.tag != ini_opts.tag)   \
+    ADD_FMT_ARG("%s%c%s", IASP,       \
+      run_opts.tag ? '+' : '-', msg); \
+} while (0)
+
+#define INT_OPT2STR(tag, prfx, fmt) do {               \
+  if (run_opts.tag != ini_opts.tag)                    \
+    ADD_FMT_ARG("%s%s" fmt, IASP, prfx, run_opts.tag); \
+} while (0)
+
+static int mc_print_args(char *buf, size_t size) {
+  int len = snprints(buf, size, " (");
+  if (len < 0) return len;
+  int iasp = len;
   BOOL_OPT2STR(udp,    PAR_UDP_STR);
   BOOL_OPT2STR(tcp,    PAR_TCP_STR);
 #ifdef WITH_MPLS
@@ -745,8 +747,8 @@ static int mc_snprint_args(char *buf, size_t size) {
   BOOL_OPT2STR(dns,    PAR_DNS_STR);
 #endif
   BOOL_OPT2STR(jitter, PAR_JITTER_STR);
-  if (run_opts.chart != ini_opts.chart)
-    ADD_INT_INFO(PAR_CHART_STR, "%u", run_opts.chart);
+  //
+  INT_OPT2STR(chart,    PAR_CHART_STR, "%u");
   //
   INT_OPT2STR(pattern,  PAR_PATT_STR, "=%d");
   INT_OPT2STR(interval, PAR_DT_STR, "=%d");
@@ -757,18 +759,15 @@ static int mc_snprint_args(char *buf, size_t size) {
   INT_OPT2STR(size,     PAR_SIZE_STR, "=%d");
   //
   BOOL_OPT2STR(oncache, PAR_CACHE_STR);
-  { int inc = snprintf(buf + len, size - len, ")"); if (inc > 0) len += inc; }
+  //
+  ADD_FMT_ARG("%c", ')');
   if (strnlen(buf, sizeof(buf)) == 3 /*" ()"*/)
     len = 0;
-  if (run_opts.pause != ini_opts.pause) {
-    int inc = snprintf(buf + len, size - len, ": %s", PAR_PAUSED_STR);
-    if (inc > 0) len += inc;
-  }
-  return (len > 0) ? len : 0;
+  if (run_opts.pause != ini_opts.pause)
+    ADD_FMT_ARG(": %s", PAR_PAUSED_STR);
+  return (len > (int)size) ? (int)size : len;
 }
-#undef SET_IASP
 #undef IASP
-#undef ADD_NTH_BIT_INFO
 
 static void mc_statmode(void) {
   int statx = 4; // x-indent: "NN. "
@@ -812,35 +811,50 @@ static inline void mc_histmode(void) {
   }
 }
 
-void mc_redraw(void) {
-  static char linebuf[LINEMAXLEN];
-  erase();
-  { // title
-    int len = 0, inc = snprintf(linebuf, sizeof(linebuf), "%s", screen_title);
-    if (inc > 0) len += inc;
-    if (opt_sum.un)
-      len += mc_snprint_args(linebuf + len, sizeof(linebuf) - len);
-    mvprintw(0, 0, "%*s", (getmaxx(stdscr) + len) / 2, linebuf);
-  }
-  { // hints and time
-    mvprintw(1, 0, "%s: ", OPTS_STR);
-    attron(A_BOLD); addch('h'); attroff(A_BOLD); printw("%s ", _HINTS_STR);
-    attron(A_BOLD); addch('q'); attroff(A_BOLD); printw("%s\n", _QUIT_STR);
-    int maxx = getmaxx(stdscr);
-    int inc = snprintf(linebuf, sizeof(linebuf), "%.*s", (int)strnlen(srchost, maxx / 2), srchost);
-    { // timestamp
-      char str[64] = {0};
-      const char *date = datetime(time(NULL), str, sizeof(str));
-      if (date && date[0]) {
-        if (inc < 0) inc = 0;
-        inc += snprintf(linebuf + inc, sizeof(linebuf) - inc, ": %s", date);
-      }
+static inline void mc_print_title(void) {
+  const char *title = screen_title;
+  char buff[LINEMAXLEN] = {0};
+  int len = snprints(buff, sizeof(buff), "%s", screen_title);
+  if (len >= 0) {
+    title = buff;
+    if (opt_sum.un) {
+      int inc = mc_print_args(buff + len, sizeof(buff) - len);
+      if (inc < 0) title = screen_title; // else len += inc;
     }
-    if ((inc > 0) && linebuf[0])
-      mvaddstr(1, maxx - ustrlen(linebuf) - 1, linebuf);
   }
-  // main body
+  mvprintw(0, 0, "%*s", (getmaxx(stdscr) + ustrlen(title)) / 2, title);
+}
+
+static inline void mc_print_hints_n_time(void) {
+  mvprintw(1, 0, "%s: ", OPTS_STR);
+  attron(A_BOLD); addch('h'); attroff(A_BOLD); printw("%s ", _HINTS_STR);
+  attron(A_BOLD); addch('q'); attroff(A_BOLD); printw("%s\n", _QUIT_STR);
+  int maxx = getmaxx(stdscr);
+  char buff[LINEMAXLEN] = {0};
+  // source host
+  int len = snprints(buff, sizeof(buff), "%.*s", (int)strnlen(srchost, maxx / 2), srchost);
+  if (len < 0) return;
+  // timestamp
+  char str[64] = {0};
+  const char *date = datetime(time(NULL), str, sizeof(str));
+  if (date && date[0]) {
+    int inc = snprints(buff + len, sizeof(buff) - len, ": %s", date);
+    if (inc < 0) return;
+    else if (inc > 0) len += inc;
+  }
+  if ((len > 0) && buff[0])
+    mvaddstr(1, maxx - ustrlen(buff) - 1, buff);
+}
+
+static inline void mc_print_main_body(void) {
   (curses_mode == 0) ? mc_statmode() : mc_histmode();
+}
+
+void mc_redraw(void) {
+  erase();
+  mc_print_title();
+  mc_print_hints_n_time();
+  mc_print_main_body();
   refresh();
 }
 
@@ -853,11 +867,11 @@ bool mc_open(void) {
   }
   raw();
   noecho();
-
+  //
   if (run_opts.color)
     if (!has_colors())
       run_opts.color = false;
-
+  //
   if (run_opts.color) {
     start_color();
     short bg_col = 0;
@@ -886,16 +900,12 @@ bool mc_open(void) {
     init_pair(pair++, COLOR_RED,     bg_col);
 #endif
   }
-
   // init title
-  { int inc = snprintf(screen_title, sizeof(screen_title), "%s", PACKAGE_NAME);
-    int len = (inc > 0) ? inc : 0;
-    if (mtr_args[0]) {
-      inc = snprintf(screen_title + len, sizeof(screen_title) - len, " %s", mtr_args);
-      if (inc > 0) len += inc;
-    }
-    snprintf(screen_title + len, sizeof(screen_title) - len, " %s", dsthost); }
-
+  if (mtr_args[0])
+    snprints(screen_title, sizeof(screen_title), "%s %s %s", PACKAGE_NAME, mtr_args, dsthost);
+  else
+    snprints(screen_title, sizeof(screen_title), "%s %s", PACKAGE_NAME, dsthost);
+  //
   mc_init();
   mc_redraw();
   curs_set(0);

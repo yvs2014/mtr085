@@ -358,8 +358,8 @@ static void parse_http(char *buf, ssize_t recv_size, atndx_t id) {
     char txt[clen + 1]; memset(txt, 0, sizeof(txt));
     // combine into one line
     for (uint i = cndx, len = 0; (i < lines_no) && (len < clen); i++) {
-      int inc = snprintf(txt + len, clen - len, "%s", lines[i]);
-      if (inc > 0) len += inc;
+      int inc = snprints(txt + len, clen - len, "%s", lines[i]);
+      if (inc < 0) break; else len += inc;
     }
 
     LOGMSG("record line: %s", txt);
@@ -468,8 +468,8 @@ void ipinfo_parse(int sock, int seq) { // except dns, dns.ack in dns.c
 
 static int create_tcpsock(int seq) {
   uint16_t port = (ORIG_TYPE == OT_WHOIS) ? WHOIS_PORT : HTTP_PORT;
-  char srv[8];
-  snprintf(srv, sizeof(srv), "%u", port);
+  char srv[8] = {0};
+  snprints(srv, sizeof(srv), "%u", port);
   LOGMSG("%s:%s", ORIG_HOST, srv);
   struct addrinfo *rp = NULL, hints = {
     .ai_family = af,
@@ -510,9 +510,10 @@ static int create_tcpsock(int seq) {
 
 static int send_tcp_query(int sock, const char *q) {
   char buf[NETDATA_MAXSIZE] = {0};
-  (ORIG_TYPE == OT_WHOIS) ?
-    snprintf(buf, sizeof(buf), "%s\r\n", q) :
-    snprintf(buf, sizeof(buf), HTTP_GET, q, ORIG_HOST, PACKAGE_NAME);
+  if (ORIG_TYPE == OT_WHOIS)
+    snprints(buf, sizeof(buf), "%s\r\n", q);
+  else
+    snprints(buf, sizeof(buf), HTTP_GET, q, ORIG_HOST, PACKAGE_NAME);
   size_t len = strnlen(buf, sizeof(buf));
   int rc = send(sock, buf, len, 0);
   if (rc >= 0) {
@@ -524,7 +525,7 @@ static int send_tcp_query(int sock, const char *q) {
 
 static char* make_tcp_qstr(t_ipaddr *ipaddr) {
   static char mkqstr[NAMELEN];
-  snprintf(mkqstr, sizeof(mkqstr), "%s%s", origins[origin_no].prefix, strlongip(ipaddr));
+  snprints(mkqstr, sizeof(mkqstr), "%s%s", origins[origin_no].prefix, strlongip(ipaddr));
   return mkqstr;
 }
 
@@ -632,32 +633,29 @@ static char iiheader[NAMELEN];
 
 // 'div'-separated output
 const char* ipinfo_head_div(char div) {
-  iiheader[0] = 0;
+  memset(iiheader, 0, sizeof(iiheader));
   for (uint i = 0, len = 0; (i < MAX_TXT_ITEMS)
       && (ipinfo_no[i] >= 0) && (ipinfo_no[i] < itemname_max)
       && ORIG_UNAME(ipinfo_no[i]) && (len < sizeof(iiheader)); i++) {
-    int inc = 0;
-    if (i) inc += snprintf(iiheader + len, sizeof(iiheader) - len, "%c", div);
-    if (inc > 0) len+= inc;
-    inc = snprintf(iiheader + len, sizeof(iiheader) - len, "\"%s\"", ORIG_UNAME(ipinfo_no[i]));
-    if (inc > 0) len += inc;
+    int inc = (i && div) ?
+      snprints(iiheader + len, sizeof(iiheader) - len, "%c\"%s\"", div, ORIG_UNAME(ipinfo_no[i])) :
+      snprints(iiheader + len, sizeof(iiheader) - len,   "\"%s\"",      ORIG_UNAME(ipinfo_no[i]));
+    if (inc < 0) break; else len += inc;
   }
   return iiheader;
 }
 
 // fixed width output
 const char* ipinfo_head_fix(void) {
-  iiheader[0] = 0;
+  memset(iiheader, 0, sizeof(iiheader));
   for (uint i = 0, len = 0; (i < MAX_TXT_ITEMS)
       && (ipinfo_no[i] >= 0) && (ipinfo_no[i] < itemname_max)
       && ORIG_UNAME(ipinfo_no[i]) && (len < sizeof(iiheader)); i++) {
-    int inc = snprintf(iiheader + len, sizeof(iiheader) - len,
-      "%s", ORIG_UNAME(ipinfo_no[i]));
-    if (inc > 0) len += inc;
     int gap = ORIG_WIDTH(ipinfo_no[i]) - ustrlen(ORIG_UNAME(ipinfo_no[i]));
     if (gap < 0) gap = 0;
-    inc = snprintf(iiheader + len, sizeof(iiheader) - len, "%*s", ++gap, "");
-    if (inc > 0) len += inc;
+    int inc = snprints(iiheader + len, sizeof(iiheader) - len, "%s%*s",
+      ORIG_UNAME(ipinfo_no[i]), ++gap, "");
+    if (inc < 0) break; else if (inc > 0) len += inc;
   }
   return iiheader;
 }
@@ -669,14 +667,14 @@ typedef int (*filler_fn)(char *buf, int size, const char *str, t_fmtdata fmt);
 
 static int fmt_filler(char *buf, int size, const char *str, t_fmtdata fmt) {
   return (fmt.num > 0) ?
-    snprintf(buf, size, "%-*s ", fmt.num, str) :
-    snprintf(buf, size, "%s ", str);
+    snprints(buf, size, "%-*s ", fmt.num, str) :
+    snprints(buf, size, "%s ", str);
 }
 
 static int str_filler(char *buf, int size, const char *str, t_fmtdata fmt) {
   return fmt.num ?
-    snprintf(buf, size, "%c\"%s\"", fmt.ch, str) :
-    snprintf(buf, size, "\"%s\"", str);
+    snprints(buf, size, "%c\"%s\"", fmt.ch, str) :
+    snprints(buf, size,   "\"%s\"",         str);
 }
 
 // formatted output

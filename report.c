@@ -79,27 +79,53 @@ void report_started_at(void) { started_at = time(NULL); }
 } while(0)
 #endif
 
-static size_t snprint_addr(char *buf, size_t size, int at, int ndx) {
-  if (!buf || !size) return 0;
+static void print_str_width(const char *str, int width) {
+  if (!str) return;
+  if (width < 0) printf("%s", str);
+  else printf("%-*s", width, str);
+}
+
+static void print_addr(int at, int ndx, int width) {
+  if (!width) return;
   t_ipaddr *ipaddr = &IP_AT_NDX(at, ndx);
   if (addr_exist(ipaddr)) {
 #ifdef ENABLE_DNS
     const char *name = run_opts.dns ? dns_ptr_cache(at, ndx) : NULL;
     if (name) {
-      int inc = snprintf(buf, size, "%s", name);
-      size_t len = (inc > 0) ? inc : 0;
       if (run_opts.ips) {
-        inc = snprintf(buf + len, size - len, " (%s)", strlongip(ipaddr));
-        if (inc > 0) len += inc;
-      }
-      return len;
-    }
+        if (width > 0) {
+          char buff[MAXDNAME] = {0};
+          snprints(buff, sizeof(buff), "%s (%s)", name, strlongip(ipaddr));
+          print_str_width(buff, width);
+        } else
+          printf("%s (%s)", name, strlongip(ipaddr));
+      } else print_str_width(name, width);
+    } else
 #endif
-    int inc = snprintf(buf, size, "%s", strlongip(ipaddr));
-    return (inc > 0) ? inc : 0;
-  }
-  int inc = snprintf(buf, size, "%s", UNKN_ITEM);
-  return (inc > 0) ? inc : 0;
+      print_str_width(strlongip(ipaddr), width);
+  } else
+    print_str_width(UNKN_ITEM, width);
+}
+
+
+static size_t snprint_addr(char *buf, size_t size, int at, int ndx) {
+  if (!buf || !size) return 0;
+  buf[0] = 0;
+  int len = 0;
+  t_ipaddr *ipaddr = &IP_AT_NDX(at, ndx);
+  if (addr_exist(ipaddr)) {
+#ifdef ENABLE_DNS
+    const char *name = run_opts.dns ? dns_ptr_cache(at, ndx) : NULL;
+    if (name) {
+      len = run_opts.ips ?
+        snprints(buf, size, "%s (%s)", name, strlongip(ipaddr)) :
+        snprints(buf, size, "%s",      name);
+    } else
+#endif
+      len = snprints(buf, size, "%s", strlongip(ipaddr));
+  } else
+    len = snprints(buf, size, "%s", UNKN_ITEM);
+  return (len < 0) ? 0 : len;
 }
 
 #ifdef WITH_MPLS
@@ -110,7 +136,7 @@ static void print_mpls(const mpls_data_t *mpls) {
 #endif
 
 static size_t get_longest_name(size_t min, size_t max) {
-  char buf[max];
+  char buf[max]; memset(buf, 0, sizeof(buf));
   int nmax = net_max();
   for (int at = net_min(); at < nmax; at++) {
     for (int i = 0; i < MAXPATH; i++) {
@@ -180,9 +206,7 @@ static void report_print_body(int at, const char *fmt, int hostlen, int infolen)
   // body: left
   if (fmt) printf(fmt, at + 1);
   REPORT_INFO(infolen, ipinfo_data_fix(at, host[at].current));
-  { char name[MAXDNAME] = {0};
-    snprint_addr(name, sizeof(name), at, host[at].current);
-    printf("%-*s", hostlen, name); }
+  print_addr(at, host[at].current, hostlen);
   // body: right
   foreach_stat(at, report_bodystat, '\n');
 #ifdef WITH_MPLS
@@ -198,9 +222,8 @@ static void report_print_rest(int at, int hostlen, int infolen) {
       break; // done
     printf("%*s", IND_REP, "");
     REPORT_INFO(infolen, ipinfo_data_fix(at, i));
-    { char name[MAXDNAME] = {0};
-      snprint_addr(name, sizeof(name), at, i);
-      printf("%-*s\n", hostlen, name); }
+    print_addr(at, i, hostlen);
+    putchar('\n');
 #ifdef WITH_MPLS
     if (run_opts.mpls)
       print_mpls(&MPLS_AT_NDX(at, i));
@@ -254,9 +277,9 @@ void xml_close(void) {
   printf("%*s<DST HOST=\"%s\">\n", IND_XML, "", dsthost);
   int max = net_max();
   for (int at = net_min(); at < max; at++) {
-    char buf[MAXDNAME] = {0};
-    snprint_addr(buf, sizeof(buf), at, host[at].current);
-    printf("%*s<HOP TTL=\"%d\" HOST=\"%s\">\n", IND_XML * 2, "", at + 1, buf);
+    printf("%*s<HOP TTL=\"%d\" HOST=\"", IND_XML * 2, "", at + 1);
+    print_addr(at, host[at].current, -1);
+    printf("%s", "\">\n");
     foreach_stat(at, xml_statline, 0);
 #ifdef WITH_IPINFO
     if (ipinfo_ready())
@@ -309,12 +332,11 @@ void json_close(bool next) {
   printf("%c\"%s\":[", DIV_JSON, _(DATA_STR));
   int min = net_min(), max = net_max();
   for (int at = min; at < max; at++) {
-    char buf[MAXDNAME] = {0};
     printf((at == min) ? "\n" : ",\n");
-    snprint_addr(buf, sizeof(buf), at, host[at].current);
-    printf("%*s{\"%s\":\"%s\"%c\"%s\":%d%c\"%s\":\"%s\"", IND_JSON * 2, "",
-      _(HOST_STR), buf, DIV_JSON, _(HOP_STR), at + 1, DIV_JSON,
-      _(ACTIVE_STR), _(host[at].up ? YES_STR : NO_STR));
+    printf("%*s{\"%s\":\"", IND_JSON * 2, "", _(HOST_STR));
+    print_addr(at, host[at].current, -1);
+    printf("\"%c\"%s\":%d%c\"%s\":\"%s\"", DIV_JSON, _(HOP_STR), at + 1,
+      DIV_JSON, _(ACTIVE_STR), _(host[at].up ? YES_STR : NO_STR));
     foreach_stat(at, json_statline, 0);
 #ifdef WITH_IPINFO
     if (ipinfo_ready())
@@ -378,10 +400,10 @@ void toon_close(void) {
 #endif
   printf("}:\n");
   for (int at = min; at < max; at++) {
-    char buf[MAXDNAME] = {0};
-    snprint_addr(buf, sizeof(buf), at, host[at].current);
-    printf("%*s\"%s\"%c%d%c\"%s\"", IND_TOON * 3, "", buf/*HOST_STR*/, DIV_TOON,
-      at + 1/*HOP_STR*/, DIV_TOON, _(host[at].up ? YES_STR : NO_STR) /*ACTIVE_STR*/);
+    printf("%*s\"", IND_TOON * 3, ""); /*HOST_STR*/
+    print_addr(at, host[at].current, -1);
+    printf("\"%c%d%c\"%s\"", DIV_TOON, at + 1/*HOP_STR*/, DIV_TOON,
+      _(host[at].up ? YES_STR : NO_STR) /*ACTIVE_STR*/);
     foreach_stat(at, toon_statline, 0);
 #ifdef WITH_IPINFO
     if (ipinfo_ready())
@@ -421,9 +443,8 @@ static void csv_bodyline(int at, const t_stat *stat) {
 }
 
 static inline void csv_body(int at) {
-  char buf[MAXDNAME] = {0};
-  snprint_addr(buf, sizeof(buf), at, host[at].current);
-  printf("%d%c%s", at + 1, DIV_CSV, buf);
+  printf("%d%c", at + 1, DIV_CSV);
+  print_addr(at, host[at].current, -1);
   //
   foreach_stat(at, csv_bodyline, DIV_CSV);
 #ifdef WITH_IPINFO

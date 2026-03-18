@@ -31,11 +31,11 @@
 // note: return size can distinct: src.len() and printed chars
 #define STRLCPY(dst, src, size) strlcpy(dst, src, size)
 #else
-#define STRLCPY(dst, src, size) snprintf(dst, size, "%s", src)
+#define STRLCPY(dst, src, size) snprints(dst, size, "%s", src)
 #endif
 
 #ifndef GITREV
-#define GITREV "239"
+#define GITREV "240"
 #endif
 
 #ifndef HAVE_UINT

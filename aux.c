@@ -4,6 +4,7 @@
 #include <ctype.h>
 #include <errno.h>
 #include <time.h>
+#include <stdarg.h>
 
 #include "aux.h"
 #include "common.h"
@@ -70,21 +71,19 @@ void foreach_stat(int at, void (*body)(int at, const t_stat *stat), char fin) {
 }
 
 char limit_error[NAMELEN];
-int limit_int(int min, int max, const char *arg, const char *what, int8_t fail) {
+int limit_int(int min, int max, const char *arg, const char *what, char fail) {
   limit_error[0] = 0;
   long long val = str2ll(arg);
   long long lim = val;
   if (errno)
-    snprintf(limit_error, sizeof(limit_error), "%s", strerror(errno));
+    snprints(limit_error, sizeof(limit_error), "%s", strerror(errno));
   if ((val < min) || (val > max)) {
     errno = ERANGE;
     lim = (val < min) ? min : max;
-    int l = 0;
-    if (what)
-      l += snprintf(limit_error, sizeof(limit_error), "%s: ", what);
-    if (l < 0) l = 0;
-    snprintf(limit_error + l, sizeof(limit_error) - l,
-      "%s: %s [%d,%d]", arg, strerror(errno), min, max);
+    if (what) snprints(limit_error, sizeof(limit_error), "%s: %s: %s [%d,%d]",
+      what, arg, strerror(errno), min, max);
+    else      snprints(limit_error, sizeof(limit_error),     "%s: %s [%d,%d]",
+            arg, strerror(errno), min, max);
   }
   if (errno && fail) {
     if (fail > 0) {
@@ -114,5 +113,15 @@ char *datetime(time_t at, char *buff, size_t size) {
 #endif
   if (tm) strftime(buff, size, "%c", tm);
   return buff;
+}
+
+int snprints(char str[], size_t size, const char *format, ...) {
+  if (!str || !format) return 0;
+  va_list args;
+  va_start(args, format);
+  int len = vsnprintf(str, size, format, args);
+  va_end(args);
+  if (len < 0) str[0] = 0;
+  return (len > (int)size) ? (int)size : len;
 }
 

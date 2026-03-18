@@ -172,7 +172,7 @@ struct PACKIT icmpext_object { // RFC4884
 
 #define NET_FAIL_WARN(fmt, ...) do {                  \
   WARNX(fmt ": %s", __VA_ARGS__, tgterr_txt);         \
-  snprintf(logerr_txt, sizeof(logerr_txt),            \
+  snprints(logerr_txt, sizeof(logerr_txt),            \
     fmt ": %s", __VA_ARGS__, tgterr_txt);             \
   LOG_RE(false, fmt ": %s", __VA_ARGS__, tgterr_txt); \
 } while (0)
@@ -308,17 +308,15 @@ static uint16_t udpsum16(struct _iphdr *ip, void *udata, int udata_len, int dsiz
 }
 
 const char* rstrerror(int rc) {
-  strerr_txt[0] = 0;
-  snprintf(strerr_txt, sizeof(strerr_txt), "%s", strerror(rc));
-  tgterr_txt[0] = 0;
-  snprintf(tgterr_txt, sizeof(tgterr_txt), "%s", strerror(rc));
+  snprints(strerr_txt, sizeof(strerr_txt), "%s", strerror(rc));
+  snprints(tgterr_txt, sizeof(tgterr_txt), "%s", strerror(rc));
   return tgterr_txt;
 }
 
 static void net_warn(const char *prefix) {
   char* str = tgterr_txt[0] ? tgterr_txt : "Unknown error";
   warnx("%s: %s", prefix, str);
-  snprintf(logerr_txt, sizeof(logerr_txt), "%s: %s", prefix, str);
+  snprints(logerr_txt, sizeof(logerr_txt), "%s: %s", prefix, str);
   LOGMSG("%s: %s", prefix, str);
 }
 
@@ -890,7 +888,7 @@ const char *net_elem(int at, char ch) {
       ival = host[at].sent; break;
   }
   if (ival >= 0) {
-    snprintf(elemstr, sizeof(elemstr), "%d", ival);
+    snprints(elemstr, sizeof(elemstr), "%d", ival);
     return elemstr;
   }
   double val = NAN;
@@ -925,7 +923,7 @@ const char *net_elem(int at, char ch) {
       val = host[at].jinta; break;
     default: return NULL;
   }
-  snprintf(elemstr, sizeof(elemstr), "%.*f%s", val2len(val), val, suffix ? suffix : "");
+  snprints(elemstr, sizeof(elemstr), "%.*f%s", val2len(val), val, suffix ? suffix : "");
   return elemstr;
 }
 
@@ -1363,7 +1361,7 @@ const char *strlongip(t_ipaddr *ipaddr) {
 const char *mpls2str(const mpls_label_t *label, int indent) {
   static const char mpls_fmt[] = "%*s[Lbl:%u Exp:%u S:%u TTL:%u]";
   static char mpls2s_buf[64];
-  snprintf(mpls2s_buf, sizeof(mpls2s_buf), mpls_fmt, indent, "",
+  snprints(mpls2s_buf, sizeof(mpls2s_buf), mpls_fmt, indent, "",
     label->u.lab, label->u.exp, label->u.bos, label->u.ttl);
   return mpls2s_buf;
 }

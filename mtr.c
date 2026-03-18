@@ -185,8 +185,7 @@ enum { REPORT_PINGS = 100, CACHE_TIMEOUT = 60, TCPSYN_TOUT_MAX = 60 };
 //// global vars
 int mtrtype = IPPROTO_ICMP;   // ICMP as default packet type
 pid_t mypid;
-#define ARGS_LEN 64 /* seem to be enough */
-char mtr_args[ARGS_LEN + 1];  // display in curses title
+char mtr_args[128];           // args to display in curses title
 #if defined(OUTPUT_FORMAT_JSON) || defined(OUTPUT_FORMAT_TOON)
 #define OUTPUT_OPTV
 #endif
@@ -774,9 +773,9 @@ static void parse_options(int argc, char **argv) {
 #endif
   }
   run_opts = ini_opts; // to reflect possible interactive changes
-  for (int i = 1, len = 0; (i < optind) && (len < ARGS_LEN); i++) {
-    int inc = snprintf(mtr_args + len, ARGS_LEN - len, (i > 1) ? " %s" : "%s", argv[i]);
-    if (inc > 0) len += inc;
+  for (int i = 1, len = 0; (i < optind) && (i < argc) && argv[i] && ((uint)len < sizeof(mtr_args)); i++) {
+    int inc = snprints(mtr_args + len, sizeof(mtr_args) - len, (i > 1) ? " %s" : "%s", argv[i]);
+    if (inc < 0) break; else len += inc;
   }
   ineractive_modes(display_mode);
 }
