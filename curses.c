@@ -75,8 +75,10 @@
 enum { LINEMAXLEN = 1024, HINT_YPOS = 2, HOSTINFOMAX = 30 };
 
 static char screen_title[NAMELEN]; // progname + arguments + destination
+static uint screen_title_ulen;
 static bool at_quit, screen_ready;
-static uint title_len;
+static int stat_title_len = -1;
+static int cached_title_ulen = -1;
 
 static size_t enter_smth(char *buf, size_t size, int y, int x) {
   move(y, x);
@@ -237,8 +239,7 @@ static inline void mc_key_s(void) { // set payload size
   }
 }
 
-key_action_t mc_keyaction(void) {
-  int ch = getch();
+static key_action_t mc_keyaction_body(int ch) {
 #ifdef KEY_RESIZE
 #define GETCH_BATCH 100
   if (ch == KEY_RESIZE) { // cleanup by batch
@@ -279,7 +280,7 @@ key_action_t mc_keyaction(void) {
       OPT_SUM(interval);
     } break;
     case 'j':
-      title_len = 0;
+      stat_title_len = -1;
       return ActionJitter;
 #ifdef WITH_IPINFO
     case 'l': return ActionAS;
@@ -296,7 +297,7 @@ key_action_t mc_keyaction(void) {
 #endif
     case 'o': // fields to display and their order
       mc_key_o();
-      title_len = 0;
+      stat_title_len = -1;
       break;
     case ' ':
     case 'p': return ActionPauseResume;
@@ -319,6 +320,43 @@ key_action_t mc_keyaction(void) {
     default: break;
   }
   return ActionNone; // ignore unknown input
+}
+
+key_action_t mc_keyaction(void) {
+  // wrapper to mc_keyaction_body(): reset 'title_cache' if it needs
+  int ch = getch();
+  switch (ch) {
+    case 'b': // bit pattern
+    case 'c': // number of cycles
+    case 'd': // ActionDisplay;
+#ifdef WITH_MPLS
+    case 'e': // ActionMPLS;
+#endif
+    case 'f': // first ttl
+    case 'i': // interval
+    case 'j': // ActionJitter
+#ifdef WITH_IPINFO
+    case 'l': // ActionAS;
+    case 'L': // ActionII;
+#endif
+    case 'm': // max ttl
+#ifdef ENABLE_DNS
+    case 'n': // ActionDNS;
+#endif
+    case ' ':
+    case 'p': // ActionPauseResume;
+#ifdef IP_TOS
+    case 'Q': // qos
+#endif
+    case 's': // payload size
+    case 't': // ActionTCP;
+    case 'u': // ActionUDP;
+    case 'x': // ActionCache;
+      cached_title_ulen = -1;
+      break;
+    default: break;
+  }
+  return mc_keyaction_body(ch);
 }
 
 #ifdef WITH_MPLS
@@ -613,7 +651,7 @@ static void histogram(int x, int cols) {
   }
 }
 
-static int get_title_len(void) {
+static int get_stat_title_len(void) {
   int len = 0;
   for (uint i = 0; i < MAXFLD; i++) {
     const t_stat *stat = active_stats(i);
@@ -714,17 +752,13 @@ static void print_scale(void) {
 
 #define IASP ((len > iasp) ? " " : "")
 
-#define INC_OR_RET {            \
-  if (inc < 0) return len;      \
-  else if (inc > 0) len += inc; \
-}
-
 #define ADD_FMT_ARG(fmt, ...) do {   \
   int max = size - len;              \
   if (max <= 0) return size;         \
   int inc = snprinte(buf + len, max, \
     fmt, __VA_ARGS__);               \
-  INC_OR_RET;                        \
+  if (inc < 0) return len;           \
+  else if (inc > 0) len += inc;      \
 } while (0)
 
 #define BOOL_OPT2STR(tag, msg) do {   \
@@ -738,7 +772,8 @@ static void print_scale(void) {
     ADD_FMT_ARG("%s%s" fmt, IASP, prfx, run_opts.tag); \
 } while (0)
 
-static int mc_print_args(char *buf, size_t size) {
+static int mc_print_args(char buf[], size_t size) NONNULL(1);
+static int mc_print_args(char buf[], size_t size) {
   int len = snprinte(buf, size, " (");
   if (len < 0) return len;
   int iasp = len;
@@ -769,13 +804,18 @@ static int mc_print_args(char *buf, size_t size) {
   BOOL_OPT2STR(oncache, PAR_CACHE_STR);
   //
   ADD_FMT_ARG("%c", ')');
-  if (strnlen(buf, sizeof(buf)) == 3 /*" ()"*/)
+#define EMPTY_ARGS " ()"
+  if (!strncmp(buf, EMPTY_ARGS, sizeof(EMPTY_ARGS)))
     len = 0;
+#undef EMPTY_ARGS
   if (run_opts.pause != ini_opts.pause)
     ADD_FMT_ARG(": %s", PAR_PAUSED_STR);
   return (len > (int)size) ? (int)size : len;
 }
 #undef IASP
+#undef ADD_FMT_ARG
+#undef INT_OPT2STR
+#undef BOOL_OPT2STR
 
 static void mc_statmode(void) {
   int statx = 4; // x-indent: "NN. "
@@ -791,8 +831,9 @@ static void mc_statmode(void) {
   }
 #endif
   mvprintw(staty - 1, statx, "%s", HOST_STR);
-  if (!title_len) title_len = get_title_len();
-  int x = getmaxx(stdscr) - title_len - 1;
+  if (stat_title_len < 0)
+    stat_title_len = get_stat_title_len();
+  int x = getmaxx(stdscr) - stat_title_len - 1;
   if (x < 0) x = 0;
   mc_stat_title(x, staty - 1);
   attroff(A_BOLD);
@@ -821,17 +862,33 @@ static inline void mc_histmode(void) {
 }
 
 static inline void mc_print_title(void) {
-  const char *title = screen_title;
-  char buff[LINEMAXLEN] = {0};
-  int len = snprinte(buff, sizeof(buff), "%s", screen_title);
-  if (len >= 0) {
-    title = buff;
+  static char title_cache[LINEMAXLEN];
+  if (cached_title_ulen < 0) { // generate title and cache it
+    char buff[LINEMAXLEN] = {0};
+    const char *pretitle = screen_title;
     if (opt_sum.un) {
-      int inc = mc_print_args(buff + len, sizeof(buff) - len);
-      if (inc < 0) title = screen_title; // else len += inc;
+      int len = snprinte(buff, sizeof(buff), "%s", screen_title);
+      if (len >= 0) {
+        pretitle = buff;
+        int inc = mc_print_args(buff + len, sizeof(buff) - len);
+        if (inc < 0) pretitle = screen_title; // else len += inc;
+      }
     }
+    memset(title_cache, 0, sizeof(title_cache));
+    int len = snprinte(title_cache, sizeof(title_cache), "%s", pretitle);
+    if (len >= 0)
+      cached_title_ulen = ustrlen(title_cache);
   }
-  mvprintw(0, 0, "%*s", (getmaxx(stdscr) + ustrlen(title)) / 2, title);
+  //
+  const char *title = NULL;
+  if (cached_title_ulen > 0)
+    title = title_cache;
+  else {
+    title = screen_title;
+    cached_title_ulen = screen_title_ulen;
+  }
+  if (title && *title)
+    mvprintw(0, 0, "%*s", (getmaxx(stdscr) + cached_title_ulen) / 2, title);
 }
 
 static inline void mc_print_hints_n_time(void) {
@@ -913,6 +970,8 @@ bool mc_open(void) {
     snprinte(screen_title, sizeof(screen_title), "%s %s %s", PACKAGE_NAME, mtr_args, dsthost);
   else
     snprinte(screen_title, sizeof(screen_title), "%s %s", PACKAGE_NAME, dsthost);
+  if (screen_title[0])
+    screen_title_ulen = ustrlen(screen_title);
   //
   mc_init();
   mc_redraw();
