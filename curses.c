@@ -387,7 +387,7 @@ static void printw_addr(int at, int ndx) {
   const char *name = dns_ptr_lookup(at, ndx);
   if (name) {
     printw("%s", name);
-    if (run_opts.ips)
+    if (run_opts.both)
       printw(" (%s)", strlongip(addr));
   } else
 #endif

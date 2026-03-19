@@ -249,7 +249,7 @@ static struct option long_options[] = {
 #endif
   {"address",    1, 0, OPT_ADDR},
 #ifdef ENABLE_DNS
-  {"show-ips",   0, 0, OPT_BOTH},
+  {"show-both",  0, 0, OPT_BOTH},
 #endif
   {"bitpattern", 1, 0, OPT_BITS},     // in range 0-255, or -1 for random
   {"cycles",     1, 0, OPT_COUNT},
@@ -628,7 +628,7 @@ static inline void short_set(char opt, const char *progname) {
       break;
 #ifdef ENABLE_DNS
     case OPT_BOTH:
-      ini_opts.ips = true;
+      ini_opts.both = true;
       break;
 #endif
     case OPT_BITS:

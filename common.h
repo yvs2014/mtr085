@@ -50,7 +50,7 @@
 #endif
 
 #ifndef GITREV
-#define GITREV "244"
+#define GITREV "245"
 #endif
 
 #ifndef HAVE_UINT
@@ -153,7 +153,7 @@ typedef struct opts_s {
   bool
     interactive,
     //
-    ips,      // -b
+    both,     // -b
     mpls,     // -e
     jitter,   // -j
     asn,      // -l
@@ -193,7 +193,7 @@ typedef union opt_sum_u {
   struct { uint
     interactive :1,
     //
-    ips      :1, // -b
+    both     :1, // -b
     mpls     :1, // -e
     jitter   :1, // -j
     asn      :1, // -l

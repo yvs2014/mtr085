@@ -49,7 +49,7 @@ static inline void split_multipath(int at) {
 #ifdef ENABLE_DNS
     const char *name = dns_ptr_lookup(at, i);
     printf("%c%s", DIV_SPLIT, name ? name : strlongip(ipaddr));
-    if (run_opts.ips)
+    if (run_opts.both)
 #endif
     { printf("%c%s", DIV_SPLIT, strlongip(ipaddr)); }
 #ifdef WITH_IPINFO
@@ -74,7 +74,7 @@ void split_redraw(void) {
 #ifdef ENABLE_DNS
       { const char *name = dns_ptr_lookup(at, host[at].current);
         printf("%c%s", DIV_SPLIT, name ? name : strlongip(ipaddr)); }
-      if (run_opts.ips)
+      if (run_opts.both)
 #endif
       { printf("%c%s", DIV_SPLIT, strlongip(ipaddr)); }
       for (uint i = 0; i < sizeof(fields); i++) {

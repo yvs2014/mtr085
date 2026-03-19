@@ -1,4 +1,5 @@
 .ds o6 "46
+.ds ob "b
 .ds oe "e
 .ds ol "lL
 .ds on "n
@@ -20,7 +21,7 @@
 .Nd a network diagnostic tool
 .Sh SYNOPSIS
 .Nm
-.Op Fl a\*[on b]Bcd\*[oe]fFi\*[ol]m\*[on]\*[oN]\*[oo]\*[op]\*[oq]rsStTuvx\*[o6]
+.Op Fl a\*[ob]Bcd\*[oe]fFi\*[ol]m\*[on]\*[oN]\*[oo]\*[op]\*[oq]rsStTuvx\*[o6]
 TARGET[:PORT] ...
 .Sh DESCRIPTION
 .Nm
@@ -49,11 +50,9 @@ The results are usually reported as round-trip-response times in milliseconds an
 Bind outgoing packets' socket to specific interface, so that any packet will be sent through this interface.
 .Sy Note
 that this option doesn't apply to DNS requests (which could be and could not be what you want).
-.ie "b"\*[on b]" \{\
-.It Fl b, Fl -show-ips
-Display both hostnames and IP addresses.  In split mode this adds an extra field to the output.  In report mode, there is usually too little space to add the IPs, and they will be truncated.  Use the wide report mode
-.Fl w
-to see the IPs in report mode.
+.ie "b"\*[ob]" \{\
+.It Fl b, Fl -show-both
+Display both (hop's IP address and hostname).  In split mode it adds an extra field to the output.
 .\}
 .It Fl B, Fl -bitpattern Ar NUM
 Specify bit pattern to use in payload.  Should be either within range 0-255, or -1 for random sampling.

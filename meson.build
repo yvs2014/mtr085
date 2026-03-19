@@ -196,6 +196,7 @@ else
   optlist += '-DNS'
   manexcl += 'n'
   manexcl += 'N'
+  manexcl += 'b'
 endif
 #
 ai_idn_hdr = '''
