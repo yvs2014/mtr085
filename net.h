@@ -72,13 +72,6 @@ typedef struct timemsec {
   long frac;  // in nanoseconds
 } timemsec_t;
 
-// attribute: packed
-#if __has_attribute(__packed__)
-#define PACKIT __attribute__((__packed__))
-#else
-#define PACKIT
-#endif
-
 #ifdef WITH_MPLS
 typedef union PACKIT mpls_label { // RFC4950
   struct {

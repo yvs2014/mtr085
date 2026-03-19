@@ -39,7 +39,6 @@
 #if !defined(LOG_IPINFO) && defined(LOGMOD)
 #undef LOGMOD
 #endif
-#include "common.h"
 
 #include "ipinfo.h"
 #include "mtr-poll.h"
@@ -305,11 +304,11 @@ static int count_records(char **record) {
   return nth;
 }
 
-static inline int parse_http_content_len(int lines_no, char* lines[TCP_RESP_LINES],
-  size_t recv_size, uint *cndx)
-{
+static inline int parse_http_content_len(uint lines_no, char* lines[TCP_RESP_LINES],
+	size_t recv_size, uint *cndx) {
   uint ndx = 0, len = 0; // content index in tcp response and its length
-  for (int i = 0; i < lines_no; i++) {
+  uint min = lines_no < TCP_RESP_LINES ? lines_no : TCP_RESP_LINES;
+  for (uint i = 0; i < min; i++) {
     char* tagvalue[2] = { lines[i], NULL };
     if (split_with_sep(tagvalue, 2, ' ', 0) == 2)
       if (strcmp("Content-Length:", tagvalue[0]) == 0)
@@ -327,6 +326,7 @@ static inline int parse_http_content_len(int lines_no, char* lines[TCP_RESP_LINE
     if (len > NAMELEN) len = NAMELEN;
   }
   if (cndx) *cndx = ndx;
+  if (len > (TCP_RESP_LINES * NAMELEN)) len = TCP_RESP_LINES * NAMELEN;
   return len;
 }
 
@@ -358,7 +358,7 @@ static void parse_http(char *buf, ssize_t recv_size, atndx_t id) {
     char txt[clen + 1]; memset(txt, 0, sizeof(txt));
     // combine into one line
     for (uint i = cndx, len = 0; (i < lines_no) && (len < clen); i++) {
-      int inc = snprints(txt + len, clen - len, "%s", lines[i]);
+      int inc = snprinte(txt + len, clen - len, "%s", lines[i]);
       if (inc < 0) break; else len += inc;
     }
 
@@ -469,8 +469,9 @@ void ipinfo_parse(int sock, int seq) { // except dns, dns.ack in dns.c
 static int create_tcpsock(int seq) {
   uint16_t port = (ORIG_TYPE == OT_WHOIS) ? WHOIS_PORT : HTTP_PORT;
   char srv[8] = {0};
-  snprints(srv, sizeof(srv), "%u", port);
+  snprinte(srv, sizeof(srv), "%u", port);
   LOGMSG("%s:%s", ORIG_HOST, srv);
+  if (!srv[0]) return -1;
   struct addrinfo *rp = NULL, hints = {
     .ai_family = af,
     .ai_socktype = SOCK_STREAM,
@@ -511,10 +512,14 @@ static int create_tcpsock(int seq) {
 static int send_tcp_query(int sock, const char *q) {
   char buf[NETDATA_MAXSIZE] = {0};
   if (ORIG_TYPE == OT_WHOIS)
-    snprints(buf, sizeof(buf), "%s\r\n", q);
+    snprinte(buf, sizeof(buf), "%s\r\n", q);
   else
-    snprints(buf, sizeof(buf), HTTP_GET, q, ORIG_HOST, PACKAGE_NAME);
+    snprinte(buf, sizeof(buf), HTTP_GET, q, ORIG_HOST, PACKAGE_NAME);
   size_t len = strnlen(buf, sizeof(buf));
+  if (!len) {
+    errno = EINVAL;
+    return -1;
+  }
   int rc = send(sock, buf, len, 0);
   if (rc >= 0) {
     /*summ*/ ipinfo_queries[0]++; (ORIG_TYPE == OT_HTTP) ? ipinfo_queries[1]++ : ipinfo_queries[2]++;
@@ -525,7 +530,7 @@ static int send_tcp_query(int sock, const char *q) {
 
 static char* make_tcp_qstr(t_ipaddr *ipaddr) {
   static char mkqstr[NAMELEN];
-  snprints(mkqstr, sizeof(mkqstr), "%s%s", origins[origin_no].prefix, strlongip(ipaddr));
+  snprinte(mkqstr, sizeof(mkqstr), "%s%s", origins[origin_no].prefix, strlongip(ipaddr));
   return mkqstr;
 }
 
@@ -628,36 +633,29 @@ int ipinfo_width(void) {
   return width;
 }
 
-//
-static char iiheader[NAMELEN];
-
 // 'div'-separated output
-const char* ipinfo_head_div(char div) {
-  memset(iiheader, 0, sizeof(iiheader));
+void ipinfo_head_div(char buff[], size_t size, char div) {
   for (uint i = 0, len = 0; (i < MAX_TXT_ITEMS)
       && (ipinfo_no[i] >= 0) && (ipinfo_no[i] < itemname_max)
-      && ORIG_UNAME(ipinfo_no[i]) && (len < sizeof(iiheader)); i++) {
+      && ORIG_UNAME(ipinfo_no[i]) && (len < size); i++) {
     int inc = (i && div) ?
-      snprints(iiheader + len, sizeof(iiheader) - len, "%c\"%s\"", div, ORIG_UNAME(ipinfo_no[i])) :
-      snprints(iiheader + len, sizeof(iiheader) - len,   "\"%s\"",      ORIG_UNAME(ipinfo_no[i]));
+      snprinte(buff + len, size - len, "%c\"%s\"", div, ORIG_UNAME(ipinfo_no[i])) :
+      snprinte(buff + len, size - len,   "\"%s\"",      ORIG_UNAME(ipinfo_no[i]));
     if (inc < 0) break; else len += inc;
   }
-  return iiheader;
 }
 
 // fixed width output
-const char* ipinfo_head_fix(void) {
-  memset(iiheader, 0, sizeof(iiheader));
+void ipinfo_head_fix(char buff[], size_t size) {
   for (uint i = 0, len = 0; (i < MAX_TXT_ITEMS)
       && (ipinfo_no[i] >= 0) && (ipinfo_no[i] < itemname_max)
-      && ORIG_UNAME(ipinfo_no[i]) && (len < sizeof(iiheader)); i++) {
+      && ORIG_UNAME(ipinfo_no[i]) && (len < size); i++) {
     int gap = ORIG_WIDTH(ipinfo_no[i]) - ustrlen(ORIG_UNAME(ipinfo_no[i]));
     if (gap < 0) gap = 0;
-    int inc = snprints(iiheader + len, sizeof(iiheader) - len, "%s%*s",
+    int inc = snprinte(buff + len, size - len, "%s%*s",
       ORIG_UNAME(ipinfo_no[i]), ++gap, "");
     if (inc < 0) break; else if (inc > 0) len += inc;
   }
-  return iiheader;
 }
 
 //
@@ -667,34 +665,31 @@ typedef int (*filler_fn)(char *buf, int size, const char *str, t_fmtdata fmt);
 
 static int fmt_filler(char *buf, int size, const char *str, t_fmtdata fmt) {
   return (fmt.num > 0) ?
-    snprints(buf, size, "%-*s ", fmt.num, str) :
-    snprints(buf, size, "%s ", str);
+    snprinte(buf, size, "%-*s ", fmt.num, str) :
+    snprinte(buf, size, "%s ", str);
 }
 
 static int str_filler(char *buf, int size, const char *str, t_fmtdata fmt) {
   return fmt.num ?
-    snprints(buf, size, "%c\"%s\"", fmt.ch, str) :
-    snprints(buf, size,   "\"%s\"",         str);
+    snprinte(buf, size, "%c\"%s\"", fmt.ch, str) :
+    snprinte(buf, size,   "\"%s\"",         str);
 }
 
 // formatted output
-const char *ipinfo_data_div(int at, int ndx, char div) {
-  static char fmtinfo[NAMELEN];
-  fmtinfo[0] = 0;
+void ipinfo_data_div(char buff[], size_t size, int at, int ndx, char div) {
   t_fmtdata fmtdata = { .ch = div };
   filler_fn filler = fmtdata.ch ? str_filler : fmt_filler;
-  for (uint i = 0, len = 0; (i < MAX_TXT_ITEMS)
-      && (ipinfo_no[i] >= 0) && (ipinfo_no[i] < itemname_max)
-      && (len < sizeof(fmtinfo)); i++) {
+  for (uint i = 0, len = 0; (i < MAX_TXT_ITEMS) && (len < size)
+      && (ipinfo_no[i] >= 0) && (ipinfo_no[i] < itemname_max); i++) {
     const char *rec = addr_exist(&IP_AT_NDX(at, ndx)) ?
       get_ipinfo(at, ndx, ipinfo_no[i]) : NULL;
     fmtdata.num = fmtdata.ch ? (int)i : ORIG_WIDTH(ipinfo_no[i]);
-    int inc = filler(fmtinfo + len, sizeof(fmtinfo) - len, rec ? rec : UNKN, fmtdata);
-    if (inc > 0) len += inc;
+    int inc = filler(buff + len, size - len, rec ? rec : UNKN, fmtdata);
+    if (inc < 0) break; else if (inc > 0) len += inc;
   }
-  return fmtinfo;
 }
-inline const char* ipinfo_data_fix(int at, int ndx) { return ipinfo_data_div(at, ndx, 0); }
+inline void ipinfo_data_fix(char buff[], size_t size, int at, int ndx) {
+  ipinfo_data_div(buff, size, at, ndx, 0); }
 
 bool ipinfo_ready(void) { return (run_opts.lookup && ii_ready); }
 

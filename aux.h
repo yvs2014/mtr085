@@ -9,17 +9,6 @@
 
 #define LENVALMIL(val) double _v = (val) / (double)MIL; int _l = val2len(_v);
 
-#if __has_attribute(unused)
-#define UNUSED __attribute__((unused))
-#else
-#define UNUSED
-#endif
-#if __has_attribute(nonnull)
-#define NONNULL(...) __attribute__((nonnull(__VA_ARGS__)))
-#else
-#define NONNULL(...)
-#endif
-
 char* trim(char *str);
 int val2len(double val);
 
@@ -36,6 +25,6 @@ extern char limit_error[NAMELEN];
 int limit_int(int min, int max, const char *arg, const char *what, char fail) NONNULL(3);
 uint ustrlen(const char *str);
 char *datetime(time_t at, char *buff, size_t size) NONNULL(2);
-int snprints(char str[], size_t size, const char *format, ...);
+int snprinte(char str[], size_t size, const char *format, ...);
 
 #endif

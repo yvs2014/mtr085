@@ -216,7 +216,7 @@ static inline void dns_open_finlog(void) {
   for (int i = 0; i < nscount6; i++) {
     if (!inet_ntop(nsaddrs6[i].sin6_family, &nsaddrs6[i].sin6_addr, buff, sizeof(buff)))
       for (size_t j = 0, l = 0; (j < sizeof(nsaddrs6[i].sin6_addr.s6_addr)) && (l < sizeof(buff)); j++) {
-        int inc = snprints(buff + l, sizeof(buff) - l, "%02x", nsaddrs6[i].sin6_addr.s6_addr[j]);
+        int inc = snprinte(buff + l, sizeof(buff) - l, "%02x", nsaddrs6[i].sin6_addr.s6_addr[j]);
         if (inc > 0) l += inc; else break;
       }
     LOGMSG("ns6#%d: [%s]:%u (af=%u)", i, buff, ntohs(nsaddrs6[i].sin6_port), nsaddrs6[i].sin6_family);
@@ -263,14 +263,15 @@ void dns_close(void) {
 #ifdef ENABLE_IPV6
 #define HEXMASK 0xf
 // fill ip6.arpa str
+static void ip2arpa6(const uint8_t *ptr, char *buf, int size, const char *suff) NONNULL(1, 2, 4);
 static void ip2arpa6(const uint8_t *ptr, char *buf, int size, const char *suff) {
   int len = 0;
   for (int i = HEXMASK; (i >= 0) && (len < size); i--) {
-    int inc = snprints(buf + len, size - len, "%x.%x.", ptr[i] & HEXMASK, ptr[i] >> 4);
+    int inc = snprinte(buf + len, size - len, "%x.%x.", ptr[i] & HEXMASK, ptr[i] >> 4);
     if (inc > 0) len += inc; else break;
   }
   if (len < size)
-    snprints(buf + len, size - len, "%s", suff);
+    snprinte(buf + len, size - len, "%s", suff);
 }
 #endif
 
@@ -282,7 +283,7 @@ char* ip2arpa(const t_ipaddr *ipaddr, const char *suff4, const char *suff6) {
     ip2arpa6(p, lqbuf, sizeof(lqbuf), suff6 ? suff6 : ARPA6_SUFFIX);
   } else
 #endif
-  { snprints(lqbuf, sizeof(lqbuf), "%d.%d.%d.%d.%s", p[3], p[2], p[1], p[0], suff4 ? suff4 : ARPA4_SUFFIX); }
+  { snprinte(lqbuf, sizeof(lqbuf), "%d.%d.%d.%d.%s", p[3], p[2], p[1], p[0], suff4 ? suff4 : ARPA4_SUFFIX); }
   return lqbuf;
 }
 

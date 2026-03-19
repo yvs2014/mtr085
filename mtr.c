@@ -774,7 +774,7 @@ static void parse_options(int argc, char **argv) {
   }
   run_opts = ini_opts; // to reflect possible interactive changes
   for (int i = 1, len = 0; (i < optind) && (i < argc) && argv[i] && ((uint)len < sizeof(mtr_args)); i++) {
-    int inc = snprints(mtr_args + len, sizeof(mtr_args) - len, (i > 1) ? " %s" : "%s", argv[i]);
+    int inc = snprinte(mtr_args + len, sizeof(mtr_args) - len, (i > 1) ? " %s" : "%s", argv[i]);
     if (inc < 0) break; else len += inc;
   }
   ineractive_modes(display_mode);

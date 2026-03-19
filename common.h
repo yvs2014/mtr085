@@ -27,15 +27,37 @@
 #include <sys/param.h>
 #endif
 
+//
+// attribute: unused
+#if __has_attribute(unused)
+#define UNUSED __attribute__((unused))
+#else
+#define UNUSED
+#endif
+//
+// attribute: nonnull
+#if __has_attribute(nonnull)
+#define NONNULL(...) __attribute__((nonnull(__VA_ARGS__)))
+#else
+#define NONNULL(...)
+#endif
+//
+// attribute: packed
+#if __has_attribute(__packed__)
+#define PACKIT __attribute__((__packed__))
+#else
+#define PACKIT
+#endif
+
 #ifdef HAVE_STRLCPY
 // note: return size can distinct: src.len() and printed chars
 #define STRLCPY(dst, src, size) strlcpy(dst, src, size)
 #else
-#define STRLCPY(dst, src, size) snprints(dst, size, "%s", src)
+#define STRLCPY(dst, src, size) snprinte(dst, size, "%s", src)
 #endif
 
 #ifndef GITREV
-#define GITREV "240"
+#define GITREV "242"
 #endif
 
 #ifndef HAVE_UINT

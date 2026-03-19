@@ -32,7 +32,7 @@ void dns_parse(int fd, int family);
 const char *dns_ptr_lookup(int at, int ndx);
 const char *dns_ptr_cache(int at, int ndx);
 int dns_send_query(int at, int ndx, const char *qstr, int type);
-char* ip2arpa(const t_ipaddr *ipaddr, const char *suff4, const char *suff6);
+char* ip2arpa(const t_ipaddr *ipaddr, const char *suff4, const char *suff6) NONNULL(1);
 
 extern void (*dns_ptr_handler)(int at, int ndx, const char* answer);
 extern void (*dns_txt_handler)(int at, int ndx, const char* answer);

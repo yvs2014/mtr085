@@ -76,13 +76,13 @@ int limit_int(int min, int max, const char *arg, const char *what, char fail) {
   long long val = str2ll(arg);
   long long lim = val;
   if (errno)
-    snprints(limit_error, sizeof(limit_error), "%s", strerror(errno));
+    snprinte(limit_error, sizeof(limit_error), "%s", strerror(errno));
   if ((val < min) || (val > max)) {
     errno = ERANGE;
     lim = (val < min) ? min : max;
-    if (what) snprints(limit_error, sizeof(limit_error), "%s: %s: %s [%d,%d]",
+    if (what) snprinte(limit_error, sizeof(limit_error), "%s: %s: %s [%d,%d]",
       what, arg, strerror(errno), min, max);
-    else      snprints(limit_error, sizeof(limit_error),     "%s: %s [%d,%d]",
+    else      snprinte(limit_error, sizeof(limit_error),     "%s: %s [%d,%d]",
             arg, strerror(errno), min, max);
   }
   if (errno && fail) {
@@ -115,16 +115,14 @@ char *datetime(time_t at, char *buff, size_t size) {
   return buff;
 }
 
-int snprints(char str[], size_t size, const char *format, ...) {
+int snprinte(char str[], size_t size, const char *format, ...) {
   if (!str || !format) return 0;
   va_list args;
   va_start(args, format);
   int len = vsnprintf(str, size, format, args);
   va_end(args);
+  if (len >= (int)size) len = -1; // truncation as error
   if (len < 0) str[0] = 0;
-  if (len >= (int)size) {
-    len = (size > 0) ? (size - 1) : 0;
-  }
   return len;
 }
 

@@ -335,8 +335,12 @@ static int printw_mpls(const mpls_data_t *m) {
 static void printw_addr(int at, int ndx) {
   t_ipaddr *addr = &IP_AT_NDX(at, ndx);
 #ifdef WITH_IPINFO
-  if (ipinfo_ready())
-    printw("%s", ipinfo_data_fix(at, ndx));
+  if (ipinfo_ready()) {
+    char info[NAMELEN] = {0};
+    ipinfo_data_fix(info, sizeof(info), at, ndx);
+    if (info[0])
+      printw("%s", info);
+  }
 #endif
   bool down = !host[at].up;
   if (down)
@@ -569,8 +573,12 @@ static inline void histoaddr(int at, int max, int y, int x, int cols) {
     if (!host[at].up)
       attron(A_BOLD);
 #ifdef WITH_IPINFO
-    if (ipinfo_ready())
-      printw("%s", ipinfo_data_fix(at, host[at].current));
+    if (ipinfo_ready()) {
+      char info[NAMELEN] = {0};
+      ipinfo_data_fix(info, sizeof(info), at, host[at].current);
+      if (info[0])
+        printw("%s", info);
+    }
 #endif
 #ifdef ENABLE_DNS
     const char *name = dns_ptr_lookup(at, host[at].current);
@@ -714,7 +722,7 @@ static void print_scale(void) {
 #define ADD_FMT_ARG(fmt, ...) do {   \
   int max = size - len;              \
   if (max <= 0) return size;         \
-  int inc = snprints(buf + len, max, \
+  int inc = snprinte(buf + len, max, \
     fmt, __VA_ARGS__);               \
   INC_OR_RET;                        \
 } while (0)
@@ -731,7 +739,7 @@ static void print_scale(void) {
 } while (0)
 
 static int mc_print_args(char *buf, size_t size) {
-  int len = snprints(buf, size, " (");
+  int len = snprinte(buf, size, " (");
   if (len < 0) return len;
   int iasp = len;
   BOOL_OPT2STR(udp,    PAR_UDP_STR);
@@ -775,9 +783,10 @@ static void mc_statmode(void) {
   attron(A_BOLD);
 #ifdef WITH_IPINFO
   if (ipinfo_ready()) {
-    const char *header = ipinfo_head_fix();
-    if (header)
-      mvprintw(staty - 1, statx, "%s", header);
+    char info[NAMELEN] = {0};
+    ipinfo_head_fix(info, sizeof(info));
+    if (info[0])
+      mvprintw(staty - 1, statx, "%s", info);
     statx += ipinfo_width(); // indent: "NN. " + IPINFO
   }
 #endif
@@ -814,7 +823,7 @@ static inline void mc_histmode(void) {
 static inline void mc_print_title(void) {
   const char *title = screen_title;
   char buff[LINEMAXLEN] = {0};
-  int len = snprints(buff, sizeof(buff), "%s", screen_title);
+  int len = snprinte(buff, sizeof(buff), "%s", screen_title);
   if (len >= 0) {
     title = buff;
     if (opt_sum.un) {
@@ -832,17 +841,16 @@ static inline void mc_print_hints_n_time(void) {
   int maxx = getmaxx(stdscr);
   char buff[LINEMAXLEN] = {0};
   // source host
-  int len = snprints(buff, sizeof(buff), "%.*s", (int)strnlen(srchost, maxx / 2), srchost);
-  if (len < 0) return;
-  // timestamp
+  int len = snprinte(buff, sizeof(buff), "%.*s", (int)strnlen(srchost, maxx / 2), srchost);
+  if (len < 0)
+    return;
+  // timestamp (note: not mandatory)
   char str[64] = {0};
   const char *date = datetime(time(NULL), str, sizeof(str));
-  if (date && date[0]) {
-    int inc = snprints(buff + len, sizeof(buff) - len, ": %s", date);
-    if (inc < 0) return;
-    else if (inc > 0) len += inc;
-  }
-  if ((len > 0) && buff[0])
+  if (date && date[0])
+    snprinte(buff + len, sizeof(buff) - len, ": %s", date);
+  //
+  if ((len > 0) && buff[0]) // rigth aligned
     mvaddstr(1, maxx - ustrlen(buff) - 1, buff);
 }
 
@@ -902,9 +910,9 @@ bool mc_open(void) {
   }
   // init title
   if (mtr_args[0])
-    snprints(screen_title, sizeof(screen_title), "%s %s %s", PACKAGE_NAME, mtr_args, dsthost);
+    snprinte(screen_title, sizeof(screen_title), "%s %s %s", PACKAGE_NAME, mtr_args, dsthost);
   else
-    snprints(screen_title, sizeof(screen_title), "%s %s", PACKAGE_NAME, dsthost);
+    snprinte(screen_title, sizeof(screen_title), "%s %s", PACKAGE_NAME, dsthost);
   //
   mc_init();
   mc_redraw();
