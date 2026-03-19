@@ -287,11 +287,13 @@ static key_action_t keyboard_events(key_action_t action) {
       run_opts.pause = !run_opts.pause;
       OPT_SUM(pause);
       break;
+#if defined(CURSESMODE) || defined(SPLITMODE)
     case ActionJitter: // latency OR jitter
       run_opts.jitter = !run_opts.jitter;
       OPT_SUM(jitter);
       onoff_jitter();
       break;
+#endif
 #ifdef WITH_MPLS
     case ActionMPLS:
       LOGMSG("toggle %s: %d -> %d", "MPLS", run_opts.mpls, !run_opts.mpls);

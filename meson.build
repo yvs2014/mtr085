@@ -69,7 +69,6 @@ fndesc = {
   'pow': {'libs': ['m'], 'hdr': 'math.h'},
   'warnx': {'libs': ['bsd'], 'hdr': 'err.h'},
   'socket': {'libs': ['socket', 'network'], 'hdr': 'sys/socket.h'},
-  'strlcpy': {'libs': [], 'hdr': 'stdlib.h', 'libhdr': true, 'req': false},
   'arc4random_uniform': {'libs': [], 'hdr': 'stdlib.h', 'libhdr': true, 'req': false},
   'quick_exit':  {'libs': [], 'hdr': 'stdlib.h', 'req': false},
   'localtime_r': {'libs': [], 'hdr': 'time.h',   'req': false},

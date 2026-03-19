@@ -526,7 +526,9 @@ static inline void option_fields(char opt) {
 #ifdef ENABLE_DNS
 static inline void option_ns(char opt) {
   char buff[MAX_ADDRSTRLEN + 6/*:port*/] = {0};
-  STRLCPY(buff, optarg, sizeof(buff));
+  snprinte(buff, sizeof(buff), "%s", optarg);
+  if (!buff[0])
+    err(EINVAL, "-%c", opt);
   char* hostport[2] = {0};
   if (!split_hostport(buff, hostport))
     errx(EINVAL, "-%c: %s: %s", opt, PARSE_ERR, buff);
@@ -842,7 +844,9 @@ static void init_locale(void) {
   setlocale(LC_CTYPE, "");
   if (strcasecmp("UTF-8", nl_langinfo(CODESET)) == 0) { // NOLINT(concurrency-mt-unsafe)
     if (iswprint(L'▁')) {
+#ifdef CURSESMODE
       curses_mode_max++;
+#endif
       return;
     }
     warnx("%s", UNOPRINT_ERR);
@@ -922,7 +926,9 @@ static inline void resolv_with_port(t_res_rc *rr, t_res_rc *rr_init) {
   if (!rr)
     return;
   char buff[MAX_ADDRSTRLEN + 6/*:port*/] = {0};
-  STRLCPY(buff, dsthost, sizeof(buff));
+  snprinte(buff, sizeof(buff), dsthost);
+  if (buff[0] < 0)
+    return;
   char* hostport[2] = {0};
   if (split_hostport(buff, hostport)) {
     limit_error[0] = 0;
@@ -979,7 +985,7 @@ static inline void main_prep(int argc, char **argv) {
     dns_open();
 #endif
   if (gethostname(srchost, sizeof(srchost)))
-    STRLCPY(srchost, NONE_STR, sizeof(srchost));
+    snprinte(srchost, sizeof(srchost), "%s", NONE_STR);
   display_start(
 #ifdef OUTPUT_FORMAT_TOON
     (argc > optind) ? (argc - optind) : 0

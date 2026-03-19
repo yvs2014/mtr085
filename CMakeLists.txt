@@ -368,7 +368,7 @@ set(FN_MUST socket)
 fn_checkout()
 #
 set(FN_LIBS c)
-set(FN_LIST warnx strlcpy arc4random_uniform)
+set(FN_LIST warnx arc4random_uniform)
 set(FN_MUST warnx)
 fn_checkout()
 #

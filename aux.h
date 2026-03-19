@@ -16,6 +16,8 @@ extern int fld_index[UCHAR_MAX + 1];
 void set_fld_active(const char *str);
 #ifdef CURSESMODE
 bool is_custom_fld(void);
+#endif
+#if defined(CURSESMODE) || defined(SPLITMODE)
 void onoff_jitter(void);
 #endif
 const t_stat* active_stats(size_t nth);

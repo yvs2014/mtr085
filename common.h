@@ -49,15 +49,8 @@
 #define PACKIT
 #endif
 
-#ifdef HAVE_STRLCPY
-// note: return size can distinct: src.len() and printed chars
-#define STRLCPY(dst, src, size) strlcpy(dst, src, size)
-#else
-#define STRLCPY(dst, src, size) snprinte(dst, size, "%s", src)
-#endif
-
 #ifndef GITREV
-#define GITREV "242"
+#define GITREV "243"
 #endif
 
 #ifndef HAVE_UINT

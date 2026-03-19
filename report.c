@@ -195,6 +195,7 @@ static void report_print_header(int hostlen, int infolen) {
   foreach_stat(0, report_headstat, '\n');
 }
 
+static void report_bodystat(int at, const t_stat *stat) NONNULL(2);
 static void report_bodystat(int at, const t_stat *stat) {
   const char *str = net_elem(at, stat->key);
   if (str) {
