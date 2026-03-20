@@ -21,7 +21,8 @@
 
 #include <stdbool.h>
 #include <sys/types.h>
-#include <common.h>
+
+#include "common.h"
 
 bool  ipinfo_init(const char *arg);
 void  ipinfo_close(void);

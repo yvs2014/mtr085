@@ -12,6 +12,7 @@ chk_cmd dh debhelper
 
 set -e
 rev="$(git rev-list HEAD | sed '/^97af563/q' | sed -n '$=')"
+rev="$((rev - 1))"
 arch="$(dpkg-architecture -qDEB_BUILD_ARCH)"
 dist="$(lsb_release -cs)"
 name="mtr085"

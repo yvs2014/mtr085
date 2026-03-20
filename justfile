@@ -114,3 +114,7 @@ snap: (check_dep "snapcraft" "snap install snapcraft")
 	snapcraft
 	@ls -l *.snap
 
+# misc
+setcap: install-meson
+	setcap cap_net_raw+p /usr/local/bin/mtr
+

@@ -932,6 +932,9 @@ bool mc_open(void) {
   }
   raw();
   noecho();
+  // reset cache
+  cached_title_ulen = -1;
+  stat_title_len = -1;
   //
   if (run_opts.color)
     if (!has_colors())

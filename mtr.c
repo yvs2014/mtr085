@@ -926,8 +926,7 @@ static inline void resolv_with_port(t_res_rc *rr, t_res_rc *rr_init) {
   if (!rr)
     return;
   char buff[MAX_ADDRSTRLEN + 6/*:port*/] = {0};
-  snprinte(buff, sizeof(buff), dsthost);
-  if (buff[0] < 0)
+  if (snprinte(buff, sizeof(buff), "%s", dsthost) < 0)
     return;
   char* hostport[2] = {0};
   if (split_hostport(buff, hostport)) {
