@@ -20,7 +20,7 @@ jobs:
         os: [ubuntu-latest]
         compiler: [gcc, clang]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: master
       - name: Install mandatory packages for building
@@ -37,7 +37,7 @@ jobs:
         run: sudo dpkg -i debs/mtr085_*.deb
       - name: Run on ${{matrix.os}}
         run: mtr -r localhost
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: assets built with ${{matrix.compiler}}
           path: debs/mtr085_*_*.deb
@@ -50,7 +50,7 @@ jobs:
         os: [macos-latest]
         compiler: [gcc, clang]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: master
       - name: Install mandatory packages for building
