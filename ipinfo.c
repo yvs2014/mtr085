@@ -41,7 +41,7 @@
 #endif
 
 #include "ipinfo.h"
-#include "mtr-poll.h"
+#include "polling.h"
 #include "net.h"
 #ifdef ENABLE_DNS
 #include "dns.h"

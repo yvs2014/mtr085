@@ -16,12 +16,12 @@
     Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 */
 
-#include "mtr-poll.h"
 #include "common.h"
 #include "display.h"
+#include "polling.h"
 #include "report.h"
-#ifdef CURSESMODE
-#include "mtr-curses.h"
+#ifdef TUIMODE
+#include "tui.h"
 #endif
 #ifdef SPLITMODE
 #include "split.h"
@@ -29,8 +29,8 @@
 
 bool display_open(void) {
   switch (display_mode) {
-#ifdef CURSESMODE
-    case DisplayCurses: return mc_open();
+#ifdef TUIMODE
+    case DisplayTUI: return tui_open();
 #endif
 #ifdef SPLITMODE
     case DisplaySplit: split_open(); break;
@@ -43,8 +43,8 @@ bool display_open(void) {
 void display_close(bool next) {
   switch (display_mode) {
     case DisplayReport: report_close(next, true); break;
-#ifdef CURSESMODE
-    case DisplayCurses: mc_close(); break;
+#ifdef TUIMODE
+    case DisplayTUI: tui_close(); break;
 #endif
 #ifdef SPLITMODE
     case DisplaySplit: split_close(); break;
@@ -76,8 +76,8 @@ void display_start(
 #endif
 ) {
   if (display_mode == DisplayAuto) {
-#ifdef CURSESMODE
-    display_mode = DisplayCurses; // default
+#ifdef TUIMODE
+    display_mode = DisplayTUI; // default
 #else
     display_mode = DisplayReport; // if no curses
 #endif
@@ -117,8 +117,8 @@ void display_start(
 }
 
 void display_confirm_fin(void) {
-#ifdef CURSESMODE
-  if (display_mode == DisplayCurses) mc_confirm();
+#ifdef TUIMODE
+  if (display_mode == DisplayTUI) tui_confirm();
 #endif
 }
 
@@ -136,8 +136,8 @@ void display_final(void) {
 
 void display_redraw(void) {
   switch (display_mode) {
-#ifdef CURSESMODE
-    case DisplayCurses: mc_redraw(); break;
+#ifdef TUIMODE
+    case DisplayTUI: tui_redraw(); break;
 #endif
 #ifdef SPLITMODE
     case DisplaySplit: split_redraw(); break;
@@ -169,8 +169,8 @@ void display_redraw(void) {
 
 key_action_t display_key_action(void) {
   switch (display_mode) {
-#ifdef CURSESMODE
-    case DisplayCurses: return mc_keyaction();
+#ifdef TUIMODE
+    case DisplayTUI: return tui_keyaction();
 #endif
 #ifdef SPLITMODE
     case DisplaySplit: return split_keyaction();
@@ -182,8 +182,8 @@ key_action_t display_key_action(void) {
 
 void display_loop(void) {
   switch (display_mode) {
-#ifdef CURSESMODE
-    case DisplayCurses:
+#ifdef TUIMODE
+    case DisplayTUI:
 #endif
 #ifdef SPLITMODE
     case DisplaySplit:
@@ -213,9 +213,9 @@ void display_loop(void) {
 }
 
 void display_clear(void) {
-#ifdef CURSESMODE
-  if (display_mode == DisplayCurses)
-    mc_clear();
+#ifdef TUIMODE
+  if (display_mode == DisplayTUI)
+    tui_clear();
 #endif
 }
 

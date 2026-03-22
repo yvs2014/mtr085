@@ -25,7 +25,7 @@ config.set_quoted('VERSION', '.'.join(version))
 # options
 optlist = []
 cap        = get_option('CAP')
-curses     = get_option('CURSES')
+tui        = get_option('TUI')
 unicode    = get_option('UNICODE')
 nls        = get_option('NLS')
 dns        = get_option('DNS')
@@ -58,11 +58,11 @@ headers = ['netdb.h', 'netinet/in.h', 'sys/param.h']
 
 # sources
 srcn  = [name]
+srcn += 'aux'
 srcn += 'net'
+srcn += 'polling'
 srcn += 'display'
 srcn += 'report'
-srcn += 'poll'
-srcn += 'aux'
 
 # probes
 fndesc = {
@@ -75,7 +75,9 @@ fndesc = {
   'uselocale':   {'libs': [], 'hdr': 'locale.h', 'req': false},
 }
 
-# optional: CAP (default yes)
+## optional fetaures
+
+# linux capabilities
 if cap
   lib = 'cap'
   libcap = dependency('lib' + lib, required: false)
@@ -88,8 +90,9 @@ if cap
 else
   optlist += '-CAP'
 endif
-#
-if curses
+
+# TUI (curses library)
+if tui
 #  lib = 'tinfo'
 #  libtinfo = dependency('lib' + lib, required: false)
 #  if not libtinfo.found()
@@ -116,11 +119,14 @@ if curses
       endif
     endif
   endif
+  config.set_quoted('TUIKIND', lib)
   deps += libcurses
-  fn = 'use_default_colors'
-  if cc.has_function(fn, dependencies: libcurses)
-    config.set('HAVE_' + fn.underscorify().to_upper(), 1)
-  endif
+  fns = ['use_default_colors', 'curses_version']
+  foreach fn: fns
+    if cc.has_function(fn, dependencies: libcurses)
+      config.set('HAVE_' + fn.underscorify().to_upper(), 1)
+    endif
+  endforeach
   headers += 'ncursesw/ncurses.h'
   headers += 'ncursesw/curses.h'
   headers += 'ncurses/ncurses.h'
@@ -132,12 +138,13 @@ if curses
     assert(cc.has_function(fn, dependencies: libcurses), 'UNICODE is enabled, but no wchar library found')
   endif
   srcn += 'curses'
-  optlist += '+CURSES'
-  config.set('CURSESMODE', 1)
+  optlist += '+TUI'
+  config.set('TUIMODE', 1)
 else
-  optlist += '-CURSES'
+  optlist += '-TUI'
 endif
-#
+
+# unicode support
 if unicode
   headers += 'wchar.h'
   headers += 'wctype.h'
@@ -148,7 +155,8 @@ if unicode
 else
   optlist += '-UNICODE'
 endif
-#
+
+# NLS support
 if nls
   config.set('USE_NLS', 1)
   config.set_quoted('LOCALEDIR', join_paths(get_option('prefix'), get_option('localedir')))
@@ -163,7 +171,8 @@ if nls
 else
   optlist += '-NLS'
 endif
-#
+
+# DNS support
 if dns
   fn = 'res_mkquery'
   hdrs = ['netinet/in.h', 'resolv.h', 'netdb.h']
@@ -198,7 +207,8 @@ else
   manexcl += 'N'
   manexcl += 'b'
 endif
-#
+
+# IDN support
 ai_idn_hdr = '''
 #ifndef _GNU_SOURCE
 #define _GNU_SOURCE 1
@@ -234,7 +244,8 @@ if not idn # no getaddrinfo() with AI_IDN flag
   endforeach
 endif
 optlist += idn ? '+IDN' : '-IDN'
-#
+
+# ipinfo feature
 if ipinfo
   srcn += 'ipinfo'
   optlist += '+IPINFO'
@@ -243,7 +254,8 @@ else
   optlist += '-IPINFO'
   manexcl += 'l'
 endif
-#
+
+# split mode
 if split
   srcn += 'split'
   optlist += '+SPLIT'
@@ -252,7 +264,8 @@ else
   optlist += '-SPLIT'
   manexcl += 'p'
 endif
-#
+
+# IPv6 support
 if ipv6
   optlist += '+IPV6'
   config.set('ENABLE_IPV6', 1)
@@ -261,7 +274,8 @@ else
   manexcl += '4'
   manexcl += '6'
 endif
-#
+
+# MPLS support
 if mpls
   optlist += '+MPLS'
   config.set('WITH_MPLS', 1)
@@ -269,8 +283,8 @@ else
   optlist += '-MPLS'
   manexcl += 'e'
 endif
-#
-# out format options
+
+# text modes: output format
 if outraw
   outfmt += 'raw'
   config.set('OUTPUT_FORMAT_RAW', 1)
@@ -313,7 +327,7 @@ else
   optlist += '-OUTFMT'
   manexcl += 'o'
 endif
-#
+
 # syslog debug options
 if debpoll
   deblog += 'poll'
@@ -336,9 +350,10 @@ if deblog.length() > 0
 else
   optlist += '-DEBLOG'
 endif
+
 #
 config.set_quoted('BUILD_OPTIONS', ' '.join(optlist))
-# end of options
+## end of optional fetaures
 
 
 # test types: uint, ulong
@@ -411,8 +426,10 @@ endforeach
 #
 
 if meson.version().version_compare('>=0.53')
-  summary({'CAP': cap, 'CURSES': curses, 'UNICODE': unicode, 'NLS': nls,
-   'DNS': dns, 'IDN': idn, 'IPINFO': ipinfo, 'SPLIT': split, 'IPV6': ipv6, 'MPLS': mpls},
+  summary({
+   'TUI': tui, 'CAP': cap, 'UNICODE': unicode, 'NLS': nls,
+   'DNS': dns, 'IDN': idn, 'IPINFO': ipinfo,
+   'SPLIT': split, 'IPV6': ipv6, 'MPLS': mpls},
     bool_yn: true)
 endif
 

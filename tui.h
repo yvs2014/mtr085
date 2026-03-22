@@ -16,16 +16,17 @@
     Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 */
 
-#ifndef MTR_CURSES_H
-#define MTR_CURSES_H
+#ifndef TUI_H
+#define TUI_H
 
 #include "common.h"
 
-bool mc_open(void);
-void mc_close(void);
-void mc_redraw(void);
-key_action_t mc_keyaction(void);
-void mc_clear(void);
-void mc_confirm(void);
+bool tui_open(void);
+void tui_close(void);
+void tui_redraw(void);
+key_action_t tui_keyaction(void);
+void tui_clear(void);
+void tui_confirm(void);
+const char* tui_version(void);
 
 #endif

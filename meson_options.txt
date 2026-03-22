@@ -1,5 +1,5 @@
+option('TUI',       type: 'boolean', value: true,  description: '[N]Curses version')
 option('CAP',       type: 'boolean', value: true,  description: 'Linux capabilities')
-option('CURSES',    type: 'boolean', value: true,  description: '[N]Curses version')
 option('UNICODE',   type: 'boolean', value: true,  description: 'Unicode support')
 option('NLS',       type: 'boolean', value: true,  description: 'I18n support')
 option('DNS',       type: 'boolean', value: true,  description: 'DNS support')

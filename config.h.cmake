@@ -9,8 +9,8 @@
 /* Linux capabilities */
 #cmakedefine LIBCAP
 
-/* Curses support */
-#cmakedefine CURSESMODE
+/* TUI (curses library) */
+#cmakedefine TUIMODE
 #cmakedefine HAVE_NCURSESW_NCURSES_H
 #cmakedefine HAVE_NCURSESW_CURSES_H
 #cmakedefine HAVE_NCURSES_NCURSES_H
@@ -18,6 +18,8 @@
 #cmakedefine HAVE_NCURSES_H
 #cmakedefine HAVE_CURSES_H
 #cmakedefine HAVE_USE_DEFAULT_COLORS
+#cmakedefine HAVE_CURSES_VERSION
+#cmakedefine TUIKIND "@TUIKIND@"
 
 /* Unicode related */
 #cmakedefine WITH_UNICODE

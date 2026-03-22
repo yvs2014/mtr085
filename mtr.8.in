@@ -244,7 +244,12 @@ Use UDP datagrams instead of ICMP ECHO
 .br
 Print
 .Nm
-version and build options
+version and features
+.It Fl vv
+.br
+Print
+.Nm
+version, features, and TUI info
 .It Fl x, Fl -cache Ar SECONDS
 Cache mode. Don't ping known hops during cache-timeout period (0 means default 60 seconds).
 .ie "46"\*[o6]" \{\

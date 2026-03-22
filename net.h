@@ -43,7 +43,7 @@
 #define MAXPACKET 1500 // limit it to default MTU
 #define MINPACKET 28   // 20 bytes IP and 8 bytes ICMP or UDP
 
-#ifdef CURSESMODE
+#ifdef TUIMODE
 #define SAVED_PINGS 200
 enum { CT_UNKN = -1, CT_UNSENT = -2, CT_SEAL = -3 };
 #endif
@@ -125,7 +125,7 @@ typedef struct nethost {
   double jitter, javg, jworst, jinta; // jitters
   long double var;        // variance as base for std deviance: sqrt(var/(recv-1))
   bool transit, up;       // states: ping in transit, host alive
-#ifdef CURSESMODE
+#ifdef TUIMODE
   int saved[SAVED_PINGS]; // map for display mode: <0 " ?" chars, >=0 pong in usec
   int saved_seq_offset;
 #endif

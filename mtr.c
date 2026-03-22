@@ -35,7 +35,6 @@
 #include <sys/stat.h>
 
 #include "common.h"
-#include "nls.h"
 
 #ifdef HAVE_NETDB_H
 #include <netdb.h>
@@ -51,20 +50,20 @@
 #endif
 
 #ifndef AI_IDN
-#if   defined(LIBIDN2)
-#if   defined(HAVE_IDN2_IDN2_H)
-#include <idn2/idn2.h>
-#else
-#include <idn2.h>
-#endif
-#define IDN_TO_ASCII_LZ idn2_to_ascii_lz
-#define IDN_TO_ASCII_8Z idn2_to_ascii_8z
-#define IDN_STRERROR    idn2_strerror
+#ifdef LIBIDN2
+#  ifdef HAVE_IDN2_IDN2_H
+#    include <idn2/idn2.h>
+#  else
+#    include <idn2.h>
+#  endif
+#  define IDN_TO_ASCII_LZ idn2_to_ascii_lz
+#  define IDN_TO_ASCII_8Z idn2_to_ascii_8z
+#  define IDN_STRERROR    idn2_strerror
 #elif defined(LIBIDN)
-#include <idna.h>
-#define IDN_TO_ASCII_LZ idna_to_ascii_lz
-#define IDN_TO_ASCII_8Z idna_to_ascii_8z
-#define IDN_STRERROR    idna_strerror
+#  include <idna.h>
+#  define IDN_TO_ASCII_LZ idna_to_ascii_lz
+#  define IDN_TO_ASCII_8Z idna_to_ascii_8z
+#  define IDN_STRERROR    idna_strerror
 #endif
 #endif
 
@@ -85,6 +84,11 @@
 #include <ctype.h>
 #endif
 
+#include "nls.h"
+#ifdef TUIMODE
+#include "tui.h"
+#endif
+
 enum OPTIONS {
 #ifdef ENABLE_IPV6
   OPT_IPV4     = '4',
@@ -96,7 +100,7 @@ enum OPTIONS {
 #endif
   OPT_BITS     = 'B',
   OPT_COUNT    = 'c',
-#ifdef CURSESMODE
+#ifdef TUIMODE
   OPT_DISPLAY  = 'd',
 #endif
 #ifdef WITH_MPLS
@@ -216,9 +220,9 @@ static bool af_specified;     // set with -4/-6 options
 int sum_sock[2];              // socket summary: open()/close() calls
 // chart related
 int display_offset;
-int curses_mode;              // 1st and 2nd bits, 3rd is reserved
-#ifdef CURSESMODE
-int curses_mode_max = 3;
+int chart_mode;               // 1st and 2nd bits, 3rd is reserved
+#ifdef TUIMODE
+int chart_mode_max = 3;
 #endif
 //
 t_stat stats[] = {
@@ -253,7 +257,7 @@ static struct option long_options[] = {
 #endif
   {"bitpattern", 1, 0, OPT_BITS},     // in range 0-255, or -1 for random
   {"cycles",     1, 0, OPT_COUNT},
-#ifdef CURSESMODE
+#ifdef TUIMODE
   {"display",    1, 0, OPT_DISPLAY},
 #endif
 #ifdef WITH_MPLS
@@ -364,7 +368,7 @@ static const char *get_opt_desc(char opt) {
     case OPT_TIMEOUT: return STR_IN_SECONDS;
     case OPT_ADDR:    return STR_IP_ADDRESS;
     case OPT_COUNT:    return STR_COUNT;
-#ifdef CURSESMODE
+#ifdef TUIMODE
     case OPT_DISPLAY: return STR_MODE;
 #endif
     case OPT_SIZE:    return STR_IN_BYTES;
@@ -494,11 +498,11 @@ static bool split_hostport(char *buff, char* hostport[2]) {
 #define TOS4TOS(what, tos) NOOP
 #endif
 
-#ifdef CURSESMODE
+#ifdef TUIMODE
 #define VAL_TRU(nth) ((val & (1u << (nth - 1))) ? true : false)
 static inline void option_display(char opt) {
   int val = limit_int(0, INT8_MAX, optarg, DISPMODE_ERR, opt);
-  curses_mode = (val & ~8) % curses_mode_max;
+  chart_mode = (val & ~8) % chart_mode_max;
   ini_opts.chart   = val & 3;    // first two bits
                                  // 3rd reserved
   ini_opts.color   = VAL_TRU(4); // 4th
@@ -577,6 +581,17 @@ static inline void option_output(const char *progname) {
 }
 #endif
 
+static inline void option_version(uint count UNUSED) {
+#ifdef BUILD_OPTIONS
+  printf("%s.%s: %s\n", PACKAGE_NAME, GITREV, BUILD_OPTIONS);
+#else
+  printf("%s.%s\n", PACKAGE_NAME, GITREV);
+#endif
+  if (count > 1)
+    printf("TUI: %s\n", tui_version());
+  QEXIT(EXIT_SUCCESS);
+}
+
 static inline void ineractive_modes(display_mode_t mode) {
   switch (mode) {
     case DisplayReport:
@@ -613,7 +628,7 @@ static void set_optv(int argc, char **argv) {
 }
 #endif
 
-static inline void short_set(char opt, const char *progname) {
+static void short_set(char opt, const char *progname) {
   switch (opt) {
 #ifdef ENABLE_IPV6
     case OPT_IPV4:
@@ -639,7 +654,7 @@ static inline void short_set(char opt, const char *progname) {
       assert(optarg);
       ini_opts.cycles = limit_int(-1, INT_MAX, optarg, CYCLESNO_STR, opt);
       break;
-#ifdef CURSESMODE
+#ifdef TUIMODE
     case OPT_DISPLAY:
       assert(optarg);
       option_display(opt);
@@ -729,12 +744,7 @@ static inline void short_set(char opt, const char *progname) {
       ini_opts.udp = true;
       break;
     case OPT_VERSION:
-#ifdef BUILD_OPTIONS
-      printf("%s.%s: %s\n", PACKAGE_NAME, GITREV, BUILD_OPTIONS);
-#else
-      printf("%s.%s\n", PACKAGE_NAME, GITREV);
-#endif
-      QEXIT(EXIT_SUCCESS);
+      break;
     case OPT_CACHE:
       assert(optarg);
       ini_opts.cache   = limit_int(1, INT_MAX, optarg, CACHE_TOUT_STR, opt);
@@ -764,16 +774,23 @@ static inline void short_set(char opt, const char *progname) {
 
 static void parse_options(int argc, char **argv) {
   int opt = 0;
+  uint countv = 0;
   while ((opt = my_getopt_long(argc, argv)) >= 0) {
     short_set((char)opt, argv[0]);
+    switch (opt) {
 #ifdef OUTPUT_OPTV
-    if (opt == OPT_OUTPUT) {
-      int arg = tolower((int)optarg[0]);
-      if ((arg == OTOON) || (arg == OJSON))
-        set_optv(argc, argv);
-    }
+      case OPT_OUTPUT: {
+        int arg = tolower((int)optarg[0]);
+        if ((arg == OTOON) || (arg == OJSON))
+          set_optv(argc, argv);
+      } break;
 #endif
+      case OPT_VERSION: countv++; break;
+      default: break;
+    }
   }
+  if (countv > 0)
+    option_version(countv);
   run_opts = ini_opts; // to reflect possible interactive changes
   for (int i = 1, len = 0; (i < optind) && (i < argc) && argv[i] && ((uint)len < sizeof(mtr_args)); i++) {
     int inc = snprinte(mtr_args + len, sizeof(mtr_args) - len, (i > 1) ? " %s" : "%s", argv[i]);
@@ -844,8 +861,8 @@ static void init_locale(void) {
   setlocale(LC_CTYPE, "");
   if (strcasecmp("UTF-8", nl_langinfo(CODESET)) == 0) { // NOLINT(concurrency-mt-unsafe)
     if (iswprint(L'▁')) {
-#ifdef CURSESMODE
-      curses_mode_max++;
+#ifdef TUIMODE
+      chart_mode_max++;
 #endif
       return;
     }
@@ -1032,7 +1049,7 @@ static inline void main_fin(void) {
 #endif
   if (run_opts.stat)
     stat_fin();
-  if (strerr_txt[0] && (display_mode == DisplayCurses))
+  if (strerr_txt[0] && (display_mode == DisplayTUI))
     warnx("%s", strerr_txt); // duplicate an error cleaned by ncurses
   UNICODE_FREE;
 }

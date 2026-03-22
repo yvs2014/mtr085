@@ -29,7 +29,7 @@
 #include "common.h"
 #include "aux.h"
 
-#include "mtr-poll.h"
+#include "polling.h"
 #include "net.h"
 #include "display.h"
 #ifdef ENABLE_DNS
@@ -39,7 +39,7 @@
 #include "ipinfo.h"
 #endif
 
-#if defined(CURSESMODE) || defined(SPLITMODE)
+#if defined(TUIMODE) || defined(SPLITMODE)
 #define SCROLL_LINES 5
 #endif
 
@@ -268,11 +268,11 @@ static key_action_t keyboard_events(key_action_t action) {
       LOGMSG("%s", "reset network counters");
       net_reset();
       break;
-#ifdef CURSESMODE
+#ifdef TUIMODE
     case ActionDisplay: {
-      int mode = (curses_mode + 1) % curses_mode_max;
+      int mode = (chart_mode + 1) % chart_mode_max;
       LOGMSG("switch display mode: %d -> %d", curses_mode, mode);
-      curses_mode = mode;
+      chart_mode = mode;
       run_opts.chart = mode & 3; // chart bits
       OPT_SUM(chart);
       display_clear();
@@ -287,7 +287,7 @@ static key_action_t keyboard_events(key_action_t action) {
       run_opts.pause = !run_opts.pause;
       OPT_SUM(pause);
       break;
-#if defined(CURSESMODE) || defined(SPLITMODE)
+#if defined(TUIMODE) || defined(SPLITMODE)
     case ActionJitter: // latency OR jitter
       run_opts.jitter = !run_opts.jitter;
       OPT_SUM(jitter);
@@ -332,7 +332,7 @@ static key_action_t keyboard_events(key_action_t action) {
       OPT_SUM(lookup);
       break;
 #endif
-#if defined(CURSESMODE) || defined(SPLITMODE)
+#if defined(TUIMODE) || defined(SPLITMODE)
     case ActionScrollDown: {
       LOGMSG("scroll down %d lines", SCROLL_LINES);
       display_offset += SCROLL_LINES;

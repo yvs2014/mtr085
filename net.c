@@ -48,7 +48,7 @@
 #include "net.h"
 #include "aux.h"
 #include "nls.h"
-#include "mtr-poll.h"
+#include "polling.h"
 #include "display.h"
 
 #ifdef ENABLE_DNS
@@ -194,7 +194,7 @@ struct sequence {
   int at;
   bool transit;
   struct timespec time;
-#ifdef CURSESMODE
+#ifdef TUIMODE
   int saved_seq;
 #endif
 };
@@ -339,7 +339,7 @@ static void save_sequence(int seq, int at) {
     host[at].up = false; // if previous packet is in transit too, then assume it's down
   host[at].transit = true;
   host[at].sent++;
-#ifdef CURSESMODE
+#ifdef TUIMODE
   seqlist[seq].saved_seq = host[at].sent;
   if (host[at].saved[SAVED_PINGS - 1] != CT_UNSENT) {
     for (int at = 0; at < MAXHOST; at++) {
@@ -731,7 +731,7 @@ static int net_stat(uint port, const void *addr, struct timespec *recv_at,
   timemsec_t curr = { .ms = time2msec(tv), .frac = time2mfrac(tv) };
   hop_stats(at, curr);
 
-#ifdef CURSESMODE
+#ifdef TUIMODE
   int n = seqlist[seq].saved_seq - host[at].saved_seq_offset;
   if ((n >= 0) && (n <= SAVED_PINGS))
     host[at].saved[n] = time2usec(tv);
@@ -1167,7 +1167,7 @@ void net_reset(void) {
     for (int ndx = 0; ndx < MAXPATH; ndx++)
       set_new_addr(at, ndx, &unspec_addr MPLSFNTAIL(NULL));  // clear all query-response cache
   memset(host, 0, sizeof(host));
-#ifdef CURSESMODE
+#ifdef TUIMODE
   for (int at = 0; at < MAXHOST; at++) {
     for (int i = 0; i < SAVED_PINGS; i++)
       host[at].saved[i] = CT_UNSENT; // unsent

@@ -20,9 +20,9 @@
 #include <string.h>
 #include <sys/types.h>
 
-#include "mtr-curses.h"
 #include "common.h"
 #include "nls.h"
+#include "tui.h"
 
 #ifdef WITH_UNICODE
 #ifndef _XOPEN_SOURCE_EXTENDED
@@ -239,7 +239,7 @@ static inline void mc_key_s(void) { // set payload size
   }
 }
 
-static key_action_t mc_keyaction_body(int ch) {
+static key_action_t keyaction_body(int ch) {
 #ifdef KEY_RESIZE
 #define GETCH_BATCH 100
   if (ch == KEY_RESIZE) { // cleanup by batch
@@ -322,8 +322,8 @@ static key_action_t mc_keyaction_body(int ch) {
   return ActionNone; // ignore unknown input
 }
 
-key_action_t mc_keyaction(void) {
-  // wrapper to mc_keyaction_body(): reset 'title_cache' if it needs
+key_action_t tui_keyaction(void) {
+  // wrapper to keyaction_body(): reset 'title_cache' if it needs
   int ch = getch();
   switch (ch) {
     case 'b': // bit pattern
@@ -356,7 +356,7 @@ key_action_t mc_keyaction(void) {
       break;
     default: break;
   }
-  return mc_keyaction_body(ch);
+  return keyaction_body(ch);
 }
 
 #ifdef WITH_MPLS
@@ -512,7 +512,7 @@ static void scale_map(int *scale, const double *factors, int num) {
 
 static void dmode_scale_map(void) {
 #ifdef WITH_UNICODE
-  if (curses_mode == 3)
+  if (chart_mode == 3)
     scale_map(scale3, factors3, run_opts.color ? NUM_FACTORS3 : (NUM_FACTORS3_MONO + 1));
   else
 #endif
@@ -585,9 +585,9 @@ static void mc_init(void) {
 
 static chtype get_saved_ch(int saved_int) {
   NA_MAP(map_na2);
-  if (curses_mode == 1)
+  if (chart_mode == 1)
     return map1[(saved_int <= scale2[NUM_FACTORS2 - 2]) ? 0 : 1];
-  if (curses_mode == 2)
+  if (chart_mode == 2)
     for (int i = 0; i < NUM_FACTORS2; i++)
       if (saved_int <= scale2[i])
         return map2[i];
@@ -628,7 +628,7 @@ static inline void histoaddr(int at, int max, int y, int x, int cols) {
       attroff(A_BOLD);
     mvprintw(y, x, " ");
 #ifdef WITH_UNICODE
-    if (curses_mode == 3)
+    if (chart_mode == 3)
       for (int i = SAVED_PINGS - cols; i < SAVED_PINGS; i++)
         add_wch(mtr_saved_cc(host[at].saved[i]));
     else
@@ -709,7 +709,7 @@ static void print_scale(void) {
   attron(A_BOLD);
   printw("%s:", SCALE_STR);
   attroff(A_BOLD);
-  if (curses_mode == 1) {
+  if (chart_mode == 1) {
     addstr("  ");
     addch(map1[0] | A_BOLD);
     LENVALMIL(scale2[NUM_FACTORS2 - 2]);
@@ -718,7 +718,7 @@ static void print_scale(void) {
     printw(" %s " MSEC_FMT "   ", MORETHAN_STR, _l, _v, MSEC_STR);
     addch('?' | (run_opts.color ? (map2[NUM_FACTORS2 - 1] & A_ATTRIBUTES) : A_BOLD));
     printw(" %s", UNKNOWN_STR);
-  } else if (curses_mode == 2) {
+  } else if (chart_mode == 2) {
     if (run_opts.color) {
       for (int i = 0; i < NUM_FACTORS2 - 1; i++) {
         addstr("  ");
@@ -741,7 +741,7 @@ static void print_scale(void) {
     }
   }
 #ifdef WITH_UNICODE
-  else if (curses_mode == 3) {
+  else if (chart_mode == 3) {
     if (run_opts.color)
       mtr_print_scale3(1, NUM_FACTORS3 - 1, 2);
     else
@@ -817,7 +817,7 @@ static int mc_print_args(char buf[], size_t size) {
 #undef INT_OPT2STR
 #undef BOOL_OPT2STR
 
-static void mc_statmode(void) {
+static void display_stats(void) {
   int statx = 4; // x-indent: "NN. "
   int staty = 4; // y-indent: main_title + hint_line + field_titles[2]
   attron(A_BOLD);
@@ -841,7 +841,7 @@ static void mc_statmode(void) {
     print_hops(x);
 }
 
-static inline void mc_histmode(void) {
+static inline void display_charts(void) {
   int statx = HOSTINFOMAX;
   int staty = 4; // y-indent: main_title + hint_line + field_titles[2]
 #ifdef WITH_IPINFO
@@ -912,10 +912,10 @@ static inline void mc_print_hints_n_time(void) {
 }
 
 static inline void mc_print_main_body(void) {
-  (curses_mode == 0) ? mc_statmode() : mc_histmode();
+  chart_mode ? display_charts() : display_stats();
 }
 
-void mc_redraw(void) {
+void tui_redraw(void) {
   erase();
   mc_print_title();
   mc_print_hints_n_time();
@@ -924,7 +924,7 @@ void mc_redraw(void) {
 }
 
 
-bool mc_open(void) {
+bool tui_open(void) {
   screen_ready = initscr();
   if (!screen_ready) {
     warnx("initscr() failed");
@@ -977,12 +977,12 @@ bool mc_open(void) {
     screen_title_ulen = ustrlen(screen_title);
   //
   mc_init();
-  mc_redraw();
+  tui_redraw();
   curs_set(0);
   return true;
 }
 
-void mc_confirm(void) {
+void tui_confirm(void) {
   if (at_quit || !stdscr || !screen_ready)
     return;
   at_quit = true;
@@ -995,15 +995,27 @@ void mc_confirm(void) {
   getch();
 }
 
-void mc_close(void) {
+void tui_close(void) {
   if (stdscr && screen_ready) {
     endwin();
     screen_ready = false;
   }
 }
 
-void mc_clear(void) {
-  mc_close();
-  mc_open();
+inline void tui_clear(void) {
+  tui_close();
+  tui_open();
+}
+
+inline const char* tui_version(void) {
+  return
+#if   defined(HAVE_CURSES_VERSION)
+  curses_version()
+#elif defined(TUIKIND)
+  TUIKIND
+#else
+  UNKNOWN_STR
+#endif
+  ;
 }
 

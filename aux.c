@@ -38,10 +38,10 @@ void set_fld_active(const char *str) {
   snprinte(fld_custom, sizeof(fld_custom), "%s", str ? str : fld_default);
   fld_active = fld_custom;
 }
-#ifdef CURSESMODE
+#ifdef TUIMODE
 bool is_custom_fld(void) { return (strncmp(fld_active, fld_jitter, sizeof(fld_jitter)) != 0) && (strncmp(fld_active, fld_default, sizeof(fld_default)) != 0); }
 #endif
-#if defined(CURSESMODE) || defined(SPLITMODE)
+#if defined(TUIMODE) || defined(SPLITMODE)
 void onoff_jitter(void) { int cmp = strncmp(fld_active, fld_jitter, sizeof(fld_jitter)); fld_active = cmp ? fld_jitter : fld_custom; }
 #endif
 

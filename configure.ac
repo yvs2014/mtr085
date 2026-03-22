@@ -52,17 +52,19 @@ AC_ARG_WITH(splitmode,
 AM_CONDITIONAL([SPLITMODE], [test "x$splitmode" = "xyes"])
 AS_IF([test "x$splitmode" = "xyes"], [AC_DEFINE([SPLITMODE], [1], [Define to enable split-mode])])
 
-AC_ARG_WITH(curses,
-	AS_HELP_STRING([--without-curses], [without Curses library]),
-	[curses=${withval}], [curses=yes])
-AM_CONDITIONAL([CURSES], [test "x$curses" = "xyes"])
+AC_ARG_WITH(tui,
+	AS_HELP_STRING([--without-tui], [without Curses library]),
+	[tui=${withval}], [tui=yes])
+AM_CONDITIONAL([TUI], [test "x$tui" = "xyes"])
 _unicode="no"
-AS_IF([test "x$curses" = "xyes"], [
-	AC_DEFINE(CURSESMODE, 1, Build with curses support)
+AS_IF([test "x$tui" = "xyes"], [
+	AC_DEFINE(TUIMODE, 1, [Build with TUI (curses library)])
 	AC_CHECK_HEADERS([ncursesw/ncurses.h ncursesw/curses.h ncurses/ncurses.h ncurses/curses.h ncurses.h curses.h], break)
 	_curses_libs="ncursesw ncurses curses tinfo"
 	AC_SEARCH_LIBS([use_default_colors], [$_curses_libs],
 		AC_DEFINE([HAVE_USE_DEFAULT_COLORS], [1], [Define this if curses library has use_default_colors()]))
+	AC_SEARCH_LIBS([curses_version], [$_curses_libs],
+		AC_DEFINE([HAVE_CURSES_VERSION], [1], [Define this if curses library has curses_version()]))
 	AC_ARG_WITH(unicode,
 		AS_HELP_STRING([--without-unicode], [without Unicode histogram]),
 		[unicode=${withval}], [unicode=yes])
@@ -72,6 +74,12 @@ AS_IF([test "x$curses" = "xyes"], [
 			AC_DEFINE([WITH_UNICODE], [1], [Define to enable unicode])
 			_unicode="yes"],
 		AC_MSG_ERROR([Wide-character curses library not found]))
+	])
+	AC_CHECK_LIB([ncursesw], [initscr], AC_DEFINE([TUIKIND], ["ncursesw"], [Kind of TUI lib]), [
+	AC_CHECK_LIB([ncurses],  [initscr], AC_DEFINE([TUIKIND], ["ncurses"],  [Kind of TUI lib]), [
+	AC_CHECK_LIB([curses],   [initscr], AC_DEFINE([TUIKIND], ["curses"],   [Kind of TUI lib]), [
+	])
+	])
 	])
 ])
 
@@ -301,7 +309,7 @@ m4_ifdef([AX_CHECK_COMPILE_FLAG], [
 
 _option_list=""
 AS_IF([test "x$libcap" = "xyes"],      [_option_list="$_option_list +CAP"],     [_option_list="$_option_list -CAP"])
-AS_IF([test "x$curses" = "xyes"],      [_option_list="$_option_list +CURSES"],  [_option_list="$_option_list -CURSES"])
+AS_IF([test "x$tui"    = "xyes"],      [_option_list="$_option_list +TUI"],     [_option_list="$_option_list -TUI"])
 AS_IF([test "x$_unicode" = "xyes"],    [_option_list="$_option_list +UNICODE"], [_option_list="$_option_list -UNICODE"])
 AS_IF([test "x$nls"    = "xyes"],      [_option_list="$_option_list +NLS"],     [_option_list="$_option_list -NLS"])
 AS_IF([test "x$dns"    = "xyes"],      [_option_list="$_option_list +DNS"],     [_option_list="$_option_list -DNS"])

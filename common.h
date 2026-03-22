@@ -50,7 +50,7 @@
 #endif
 
 #ifndef GITREV
-#define GITREV "248"
+#define GITREV "249"
 #endif
 
 #ifndef HAVE_UINT
@@ -103,7 +103,7 @@ enum {
 typedef enum {
   DisplayAuto, // curses mode if available, otherwise split mode
   DisplayReport,
-  DisplayCurses,
+  DisplayTUI,
   DisplaySplit,
 #ifdef OUTPUT_FORMAT_RAW
   DisplayRaw,
@@ -335,12 +335,12 @@ extern opts_t run_opts;    // runtime options
 extern opts_t ini_opts;    // initial options
 extern opt_sum_t opt_sum;  // checksum changes
 
-#if defined(CURSESMODE) || defined(SPLITMODE)
+#if defined(TUIMODE) || defined(SPLITMODE)
 extern int display_offset;
 #endif
-#ifdef CURSESMODE
-extern int curses_mode;
-extern int curses_mode_max;
+#ifdef TUIMODE
+extern int chart_mode;
+extern int chart_mode_max;
 #endif
 
 // keys: the value in the array is the index number in stats[]

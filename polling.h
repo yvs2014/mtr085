@@ -16,8 +16,8 @@
     Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 */
 
-#ifndef MTR_POLL_H
-#define MTR_POLL_H
+#ifndef POLLING_H
+#define POLLING_H
 
 #include <poll.h>
 
