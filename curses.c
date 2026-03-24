@@ -118,7 +118,7 @@ static void mc_get_int(int *val, int min, int max,
   mvprintw(HINT_YPOS, 0, "%s: %d", what, *val);
   if (hint)
     mvprintw(HINT_YPOS + 1, 0, "-> %s", hint);
-  int xpos = what ? ustrlen(what) : 0;
+  uint xpos = what ? ustrnlen(what, COLS) : 0;
   char entered[MAXFLD + 1] = {0};
   if (enter_smth(entered, sizeof(entered), HINT_YPOS, xpos + 2)) {
     int num = limit_int(min, max, entered, what, 0);
@@ -161,18 +161,20 @@ static inline void mc_key_h(void) { // help
     {.key = SPACE_STR, .hint = CMD_SP_STR},
   };
   erase();
-  int x = 2; int y = 2, indent = 12;
+  int x = 2, y = 2;
+#define INDENT 12
   mvprintw(x++, 0, "%s:", COMMANDS_STR);
   for (uint i = 0; i < ARRAY_LEN(cmd); i++) {
-    int pad = indent - ustrlen(cmd[i].key);
+    int pad = INDENT - ustrnlen(cmd[i].key, INDENT);
     const char *type = cmd[i].type == CH_INT ? CH_NUM_STR :
                        cmd[i].type == CH_STR ? CH_STR_STR : NULL;
     if (type) {
-      pad -= ustrlen(type) + 1;
+      pad -= ustrnlen(type, COLS) + 1;
       mvprintw(x++, y, "%s %s%*s %s", cmd[i].key, type, (pad < 0) ? 0 : pad, "", cmd[i].hint);
     } else
       mvprintw(x++, y, "%s%*s %s", cmd[i].key, (pad < 0) ? 0 : pad, "", cmd[i].hint);
   }
+#undef INDENT
   x++;
   mvprintw(x++, 0, "%s ...", ANYCONT_STR);
   getch();
@@ -180,7 +182,7 @@ static inline void mc_key_h(void) { // help
 
 static inline void mc_key_c(void) { // set number of cycles
   mvprintw(HINT_YPOS, 0, "%s (%s): %d", CYCLESNO_STR, CYCLE0NO_STR, run_opts.cycles);
-  int xpos = ustrlen(CYCLESNO_STR) + 2 + ustrlen(CYCLE0NO_STR) + 3;
+  int xpos = ustrnlen(CYCLESNO_STR, COLS / 2 - 2) + 2 + ustrnlen(CYCLE0NO_STR, COLS / 2 - 3) + 3;
   char entered[MAXFLD + 1] = {0};
   if (enter_smth(entered, sizeof(entered), HINT_YPOS, xpos)) {
     int num = limit_int(0, INT_MAX, entered, CYCLESNO_STR, 0);
@@ -198,7 +200,7 @@ static inline void mc_key_o(void) { // set fields to display and their order
   mvprintw(HINT_YPOS, 0, "%s: %s\n\n", FIELDS_STR, fld_active);
   for (int i = 0; i < stat_max; i++) if (stats[i].hint)
     printw("  %c: %s\n", stats[i].key, stats[i].hint);
-  move(HINT_YPOS, ustrlen(FIELDS_STR) + 2);
+  move(HINT_YPOS, ustrnlen(FIELDS_STR, COLS - 2) + 2);
   refresh();
   enter_stat_fields();
 }
@@ -225,7 +227,7 @@ static inline void mc_key_s(void) { // set payload size
   const int max = MAXPACKET - MINPACKET;
   mvprintw(HINT_YPOS + 1, 0, "-> %s[%d,%d], %s", RANGE_STR, -max, max, NEG4RND_STR);
   char entered[MAXFLD + 1] = {0};
-  int xpos = ustrlen(PSIZE_CHNG_STR) + 2;
+  int xpos = ustrnlen(PSIZE_CHNG_STR, COLS - 2) + 2;
   if (enter_smth(entered, sizeof(entered), HINT_YPOS, xpos)) {
     int num = limit_int(-max, max, entered, PSIZE_STR, 0);
     if (limit_error[0]) {
@@ -661,7 +663,8 @@ static int get_stat_title_len(void) {
 }
 
 static int mc_fit_posx(int pos, int len) {
-  return ((pos + len) > (getmaxx(stdscr) - 1)) ? (getmaxx(stdscr) - len - 1) : pos;
+  int lcols = COLS - 1 - len;
+  return (pos < lcols) ? pos : lcols;
 }
 
 static void mc_stat_title(int x, int y) {
@@ -675,11 +678,11 @@ static void mc_stat_title(int x, int y) {
       int curx = getcurx(stdscr);
       int pos  = curx + ((pad > 0) ? pad : 1);
       if (!i && custom) {
-        int len = ustrlen(USR_FIELDS_STR) + 2 + strnlen(fld_active, MAXFLD);
+        int len = ustrnlen(USR_FIELDS_STR, COLS - 2) + 2 + strnlen(fld_active, MAXFLD);
         mvprintw(y - 1, mc_fit_posx(pos, len), "%s: %s", USR_FIELDS_STR, fld_active);
       } else if (!custom) {
         const char *sub = i ? PINGS_STR : PACKETS_STR;
-        int len = ustrlen(sub);
+        int len = ustrnlen(sub, COLS);
         mvprintw(y - 1, mc_fit_posx(pos, len), "%s", i ? PINGS_STR : PACKETS_STR);
       }
       move(y, curx);
@@ -833,7 +836,7 @@ static void display_stats(void) {
   mvprintw(staty - 1, statx, "%s", HOST_STR);
   if (stat_title_len < 0)
     stat_title_len = get_stat_title_len();
-  int x = getmaxx(stdscr) - stat_title_len - 1;
+  int x = COLS - stat_title_len - 1;
   if (x < 0) x = 0;
   mc_stat_title(x, staty - 1);
   attroff(A_BOLD);
@@ -848,8 +851,7 @@ static inline void display_charts(void) {
   if (ipinfo_ready())
     statx += ipinfo_width();
 #endif
-  int maxx = getmaxx(stdscr);
-  int max_cols = (maxx <= (SAVED_PINGS + statx)) ? (maxx - statx) : SAVED_PINGS;
+  int max_cols = (COLS <= (SAVED_PINGS + statx)) ? (COLS - statx) : SAVED_PINGS;
   statx -= 2;
   mvprintw(staty - 1, statx, "%s: %d %s", HISTOGRAM_STR, max_cols, HCOLS_STR);
   if (move(staty, 0) != ERR) {
@@ -877,7 +879,7 @@ static inline void mc_print_title(void) {
     memset(title_cache, 0, sizeof(title_cache));
     int len = snprinte(title_cache, sizeof(title_cache), "%s", pretitle);
     if (len >= 0)
-      cached_title_ulen = ustrlen(title_cache);
+      cached_title_ulen = ustrnlen(title_cache, COLS);
   }
   //
   const char *title = NULL;
@@ -888,17 +890,16 @@ static inline void mc_print_title(void) {
     cached_title_ulen = screen_title_ulen;
   }
   if (title && *title)
-    mvprintw(0, 0, "%*s", (getmaxx(stdscr) + cached_title_ulen) / 2, title);
+    mvprintw(0, 0, "%*s", (COLS + cached_title_ulen) / 2, title);
 }
 
 static inline void mc_print_hints_n_time(void) {
   mvprintw(1, 0, "%s: ", OPTS_STR);
   attron(A_BOLD); addch('h'); attroff(A_BOLD); printw("%s ", _HINTS_STR);
   attron(A_BOLD); addch('q'); attroff(A_BOLD); printw("%s\n", _QUIT_STR);
-  int maxx = getmaxx(stdscr);
   char buff[LINEMAXLEN] = {0};
   // source host
-  int len = snprinte(buff, sizeof(buff), "%.*s", (int)strnlen(srchost, maxx / 2), srchost);
+  int len = snprinte(buff, sizeof(buff), "%.*s", (int)strnlen(srchost, COLS / 2), srchost);
   if (len < 0)
     return;
   // timestamp (note: not mandatory)
@@ -908,7 +909,7 @@ static inline void mc_print_hints_n_time(void) {
     snprinte(buff + len, sizeof(buff) - len, ": %s", date);
   //
   if ((len > 0) && buff[0]) // rigth aligned
-    mvaddstr(1, maxx - ustrlen(buff) - 1, buff);
+    mvaddstr(1, COLS - ustrnlen(buff, sizeof(buff)) - 1, buff);
 }
 
 static inline void mc_print_main_body(void) {
@@ -974,7 +975,7 @@ bool tui_open(void) {
   else
     snprinte(screen_title, sizeof(screen_title), "%s %s", PACKAGE_NAME, dsthost);
   if (screen_title[0])
-    screen_title_ulen = ustrlen(screen_title);
+    screen_title_ulen = ustrnlen(screen_title, COLS);
   //
   mc_init();
   tui_redraw();
@@ -986,11 +987,11 @@ void tui_confirm(void) {
   if (at_quit || !stdscr || !screen_ready)
     return;
   at_quit = true;
-  int y = getmaxy(stdscr) - 1;
+  int y = LINES - 1;
   move(y - 1, 0); clrtoeol();
   move(y,     0); clrtoeol();
-  int len = ustrlen(ANYQUIT_STR) + 4;
-  mvprintw(y - 1, (getmaxx(stdscr) - len) / 2, "%s ...", ANYQUIT_STR);
+  int len = ustrnlen(ANYQUIT_STR, COLS - 4) + 4;
+  mvprintw(y - 1, (COLS - len) / 2, "%s ...", ANYQUIT_STR);
   flushinp();
   getch();
 }

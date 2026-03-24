@@ -1087,7 +1087,7 @@ int main(int argc, char **argv) {
   for (uint i = 0; i < ARRAY_LEN(stats); i++) {
     if (stats[i].name && stats[i].name[0]) {
       stats[i].name  = _(stats[i].name);
-      stats[i].len   = ustrlen(stats[i].name);
+      stats[i].len   = ustrnlen(stats[i].name, NAMELEN);
       if (stats[i].min <= stats[i].len)
         stats[i].min = stats[i].len + 1;
     }

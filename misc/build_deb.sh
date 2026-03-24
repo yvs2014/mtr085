@@ -36,7 +36,7 @@ bi_file="$nra.buildinfo"
 ch_file="$nra.changes"
 dpkg-buildpackage --help | grep -q buildinfo-file && \
   BOUT="--buildinfo-file=$bi_file" COUT="--changes-file=$ch_file" || \
-  BOUT="--buildinfo-option=-O$bi_file" COUT="--changes-option=-O$ch_file" DH_OPTIONS="--destdir=$ddir"
+  BOUT="--buildinfo-option=-O$bi_file" COUT="--changes-option=-O$ch_file"
 
 export DEBDIR="--destdir=$ddir"
 dpkg-buildpackage -b -tc --no-sign \

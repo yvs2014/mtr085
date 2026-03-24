@@ -50,7 +50,7 @@
 #endif
 
 #ifndef GITREV
-#define GITREV "249"
+#define GITREV "250"
 #endif
 
 #ifndef HAVE_UINT

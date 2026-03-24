@@ -215,8 +215,7 @@ static char** split_record(char *record) {
 
 static void adjust_width(char** record) {
   for (int i = 0; (i < MAX_TXT_ITEMS) && record[i]; i++) {
-    uint len = ustrlen(record[i]); // ? mbstowcs(NULL, records[i], 0);
-    int width = (len > NAMELEN) ? NAMELEN : len;
+    int width = ustrnlen(record[i], NAMELEN); // ? mbstowcs(NULL, records[i], 0);
     if (ORIG_WIDTH(i) < width)
       ORIG_WIDTH(i) = width;
   }
@@ -275,7 +274,7 @@ static char trim_c(char *str, const char *quotes) {
 }
 
 static char* trim_str(char *str, const char *quotes) {
-  { uint len = ustrlen(str);
+  { int len = ustrnlen(str, NETDATA_MAXSIZE);
     char *ptr = str + len - 1;
     for (int i = len; i > 0; i--, ptr--)
       if (trim_c(ptr, quotes)) break; }
@@ -308,11 +307,19 @@ static inline int parse_http_content_len(uint lines_no, char* lines[TCP_RESP_LIN
 	size_t recv_size, uint *cndx) {
   uint ndx = 0, len = 0; // content index in tcp response and its length
   uint min = lines_no < TCP_RESP_LINES ? lines_no : TCP_RESP_LINES;
+  static char CNT_LEN_HEADER[] = "Content-Length:";
   for (uint i = 0; i < min; i++) {
     char* tagvalue[2] = { lines[i], NULL };
     if (split_with_sep(tagvalue, 2, ' ', 0) == 2)
-      if (strcmp("Content-Length:", tagvalue[0]) == 0)
-        len = atoi(tagvalue[1]);
+      if (strncmp(CNT_LEN_HEADER, tagvalue[0], sizeof(CNT_LEN_HEADER)) == 0) {
+        if (tagvalue[1]) {
+          errno = 0; long n = strtol(tagvalue[1], NULL, 10);
+          if (errno)
+            errno = 0;
+	  else if ((0 <= n) && (n <= INT_MAX))
+            len = n;
+        }
+      }
     if (lines[i][0]) // skip header lines
       continue;
     if ((i + 1) < lines_no)
@@ -321,13 +328,10 @@ static inline int parse_http_content_len(uint lines_no, char* lines[TCP_RESP_LIN
   }
   if (ndx && (len > 0) && (len < recv_size))
     *(lines[ndx] + len) = 0;
-  else {
-    len = ustrlen(lines[ndx]);
-    if (len > NAMELEN) len = NAMELEN;
-  }
+  else
+    len = ustrnlen(lines[ndx], NAMELEN);
   if (cndx) *cndx = ndx;
-  if (len > (TCP_RESP_LINES * NAMELEN)) len = TCP_RESP_LINES * NAMELEN;
-  return len;
+  return (len < NETDATA_MAXSIZE) ? len : NETDATA_MAXSIZE;
 }
 
 
@@ -650,7 +654,7 @@ void ipinfo_head_fix(char buff[], size_t size) {
   for (uint i = 0, len = 0; (i < MAX_TXT_ITEMS)
       && (ipinfo_no[i] >= 0) && (ipinfo_no[i] < itemname_max)
       && ORIG_UNAME(ipinfo_no[i]) && (len < size); i++) {
-    int gap = ORIG_WIDTH(ipinfo_no[i]) - ustrlen(ORIG_UNAME(ipinfo_no[i]));
+    int gap = ORIG_WIDTH(ipinfo_no[i]) - ustrnlen(ORIG_UNAME(ipinfo_no[i]), NAMELEN);
     if (gap < 0) gap = 0;
     int inc = snprinte(buff + len, size - len, "%s%*s",
       ORIG_UNAME(ipinfo_no[i]), ++gap, "");
@@ -779,9 +783,7 @@ bool ipinfo_init(const char *arg) {
     ORIG_UNAME(i) = _(ORIG_NAME(i));
     if (!ORIG_UNAME(i))
       ORIG_UNAME(i) = ORIG_NAME(i);
-    ORIG_WIDTH(i) = ustrlen(ORIG_UNAME(i));
-    if (ORIG_WIDTH(i) > NAMELEN)
-      ORIG_WIDTH(i) = NAMELEN;
+    ORIG_WIDTH(i) = ustrnlen(ORIG_UNAME(i), NAMELEN);
   }
 
   LOGMSG("Source: %s%s%s", ORIG_HOST, origins[origin_no].host6 ? ", " : "",

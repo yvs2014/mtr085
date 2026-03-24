@@ -107,7 +107,7 @@ static void print_nameaddr(int at, int ndx, int width) {
     print_str_width(UNKN_ITEM, width);
 }
 
-static size_t snprint_addr(char buf[], size_t size, uint at, uint ndx) {
+static int snprint_addr(char buf[], size_t size, uint at, uint ndx) {
   if (!buf || !size) return 0;
   int len = 0;
   t_ipaddr *ipaddr = &IP_AT_NDX(at, ndx);
@@ -133,12 +133,12 @@ static void print_mpls(const mpls_data_t *mpls) {
 }
 #endif
 
-static size_t longest_hopname(size_t longest) {
+static int longest_hopname(int longest) {
   char buff[MAXDNAME] = {0};
-  uint nmax = net_max();
-  for (uint at = net_min(); at < nmax; at++) {
+  int nmax = net_max();
+  for (int at = net_min(); at < nmax; at++) {
     for (uint i = 0; i < MAXPATH; i++) {
-      size_t len = snprint_addr(buff, sizeof(buff), at, i);
+      int len = snprint_addr(buff, sizeof(buff), at, i);
       if (len > longest)
         longest = len;
     }
@@ -161,11 +161,11 @@ void report_resolv(void) {
 #endif
 
 #ifdef WITH_IPINFO
-static void report_info(uint infolen, const char info[]) NONNULL(2);
-static void report_info(uint infolen, const char info[]) {
+static void report_info(int infolen, const char info[]) NONNULL(2);
+static void report_info(int infolen, const char info[]) {
   if (!infolen) return;
   if (info[0]) { // note: utf8 length
-    int len = infolen - ustrlen(info) + 1;
+    int len = infolen - ustrnlen(info, infolen) + 1;
     printf("%s%*s", info, (len < 0) ? 0 : len, "");
   } else
     printf("%*s", infolen + 1, "");
@@ -189,7 +189,7 @@ static void report_print_header(int hostlen, int infolen) {
     ipinfo_head_fix(info, sizeof(info));
     REPORT_INFO(infolen, info); }
   { printf("%s", HOST_STR);
-    int len = hostlen - ustrlen(HOST_STR);
+    int len = hostlen - ustrnlen(HOST_STR, hostlen);
     if (len > 0) printf("%*s", len, ""); }
   // right
   foreach_stat(0, report_headstat, '\n');
@@ -244,7 +244,7 @@ void report_close(bool next, bool with_header) {
     PRINT_DATETIME("[%s] ", date);
     printf("%s: %s %s %s\n", srchost, PACKAGE_NAME, mtr_args, dsthost);
   }
-  int hostlen = longest_hopname(ustrlen(HOST_STR)) + 1;
+  int hostlen = longest_hopname(ustrnlen(HOST_STR, MAXDNAME)) + 1;
   int infolen =
 #ifdef WITH_IPINFO
     ipinfo_ready() ? ipinfo_width() :

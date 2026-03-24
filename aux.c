@@ -99,9 +99,14 @@ int limit_int(int min, int max, const char *arg, const char *what, char fail) {
   return lim;
 }
 
-uint ustrlen(const char *str) {
-  uint len = 0;
-  if (str) for (; *str; str++) if ((*str & 0xc0) != 0x80) len++;
+int ustrnlen(const char *str, int max) {
+  // length in codepoints, 'int' to be signed
+  int len = 0;
+  if (str)
+    for (; *str; str++)
+      if ((*str & 0xc0) != 0x80) {
+        if (len < max) len++; else break;
+      }
   return len;
 }
 
@@ -114,7 +119,9 @@ char *datetime(time_t at, char *buff, size_t size) {
 #else
   struct tm *tm = (at > 0) ? localtime(&at) : NULL;
 #endif
-  if (tm) strftime(buff, size, "%c", tm);
+  if (tm)
+    if (!strftime(buff, size, "%c", tm))
+      buff[0] = 0;
   return buff;
 }
 

@@ -24,14 +24,14 @@
 
 #include "common.h"
 
-bool  ipinfo_init(const char *arg);
-void  ipinfo_close(void);
-bool  ipinfo_action(int action); // open() if necessary
-void  ipinfo_parse(int sock, int seq);
-bool  ipinfo_ready(void);
-int   ipinfo_width(void);
-bool  ipinfo_timedout(int seq);
-void  ipinfo_seq_ready(int seq);
+bool ipinfo_init(const char *arg);
+void ipinfo_close(void);
+bool ipinfo_action(int action); // open() if necessary
+void ipinfo_parse(int sock, int seq);
+bool ipinfo_ready(void);
+int  ipinfo_width(void);
+bool ipinfo_timedout(int seq);
+void ipinfo_seq_ready(int seq);
 
 void ipinfo_head_fix(char buff[], size_t size) NONNULL(1);
 void ipinfo_head_div(char buff[], size_t size, char div) NONNULL(1);

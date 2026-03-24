@@ -25,7 +25,7 @@ void foreach_stat(int at, void (*body)(int at, const t_stat *stat), char fin) NO
 
 extern char limit_error[NAMELEN];
 int limit_int(int min, int max, const char *arg, const char *what, char fail) NONNULL(3);
-uint ustrlen(const char *str);
+int ustrnlen(const char *str, int max);
 char *datetime(time_t at, char *buff, size_t size) NONNULL(2);
 int snprinte(char str[], size_t size, const char *format, ...);
 

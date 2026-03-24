@@ -147,13 +147,14 @@ static void split_help(void) {
     {.key = "+-",    .hint = CMD_PM_STR},
     {.key = "SPACE", .hint = CMD_SP_STR},
   };
-  int indent = 10;
   //
+#define INDENT 10
   printf("%s:\n", COMMANDS_STR);
   for (uint i = 0; i < ARRAY_LEN(cmd); i++) {
-    int pad = indent - ustrlen(cmd[i].key);
+    int pad = INDENT - ustrnlen(cmd[i].key, INDENT);
     printf("%s%*s %s\n", cmd[i].key, (pad < 0) ? 0 : pad, "", cmd[i].hint);
   }
+#undef INDENT
   printf("\n");
   printf("%s ... ", ANYCONT_STR);
   fflush(stdout);
