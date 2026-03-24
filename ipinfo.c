@@ -206,7 +206,8 @@ static void unkn2norm(char **record) {
 }
 
 static char** split_record(char *record) {
-  static char* recbuf[MAX_TXT_ITEMS] = {0};
+  static char* recbuf[MAX_TXT_ITEMS];
+  memset(recbuf, 0, sizeof(recbuf));
   recbuf[0] = record;
   split_with_sep(recbuf, MAX_TXT_ITEMS, origins[origin_no].sep, '"');
   unkn2norm(recbuf);
