@@ -94,7 +94,7 @@ long str2l(const char *arg) {
     OPTARG_BUFERR(       fmt,       __VA_ARGS__); \
 } while (0)
 
-int arg2int(char opt, const char *arg, int min, int max, const char *what, char *buff, size_t size) {
+int arg2int(int8_t opt, const char *arg, int min, int max, const char *what, char *buff, size_t size) {
 // in buff (opt == 0)
 // opt < 0: warn() on error
 // opt > 0: err()  on error
