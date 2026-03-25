@@ -121,9 +121,10 @@ static void mc_get_int(int *val, int min, int max,
   uint xpos = what ? ustrnlen(what, COLS) : 0;
   char entered[MAXFLD + 1] = {0};
   if (enter_smth(entered, sizeof(entered), HINT_YPOS, xpos + 2)) {
-    int num = limit_int(min, max, entered, what, 0);
-    if (limit_error[0]) {
-      printw("%s. %s ...", limit_error, ANYCONT_STR);
+    char emsg[NAMELEN] = {0};
+    int num = arg2int(0, entered, min, max, what, emsg, sizeof(emsg));
+    if (emsg[0]) {
+      printw("%s. %s ...", emsg, ANYCONT_STR);
       refresh(); getch();
     } else
       *val = num;
@@ -185,9 +186,10 @@ static inline void mc_key_c(void) { // set number of cycles
   int xpos = ustrnlen(CYCLESNO_STR, COLS / 2 - 2) + 2 + ustrnlen(CYCLE0NO_STR, COLS / 2 - 3) + 3;
   char entered[MAXFLD + 1] = {0};
   if (enter_smth(entered, sizeof(entered), HINT_YPOS, xpos)) {
-    int num = limit_int(0, INT_MAX, entered, CYCLESNO_STR, 0);
-    if (limit_error[0]) {
-      printw("%s. %s ...", limit_error, ANYCONT_STR);
+    char emsg[NAMELEN] = {0};
+    int num = arg2int(0, entered, 0, INT_MAX, CYCLESNO_STR, emsg, sizeof(emsg));
+    if (emsg[0]) {
+      printw("%s. %s ...", emsg, ANYCONT_STR);
       refresh(); getch();
     } else {
       run_opts.cycles = num;
@@ -229,9 +231,10 @@ static inline void mc_key_s(void) { // set payload size
   char entered[MAXFLD + 1] = {0};
   int xpos = ustrnlen(PSIZE_CHNG_STR, COLS - 2) + 2;
   if (enter_smth(entered, sizeof(entered), HINT_YPOS, xpos)) {
-    int num = limit_int(-max, max, entered, PSIZE_STR, 0);
-    if (limit_error[0]) {
-      printw("%s. %s ...", limit_error, ANYCONT_STR);
+    char emsg[NAMELEN] = {0};
+    int num = arg2int(0, entered, -max, max, PSIZE_STR, emsg, sizeof(emsg));
+    if (emsg[0]) {
+      printw("%s. %s ...", emsg, ANYCONT_STR);
       refresh(); getch();
     } else {
       run_opts.size = num;

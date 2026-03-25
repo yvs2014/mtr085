@@ -23,8 +23,8 @@ void onoff_jitter(void);
 const t_stat* active_stats(size_t nth);
 void foreach_stat(int at, void (*body)(int at, const t_stat *stat), char fin) NONNULL(2);
 
-extern char limit_error[NAMELEN];
-int limit_int(int min, int max, const char *arg, const char *what, char fail) NONNULL(3);
+int arg2int(char opt, const char *arg, int min, int max,
+  const char *what, char *buff, size_t size) NONNULL(2);
 int ustrnlen(const char *str, int max);
 char *datetime(time_t at, char *buff, size_t size) NONNULL(2);
 int snprinte(char str[], size_t size, const char *format, ...);

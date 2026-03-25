@@ -51,16 +51,11 @@ const t_stat* active_stats(size_t nth) {
   return ((ndx >= 0) && (ndx < stat_max)) ? &stats[ndx] : NULL;
 }
 
-static inline long long str2ll(const char *arg) {
-#define STR2L_FAILED (errno || (end && *end) || (arg == end))
-  char *end = NULL; errno = 0;
-  long long num = strtoll(arg, &end, 10);
-  if (STR2L_FAILED) { // try hex
-    end = NULL; errno = 0;
-    num = strtoll(arg, &end, 16);
-    if (STR2L_FAILED && !errno)
-      errno = EINVAL;
-  }
+static long str2l(const char *arg) {
+  errno = 0; char *end = NULL;
+  long num = strtol(arg, &end, 0);
+  if (!errno && ((end && *end) || (arg == end)))
+    errno = EINVAL;
   return num;
 #undef STR2L_FAILED
 }
@@ -73,31 +68,50 @@ void foreach_stat(int at, void (*body)(int at, const t_stat *stat), char fin) {
   if (fin) putchar(fin);
 }
 
-char limit_error[NAMELEN];
-int limit_int(int min, int max, const char *arg, const char *what, char fail) {
-  limit_error[0] = 0;
-  long long val = str2ll(arg);
-  long long lim = val;
-  if (errno)
-    snprinte(limit_error, sizeof(limit_error), "%s", strerror(errno));
-  if ((val < min) || (val > max)) {
+#define BUFWARNERR(fmt, ...) do {            \
+  if (inbuf)                                 \
+    snprinte(buff, size, fmt, __VA_ARGS__);  \
+  else if (opt < 0)                          \
+    warnx(               fmt, __VA_ARGS__);  \
+  else                                       \
+    errx(errno,          fmt, __VA_ARGS__);  \
+} while(0)
+//
+#define OPTARG_BUFERR(fmt, ...) do {           \
+  if (opt > 0)                                 \
+    BUFWARNERR("-%c: " fmt, opt, __VA_ARGS__); \
+  else                                         \
+    BUFWARNERR(        fmt,      __VA_ARGS__); \
+} while (0)
+//
+#define WHATARG_BUFFERR(fmt, ...) do {            \
+  if (what && what[0])                            \
+    OPTARG_BUFERR("%s: " fmt, what, __VA_ARGS__); \
+  else                                            \
+    OPTARG_BUFERR(       fmt,       __VA_ARGS__); \
+} while (0)
+
+int arg2int(char opt, const char *arg, int min, int max, const char *what, char *buff, size_t size) {
+// in buff (opt == 0)
+// opt < 0: warn() on error
+// opt > 0: err()  on error
+  bool inbuf = buff && size;
+  if (inbuf) buff[0] = 0;
+  long value = str2l(arg);
+  if ((value < min) || (value > max)) {
+    value = (value < min) ? min : max;
     errno = ERANGE;
-    lim = (val < min) ? min : max;
-    if (what) snprinte(limit_error, sizeof(limit_error), "%s: %s: %s [%d,%d]",
-      what, arg, strerror(errno), min, max);
-    else      snprinte(limit_error, sizeof(limit_error),     "%s: %s [%d,%d]",
-            arg, strerror(errno), min, max);
+    WHATARG_BUFFERR("%.20s: %s [%d,%d]", arg, strerror(errno), min, max);
+  } else if (errno) {
+    WHATARG_BUFFERR("%s", strerror(errno));
   }
-  if (errno && fail) {
-    if (fail > 0) {
-      limit_error[0] ?
-        errx(errno ? errno : EXIT_FAILURE, "-%c: %s", fail, limit_error) :
-        err (errno ? errno : EXIT_FAILURE, "-%c", fail);
-    } else
-      warnx("%s", limit_error);
-  }
-  return lim;
+  // keep errno for "opt < 0 (warn)" case only, otherwise clean
+  if (opt >= 0) errno = 0;
+  return value;
 }
+#undef BUFWARNERR
+#undef OPTARG_BUFERR
+#undef WHATARG_BUFFERR
 
 int ustrnlen(const char *str, int max) {
   // length in codepoints, 'int' to be signed

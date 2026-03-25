@@ -501,7 +501,7 @@ static bool split_hostport(char *buff, char* hostport[2]) {
 #ifdef TUIMODE
 #define VAL_TRU(nth) ((val & (1u << (nth - 1))) ? true : false)
 static inline void option_display(char opt) {
-  int val = limit_int(0, INT8_MAX, optarg, DISPMODE_ERR, opt);
+  int val = arg2int(opt, optarg, 0, INT8_MAX, DISPMODE_ERR, NULL, 0);
   chart_mode = (val & ~8) % chart_mode_max;
   ini_opts.chart   = val & 3;    // first two bits
                                  // 3rd reserved
@@ -648,11 +648,11 @@ static void short_set(char opt, const char *progname) {
 #endif
     case OPT_BITS:
       assert(optarg);
-      ini_opts.pattern = limit_int(-1, UINT8_MAX, optarg, BITPATT_STR, opt);
+      ini_opts.pattern = arg2int(opt, optarg, -1, UINT8_MAX, BITPATT_STR, NULL, 0);
       break;
     case OPT_COUNT:
       assert(optarg);
-      ini_opts.cycles = limit_int(-1, INT_MAX, optarg, CYCLESNO_STR, opt);
+      ini_opts.cycles = arg2int(opt, optarg, -1, INT_MAX, CYCLESNO_STR, NULL, 0);
       break;
 #ifdef TUIMODE
     case OPT_DISPLAY:
@@ -670,8 +670,7 @@ static void short_set(char opt, const char *progname) {
       if ((optarg[0] == AUTOTTL) && !optarg[1])
         ini_opts.endpoint = true;
       else
-        ini_opts.minttl =
-          limit_int(1, ini_opts.maxttl, optarg, MINTTL_STR, opt);
+        ini_opts.minttl = arg2int(opt, optarg, 1, ini_opts.maxttl, MINTTL_STR, NULL, 0);
       break;
     case OPT_FIELDS:
       assert(optarg);
@@ -679,12 +678,11 @@ static void short_set(char opt, const char *progname) {
       break;
     case OPT_INTERVAL:
       assert(optarg);
-      ini_opts.interval = limit_int(1, INT_MAX, optarg, INTERVAL_STR, opt);
+      ini_opts.interval = arg2int(opt, optarg, 1, INT_MAX, INTERVAL_STR, NULL, 0);
       break;
     case OPT_TTLMAX:
       assert(optarg);
-      ini_opts.maxttl =
-        limit_int(ini_opts.minttl, MAXHOST - 1, optarg, MAXTTL_STR, opt);
+      ini_opts.maxttl = arg2int(opt, optarg, ini_opts.minttl, MAXHOST - 1, MAXTTL_STR, NULL, 0);
       break;
 #ifdef ENABLE_DNS
     case OPT_NODNS:
@@ -709,7 +707,7 @@ static void short_set(char opt, const char *progname) {
 #ifdef IP_TOS
     case OPT_QOS:
       assert(optarg);
-      ini_opts.qos = limit_int(0, UINT8_MAX, optarg, QOSTOS_STR, opt);
+      ini_opts.qos = arg2int(opt, optarg, 0, UINT8_MAX, QOSTOS_STR, NULL, 0);
       TOS4TOS(QOSTOS_STR, ini_opts.qos);
       break;
 #endif
@@ -721,7 +719,7 @@ static void short_set(char opt, const char *progname) {
     case OPT_SIZE: {
       assert(optarg);
       int max = MAXPACKET - MINPACKET;
-      ini_opts.size = limit_int(-max, max, optarg, PSIZE_STR, opt);
+      ini_opts.size = arg2int(opt, optarg, -max, max, PSIZE_STR, NULL, 0);
     } break;
     case OPT_SUMMARY:
       ini_opts.stat = true;
@@ -734,8 +732,7 @@ static void short_set(char opt, const char *progname) {
       break;
     case OPT_TIMEOUT:
       assert(optarg);
-      ini_opts.syn =
-        limit_int(1, TCPSYN_TOUT_MAX, optarg, TCP_TOUT_STR, opt) * MIL;
+      ini_opts.syn = arg2int(opt, optarg, 1, TCPSYN_TOUT_MAX, TCP_TOUT_STR, NULL, 0) * MIL;
       break;
     case OPT_UDP:
       if (mtrtype == IPPROTO_TCP)
@@ -747,7 +744,7 @@ static void short_set(char opt, const char *progname) {
       break;
     case OPT_CACHE:
       assert(optarg);
-      ini_opts.cache   = limit_int(1, INT_MAX, optarg, CACHE_TOUT_STR, opt);
+      ini_opts.cache   = arg2int(opt, optarg, 1, INT_MAX, CACHE_TOUT_STR, NULL, 0);
       ini_opts.oncache = true;
       break;
 #ifdef WITH_IPINFO
@@ -947,16 +944,17 @@ static inline void resolv_with_port(t_res_rc *rr, t_res_rc *rr_init) {
     return;
   char* hostport[2] = {0};
   if (split_hostport(buff, hostport)) {
-    limit_error[0] = 0;
+    errno = 0;
     if (hostport[1]) {
-      int num = limit_int(1, USHRT_MAX, hostport[1], PORTNUM_STR, -1);
-      if (!limit_error[0])
+      int num = arg2int(-1, hostport[1], 1, USHRT_MAX, PORTNUM_STR, NULL, 0);
+      if (!errno)
         ini_opts.port = num;
     }
-    if (!limit_error[0] && hostport[0] && rr_init) {
+    if (!errno && hostport[0] && rr_init) {
       *rr = *rr_init; rr->target = hostport[0];
       try_to_resolv(rr);
     }
+    if (errno) errno = 0;
   } else
     warnx("%s: %s", PARSE_ERR, buff);
 }
