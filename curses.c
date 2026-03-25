@@ -583,9 +583,9 @@ static void mc_init(void) {
 
 #define NA_MAP(map) { \
   if (saved_int == CT_UNSENT) \
-    return (map)[0]; /* unsent ' ' */ \
+    return map[0]; /* unsent ' ' */ \
   if ((saved_int == CT_UNKN) || (saved_int == CT_SEAL)) \
-    return (map)[1]; /* no response '?' */ \
+    return map[1]; /* no response '?' */ \
 }
 
 static chtype get_saved_ch(int saved_int) {
@@ -600,7 +600,7 @@ static chtype get_saved_ch(int saved_int) {
 }
 
 #ifdef WITH_UNICODE
-static cchar_t* mtr_saved_cc(int saved_int) {
+static cchar_t* mc_saved_cc(int saved_int) {
   NA_MAP(&map_na3);
   int num = run_opts.color ? NUM_FACTORS3 : (NUM_FACTORS3_MONO + 1);
   for (int i = 0; i < num; i++)
@@ -635,7 +635,7 @@ static inline void histoaddr(int at, int max, int y, int x, int cols) {
 #ifdef WITH_UNICODE
     if (chart_mode == 3)
       for (int i = SAVED_PINGS - cols; i < SAVED_PINGS; i++)
-        add_wch(mtr_saved_cc(host[at].saved[i]));
+        add_wch(mc_saved_cc(host[at].saved[i]));
     else
 #endif
       for (int i = SAVED_PINGS - cols; i < SAVED_PINGS; i++)
@@ -676,7 +676,7 @@ static void mc_stat_title(int x, int y) {
   for (uint i = 0; i < MAXFLD; i++) {
     const t_stat *stat = active_stats(i);
     if (!stat) break;
-    int pad = stat->min - stat->len;
+    int pad = (int)stat->min - stat->len;
     if (!i || (i == 3)) { // add subtitles
       int curx = getcurx(stdscr);
       int pos  = curx + ((pad > 0) ? pad : 1);
@@ -695,7 +695,7 @@ static void mc_stat_title(int x, int y) {
 }
 
 #ifdef WITH_UNICODE
-static void mtr_print_scale3(int min, int max, int step) {
+static void mc_print_scale3(int min, int max, int step) {
   for (int i = min; i < max; i += step) {
     addstr("  ");
     add_wch(&map3[i]);
@@ -749,9 +749,9 @@ static void print_scale(void) {
 #ifdef WITH_UNICODE
   else if (chart_mode == 3) {
     if (run_opts.color)
-      mtr_print_scale3(1, NUM_FACTORS3 - 1, 2);
+      mc_print_scale3(1, NUM_FACTORS3 - 1,  2);
     else
-      mtr_print_scale3(0, NUM_FACTORS3_MONO, 1);
+      mc_print_scale3(0, NUM_FACTORS3_MONO, 1);
   }
 #endif
 }
@@ -764,7 +764,7 @@ static void print_scale(void) {
   int inc = snprinte(buf + len, max, \
     fmt, __VA_ARGS__);               \
   if (inc < 0) return len;           \
-  else if (inc > 0) len += inc;      \
+  if (inc > 0) len += inc;           \
 } while (0)
 
 #define BOOL_OPT2STR(tag, msg) do {   \
