@@ -319,7 +319,7 @@ int dns_send_query(int at, int ndx, const char *qstr, int type) {
 }
 #undef SENDTONS
 
-inline const char *dns_ptr_cache(int at, int ndx) {
+inline const char *dns_ptr_cache(uint at, uint ndx) {
   return addr_exist(&IP_AT_NDX(at, ndx)) ? RPTR_AT_NDX(at, ndx) : NULL;
 }
 
@@ -358,8 +358,8 @@ static atndx_t *get_qatn(const char* q, int at, int ndx) {
    , QTXT_AT_NDX(at, ndx)
 #endif
   };
-  size_t qmax = ARRAY_LEN(query);
-  for (size_t t = 0; t < qmax; t++)
+  int qmax = ARRAY_LEN(query); // 1 or 2
+  for (int t = 0; t < qmax; t++)
     if (query[t] && !strncasecmp(query[t], q, MAXDNAME)) {
       static atndx_t qatn;
       qatn = (atndx_t){.at = at, .ndx = ndx, .type = t}; // type: 0 - t_ptr, 1 - t_txt

@@ -499,7 +499,7 @@ static bool split_hostport(char *buff, char* hostport[2]) {
 #endif
 
 #ifdef TUIMODE
-#define VAL_TRU(nth) ((val & (1u << (nth - 1))) ? true : false)
+#define VAL_TRU(nth) ((val & (1u << ((nth) - 1))) ? true : false)
 static inline void option_display(char opt) {
   int val = arg2int(opt, optarg, 0, INT8_MAX, DISPMODE_ERR, NULL, 0);
   chart_mode = (val & ~8) % chart_mode_max;
@@ -791,7 +791,8 @@ static void parse_options(int argc, char **argv) {
   run_opts = ini_opts; // to reflect possible interactive changes
   for (int i = 1, len = 0; (i < optind) && (i < argc) && argv[i] && ((uint)len < sizeof(mtr_args)); i++) {
     int inc = snprinte(mtr_args + len, sizeof(mtr_args) - len, (i > 1) ? " %s" : "%s", argv[i]);
-    if (inc < 0) break; else len += inc;
+    if (inc < 0) break;
+    if (inc > 0) len += inc;
   }
   ineractive_modes(display_mode);
 }

@@ -246,7 +246,7 @@ static void save_fields(int at, int ndx, char **record) {
 }
 
 #ifdef ENABLE_DNS
-void save_txt_answer(int at, int ndx, const char *answer) {
+static void save_txt_answer(int at, int ndx, const char *answer) {
   char *copy = NULL, **data = NULL;
   if (answer && strnlen(answer, NAMELEN)) {
     copy = strndup(answer, NAMELEN);
@@ -365,7 +365,8 @@ static void parse_http(char *buf, ssize_t recv_size, atndx_t id) {
     // combine into one line
     for (uint i = cndx, len = 0; (i < lines_no) && (len < clen); i++) {
       int inc = snprinte(txt + len, clen - len, "%s", lines[i]);
-      if (inc < 0) break; else len += inc;
+      if (inc < 0) break;
+      if (inc > 0) len += inc;
     }
 
     LOGMSG("record line: %s", txt);
@@ -647,7 +648,8 @@ void ipinfo_head_div(char buff[], size_t size, char div) {
     int inc = (i && div) ?
       snprinte(buff + len, size - len, "%c\"%s\"", div, ORIG_UNAME(ipinfo_no[i])) :
       snprinte(buff + len, size - len,   "\"%s\"",      ORIG_UNAME(ipinfo_no[i]));
-    if (inc < 0) break; else len += inc;
+    if (inc < 0) break;
+    if (inc > 0) len += inc;
   }
 }
 
@@ -691,7 +693,8 @@ void ipinfo_data_div(char buff[], size_t size, int at, int ndx, char div) {
       get_ipinfo(at, ndx, ipinfo_no[i]) : NULL;
     fmtdata.num = fmtdata.ch ? (int)i : ORIG_WIDTH(ipinfo_no[i]);
     int inc = filler(buff + len, size - len, rec ? rec : UNKN, fmtdata);
-    if (inc < 0) break; else if (inc > 0) len += inc;
+    if (inc < 0) break;
+    if (inc > 0) len += inc;
   }
 }
 inline void ipinfo_data_fix(char buff[], size_t size, int at, int ndx) {

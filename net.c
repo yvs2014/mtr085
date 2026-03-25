@@ -200,9 +200,9 @@ struct sequence {
 };
 
 // global vars
-int af = AF_INET;     // default address family
-t_ipaddr unspec_addr; // 0
-bool  (*addr_exist)(const void *a); // true if not 0
+int af = AF_INET;                   // default address family
+static t_ipaddr unspec_addr;        // 0
+bool  (*addr_exist)(const void *a); // true unless 0
 bool  (*addr_equal)(const void *a, const void *b);
 void* (*addr_copy)(void *dst, const void *src);
 nethost_t host[MAXHOST];
@@ -622,14 +622,16 @@ static void hop_stats(int at, timemsec_t curr) {
     host[at].seen = time(NULL);
 }
 
-static int addr2ndx(int hop, const t_ipaddr *addr) { // return index of 'addr' at 'hop', otherwise -1
+// return index of 'addr' at 'hop', otherwise -1
+static int addr2ndx(int hop, const t_ipaddr *addr) {
   for (int i = 0; i < MAXPATH; i++)
     if (addr_equal(&IP_AT_NDX(hop, i), addr))
       return i;
   return -1;
 }
 
-int at2next(int hop) { // return first free slot at 'hop', otherwise -1
+// return first free slot at 'hop', otherwise -1
+static int at2next(int hop) {
   for (int i = 0; i < MAXPATH; i++)
     if (!addr_exist(&IP_AT_NDX(hop, i)))
       return i;
@@ -886,6 +888,7 @@ const char *net_elem(int at, char ch) {
       ival = host[at].recv; break;
     case 'S':  // Sent Packets
       ival = host[at].sent; break;
+    default: break;
   }
   if (ival >= 0) {
     snprinte(elemstr, sizeof(elemstr), "%d", ival);
@@ -1023,7 +1026,7 @@ static void net_sock_close(void) {
 }
 
 #ifdef LIBCAP
-void set_rawcap_flag(cap_flag_value_t onoff) {
+static void set_rawcap_flag(cap_flag_value_t onoff) {
   cap_t curr = cap_get_proc();
   if (curr) {
     cap_flag_value_t perm = onoff;
@@ -1139,19 +1142,19 @@ bool net_set_host(t_ipaddr *ipaddr) {
   }
 
   net_reset();
-  { struct sockaddr_storage ss[1];
-    socklen_t len = sizeof(*ss);
-    if (getsockname(recvsock, (struct sockaddr *)ss, &len) < 0)
+  { struct sockaddr_storage ss = {0};
+    socklen_t len = sizeof(ss);
+    if (getsockname(recvsock, (struct sockaddr *)&ss, &len) < 0)
       warn("getsockname()");
     else {
-      if (len > sizeof(*ss))
-        warnx("%s: %d > %zd: %s", "recv-socket", len, sizeof(*ss), strerror(EINVAL));
-      int saf = ss->ss_family;
+      if (len > sizeof(ss))
+        warnx("%s: %d > %zd: %s", "recv-socket", len, sizeof(ss), strerror(EINVAL));
+      int saf = ss.ss_family;
       char *addr =
 #ifdef ENABLE_IPV6
-        (saf == AF_INET6) ? (char*)&((struct sockaddr_in6 *)ss)->sin6_addr :
+        (saf == AF_INET6) ? (char*)&((struct sockaddr_in6 *)&ss)->sin6_addr :
 #endif
-        ((saf == AF_INET) ? (char*)&((struct sockaddr_in  *)ss)->sin_addr  : NULL);
+        ((saf == AF_INET) ? (char*)&((struct sockaddr_in  *)&ss)->sin_addr  : NULL);
       if (!addr)
         warnx("%d: %s", saf, strerror(EAFNOSUPPORT));
       else if (!inet_ntop(saf, addr, localaddr, sizeof(localaddr)))

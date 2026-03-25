@@ -676,10 +676,10 @@ static void mc_stat_title(int x, int y) {
   for (uint i = 0; i < MAXFLD; i++) {
     const t_stat *stat = active_stats(i);
     if (!stat) break;
-    int pad = (int)stat->min - stat->len;
     if (!i || (i == 3)) { // add subtitles
       int curx = getcurx(stdscr);
-      int pos  = curx + ((pad > 0) ? pad : 1);
+      int dx   = (stat->min > stat->len) ? (stat->min - stat->len) : 1;
+      int pos  = curx + dx;
       if (!i && custom) {
         int len = ustrnlen(USR_FIELDS_STR, COLS - 2) + 2 + strnlen(fld_active, MAXFLD);
         mvprintw(y - 1, mc_fit_posx(pos, len), "%s: %s", USR_FIELDS_STR, fld_active);
@@ -690,7 +690,8 @@ static void mc_stat_title(int x, int y) {
       }
       move(y, curx);
     }
-    printw("%*s%s", (pad > 0) ? pad : 1, "", stat->name ? stat->name : "");
+    printw("%*s%s", (stat->min > stat->len) ? (stat->min - stat->len) : 1, "",
+      stat->name ? stat->name : "");
   }
 }
 

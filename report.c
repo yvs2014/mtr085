@@ -176,10 +176,10 @@ static void report_info(int infolen, const char info[]) {
 #endif
 
 static void report_headstat(int at UNUSED, const t_stat *stat) {
-  if (stat->name) {
-    int pad = stat->min - stat->len;
-    printf("%*s%s", (pad > 0) ? pad : 1, "", stat->name);
-  } else printf("%*s", stat->min, "");
+  if (stat->name)
+    printf("%*s%s", (stat->min > stat->len) ? (stat->min - stat->len) : 1, "", stat->name);
+  else
+    printf("%*s", stat->min, "");
 }
 
 static void report_print_header(int hostlen, int infolen) {
@@ -199,8 +199,8 @@ static void report_bodystat(int at, const t_stat *stat) NONNULL(2);
 static void report_bodystat(int at, const t_stat *stat) {
   const char *str = net_elem(at, stat->key);
   if (str) {
-    int pad = stat->min - strnlen(str, stat->min);
-    printf("%*s%s", (pad > 0) ? pad : 1, "", str);
+    uint len = strnlen(str, stat->min);
+    printf("%*s%s", (stat->min > len) ? (stat->min - len) : 1, "", str);
   } else
     printf("%*s", stat->min, "");
 }
@@ -325,15 +325,14 @@ void json_tail(void) { printf("\n]}\n"); }
 static void json_statline(int at, const t_stat *stat) {
   const char *elem = net_elem(at, stat->key);
   if (!elem) return;
-  int len = strlen(elem);
-  if (len <= 0) return;
-  if (len > NETELEM_MAXLEN)
-    len = NETELEM_MAXLEN;
-  const char *q = QUOTE(elem, DIV_JSON);
-  if (elem[len - 1] == '%') // print '%' with name
-    printf("%c\"%s%%\":%s%.*s%s", DIV_JSON, stat->name, q, len - 1, elem, q);
-  else
-    printf("%c\"%s\":%s%s%s", DIV_JSON, stat->name, q, elem, q);
+  int len = strnlen(elem, NETELEM_MAXLEN);
+  if (len > 0) {
+    const char *q = QUOTE(elem, DIV_JSON);
+    if (elem[len - 1] == '%') // print '%' with name
+      printf("%c\"%s%%\":%s%.*s%s", DIV_JSON, stat->name, q, len - 1, elem, q);
+    else
+      printf("%c\"%s\":%s%s%s",     DIV_JSON, stat->name, q,          elem, q);
+  }
 }
 
 void json_close(bool next) {
@@ -390,15 +389,14 @@ static void toon_headline(int at UNUSED, const t_stat *stat) {
 static void toon_statline(int at, const t_stat *stat) {
   const char *elem = net_elem(at, stat->key);
   if (!elem) return;
-  int len = strlen(elem);
-  if (len <= 0) return;
-  if (len > NETELEM_MAXLEN)
-    len = NETELEM_MAXLEN;
-  const char *q = QUOTE(elem, DIV_TOON);
-  if (elem[len - 1] == '%') // print '%' with name
-    printf("%c%s%.*s%s", DIV_TOON, q, len - 1, elem, q);
-  else
-    printf("%c%s%s%s", DIV_TOON, q, elem, q);
+  int len = strnlen(elem, NETELEM_MAXLEN);
+  if (len > 0) {
+    const char *q = QUOTE(elem, DIV_TOON);
+    if (elem[len - 1] == '%') // print '%' with name
+      printf("%c%s%.*s%s", DIV_TOON, q, len - 1, elem, q);
+    else
+      printf("%c%s%s%s",   DIV_TOON, q,          elem, q);
+  }
 }
 
 void toon_close(void) {
