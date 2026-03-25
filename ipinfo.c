@@ -310,17 +310,18 @@ static inline int parse_http_content_len(uint lines_no, char* lines[TCP_RESP_LIN
   uint min = lines_no < TCP_RESP_LINES ? lines_no : TCP_RESP_LINES;
   static char CNT_LEN_HEADER[] = "Content-Length:";
   for (uint i = 0; i < min; i++) {
-    char* tagvalue[2] = { lines[i], NULL };
-    if (split_with_sep(tagvalue, 2, ' ', 0) == 2)
+    char* tagvalue[2] = {lines[i], NULL};
+    if (split_with_sep(tagvalue, 2, ' ', 0) == 2) {
       if (strncmp(CNT_LEN_HEADER, tagvalue[0], sizeof(CNT_LEN_HEADER)) == 0) {
         if (tagvalue[1]) {
-          errno = 0; long n = strtol(tagvalue[1], NULL, 10);
+          errno = 0; long n = str2l(tagvalue[1]);
           if (errno)
             errno = 0;
-	  else if ((0 <= n) && (n <= INT_MAX))
+          else if ((0 < n) && (n <= INT_MAX))
             len = n;
         }
       }
+    }
     if (lines[i][0]) // skip header lines
       continue;
     if ((i + 1) < lines_no)
@@ -383,7 +384,7 @@ static void parse_http(char *buf, ssize_t recv_size, atndx_t id) {
 
 
 static void parse_whois_tagvalue(char* line, char* record[MAX_TXT_ITEMS]) {
-  char* tagvalue[2] = { line, NULL };
+  char* tagvalue[2] = {line, NULL};
   if (split_with_sep(tagvalue, 2, ':', 0) != 2) return;
   if (!(tagvalue[0] && tagvalue[1])) return;
   LOGMSG("whois-in: %s=\"%s\"", tagvalue[0], tagvalue[1]);
@@ -745,52 +746,75 @@ void ipinfo_close(void) {
 #endif
 }
 
+#define LIM_CHARS 20
+
 bool ipinfo_init(const char *arg) {
   if (!arg) return false;
   char* args[MAX_TXT_ITEMS + 1] = {0};
-
   args[0] = strdup(arg);
   if (!args[0]) { WARN("strdup(%s)", arg); return false; }
   split_with_sep(args, MAX_TXT_ITEMS + 1, COMMA, 0);
+  if (!args[0]) { errno = EINVAL; WARN("split_with_sep(%s)", arg); return false; }
+  //
   int max = ARRAY_LEN(origins);
-  int no = (args[0] && *args[0]) ? atoi(args[0]) : 1;
-  if ((no > 0) && (no <= max)) {
-    origin_no = no - 1;
+  int org = -1;
+  errno = 0;
+  if (*args[0]) {
+    long n = str2l(args[0]);
+    if (!errno && (0 <= n) && (n <= max))
+      org = n;
+  }
+  if ((org > 0) && (org <= max)) {
+    origin_no = org - 1;
     ipinfo_tcpmode = (ORIG_TYPE != OT_DNS);
   } else {
+    if (errno)
+      warn("%s: -L%.*s...", IPINFO_STR, LIM_CHARS, args[0]);
+    else {
+      errno = ERANGE;
+      warn("%s %s[1..%d]: %.*s", IPINFO_STR, RANGE_STR, max, LIM_CHARS, args[0]);
+    }
+    errno = 0;
     free(args[0]);
-    warnx("%s %s[1..%d]: %d: %s", IPINFO_STR, RANGE_STR, max, no, strerror(ERANGE));
     return false;
   }
-
+  itemname_max = 0;
+  while (ORIG_NAME(itemname_max)) itemname_max++;
+  //
   int j = 0;
-  for (int i = 1; (j < MAX_TXT_ITEMS) && (i <= MAX_TXT_ITEMS); i++)
-    if (args[i]) {
-      int no = atoi(args[i]);
-      if (no > 0)
-        ipinfo_no[j++] = no - 1;
-    }
+  for (int i = 1; args[i] && (i <= MAX_TXT_ITEMS) && (j < MAX_TXT_ITEMS); i++) {
+    if (*args[i]) {
+      errno = 0; long n = str2l(args[i]);
+      if (errno) {
+        warn("%s: -L%d [%d]=%.*s", IPINFO_STR, org, i + 1, LIM_CHARS, args[i]);
+        errno = 0;
+      } else if ((0 < n) && (n <= itemname_max))
+        ipinfo_no[j++] = n - 1;
+      else
+        warnx("%s: -L%d [%d]=%.*s: %s", IPINFO_STR, org, i + 1, LIM_CHARS, args[i], SKIPPED_STR);
+    } else
+      warnx("%s: -L%d [%d]: %s", IPINFO_STR, org, i + 1, NONE_STR);
+  }
   for (int i = j; i < MAX_TXT_ITEMS; i++)
     ipinfo_no[i] = -1;
   if (ipinfo_no[0] < 0)
     ipinfo_no[0] = 0;
-
-  if (args[0])
-    free(args[0]);
-  itemname_max = 0;
-  while (ORIG_NAME(itemname_max)) itemname_max++;
-
+  //
+  free(args[0]);
+  //
   for (int i = 0; (i < MAX_TXT_ITEMS) && ORIG_NAME(i); i++) {
     ORIG_UNAME(i) = _(ORIG_NAME(i));
     if (!ORIG_UNAME(i))
       ORIG_UNAME(i) = ORIG_NAME(i);
     ORIG_WIDTH(i) = ustrnlen(ORIG_UNAME(i), NAMELEN);
   }
-
+  //
   LOGMSG("Source: %s%s%s", ORIG_HOST, origins[origin_no].host6 ? ", " : "",
     origins[origin_no].host6 ? origins[origin_no].host6 : "");
   return true;
 }
+
+#undef MAXFIELDCHARS
 
 
 bool ipinfo_action(int action) {

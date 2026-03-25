@@ -367,7 +367,7 @@ static const char *get_opt_desc(char opt) {
     case OPT_CACHE:
     case OPT_TIMEOUT: return STR_IN_SECONDS;
     case OPT_ADDR:    return STR_IP_ADDRESS;
-    case OPT_COUNT:    return STR_COUNT;
+    case OPT_COUNT:   return STR_COUNT;
 #ifdef TUIMODE
     case OPT_DISPLAY: return STR_MODE;
 #endif

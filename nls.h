@@ -164,6 +164,7 @@
 #define DATETIME_STR _("Datetime")
 //
 #define NONE_STR     _("NONE")
+#define SKIPPED_STR  _("Skipped")
 #define YES_STR      _("yes")
 #define NO_STR       _("no")
 #define MAX_STR      _("max")

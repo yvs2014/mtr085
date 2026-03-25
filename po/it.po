@@ -143,7 +143,7 @@ msgid "Allocated"
 msgstr "Assegnato"
 
 msgid "Origin"
-msgstr "Origine"
+msgstr "SA"
 
 msgid "Descr"
 msgstr "Descr"
@@ -474,6 +474,10 @@ msgstr "errore"
 #
 msgid "NONE"
 msgstr "NIENTE"
+
+#
+msgid "Skipped"
+msgstr "Omesso"
 
 
 ## reports

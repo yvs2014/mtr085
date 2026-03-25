@@ -475,6 +475,10 @@ msgstr "помилка"
 msgid "NONE"
 msgstr "НЕМАЄ"
 
+#
+msgid "Skipped"
+msgstr "Пропущено"
+
 
 ## reports
 

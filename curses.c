@@ -118,7 +118,7 @@ static void mc_get_int(int *val, int min, int max,
   mvprintw(HINT_YPOS, 0, "%s: %d", what, *val);
   if (hint)
     mvprintw(HINT_YPOS + 1, 0, "-> %s", hint);
-  uint xpos = what ? ustrnlen(what, COLS) : 0;
+  int xpos = (what && what[0]) ? ustrnlen(what, COLS) : 0;
   char entered[MAXFLD + 1] = {0};
   if (enter_smth(entered, sizeof(entered), HINT_YPOS, xpos + 2)) {
     char emsg[NAMELEN] = {0};
@@ -977,8 +977,7 @@ bool tui_open(void) {
     snprinte(screen_title, sizeof(screen_title), "%s %s %s", PACKAGE_NAME, mtr_args, dsthost);
   else
     snprinte(screen_title, sizeof(screen_title), "%s %s", PACKAGE_NAME, dsthost);
-  if (screen_title[0])
-    screen_title_ulen = ustrnlen(screen_title, COLS);
+  screen_title_ulen = screen_title[0] ? ustrnlen(screen_title, COLS) : 0;
   //
   mc_init();
   tui_redraw();
