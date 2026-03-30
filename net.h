@@ -123,7 +123,7 @@ typedef struct nethost {
   timemsec_t last, best, worst;  // >10 ? %d : %1.f [msec]
   double avg, mean;              // >10 ? %d : %1.f [msec]
   double jitter, javg, jworst, jinta; // jitters
-  long double var;        // variance as base for std deviance: sqrt(var/(recv-1))
+  double var;                    // variance as base for std deviance: sqrt(var/(recv-1))
   bool transit, up;       // states: ping in transit, host alive
 #ifdef TUIMODE
   int saved[SAVED_PINGS]; // map for display mode: <0 " ?" chars, >=0 pong in usec
@@ -153,9 +153,9 @@ extern char localaddr[];
 #define QTXT_TS_AT_NDX(at, ndx) (host[at].eaddr[ndx].q_txt_ts)
 #endif
 
-enum { IPV6_UNDEF = -1, IPV6_DISABLED = 0, IPV6_ENABLED = 1 };
+enum IPV6_ENDIS { IPV6_UNDEF = -1, IPV6_DISABLED = 0, IPV6_ENABLED = 1 };
 
-void net_settings(int ipv6_enabled);
+void net_settings(enum IPV6_ENDIS ipv6_enabled);
 bool net_open(void);
 void net_assert(void);
 void net_set_type(int type);

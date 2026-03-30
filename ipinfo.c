@@ -662,7 +662,8 @@ void ipinfo_head_fix(char buff[], size_t size) {
     if (gap < 0) gap = 0;
     int inc = snprinte(buff + len, size - len, "%s%*s",
       ORIG_UNAME(ipinfo_no[i]), ++gap, "");
-    if (inc < 0) break; else if (inc > 0) len += inc;
+    if (inc < 0) break;
+    if (inc > 0) len += inc;
   }
 }
 

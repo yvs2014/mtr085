@@ -746,7 +746,7 @@ static int net_stat(uint port, const void *addr, struct timespec *recv_at,
 }
 
 #ifdef WITH_MPLS
-static inline bool mplslike(int psize, int hsize) {
+static inline bool mplslike(ssize_t psize, ssize_t hsize) {
   return (run_opts.mpls && ((psize - hsize) >= MPLSMIN));
 }
 
@@ -758,7 +758,7 @@ static mpls_data_t *decodempls(const uint8_t *data, int size) {
     LOGMSG("got %d bytes of data, whereas mpls min is %d", size, MPLSMIN);
     return NULL;
   }
-  int off = mplsoff; // at least 12bytes ahead: icmp_ext_struct(4) icmp_ext_object(4) label(4) [label(4) ...]
+  uint off = mplsoff; // at least 12bytes ahead: icmp_ext_struct(4) icmp_ext_object(4) label(4) [label(4) ...]
   // icmp extension structure
   struct icmpext_struct *ies = (struct icmpext_struct *)&data[off];
   if ((ies->ver != ICMP_EXT_VER) || ies->res || !ies->sum) {
@@ -1324,24 +1324,22 @@ void net_set_type(int type) {
   dst_unreach = n_un; \
 }
 
-void net_settings(int ipv6_enabled) {
+void net_settings(enum IPV6_ENDIS ipv6) {
 #ifdef ENABLE_DNS
   dns_ptr_handler = save_ptr_answer; // no checks, handler for net-module only
 #endif
-  switch (ipv6_enabled) {
+  if (ipv6 == IPV6_ENABLED) {
 #ifdef ENABLE_IPV6
-    case IPV6_ENABLED:
       af = AF_INET6;
       addr_exist = addr6exist;
       addr_equal = addr6equal;
       addr_copy  = addr6copy;
       iphdr_sz = 0;
-      ipicmphdr_sz = 40 + sizeof(struct _icmphdr);
+      ipicmphdr_sz = sizeof(struct ip6_hdr) + sizeof(struct _icmphdr);
       sa_addr_offset = offsetof(struct sockaddr_in6, sin6_addr);
       NET46SETS(sizeof(struct sockaddr_in6), ICMP6_ECHO_REPLY, ICMP6_TIME_EXCEEDED, ICMP6_DST_UNREACH);
-    break;
 #endif
-    default: // IPv4 by default
+  } else { // IPv4 by default
       af = AF_INET;
       addr_exist = addr4exist;
       addr_equal = addr4equal;
@@ -1350,7 +1348,6 @@ void net_settings(int ipv6_enabled) {
       ipicmphdr_sz = iphdr_sz + sizeof(struct _icmphdr);
       sa_addr_offset = offsetof(struct sockaddr_in, sin_addr);
       NET46SETS(sizeof(struct sockaddr_in), ICMP_ECHOREPLY, ICMP_TIME_EXCEEDED, ICMP_UNREACH);
-    break;
   }
   net_set_type(mtrtype);
 }

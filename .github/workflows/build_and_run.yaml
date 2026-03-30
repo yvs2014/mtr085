@@ -17,7 +17,7 @@ jobs:
     runs-on: ${{matrix.os}}
     strategy:
       matrix:
-        os: [ubuntu-latest]
+        os: [ubuntu-22.04, ubuntu-24.04, ubuntu-slim]
         compiler: [gcc, clang]
     steps:
       - uses: actions/checkout@v6
@@ -47,7 +47,7 @@ jobs:
     runs-on: ${{matrix.os}}
     strategy:
       matrix:
-        os: [macos-latest]
+        os: [macos-14, macos-15, macos-26]
         compiler: [gcc, clang]
     steps:
       - uses: actions/checkout@v6
