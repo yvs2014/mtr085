@@ -396,7 +396,7 @@ static void printw_addr(int at, int ndx) {
       printw(" (%s)", strlongip(addr));
   } else
 #endif
-    printw("%s", strlongip(addr));
+  { printw("%s", strlongip(addr)); }
   if (down)
     attroff(A_BOLD);
 }

@@ -65,6 +65,8 @@ static inline void split_multipath(int at) {
 }
 
 void split_redraw(void) {
+  if (run_opts.pause)
+    return;
   const char fields[] = "LRSBAW"; // Loss, Recv, Sent, Best, Avg, Worst
   int max = net_max();
   for (int at = net_min() + display_offset; at < max; at++) {
@@ -157,7 +159,7 @@ static void split_help(void) {
 #undef INDENT
   printf("\n");
   printf("%s ... ", ANYCONT_STR);
-  fflush(stdout);
+  (void)fflush(stdout);
 }
 
 key_action_t split_keyaction(void) {
@@ -181,7 +183,15 @@ key_action_t split_keyaction(void) {
 #ifdef ENABLE_DNS
     case 'n': return ActionDNS;
 #endif
-    case 'p': return ActionPauseResume;
+    case ' ':
+    case 'p':
+      if (run_opts.pause)
+        putchar('\n');
+      else {
+        printf("%s ...", ANYCONT_STR);
+        (void)fflush(stdout);
+      }
+      return ActionPauseResume;
     case  3 : // ^C
     case 'q': return ActionQuit;
     case 'r': return ActionReset;
