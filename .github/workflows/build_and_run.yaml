@@ -28,7 +28,7 @@ jobs:
           sudo apt update
           sudo apt install -y build-essential
           sudo apt install -y devscripts debhelper meson git sed pkgconf
-          sudo apt install -y libcap2-bin libcap-dev libbsd-dev
+          sudo apt install -y libncurses-dev libcap2-bin libcap-dev libbsd-dev
       - name: Create deb package with ${{matrix.compiler}}
         env:
           CC: ${{matrix.compiler}}
@@ -56,7 +56,7 @@ jobs:
       - name: Install mandatory packages for building
         run: |
           brew update
-          brew upgrade
+          brew upgrade --overwrite
           brew install meson
       - name: Create executable with ${{matrix.compiler}}
         env:
