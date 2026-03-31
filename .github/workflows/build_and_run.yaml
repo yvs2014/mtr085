@@ -26,7 +26,7 @@ jobs:
       - name: Install mandatory packages for building
         run: |
           sudo apt update
-          sudo apt install -y build-essential
+          sudo apt install -y build-essential gcc clang
           sudo apt install -y devscripts debhelper meson git sed pkgconf
           sudo apt install -y libncurses-dev libcap2-bin libcap-dev libbsd-dev
       - name: Create deb package with ${{matrix.compiler}}
