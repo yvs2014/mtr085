@@ -505,6 +505,9 @@ msgstr "IP-інфо"
 
 ## messages
 
+msgid "Press any letter to continue"
+msgstr "Натисніть будь-яку букву для продовження"
+
 msgid "Press any key to continue"
 msgstr "Натисніть будь-яку клавішу для продовження"
 

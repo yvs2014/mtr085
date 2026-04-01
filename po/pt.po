@@ -510,6 +510,9 @@ msgstr "IP-info"
 
 ## messages
 
+msgid "Press any letter to continue"
+msgstr "Pressione qualquer letra para continuar"
+
 msgid "Press any key to continue"
 msgstr "Pressione qualquer tecla para continuar"
 

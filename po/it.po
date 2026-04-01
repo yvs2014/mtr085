@@ -505,6 +505,9 @@ msgstr "IP-info"
 
 ## messages
 
+msgid "Press any letter to continue"
+msgstr "Premere una lettera qualsiasi per continuare"
+
 msgid "Press any key to continue"
 msgstr "Premere un tasto qualsiasi per continuare"
 

@@ -157,8 +157,7 @@ static void split_help(void) {
     printf("%s%*s %s\n", cmd[i].key, (pad < 0) ? 0 : pad, "", cmd[i].hint);
   }
 #undef INDENT
-  printf("\n");
-  printf("%s ... ", ANYCONT_STR);
+  printf("\n%s ... ", ANYLTTR_STR);
   (void)fflush(stdout);
 }
 
@@ -188,12 +187,15 @@ key_action_t split_keyaction(void) {
       if (run_opts.pause)
         putchar('\n');
       else {
-        printf("%s ...", ANYCONT_STR);
+        printf("%s ... ", ANYLTTR_STR);
         (void)fflush(stdout);
       }
       return ActionPauseResume;
     case  3 : // ^C
-    case 'q': return ActionQuit;
+    case 'q':
+      if (run_opts.pause)
+        putchar('\n');
+      return ActionQuit;
     case 'r': return ActionReset;
     case 't': return ActionTCP;
     case 'u': return ActionUDP;
