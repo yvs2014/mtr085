@@ -184,7 +184,8 @@ struct PACKIT icmpext_object { // RFC4884
 
 #define FAIL_AND_CLOSE(rcode, fd, fmt, ...) do { \
   rstrerror(rcode);                              \
-  display_clear(); CLOSE(fd);                    \
+  DISPCLEAR;                                     \
+  CLOSE(fd);                                     \
   NET_FAIL_WARN(fmt, __VA_ARGS__);               \
 } while (0)
 

@@ -778,7 +778,14 @@ static void parse_options(int argc, char **argv) {
 #ifdef OUTPUT_OPTV
       case OPT_OUTPUT: {
         int arg = tolower((int)optarg[0]);
-        if ((arg == OTOON) || (arg == OJSON))
+        bool optv = false;
+#ifdef OUTPUT_FORMAT_TOON
+        optv |= (arg == OTOON);
+#endif
+#ifdef OUTPUT_FORMAT_JSON
+        optv |= (arg == OJSON);
+#endif
+        if (optv)
           set_optv(argc, argv);
       } break;
 #endif
@@ -1001,11 +1008,7 @@ static inline void main_prep(int argc, char **argv) {
 #endif
   if (gethostname(srchost, sizeof(srchost)))
     snprinte(srchost, sizeof(srchost), "%s", NONE_STR);
-  display_start(
-#ifdef OUTPUT_FORMAT_TOON
-    (argc > optind) ? (argc - optind) : 0
-#endif
-  );
+  display_start((argc > optind) ? (argc - optind) : 0);
 }
 
 static inline bool main_loop(struct addrinfo *ai, uint nth, uint n_targets) {

@@ -275,12 +275,12 @@ static key_action_t keyboard_events(key_action_t action) {
       chart_mode = mode;
       run_opts.chart = mode & 3; // chart bits
       OPT_SUM(chart);
-      display_clear();
+      DISPCLEAR;
     } break;
 #endif
     case ActionClear:
       LOGMSG("%s", "clear display");
-      display_clear();
+      DISPCLEAR;
       break;
     case ActionPauseResume:
       LOGMSG("%s", "'pause/resume' pressed");
@@ -299,7 +299,7 @@ static key_action_t keyboard_events(key_action_t action) {
       LOGMSG("toggle %s: %d -> %d", "MPLS", run_opts.mpls, !run_opts.mpls);
       run_opts.mpls = !run_opts.mpls;
       OPT_SUM(mpls);
-      display_clear();
+      DISPCLEAR;
       break;
 #endif
 #ifdef ENABLE_DNS
@@ -413,7 +413,7 @@ static int conclude(struct timespec *polled_at) {
   int rc = ActionNone;
   if (IN_ISSET(FD_STDIN)) { // check keyboard events
     LOGMSG("got %s", "stdin event");
-    key_action_t act = display_key_action();
+    key_action_t act = keyaction_fn ? keyaction_fn() : ActionNone;
     if (act != ActionNone) {
       act = keyboard_events(act);
       if (act == ActionQuit) return act;
@@ -500,10 +500,9 @@ int poll_loop(void) {
     do {
       if ((anyset != ActionNone) || paused) {
         timeout = paused ? PAUSE_MSEC : 0;
-        if (paused && run_opts.interactive)
-          display_redraw();
+        if (paused && run_opts.interactive) EACHPASS;
       } else {
-        display_redraw();
+        EACHPASS;
 #ifdef WITH_IPINFO
         if (ipinfo_ready())
           proceed_ipinfo();

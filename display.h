@@ -21,21 +21,18 @@
 
 #include "common.h"
 
-void display_start(
-#ifdef OUTPUT_FORMAT_TOON
-  uint n_targets
-#else
-  void
-#endif
-);
+void display_start(uint n_targets UNUSED);
 void display_final(void);
 bool display_open(void);
 void display_close(bool next);
 void display_confirm_fin(void);
 
-void display_redraw(void);
 void display_loop(void);
-void display_clear(void);
-key_action_t display_key_action(void);
+extern void (*eachpass_fn)(void);
+extern void (*dispclear_fn)(void);
+extern key_action_t (*keyaction_fn)(void);
+
+#define EACHPASS do { if (eachpass_fn) eachpass_fn(); } while (0)
+#define DISPCLEAR do { if (dispclear_fn) dispclear_fn(); } while (0)
 
 #endif

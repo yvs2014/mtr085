@@ -25,7 +25,7 @@
 void report_started_at(void);
 void report_close(bool next, bool with_header);
 #ifdef ENABLE_DNS
-void report_resolv(void);
+void backresolv_lookups(void);
 #endif
 #ifdef OUTPUT_FORMAT_RAW
 void raw_rawping(int at, int usec);

@@ -147,7 +147,8 @@ static int longest_hopname(int longest) {
 }
 
 #ifdef ENABLE_DNS
-void report_resolv(void) {
+void backresolv_lookups(void) {
+  if (!run_opts.dns) return;
   int max = net_max();
   for (int at = net_min(); at < max; at++) if (addr_exist(&CURRENT_IP(at))) {
     dns_ptr_lookup(at, host[at].current);

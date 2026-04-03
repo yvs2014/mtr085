@@ -27,6 +27,10 @@
 #include "split.h"
 #endif
 
+void (*eachpass_fn)(void);
+void (*dispclear_fn)(void);
+key_action_t (*keyaction_fn)(void);
+
 bool display_open(void) {
   switch (display_mode) {
 #ifdef TUIMODE
@@ -68,79 +72,20 @@ void display_close(bool next) {
   }
 }
 
-void display_start(
-#ifdef OUTPUT_FORMAT_TOON
-  uint n_targets
-#else
-  void
-#endif
-) {
-  if (display_mode == DisplayAuto) {
-#ifdef TUIMODE
-    display_mode = DisplayTUI; // default
-#else
-    display_mode = DisplayReport; // if no curses
-#endif
-  }
-  switch (display_mode) {
-#ifdef OUTPUT_FORMAT_CSV
-    case DisplayCSV:
-#endif
-#ifdef OUTPUT_FORMAT_JSON
-    case DisplayJSON:
-#endif
-#ifdef OUTPUT_FORMAT_TOON
-    case DisplayTOON:
-#endif
-#ifdef OUTPUT_FORMAT_XML
-    case DisplayXML:
-#endif
-    case DisplayReport:
-      report_started_at(); break;
-    default: break;
-  }
-  switch (display_mode) {
-#ifdef OUTPUT_FORMAT_CSV
-    case DisplayCSV: csv_head(); break;
-#endif
-#ifdef OUTPUT_FORMAT_JSON
-    case DisplayJSON: json_head(); break;
-#endif
-#ifdef OUTPUT_FORMAT_TOON
-    case DisplayTOON: toon_head(n_targets); break;
-#endif
-#ifdef OUTPUT_FORMAT_XML
-    case DisplayXML: xml_head(); break;
-#endif
-    default: break;
-  }
-}
-
-void display_confirm_fin(void) {
-#ifdef TUIMODE
-  if (display_mode == DisplayTUI) tui_confirm();
-#endif
-}
-
-void display_final(void) {
-  switch (display_mode) {
-#ifdef OUTPUT_FORMAT_JSON
-    case DisplayJSON: json_tail(); break;
-#endif
-#ifdef OUTPUT_FORMAT_XML
-    case DisplayXML: xml_tail(); break;
-#endif
-    default: break;
-  }
-}
-
-void display_redraw(void) {
+static inline void display_set_callbacks(void) {
   switch (display_mode) {
 #ifdef TUIMODE
-    case DisplayTUI: tui_redraw(); break;
+    case DisplayTUI:
+      keyaction_fn = tui_keyaction;
+      dispclear_fn = tui_clear;
+      eachpass_fn  = tui_redraw;
+      break;
 #endif
 #ifdef SPLITMODE
-    case DisplaySplit: split_redraw(); break;
+    case DisplaySplit:
+      keyaction_fn = split_keyaction;
+      eachpass_fn  = split_redraw;
+      break;
 #endif
 #ifdef OUTPUT_FORMAT_TXT
     case DisplayTXT:
@@ -159,25 +104,81 @@ void display_redraw(void) {
 #endif
     case DisplayReport:
 #ifdef ENABLE_DNS
-      if (run_opts.dns)
-        report_resolv();
+      eachpass_fn = backresolv_lookups;
 #endif
       break;
     default: break;
   }
 }
 
-key_action_t display_key_action(void) {
+static inline void display_started_at(void) {
   switch (display_mode) {
-#ifdef TUIMODE
-    case DisplayTUI: return tui_keyaction();
+#ifdef OUTPUT_FORMAT_CSV
+    case DisplayCSV:
 #endif
-#ifdef SPLITMODE
-    case DisplaySplit: return split_keyaction();
+#ifdef OUTPUT_FORMAT_JSON
+    case DisplayJSON:
+#endif
+#ifdef OUTPUT_FORMAT_TOON
+    case DisplayTOON:
+#endif
+#ifdef OUTPUT_FORMAT_XML
+    case DisplayXML:
+#endif
+    case DisplayReport:
+      report_started_at(); break;
+    default: break;
+  }
+}
+
+static inline void display_head_out(uint n_targets UNUSED) {
+  switch (display_mode) {
+#ifdef OUTPUT_FORMAT_CSV
+    case DisplayCSV: csv_head(); break;
+#endif
+#ifdef OUTPUT_FORMAT_JSON
+    case DisplayJSON: json_head(); break;
+#endif
+#ifdef OUTPUT_FORMAT_TOON
+    case DisplayTOON: toon_head(n_targets); break;
+#endif
+#ifdef OUTPUT_FORMAT_XML
+    case DisplayXML: xml_head(); break;
 #endif
     default: break;
   }
-  return ActionNone;
+}
+
+void display_start(uint n_targets UNUSED) {
+  if (display_mode == DisplayAuto) {
+#ifdef TUIMODE
+    display_mode = DisplayTUI; // default
+#else
+    display_mode = DisplayReport; // if no curses
+#endif
+  }
+  //
+  display_set_callbacks();
+  display_started_at();
+  display_head_out(n_targets);
+}
+
+void display_confirm_fin(void) {
+#ifdef TUIMODE
+  if (display_mode == DisplayTUI) tui_confirm();
+#endif
+}
+
+void display_final(void) {
+  switch (display_mode) {
+#ifdef OUTPUT_FORMAT_JSON
+    case DisplayJSON: json_tail(); break;
+#endif
+#ifdef OUTPUT_FORMAT_XML
+    case DisplayXML: xml_tail(); break;
+#endif
+    default: break;
+  }
 }
 
 void display_loop(void) {
@@ -210,12 +211,5 @@ void display_loop(void) {
       poll_loop(); break;
     default: break;
   }
-}
-
-void display_clear(void) {
-#ifdef TUIMODE
-  if (display_mode == DisplayTUI)
-    tui_clear();
-#endif
 }
 
