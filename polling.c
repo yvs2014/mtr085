@@ -40,7 +40,7 @@
 #endif
 
 #if defined(TUIMODE) || defined(SPLITMODE)
-#define SCROLL_LINES 5
+#define LINES_PER_PAGE 5
 #endif
 
 enum { FD_BATCHMAX = 30 };
@@ -257,6 +257,20 @@ static bool svc(struct timespec *last, const struct timespec *interval, int *tim
   return true;
 }
 
+#ifdef TUIMODE
+static void linedown(uint lines) {
+  display_offset += lines;
+  int hops = net_max() - net_min();
+  if (display_offset >= hops)
+    display_offset = hops - 1;
+}
+static void lineup(uint lines) {
+  display_offset -= lines ? lines : LINES_PER_PAGE;
+  if (display_offset < 0)
+    display_offset = 0;
+}
+#endif
+
 // proceed keyboard events and return action
 static key_action_t keyboard_events(key_action_t action) {
   LOGMSG("action=%d", action);
@@ -332,21 +346,23 @@ static key_action_t keyboard_events(key_action_t action) {
       OPT_SUM(lookup);
       break;
 #endif
-#if defined(TUIMODE) || defined(SPLITMODE)
-    case ActionScrollDown: {
-      LOGMSG("scroll down %d lines", SCROLL_LINES);
-      display_offset += SCROLL_LINES;
-      int hops = net_max() - net_min();
-      if (display_offset >= hops)
-        display_offset = hops - 1;
-    } break;
-    case ActionScrollUp: {
-      LOGMSG("scroll up %d lines", SCROLL_LINES);
-      int rest = display_offset % 5;
-      display_offset -= rest ? rest : SCROLL_LINES;
-      if (display_offset < 0)
-        display_offset = 0;
-    } break;
+#ifdef TUIMODE
+    case ActionPageDown:
+      LOGMSG("page down (%d lines)", LINES_PER_PAGE);
+      linedown(LINES_PER_PAGE);
+      break;
+    case ActionPageUp:
+      LOGMSG("page up (%d lines)", LINES_PER_PAGE);
+      lineup(display_offset % LINES_PER_PAGE);
+      break;
+    case ActionLineDown:
+      LOGMSG("line %s", "down");
+      linedown(1);
+      break;
+    case ActionLineUp:
+      LOGMSG("line %s", "up");
+      lineup(1);
+      break;
 #endif
     case ActionUDP:
     case ActionTCP:

@@ -50,7 +50,7 @@
 #endif
 
 #ifndef GITREV
-#define GITREV "263"
+#define GITREV "264"
 #endif
 
 #ifndef HAVE_UINT
@@ -125,8 +125,11 @@ typedef enum {
 #endif
 } display_mode_t;
 
-typedef enum { ActionNone, ActionQuit, ActionReset, ActionDisplay,
-  ActionClear, ActionPauseResume, ActionScrollDown, ActionScrollUp,
+typedef enum { ActionNone, ActionQuit,
+  ActionReset, ActionDisplay, ActionClear, ActionPauseResume,
+#ifdef TUIMODE
+  ActionLineUp, ActionLineDown, ActionPageUp, ActionPageDown,
+#endif
   ActionUDP, ActionTCP, ActionCache, ActionJitter,
 #ifdef WITH_MPLS
   ActionMPLS,

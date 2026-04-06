@@ -3,15 +3,13 @@
 
 PORTNAME=	mtr085
 PORTVERSION=	GIT_COMMIT_NUMBER
-PORTREVISION=	${GITVERSION}
-PORTEPOCH=	1
-CATEGORIES=	net
+CATEGORIES=	freebsd-ports-wip net
 MASTER_SITES=	https://github.com/${GITHUB_USER}/${PORTNAME}/tarball/${GITVERSION}/ \
 		${MASTER_SITE_LOCAL}
 DISTNAME=	${PORTNAME}-${GITVERSION}
 
 MAINTAINER=	e@mail
-COMMENT=	MTR v0.85 fork with whois info, IDN, unicode
+COMMENT=	MTR-0.85 fork with whois info, IDN, NLS, unicode, etc.
 WWW=	https://github.com/${GITHUB_USER}/${PORTNAME}
 
 LICENSE=	GPLv2
@@ -71,11 +69,19 @@ MESON_ARGS+=	-DIPV6=false
 .endif
 
 .if ${PORT_OPTIONS:MSETUID}
-post-install:
+warning-at-install:
+	@${ECHO_MSG} "===>  SECURITY-REPORT"
+	@${ECHO_MSG} "    This port has installed the following binaries which execute with"
+	@${ECHO_MSG} "    increased privileges (setuid \"root\"): ${PREFIX}/sbin/mtr"
 	@${ECHO_MSG} ""
-	@${ECHO_MSG} "${PREFIX}/sbin/mtr is setuid \"root\" "
-	@${ECHO_MSG} "Please read about potential security issues"
+	@${ECHO_MSG} "    If there are vulnerabilities in this program there may be a security"
+	@${ECHO_MSG} "    risk to the system."
+	@${ECHO_MSG} "    Please type 'make deinstall' to deinstall the port if this is a concern."
 	@${ECHO_MSG} ""
+
+post-install: warning-at-install
+install-message: warning-at-install
+
 .endif
 
 .include <bsd.port.mk>

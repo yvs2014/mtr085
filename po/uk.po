@@ -337,8 +337,14 @@ msgstr "вкл/викл UDP пінги"
 msgid "toggle cache mode"
 msgstr "вкл/викл режим кешування"
 
-msgid "scroll up/down"
-msgstr "прокрутка догори/донизу"
+msgid "up/down by one line"
+msgstr "на один рядок вгору/донизу"
+
+msgid "up/down by five lines"
+msgstr "на п'ять рядків вгору/донизу"
+
+msgid "PAGE UP/DOWN"
+msgstr "PageUp/PageDown"
 
 msgid "pause/resume"
 msgstr "призупинити/продовжити"

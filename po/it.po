@@ -337,8 +337,14 @@ msgstr "(dis)attiva ping UDP"
 msgid "toggle cache mode"
 msgstr "(dis)attiva modo cache"
 
-msgid "scroll up/down"
-msgstr "scorre su o giù"
+msgid "up/down by one line"
+msgstr "su/giù di una riga"
+
+msgid "up/down by five lines"
+msgstr "su/giù di cinque righe"
+
+msgid "PAGE UP/DOWN"
+msgstr "PAG SU/GIÙ"
 
 msgid "pause/resume"
 msgstr "pausa/ripresa"

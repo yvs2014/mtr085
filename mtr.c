@@ -587,8 +587,10 @@ static inline void option_version(uint count UNUSED) {
 #else
   printf("%s.%s\n", PACKAGE_NAME, GITREV);
 #endif
+#ifdef TUIMODE
   if (count > 1)
     printf("TUI: %s\n", tui_version());
+#endif
   QEXIT(EXIT_SUCCESS);
 }
 

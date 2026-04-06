@@ -158,8 +158,13 @@ static inline void mc_key_h(void) { // help
     {.key = "t", .hint = CMD_T_STR},
     {.key = "u", .hint = CMD_U_STR},
     {.key = "x", .hint = CMD_X_STR},
-    {.key = "+-",      .hint = CMD_PM_STR},
-    {.key = SPACE_STR, .hint = CMD_SP_STR},
+    {.key =
+#ifdef WITH_UNICODE
+            "↑↓"
+#endif
+            "+-",         .hint = CMD_UD1_STR},
+    {.key = PGUPDOWN_STR, .hint = CMD_UD5_STR},
+    {.key = SPACE_STR,    .hint = CMD_SP_STR},
   };
   erase();
   int x = 2, y = 2;
@@ -256,8 +261,16 @@ static key_action_t keyaction_body(int ch) {
 #undef GETCH_BATCH
 #endif
   switch (ch) {
-    case '+': return ActionScrollDown;
-    case '-': return ActionScrollUp;
+    case '+':
+    case KEY_UP:
+      return ActionLineDown;
+    case '-':
+    case KEY_DOWN:
+      return ActionLineUp;
+    case KEY_PPAGE: // PageUp
+      return ActionPageDown;
+    case KEY_NPAGE: // PageDown
+      return ActionPageUp;
     case '?':
     case 'h':
       mc_key_h();
@@ -307,6 +320,7 @@ static key_action_t keyaction_body(int ch) {
     case ' ':
     case 'p': return ActionPauseResume;
     case  3 : // ^C
+//  case  27: // Esc
     case 'q':
       at_quit = true;
       return ActionQuit;
@@ -937,6 +951,7 @@ bool tui_open(void) {
   }
   raw();
   noecho();
+  keypad(stdscr, TRUE);
   // reset cache
   cached_title_ulen = -1;
   stat_title_len = -1;

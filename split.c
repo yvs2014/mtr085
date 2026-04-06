@@ -146,7 +146,6 @@ static void split_help(void) {
     {.key = "t", .hint = CMD_T_STR},
     {.key = "u", .hint = CMD_U_STR},
     {.key = "x", .hint = CMD_X_STR},
-    {.key = "+-",    .hint = CMD_PM_STR},
     {.key = "SPACE", .hint = CMD_SP_STR},
   };
   //
@@ -168,8 +167,6 @@ key_action_t split_keyaction(void) {
     return 0;
   }
   switch (ch) {
-    case '+': return ActionScrollDown;
-    case '-': return ActionScrollUp;
     case 'e': return ActionMPLS;
     case 'h':
       split_help();
@@ -192,6 +189,7 @@ key_action_t split_keyaction(void) {
       }
       return ActionPauseResume;
     case  3 : // ^C
+//  case  27: // Esc
     case 'q':
       if (run_opts.pause)
         putchar('\n');
