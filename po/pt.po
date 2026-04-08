@@ -72,7 +72,7 @@ msgid "Scale"
 msgstr "Escala"
 
 msgid "ms"
-msgstr "mseg"
+msgstr "ms"
 
 #
 
@@ -219,25 +219,25 @@ msgid "Last"
 msgstr "Último"
 
 msgid "Newest RTT(ms)"
-msgstr "RTT(mseg) mais recente"
+msgstr "RTT(ms) mais recente"
 
 msgid "Best"
 msgstr "Melhor"
 
 msgid "Min/Best RTT(ms)"
-msgstr "RTT(mseg) min/melhor"
+msgstr "RTT(ms) min/melhor"
 
 msgid "Avrg"
 msgstr "Médio"
 
 msgid "Average RTT(ms)"
-msgstr "RTT(mseg) médio"
+msgstr "RTT(ms) médio"
 
 msgid "Wrst"
 msgstr "Pior"
 
 msgid "Max/Worst RTT(ms)"
-msgstr "Máx/Pior RTT(mseg)"
+msgstr "Máx/Pior RTT(ms)"
 
 msgid "StDev"
 msgstr "Desvio"

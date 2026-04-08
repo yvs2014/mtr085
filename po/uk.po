@@ -65,14 +65,14 @@ msgid "Histogram"
 msgstr "Гістограма"
 
 # n columns
-msgid "cols"
+msgid "columns"
 msgstr "колонок"
 
 msgid "Scale"
 msgstr "Шкала"
 
 msgid "ms"
-msgstr "мсек"
+msgstr "мс"
 
 #
 
@@ -218,25 +218,25 @@ msgid "Last"
 msgstr "Остан"
 
 msgid "Newest RTT(ms)"
-msgstr "Останнє RTT(мсек)"
+msgstr "Останнє RTT(мс)"
 
 msgid "Best"
 msgstr "Кращ"
 
 msgid "Min/Best RTT(ms)"
-msgstr "Найкраще RTT(мсек)"
+msgstr "Найкраще RTT(мс)"
 
 msgid "Avrg"
 msgstr "Серед"
 
 msgid "Average RTT(ms)"
-msgstr "Середнє RTT(мсек)"
+msgstr "Середнє RTT(мс)"
 
 msgid "Wrst"
 msgstr "Гірш"
 
 msgid "Max/Worst RTT(ms)"
-msgstr "Найгірше RTT(мсек)"
+msgstr "Найгірше RTT(мс)"
 
 msgid "StDev"
 msgstr "CтдВар"
