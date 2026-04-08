@@ -169,20 +169,20 @@ static inline void mc_key_h(void) { // help
   erase();
   int x = 2, y = 2;
 #define INDENT 12
-  mvprintw(x++, 0, "%s:", COMMANDS_STR);
+  mvprintw(y++, 0, "%s:", COMMANDS_STR);
   for (uint i = 0; i < ARRAY_LEN(cmd); i++) {
     int pad = INDENT - ustrnlen(cmd[i].key, INDENT);
     const char *type = cmd[i].type == CH_INT ? CH_NUM_STR :
                        cmd[i].type == CH_STR ? CH_STR_STR : NULL;
     if (type) {
       pad -= ustrnlen(type, COLS) + 1;
-      mvprintw(x++, y, "%s %s%*s %s", cmd[i].key, type, (pad < 0) ? 0 : pad, "", cmd[i].hint);
+      mvprintw(y++, x, "%s %s%*s %s", cmd[i].key, type, (pad < 0) ? 0 : pad, "", cmd[i].hint);
     } else
-      mvprintw(x++, y, "%s%*s %s", cmd[i].key, (pad < 0) ? 0 : pad, "", cmd[i].hint);
+      mvprintw(y++, x, "%s%*s %s", cmd[i].key, (pad < 0) ? 0 : pad, "", cmd[i].hint);
   }
 #undef INDENT
-  x++;
-  mvprintw(x++, 0, "%s ...", ANYCONT_STR);
+  mvprintw(++y, 0, "%s ...", ANYCONT_STR);
+  refresh();
   getch();
 }
 

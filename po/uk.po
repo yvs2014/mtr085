@@ -101,7 +101,7 @@ msgid "pattern"
 msgstr "шаблон"
 
 msgid "dt"
-msgstr "інтерв"
+msgstr "інтервал"
 
 msgid "cycles"
 msgstr "цикли"
