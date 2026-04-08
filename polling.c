@@ -289,13 +289,9 @@ static key_action_t keyboard_events(key_action_t action) {
       chart_mode = mode;
       run_opts.chart = mode & 3; // chart bits
       OPT_SUM(chart);
-      DISPCLEAR;
+      DISPRESET;
     } break;
 #endif
-    case ActionClear:
-      LOGMSG("%s", "clear display");
-      DISPCLEAR;
-      break;
     case ActionPauseResume:
       LOGMSG("%s", "'pause/resume' pressed");
       run_opts.pause = !run_opts.pause;
@@ -313,7 +309,7 @@ static key_action_t keyboard_events(key_action_t action) {
       LOGMSG("toggle %s: %d -> %d", "MPLS", run_opts.mpls, !run_opts.mpls);
       run_opts.mpls = !run_opts.mpls;
       OPT_SUM(mpls);
-      DISPCLEAR;
+      DISPRESET;
       break;
 #endif
 #ifdef ENABLE_DNS

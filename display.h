@@ -29,10 +29,12 @@ void display_confirm_fin(void);
 
 void display_loop(void);
 extern void (*eachpass_fn)(void);
+extern void (*dispreset_fn)(void);
 extern void (*dispclear_fn)(void);
 extern key_action_t (*keyaction_fn)(void);
 
 #define EACHPASS do { if (eachpass_fn) eachpass_fn(); } while (0)
+#define DISPRESET do { if (dispreset_fn) dispreset_fn(); } while (0)
 #define DISPCLEAR do { if (dispclear_fn) dispclear_fn(); } while (0)
 
 #endif

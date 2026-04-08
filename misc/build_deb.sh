@@ -28,7 +28,7 @@ lsb_release -r 2>/dev/null | grep '\s9\.' && \
 mkdir -p "$ddir"
 rm -f "$chf.tmp"
 dch --create -c "$chf.tmp" --package="$name" -v "$rev" -D "$dist" -u "low" -M \
-  "$name fork with whois info, unicode, nls, idn, etc."
+  "$name fork with whois info, IDN, NLS, unicode, etc."
 
 mv "$chf.tmp" "$chf"
 

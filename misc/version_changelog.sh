@@ -18,7 +18,7 @@ git_comments=
 for m in "$@"; do
 	git_comments="$git_comments -m \"$m\""
 done
-deb_comments='  * mtr085 fork with whois info, unicode, etc.'
+deb_comments='  * mtr085 fork with whois info, IDN, NLS, unicode, etc.'
 
 vers="$(git rev-list --count $TAG0..HEAD)"
 next=$((vers + 1))

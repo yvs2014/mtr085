@@ -29,6 +29,7 @@
 
 void (*eachpass_fn)(void);
 void (*dispclear_fn)(void);
+void (*dispreset_fn)(void);
 key_action_t (*keyaction_fn)(void);
 
 bool display_open(void) {
@@ -77,6 +78,7 @@ static inline void display_set_callbacks(void) {
 #ifdef TUIMODE
     case DisplayTUI:
       keyaction_fn = tui_keyaction;
+      dispreset_fn = tui_reset;
       dispclear_fn = tui_clear;
       eachpass_fn  = tui_redraw;
       break;

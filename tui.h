@@ -24,9 +24,10 @@
 bool tui_open(void);
 void tui_close(void);
 void tui_redraw(void);
-key_action_t tui_keyaction(void);
+void tui_reset(void);
 void tui_clear(void);
 void tui_confirm(void);
 const char* tui_version(void);
+key_action_t tui_keyaction(void);
 
 #endif

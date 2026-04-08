@@ -9,7 +9,8 @@
 #endif
 
 // TUI
-#define OPTS_STR       _("Keys")
+#define MENU_ICON      "≡"
+#define MENU_STR       _("Keys")
 #define _HINTS_STR     _("ints") // [h]ints
 #define _QUIT_STR      _("uit")  // [q]uit
 #define FIELDS_STR     _("Fields")

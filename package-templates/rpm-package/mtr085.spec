@@ -25,7 +25,7 @@ Conflicts: mtr, mtr-gtk
 
 %description
 mtr combines the functionality of the traceroute and ping programs in a single network diagnostic tool.
-Built from https://github.com/yvs2014/mtr085 fork with whois info, unicode, etc.
+Built from https://github.com/yvs2014/mtr085 fork with whois info, IDN, NLS, unicode.
 Main project's location is https://github.com/traviscross/mtr
 
 %define binname mtr

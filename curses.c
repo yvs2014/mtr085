@@ -70,38 +70,57 @@
 #include "ipinfo.h"
 #endif
 
+#if defined(WITH_UNICODE) && defined(MOUSE_SUPPORT)
+#define MOUSEMODE
+#define MENU_ICON "≡"
+#endif
+
 #define MSEC_FMT "%.*f %s"
 
-enum { LINEMAXLEN = 1024, HINT_YPOS = 2, HOSTINFOMAX = 30 };
+enum {
+  LINEMAXLEN  = 1024,
+  HOSTINFOMAX =   30,
+  X_INDENT    =    4, /* "NN. " */
+};
+
+enum {NDX_TITLE = 0, NDX_MENU, NDX_LABEL, NDX_WORK, NDX_STATUS, MAX_AREA_NDX};
+static WINDOW* area[MAX_AREA_NDX];
 
 static char screen_title[NAMELEN]; // progname + arguments + destination
-static uint screen_title_ulen;
+static uint screen_title_len;
 static bool at_quit, screen_ready;
-static int stat_title_len = -1;
-static int cached_title_ulen = -1;
 
-static size_t enter_smth(char *buf, size_t size, int y, int x) {
-  move(y, x);
+typedef struct {
+  int screen, stat, chart;
+} title_len_s;
+static title_len_s titlelen;
+
+static size_t enter_smth(WINDOW *win, char *buf, size_t size, int x) NONNULL(1);
+static size_t enter_smth(WINDOW *win, char *buf, size_t size, int x) {
+  wmove(win, 0, x);
   int ch = 0, curs = curs_set(1);
-  refresh();
-  for (uint i = 0; ((ch = getch()) != '\n') && (i < size);) {
-    addch((uint)ch | A_BOLD);
-    refresh();
+  wrefresh(win);
+  for (uint i = 0; ((ch = wgetch(win)) != '\n') && (i < size);) {
+    waddch(win, (uint)ch | A_BOLD);
+    wrefresh(win);
     buf[i++] = ch;
   }
-  move(y, 0); clrtoeol(); refresh();
+  wmove(win, 0, 0);
+  wclrtoeol(win);
+  wrefresh(win);
   if (curs != ERR) curs_set(curs);
   return strnlen(buf, size - 1);
 }
 
-static void enter_stat_fields(void) {
+static void enter_stat_fields(WINDOW *win) NONNULL(1);
+static void enter_stat_fields(WINDOW *win) {
   char fields[MAXFLD + 1] = {0};
   int ch = 0, curs = curs_set(1);
-  for (uint i = 0; ((ch = getch()) != '\n') && (i < sizeof(fields));) {
+  for (uint i = 0; ((ch = wgetch(win)) != '\n') && (i < sizeof(fields));) {
     int nth = 0;
     for (; nth < stat_max; nth++) if (ch == stats[nth].key) {
-      addch((uint)ch | A_BOLD);
-      refresh();
+      waddch(win, (uint)ch | A_BOLD);
+      wrefresh(win);
       fields[i++] = ch;
       break;
     }
@@ -112,26 +131,30 @@ static void enter_stat_fields(void) {
   if (curs != ERR) curs_set(curs);
 }
 
-static void mc_get_int(int *val, int min, int max,
-    const char *what, const char *hint)
+static void mc_get_int(WINDOW *win, int *val, int min, int max,
+  const char *what, const char *hint) NONNULL(1);
+static void mc_get_int(WINDOW *win, int *val, int min, int max,
+  const char *what, const char *hint)
 {
-  mvprintw(HINT_YPOS, 0, "%s: %d", what, *val);
+  mvwprintw(win, 0, 0, "%s: %d", what, *val);
   if (hint)
-    mvprintw(HINT_YPOS + 1, 0, "-> %s", hint);
-  int xpos = (what && what[0]) ? ustrnlen(what, COLS) : 0;
+    mvwprintw(win, 1, 0, "-> %s", hint);
+  int xpos = (what && what[0]) ? ustrnlen(what, getmaxx(win)) : 0;
   char entered[MAXFLD + 1] = {0};
-  if (enter_smth(entered, sizeof(entered), HINT_YPOS, xpos + 2)) {
+  if (enter_smth(win, entered, sizeof(entered), xpos + 2)) {
     char emsg[NAMELEN] = {0};
     int num = arg2int(0, entered, min, max, what, emsg, sizeof(emsg));
     if (emsg[0]) {
-      printw("%s. %s ...", emsg, ANYCONT_STR);
-      refresh(); getch();
+      wprintw(win, "%s. %s ...", emsg, ANYCONT_STR);
+      wrefresh(win);
+      wgetch(win);
     } else
       *val = num;
   }
 }
 
-static inline void mc_key_h(void) { // help
+static void mc_key_h(WINDOW *win) NONNULL(1);
+static void mc_key_h(WINDOW *win) { // help
   t_cmd_hint cmd[] = {
     {.key = "b", .hint = CMD_B_STR,  .type = CH_INT},
     {.key = "c", .hint = CMD_C_STR,  .type = CH_INT},
@@ -166,36 +189,44 @@ static inline void mc_key_h(void) { // help
     {.key = PGUPDOWN_STR, .hint = CMD_UD5_STR},
     {.key = SPACE_STR,    .hint = CMD_SP_STR},
   };
-  erase();
-  int x = 2, y = 2;
+  werase(win);
+  int x = 2, y = 1;
 #define INDENT 12
-  mvprintw(y++, 0, "%s:", COMMANDS_STR);
+  int maxx = getmaxx(win);
+  mvwprintw(win, y++, 0, "%s:", COMMANDS_STR);
   for (uint i = 0; i < ARRAY_LEN(cmd); i++) {
     int pad = INDENT - ustrnlen(cmd[i].key, INDENT);
     const char *type = cmd[i].type == CH_INT ? CH_NUM_STR :
                        cmd[i].type == CH_STR ? CH_STR_STR : NULL;
     if (type) {
-      pad -= ustrnlen(type, COLS) + 1;
-      mvprintw(y++, x, "%s %s%*s %s", cmd[i].key, type, (pad < 0) ? 0 : pad, "", cmd[i].hint);
+      pad -= ustrnlen(type, maxx) + 1;
+      mvwprintw(win, y++, x, "%s %s%*s %s", cmd[i].key, type, (pad < 0) ? 0 : pad, "", cmd[i].hint);
     } else
-      mvprintw(y++, x, "%s%*s %s", cmd[i].key, (pad < 0) ? 0 : pad, "", cmd[i].hint);
+      mvwprintw(win, y++, x, "%s%*s %s", cmd[i].key, (pad < 0) ? 0 : pad, "", cmd[i].hint);
   }
 #undef INDENT
-  mvprintw(++y, 0, "%s ...", ANYCONT_STR);
-  refresh();
-  getch();
+  mvwprintw(win, ++y, 0, "%s ...", ANYCONT_STR);
+  wrefresh(win);
+  wgetch(win);
 }
 
-static inline void mc_key_c(void) { // set number of cycles
-  mvprintw(HINT_YPOS, 0, "%s (%s): %d", NCYCLES_STR, UNLIM0_STR, run_opts.cycles);
-  int xpos = ustrnlen(NCYCLES_STR, COLS / 2 - 2) + 2 + ustrnlen(UNLIM0_STR, COLS / 2 - 3) + 3;
+static inline void mc_key_c(WINDOW *win) NONNULL(1);
+static inline void mc_key_c(WINDOW *win) { // set number of cycles
+  mvwprintw(win, 0, 0, "%s (%s): %d", NCYCLES_STR, UNLIM0_STR, run_opts.cycles);
+  int dx = 2;
+  int maxc = getmaxx(win) / 2 - dx;
+  int xpos = (maxc > 0) ? (ustrnlen(NCYCLES_STR, maxc) + dx) : 0;
+  dx++; maxc--;
+  xpos    += (maxc > 0) ? (ustrnlen(UNLIM0_STR,  maxc) + dx) : 0;
+  //
   char entered[MAXFLD + 1] = {0};
-  if (enter_smth(entered, sizeof(entered), HINT_YPOS, xpos)) {
+  if (enter_smth(win, entered, sizeof(entered), xpos)) {
     char emsg[NAMELEN] = {0};
     int num = arg2int(0, entered, 0, INT_MAX, NCYCLES_STR, emsg, sizeof(emsg));
     if (emsg[0]) {
-      printw("%s. %s ...", emsg, ANYCONT_STR);
-      refresh(); getch();
+      wprintw(win, "%s. %s ...", emsg, ANYCONT_STR);
+      wrefresh(win);
+      wgetch(win);
     } else {
       run_opts.cycles = num;
       OPT_SUM(cycles);
@@ -203,44 +234,49 @@ static inline void mc_key_c(void) { // set number of cycles
   }
 }
 
-static inline void mc_key_o(void) { // set fields to display and their order
-  mvprintw(HINT_YPOS, 0, "%s: %s\n\n", FIELDS_STR, fld_active);
+static void mc_key_o(WINDOW *win) NONNULL(1);
+static void mc_key_o(WINDOW *win) { // set fields to display and their order
+  mvwprintw(win, 0, 0, "%s: %s\n\n", FIELDS_STR, fld_active);
   for (int i = 0; i < stat_max; i++) if (stats[i].hint)
-    printw("  %c: %s\n", stats[i].key, stats[i].hint);
-  move(HINT_YPOS, ustrnlen(FIELDS_STR, COLS - 2) + 2);
-  refresh();
-  enter_stat_fields();
+    wprintw(win, "  %c: %s\n", stats[i].key, stats[i].hint);
+  int maxc = getmaxx(win) - 2;
+  wmove(win, 0, (maxc > 0) ? (ustrnlen(FIELDS_STR, maxc) + 2) : 0);
+  wrefresh(win);
+  enter_stat_fields(win);
 }
 
 #ifdef IP_TOS
-static inline void mc_key_Q(void) { // set QoS
+static inline void mc_key_Q(WINDOW *win) NONNULL(1);
+static inline void mc_key_Q(WINDOW *win) { // set QoS
 #if defined(ENABLE_IPV6) && !defined(IPV6_TCLASS)
   if (af == AF_INET6) {
-    mvprintw(HINT_YPOS,     0, "%s", TCLASS6_ERR);
-    mvprintw(HINT_YPOS + 1, 0, "-> %s ...", ANYCONT_STR);
-    getch();
+    mvwprintw(win, 0, 0, "%s", TCLASS6_ERR);
+    mvwprintw(win, 1, 0, "-> %s ...", ANYCONT_STR);
+    wgetch(win);
   } else
 #endif
   { int qos = run_opts.qos;
-    mc_get_int(&qos, 0, UINT8_MAX, QOSTOS_STR, TOS_HINT_STR);
+    mc_get_int(win, &qos, 0, UINT8_MAX, QOSTOS_STR, TOS_HINT_STR);
     run_opts.qos = qos;
     OPT_SUM(qos);
   }
 }
 #endif
 
-static inline void mc_key_s(void) { // set payload size
-  mvprintw(HINT_YPOS, 0, "%s: %d", PSIZE_CHNG_STR, run_opts.size);
+static inline void mc_key_s(WINDOW *win) NONNULL(1);
+static inline void mc_key_s(WINDOW *win) { // set payload size
+  mvwprintw(win, 0, 0, "%s: %d", PSIZE_CHNG_STR, run_opts.size);
   const int max = MAXPACKET - MINPACKET;
-  mvprintw(HINT_YPOS + 1, 0, "-> %s[%d,%d], %s", RANGE_STR, -max, max, NEG4RND_STR);
+  mvwprintw(win, 1, 0, "-> %s[%d,%d], %s", RANGE_STR, -max, max, NEG4RND_STR);
   char entered[MAXFLD + 1] = {0};
-  int xpos = ustrnlen(PSIZE_CHNG_STR, COLS - 2) + 2;
-  if (enter_smth(entered, sizeof(entered), HINT_YPOS, xpos)) {
+  int xpos = ustrnlen(PSIZE_CHNG_STR, getmaxx(win) - 2) + 2;
+  if (enter_smth(win, entered, sizeof(entered), xpos)) {
     char emsg[NAMELEN] = {0};
     int num = arg2int(0, entered, -max, max, PSIZE_STR, emsg, sizeof(emsg));
     if (emsg[0]) {
-      printw("%s. %s ...", emsg, ANYCONT_STR);
-      refresh(); getch();
+      wprintw(win, "%s. %s ...", emsg, ANYCONT_STR);
+      wrefresh(win);
+      wgetch(win);
     } else {
       run_opts.size = num;
       OPT_SUM(size);
@@ -249,12 +285,13 @@ static inline void mc_key_s(void) { // set payload size
   }
 }
 
-static key_action_t keyaction_body(int ch) {
+static key_action_t keyaction_body(WINDOW *win, int ch) NONNULL(1);
+static key_action_t keyaction_body(WINDOW *win, int ch) {
 #ifdef KEY_RESIZE
 #define GETCH_BATCH 100
   if (ch == KEY_RESIZE) { // cleanup by batch
     for (int i = 0; (ch == KEY_RESIZE) && (i < GETCH_BATCH); i++)
-      ch = getch();
+      ch = wgetch(win);
     if (ch == KEY_RESIZE) // otherwise flush
       flushinp();
   }
@@ -273,15 +310,15 @@ static key_action_t keyaction_body(int ch) {
       return ActionPageUp;
     case '?':
     case 'h':
-      mc_key_h();
+      mc_key_h(stdscr);
       break;
     case 'b': // bit pattern
-      mc_get_int(&run_opts.pattern, -1, UINT8_MAX, BITPATT_STR, RANGENEG_STR);
+      mc_get_int(win, &run_opts.pattern, -1, UINT8_MAX, BITPATT_STR, RANGENEG_STR);
       OPT_SUM(pattern);
       reset_pattern = true;
       break;
     case 'c': // number of cycles
-      mc_key_c();
+      mc_key_c(win);
       break;
     case 'd': return ActionDisplay;
 #ifdef WITH_MPLS
@@ -289,16 +326,16 @@ static key_action_t keyaction_body(int ch) {
 #endif
     case 'f': { // first ttl
       int minttl = run_opts.minttl;
-      mc_get_int(&minttl, 1, run_opts.maxttl, MINTTL_STR, NULL);
+      mc_get_int(win, &minttl, 1, run_opts.maxttl, MINTTL_STR, NULL);
       run_opts.minttl = minttl;
       OPT_SUM(minttl);
     } break;
     case 'i': { // interval
-      mc_get_int(&run_opts.interval, 1, INT_MAX, GAPINSEC_STR, NULL);
+      mc_get_int(win, &run_opts.interval, 1, INT_MAX, GAPINSEC_STR, NULL);
       OPT_SUM(interval);
     } break;
     case 'j':
-      stat_title_len = -1;
+      titlelen.stat = -1;
       return ActionJitter;
 #ifdef WITH_IPINFO
     case 'l': return ActionAS;
@@ -306,7 +343,7 @@ static key_action_t keyaction_body(int ch) {
 #endif
     case 'm': { // max ttl
       int maxttl = run_opts.maxttl;
-      mc_get_int(&maxttl, run_opts.minttl, MAXHOST - 1, MAXTTL_STR, NULL);
+      mc_get_int(win, &maxttl, run_opts.minttl, MAXHOST - 1, MAXTTL_STR, NULL);
       run_opts.maxttl = maxttl;
       OPT_SUM(maxttl);
     } break;
@@ -314,8 +351,8 @@ static key_action_t keyaction_body(int ch) {
     case 'n': return ActionDNS;
 #endif
     case 'o': // fields to display and their order
-      mc_key_o();
-      stat_title_len = -1;
+      mc_key_o(win);
+      titlelen.stat = -1;
       break;
     case ' ':
     case 'p': return ActionPauseResume;
@@ -326,12 +363,12 @@ static key_action_t keyaction_body(int ch) {
       return ActionQuit;
 #ifdef IP_TOS
     case 'Q': // qos
-      mc_key_Q();
+      mc_key_Q(win);
       break;
 #endif
     case 'r': return ActionReset;
     case 's': // payload size
-      mc_key_s();
+      mc_key_s(win);
       break;
     case 't': return ActionTCP;
     case 'u': return ActionUDP;
@@ -342,8 +379,9 @@ static key_action_t keyaction_body(int ch) {
 }
 
 key_action_t tui_keyaction(void) {
+  WINDOW *win = area[NDX_WORK];
   // wrapper to keyaction_body(): reset 'title_cache' if it needs
-  int ch = getch();
+  int ch = wgetch(win);
   switch (ch) {
     case 'b': // bit pattern
     case 'c': // number of cycles
@@ -371,48 +409,50 @@ key_action_t tui_keyaction(void) {
     case 't': // ActionTCP;
     case 'u': // ActionUDP;
     case 'x': // ActionCache;
-      cached_title_ulen = -1;
+      titlelen.screen = -1;
       break;
     default: break;
   }
-  return keyaction_body(ch);
+  return keyaction_body(win, ch);
 }
 
 #ifdef WITH_MPLS
-static int printw_mpls(const mpls_data_t *m) {
+static int printw_mpls(WINDOW *win, const mpls_data_t *m) NONNULL(1, 2);
+static int printw_mpls(WINDOW *win, const mpls_data_t *m) {
   for (int i = 0; i < m->n; i++) {
-    printw("%s", mpls2str(&(m->label[i]), 4));
-    if (move(getcury(stdscr) + 1, 0) == ERR)
+    wprintw(win, "%s", mpls2str(&(m->label[i]), 4));
+    if (wmove(win, getcury(win) + 1, 0) == ERR)
       return ERR;
   }
   return OK;
 }
 #endif
 
-static void printw_addr(int at, int ndx) {
+static void printw_addr(WINDOW *win, int at, int ndx) NONNULL(1);
+static void printw_addr(WINDOW *win, int at, int ndx) {
   t_ipaddr *addr = &IP_AT_NDX(at, ndx);
 #ifdef WITH_IPINFO
   if (ipinfo_ready()) {
     char info[NAMELEN] = {0};
     ipinfo_data_fix(info, sizeof(info), at, ndx);
     if (info[0])
-      printw("%s", info);
+      wprintw(win, "%s", info);
   }
 #endif
   bool down = !host[at].up;
   if (down)
-    attron(A_BOLD);
+    wattron(win, A_BOLD);
 #ifdef ENABLE_DNS
   const char *name = dns_ptr_lookup(at, ndx);
   if (name) {
-    printw("%s", name);
+    wprintw(win, "%s", name);
     if (run_opts.both)
-      printw(" (%s)", strlongip(addr));
+      wprintw(win, " (%s)", strlongip(addr));
   } else
 #endif
-  { printw("%s", strlongip(addr)); }
+  { wprintw(win, "%s", strlongip(addr)); }
   if (down)
-    attroff(A_BOLD);
+    wattroff(win, A_BOLD);
 }
 
 static void seal_n_bell(int at, int max) {
@@ -429,65 +469,72 @@ static void seal_n_bell(int at, int max) {
   }
 }
 
-static void print_statline(int at, const t_stat *stat) {
+static inline void print_statline(WINDOW *win, int at, const t_stat *stat) NONNULL(1);
+static inline void print_statline(WINDOW *win, int at, const t_stat *stat) {
   // if there's no replies, show only packet counters
   const char *str = (host[at].recv || strchr("LDRS", stat->key)) ? net_elem(at, stat->key) : "";
-  printw("%*s", stat->min, str ? str : "");
+  wprintw(win, "%*s", stat->min, str ? str : "");
 }
 
-static int print_stat(int at, int y, int x, int max) { // statistics
-  if (move(y, x) == ERR) return ERR;
-  foreach_stat(at, print_statline, 0);
+static int print_stat(WINDOW *win, int at, int y, int x, int max) NONNULL(1);
+static int print_stat(WINDOW *win, int at, int y, int x, int max) { // statistics
+  if (wmove(win, y, x) == ERR) return ERR;
+  for (uint i = 0; i < MAXFLD; i++) {
+    const t_stat *stat = active_stats(i);
+    if (stat) print_statline(win, at, stat); else break;
+  }
   if (run_opts.audible || run_opts.visible)
     seal_n_bell(at, max);
-  return move(y + 1, 0);
+  return wmove(win, y + 1, 0);
 }
 
-static void print_addr_extra(int at) { // mpls + multipath
+static void print_addr_extra(WINDOW *win, int at) NONNULL(1);
+static void print_addr_extra(WINDOW *win, int at) { // mpls + multipath
   for (int ndx = 0; ndx < MAXPATH; ndx++) {  // multipath
     if (ndx == host[at].current)
       continue; // because already printed
     t_ipaddr *addr = &IP_AT_NDX(at, ndx);
     if (!addr_exist(addr))
       break;
-    printw("    ");
-    printw_addr(at, ndx);
-    if (move(getcury(stdscr) + 1, 0) == ERR)
+    wprintw(win, "    ");
+    printw_addr(win, at, ndx);
+    if (wmove(win, getcury(win) + 1, 0) == ERR)
       break;
 #ifdef WITH_MPLS
     if (run_opts.mpls)
-      if (printw_mpls(&MPLS_AT_NDX(at, ndx)) == ERR)
+      if (printw_mpls(win, &MPLS_AT_NDX(at, ndx)) == ERR)
         break;
 #endif
   }
 }
 
-static void print_hops(int statx) {
+static void print_hops(WINDOW *win, int statx) NONNULL(1);
+static void print_hops(WINDOW *win, int statx) {
   int max = net_max();
   for (int at = net_min() + display_offset; at < max; at++) {
-    int y = getcury(stdscr);
-    if (move(y, 0) == ERR)
+    int y = getcury(win);
+    if (wmove(win, y, 0) == ERR)
       break;
-    printw(AT_FMT " ", at + 1);
+    wprintw(win, AT_FMT " ", at + 1);
     t_ipaddr *addr = &CURRENT_IP(at);
     if (addr_exist(addr)) {
-      printw_addr(at, host[at].current);
-      if (print_stat(at, y, statx, max) == ERR)
+      printw_addr(win, at, host[at].current);
+      if (print_stat(win, at, y, statx, max) == ERR)
         break;
 #ifdef WITH_MPLS
       if (run_opts.mpls)
-        printw_mpls(&CURRENT_MPLS(at));
+        printw_mpls(win, &CURRENT_MPLS(at));
 #endif
-      print_addr_extra(at);
+      print_addr_extra(win, at);
     } else {
-      printw("%s", UNKN_ITEM);
-      if (move(y + 1, 0) == ERR)
+      wprintw(win, "%s", UNKN_ITEM);
+      if (wmove(win, y + 1, 0) == ERR)
         break;
-      if ((at < (max - 1)) && (print_stat(at, y, statx, max) == ERR))
+      if ((at < (max - 1)) && (print_stat(win, at, y, statx, max) == ERR))
         break;
     }
   }
-  move(2, 0);
+  wmove(win, 0, 0);
 }
 
 static chtype map1[] = {'.' | A_NORMAL, '>' | COLOR_PAIR(1)};
@@ -624,49 +671,51 @@ static cchar_t* mc_saved_cc(int saved_int) {
 }
 #endif
 
-static inline void histoaddr(int at, int max, int y, int x, int cols) {
+static void histoaddr(WINDOW *win, int at, int max, int y, int x, int cols) NONNULL(1);
+static void histoaddr(WINDOW *win, int at, int max, int y, int x, int cols) {
   t_ipaddr *addr = &CURRENT_IP(at);
   if (addr_exist(addr)) {
     if (!host[at].up)
-      attron(A_BOLD);
+      wattron(win, A_BOLD);
 #ifdef WITH_IPINFO
     if (ipinfo_ready()) {
       char info[NAMELEN] = {0};
       ipinfo_data_fix(info, sizeof(info), at, host[at].current);
       if (info[0])
-        printw("%s", info);
+        wprintw(win, "%s", info);
     }
 #endif
 #ifdef ENABLE_DNS
     const char *name = dns_ptr_lookup(at, host[at].current);
-    printw("%s", name ? name : strlongip(addr));
+    wprintw(win, "%s", name ? name : strlongip(addr));
 #else
-    printw("%s", strlongip(addr));
+    wprintw(win, "%s", strlongip(addr));
 #endif
     if (!host[at].up)
-      attroff(A_BOLD);
-    mvprintw(y, x, " ");
+      wattroff(win, A_BOLD);
+    mvwprintw(win, y, x, " ");
 #ifdef WITH_UNICODE
     if (chart_mode == 3)
       for (int i = SAVED_PINGS - cols; i < SAVED_PINGS; i++)
-        add_wch(mc_saved_cc(host[at].saved[i]));
+        wadd_wch(win, mc_saved_cc(host[at].saved[i]));
     else
 #endif
       for (int i = SAVED_PINGS - cols; i < SAVED_PINGS; i++)
-        addch(get_saved_ch(host[at].saved[i]));
+        waddch(win, get_saved_ch(host[at].saved[i]));
     if (run_opts.audible || run_opts.visible)
       seal_n_bell(at, max);
-  } else printw("%s", UNKN_ITEM);
+  } else wprintw(win, "%s", UNKN_ITEM);
 }
 
-static void histogram(int x, int cols) {
+static void histogram(WINDOW *win, int x, int cols) NONNULL(1);
+static void histogram(WINDOW *win, int x, int cols) {
   int max = net_max();
   for (int at = net_min() + display_offset; at < max; at++) {
-    int y = getcury(stdscr);
-    if (move(y, 0) == ERR) break;
-    printw(AT_FMT " ", at + 1);
-    histoaddr(at, max, y, x, cols);
-    if (move(y + 1, 0) == ERR) break;
+    int y = getcury(win);
+    if (wmove(win, y, 0) == ERR) break;
+    wprintw(win, AT_FMT " ", at + 1);
+    histoaddr(win, at, max, y, x, cols);
+    if (wmove(win, y + 1, 0) == ERR) break;
   }
 }
 
@@ -679,94 +728,100 @@ static int get_stat_title_len(void) {
   return (len < 0) ? 0 : len;
 }
 
-static int mc_fit_posx(int pos, int len) {
-  int lcols = COLS - 1 - len;
+static inline int mc_fit_posx(int pos, int len, int maxx) {
+  int lcols = maxx - 1 - len;
   return (pos < lcols) ? pos : lcols;
 }
 
-static void mc_stat_title(int x, int y) {
-  if (move(y, x) == ERR) return;
+static void display_main_labels(WINDOW *win, int indent) NONNULL(1);
+static void display_main_labels(WINDOW *win, int indent) {
+  if (wmove(win, 1, indent) == ERR) return;
   bool custom = is_custom_fld();
+  int maxx = getmaxx(win);
   for (uint i = 0; i < MAXFLD; i++) {
     const t_stat *stat = active_stats(i);
     if (!stat) break;
     if (!i || (i == 3)) { // add subtitles
-      int curx = getcurx(stdscr);
+      int curx = getcurx(win);
       int dx   = (stat->min > stat->len) ? (stat->min - stat->len) : 1;
       int pos  = curx + dx;
       if (!i && custom) {
-        int len = ustrnlen(USR_FIELDS_STR, COLS - 2) + 2 + strnlen(fld_active, MAXFLD);
-        mvprintw(y - 1, mc_fit_posx(pos, len), "%s: %s", USR_FIELDS_STR, fld_active);
+        int ufl = (maxx > 2) ? ustrnlen(USR_FIELDS_STR, maxx - 2) : 0;
+        int len = ufl + 2 + strnlen(fld_active, MAXFLD);
+        mvwprintw(win, 0, mc_fit_posx(pos, len, maxx), "%s: %s", USR_FIELDS_STR, fld_active);
       } else if (!custom) {
         const char *sub = i ? PINGS_STR : PACKETS_STR;
-        int len = ustrnlen(sub, COLS);
-        mvprintw(y - 1, mc_fit_posx(pos, len), "%s", i ? PINGS_STR : PACKETS_STR);
+        int len = ustrnlen(sub, maxx);
+        mvwprintw(win, 0, mc_fit_posx(pos, len, maxx), "%s", i ? PINGS_STR : PACKETS_STR);
       }
-      move(y, curx);
+      wmove(win, 1, curx);
     }
-    printw("%*s%s", (stat->min > stat->len) ? (stat->min - stat->len) : 1, "",
+    wprintw(win, "%*s%s",
+      (stat->min > stat->len) ? (stat->min - stat->len) : 1, "",
       stat->name ? stat->name : "");
   }
 }
 
 #ifdef WITH_UNICODE
-static void mc_print_scale3(int min, int max, int step) {
+static void mc_print_scale3(WINDOW *win, int min, int max, int step) NONNULL(1);
+static void mc_print_scale3(WINDOW *win, int min, int max, int step) {
   for (int i = min; i < max; i += step) {
-    addstr("  ");
-    add_wch(&map3[i]);
+    waddstr(win, "  ");
+    wadd_wch(win, &map3[i]);
     if (scale3[i] > 0) {
       LENVALMIL(scale3[i]);
-      printw(":" MSEC_FMT, _l, _v, MSEC_STR);
+      wprintw(win, ":" MSEC_FMT, _l, _v, MSEC_STR);
     }
   }
-  addstr("  ");
-  add_wch(&map3[max]);
+  waddstr(win, "  ");
+  wadd_wch(win, &map3[max]);
 }
 #endif
 
 static inline int map2ch(int ndx) { return map2[ndx] & A_CHARTEXT; }
 
-static void print_scale(void) {
-  attron(A_BOLD);
-  printw("%s:", SCALE_STR);
-  attroff(A_BOLD);
+static void print_scale(WINDOW *win) NONNULL(1);
+static void print_scale(WINDOW *win) {
+  wattron(win, A_BOLD);
+  wprintw(win, "%s:", SCALE_STR);
+  wattroff(win, A_BOLD);
   if (chart_mode == 1) {
-    addstr("  ");
-    addch(map1[0] | A_BOLD);
+    waddstr(win, "  ");
+    waddch(win, map1[0] | A_BOLD);
     LENVALMIL(scale2[NUM_FACTORS2 - 2]);
-    printw(" %s " MSEC_FMT "   ", LESSTHAN_STR, _l, _v, MSEC_STR);
-    addch(map1[1] | (run_opts.color ? 0 : A_BOLD));
-    printw(" %s " MSEC_FMT "   ", MORETHAN_STR, _l, _v, MSEC_STR);
-    addch('?' | (run_opts.color ? (map2[NUM_FACTORS2 - 1] & A_ATTRIBUTES) : A_BOLD));
-    printw(" %s", UNKNOWN_STR);
+    wprintw(win, " %s " MSEC_FMT "   ", LESSTHAN_STR, _l, _v, MSEC_STR);
+    waddch(win, map1[1] | (run_opts.color ? 0 : A_BOLD));
+    wprintw(win, " %s " MSEC_FMT "   ", MORETHAN_STR, _l, _v, MSEC_STR);
+    waddch(win, '?' | (run_opts.color ? (map2[NUM_FACTORS2 - 1] & A_ATTRIBUTES) : A_BOLD));
+    wprintw(win, " %s", UNKNOWN_STR);
   } else if (chart_mode == 2) {
     if (run_opts.color) {
       for (int i = 0; i < NUM_FACTORS2 - 1; i++) {
-        addstr("  ");
-        addch(map2[i]);
+        waddstr(win, "  ");
+        waddch(win, map2[i]);
         if (scale2[i] > 0) {
           LENVALMIL(scale2[i]);
-          printw(":" MSEC_FMT, _l, _v, MSEC_STR);
+          wprintw(win, ":" MSEC_FMT, _l, _v, MSEC_STR);
         }
       }
-      addstr("  ");
-      addch(map2[NUM_FACTORS2 - 1]);
+      waddstr(win, "  ");
+      waddch(win, map2[NUM_FACTORS2 - 1]);
     } else {
       for (int i = 0; i < NUM_FACTORS2 - 1; i++) {
         if (scale2[i] > 0) {
           LENVALMIL(scale2[i]);
-          printw("  %c:" MSEC_FMT, map2ch(i), _l, _v, MSEC_STR);
+          wprintw(win, "  %c:" MSEC_FMT, map2ch(i), _l, _v, MSEC_STR);
         }
       }
-      printw("  %c", map2ch(NUM_FACTORS2 - 1));
+      wprintw(win, "  %c", map2ch(NUM_FACTORS2 - 1));
     }
   }
 #ifdef WITH_UNICODE
   else if (chart_mode == 3) {
     if (run_opts.color)
-      mc_print_scale3(1, NUM_FACTORS3 - 1,  2);
+      mc_print_scale3(win, 1, NUM_FACTORS3 - 1,  2);
     else
-      mc_print_scale3(0, NUM_FACTORS3_MONO, 1);
+      mc_print_scale3(win, 0, NUM_FACTORS3_MONO, 1);
   }
 #endif
 }
@@ -838,52 +893,81 @@ static int mc_print_args(char buf[], size_t size) {
 #undef INT_OPT2STR
 #undef BOOL_OPT2STR
 
-static void display_stats(void) {
-  int statx = 4; // x-indent: "NN. "
-  int staty = 4; // y-indent: main_title + hint_line + field_titles[2]
-  attron(A_BOLD);
+static void display_charts(WINDOW *label, WINDOW *work) NONNULL(1, 2);
+static void display_charts(WINDOW *label, WINDOW *work) {
+#define CHART_COLS(mx) (((mx) <= (SAVED_PINGS + dx)) ? ((mx) - dx) : SAVED_PINGS)
+  int dx = HOSTINFOMAX;
+#ifdef WITH_IPINFO
+  if (ipinfo_ready()) dx += ipinfo_width();
+#endif
+  //
+  // title part
+  werase(label);
+  static char chart_title[256];
+  if (titlelen.chart < 0) {
+    memset(chart_title, 0, sizeof(chart_title));
+    int maxx = getmaxx(label);
+    int len = snprinte(chart_title, sizeof(chart_title),
+      "%s: %d %s", HISTOGRAM_STR, CHART_COLS(maxx), HCOLS_STR);
+    if (len >= 0)
+      titlelen.chart = ustrnlen(chart_title, getmaxx(label));
+  }
+  if (titlelen.chart > 0) {
+    int x = (getmaxx(label) - titlelen.chart) / 2;
+    mvwprintw(label, 0, (x > 0) ? x : 0, "%s", chart_title);
+  }
+  wrefresh(label);
+  //
+  // chart part
+  werase(work);
+  if (wmove(work, 0, 0) != ERR) {
+    wattroff(work, A_BOLD);
+    dmode_scale_map();
+    int maxx = getmaxx(work);
+    histogram(work, dx - 2 /* right_pad(1) + 1 */, CHART_COLS(maxx));
+    if (wmove(work, getcury(work) + 1, 0) != ERR)
+      print_scale(work);
+  }
+  wrefresh(work);
+#undef CHART_COLS
+}
+
+static int display_stat_labels(WINDOW *win, int indent) NONNULL(1);
+static int display_stat_labels(WINDOW *win, int indent) {
+  werase(win);
+  wattron(win, A_BOLD);
 #ifdef WITH_IPINFO
   if (ipinfo_ready()) {
     char info[NAMELEN] = {0};
     ipinfo_head_fix(info, sizeof(info));
     if (info[0])
-      mvprintw(staty - 1, statx, "%s", info);
-    statx += ipinfo_width(); // indent: "NN. " + IPINFO
+      mvwprintw(win, 1, indent, "%s", info);
+    indent += ipinfo_width(); // indent: "NN. " + IPINFO
   }
 #endif
-  mvprintw(staty - 1, statx, "%s", HOST_STR);
-  if (stat_title_len < 0)
-    stat_title_len = get_stat_title_len();
-  int x = COLS - stat_title_len - 1;
-  if (x < 0) x = 0;
-  mc_stat_title(x, staty - 1);
-  attroff(A_BOLD);
-  if (move(staty, 0) != ERR)
-    print_hops(x);
+  mvwprintw(win, 1, indent, "%s", HOST_STR);
+  if (titlelen.stat < 0)
+    titlelen.stat = get_stat_title_len();
+  indent = getmaxx(win) - (titlelen.stat + 1);
+  if (indent < 0) indent = 0;
+  display_main_labels(win, indent);
+  wattroff(win, A_BOLD);
+  wrefresh(win);
+  return indent;
 }
 
-static inline void display_charts(void) {
-  int statx = HOSTINFOMAX;
-  int staty = 4; // y-indent: main_title + hint_line + field_titles[2]
-#ifdef WITH_IPINFO
-  if (ipinfo_ready())
-    statx += ipinfo_width();
-#endif
-  int max_cols = (COLS <= (SAVED_PINGS + statx)) ? (COLS - statx) : SAVED_PINGS;
-  statx -= 2;
-  mvprintw(staty - 1, statx, "%s: %d %s", HISTOGRAM_STR, max_cols, HCOLS_STR);
-  if (move(staty, 0) != ERR) {
-    attroff(A_BOLD);
-    dmode_scale_map();
-    histogram(statx, max_cols);
-    if (move(getcury(stdscr) + 1, 0) != ERR)
-      print_scale();
-  }
+static void display_stat_area(WINDOW *win, int stat_indent) NONNULL(1);
+static void display_stat_area(WINDOW *win, int stat_indent) {
+  werase(win);
+  print_hops(win, stat_indent);
+  wrefresh(win);
 }
 
-static inline void mc_print_title(void) {
+static void display_title(WINDOW *win) NONNULL(1);
+static void display_title(WINDOW *win) {
   static char title_cache[LINEMAXLEN];
-  if (cached_title_ulen < 0) { // generate title and cache it
+  werase(win);
+  if (titlelen.screen < 0) { // generate title and cache it
     char buff[LINEMAXLEN] = {0};
     const char *pretitle = screen_title;
     if (opt_sum.un) {
@@ -897,29 +981,38 @@ static inline void mc_print_title(void) {
     memset(title_cache, 0, sizeof(title_cache));
     int len = snprinte(title_cache, sizeof(title_cache), "%s", pretitle);
     if (len >= 0)
-      cached_title_ulen = ustrnlen(title_cache, COLS);
+      titlelen.screen = ustrnlen(title_cache, getmaxx(win));
   }
   //
   const char *title = NULL;
-  if (cached_title_ulen > 0)
+  if (titlelen.screen > 0)
     title = title_cache;
   else {
     title = screen_title;
-    cached_title_ulen = screen_title_ulen;
+    titlelen.screen = screen_title_len;
   }
   if (title && *title) {
-    int x = (COLS - cached_title_ulen) / 2;
-    mvprintw(0, (x > 0) ? x : 0, "%s", title);
+    int x = (getmaxx(win) - titlelen.screen) / 2;
+    mvwprintw(win, 0, (x > 0) ? x : 0, "%s", title);
   }
+  wrefresh(win);
 }
 
-static inline void mc_print_hints_n_time(void) {
-  mvprintw(1, 0, "%s: ", OPTS_STR);
-  attron(A_BOLD); addch('h'); attroff(A_BOLD); printw("%s ", _HINTS_STR);
-  attron(A_BOLD); addch('q'); attroff(A_BOLD); printw("%s\n", _QUIT_STR);
+static void display_menuline(WINDOW *win) NONNULL(1);
+static void display_menuline(WINDOW *win) {
+  werase(win);
+#ifdef MOUSEMODE
+  mvwprintw(win, 0, 0, "%s", MENU_ICON);
+#else
+  mvwprintw(win, 0, 0, "%s: ", MENU_STR);
+  wattron(win, A_BOLD); waddch(win, 'h'); wattroff(win, A_BOLD);
+  wprintw(win, "%s ", _HINTS_STR);
+  wattron(win, A_BOLD); waddch(win, 'q'); wattroff(win, A_BOLD);
+  wprintw(win, "%s\n", _QUIT_STR);
+#endif
   char buff[LINEMAXLEN] = {0};
   // source host
-  int len = snprinte(buff, sizeof(buff), "%.*s", (int)strnlen(srchost, COLS / 2), srchost);
+  int len = snprinte(buff, sizeof(buff), "%.*s", (int)strnlen(srchost, getmaxx(win) / 2), srchost);
   if (len < 0)
     return;
   // timestamp (note: not mandatory)
@@ -929,21 +1022,68 @@ static inline void mc_print_hints_n_time(void) {
     snprinte(buff + len, sizeof(buff) - len, ": %s", date);
   //
   if ((len > 0) && buff[0]) // rigth aligned
-    mvaddstr(1, COLS - ustrnlen(buff, sizeof(buff)) - 1, buff);
+    mvwaddstr(win, 0, getmaxx(win) - ustrnlen(buff, sizeof(buff)) - 1, buff);
+  wrefresh(win);
 }
 
-static inline void mc_print_main_body(void) {
-  chart_mode ? display_charts() : display_stats();
+static inline void display_mainbody(WINDOW *label, WINDOW *work) NONNULL(1, 2);
+static inline void display_mainbody(WINDOW *label, WINDOW *work) {
+  if (chart_mode)
+    display_charts(label, work);
+  else
+    display_stat_area(work, display_stat_labels(label, X_INDENT));
+}
+
+static WINDOW* create_area(int h, int *y) NONNULL(2);
+static WINDOW* create_area(int h, int *y) {
+  WINDOW *win = newwin(h, 0/*i.e.max*/, *y, 0);
+  *y += h;
+  if (win) {
+    wrefresh(win);
+    keypad(win, TRUE);
+  }
+  return win;
+}
+
+static void free_areas(void) {
+  for (uint i = 0; i < ARRAY_LEN(area); i++)
+    if (area[i]) delwin(area[i]);
+  memset(area, 0, sizeof(area));
+}
+
+static bool init_areas(void) {
+  // reset cached titles
+  titlelen = (title_len_s){.screen = -1, .stat = -1, .chart = -1};
+  // create areas
+  free_areas();
+  int y = 0;
+  if ((area[NDX_TITLE] = create_area(1, &y)))
+    if ((area[NDX_MENU] = create_area(1, &y)))
+      if ((area[NDX_LABEL] = create_area(2, &y))) {
+        int h = LINES - (y + 1);
+        if ((area[NDX_WORK] = create_area(h > 0 ? h : 1, &y)))
+          if ((area[NDX_STATUS] = create_area(1, &y)))
+            return true;
+      }
+  return false;
 }
 
 void tui_redraw(void) {
-  erase();
-  mc_print_title();
-  mc_print_hints_n_time();
-  mc_print_main_body();
-  refresh();
+  static int my_cols = -1, my_lines = -1;
+  if ((my_cols != COLS) || (my_lines != LINES)) {
+    if (!init_areas()) {
+      erase();
+      printw("TUI reinit failed");
+      refresh();
+    }
+    titlelen = (title_len_s){.screen = -1, .stat = -1, .chart = -1};
+    my_cols  = COLS;
+    my_lines = LINES;
+  }
+  display_title(area[NDX_TITLE]);
+  display_menuline(area[NDX_MENU]);
+  display_mainbody(area[NDX_LABEL], area[NDX_WORK]);
 }
-
 
 bool tui_open(void) {
   screen_ready = initscr();
@@ -954,9 +1094,11 @@ bool tui_open(void) {
   raw();
   noecho();
   keypad(stdscr, TRUE);
-  // reset cache
-  cached_title_ulen = -1;
-  stat_title_len = -1;
+  refresh();
+  if (!init_areas()) return false;
+  //
+  // reset cached titles
+  titlelen = (title_len_s){.screen = -1, .stat = -1, .chart = -1};
   //
   if (run_opts.color)
     if (!has_colors())
@@ -995,7 +1137,7 @@ bool tui_open(void) {
     snprinte(screen_title, sizeof(screen_title), "%s %s %s", PACKAGE_NAME, mtr_args, dsthost);
   else
     snprinte(screen_title, sizeof(screen_title), "%s %s", PACKAGE_NAME, dsthost);
-  screen_title_ulen = screen_title[0] ? ustrnlen(screen_title, COLS) : 0;
+  screen_title_len = screen_title[0] ? ustrnlen(screen_title, getmaxx(area[NDX_TITLE])) : 0;
   //
   mc_init();
   tui_redraw();
@@ -1004,28 +1146,36 @@ bool tui_open(void) {
 }
 
 void tui_confirm(void) {
-  if (at_quit || !stdscr || !screen_ready)
+  WINDOW *win = area[NDX_WORK];
+  if (at_quit || !win || !screen_ready)
     return;
   at_quit = true;
-  int y = LINES - 1;
-  move(y - 1, 0); clrtoeol();
-  move(y,     0); clrtoeol();
-  int len = ustrnlen(ANYQUIT_STR, COLS - 4) + 4;
-  mvprintw(y - 1, (COLS - len) / 2, "%s ...", ANYQUIT_STR);
+  int y = getmaxy(win) - 2;
+  wmove(win, y++, 0); wclrtoeol(win);
+  wmove(win, y--, 0); wclrtoeol(win);
+  int maxx = getmaxx(win);
+  int len = ustrnlen(ANYQUIT_STR, maxx - 4) + 4;
+  mvwprintw(win, y, (maxx - len) / 2, "%s ...", ANYQUIT_STR);
   flushinp();
-  getch();
+  wgetch(win);
 }
 
 void tui_close(void) {
   if (stdscr && screen_ready) {
+    free_areas();
     endwin();
     screen_ready = false;
   }
 }
 
-inline void tui_clear(void) {
+void tui_reset(void) {
   tui_close();
   tui_open();
+}
+
+void tui_clear(void) {
+  erase();
+  refresh();
 }
 
 inline const char* tui_version(void) {
