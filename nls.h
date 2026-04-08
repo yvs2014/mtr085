@@ -16,7 +16,7 @@
 #define USR_FIELDS_STR _("Custom fields")
 #define PACKETS_STR    _("Packets")
 #define PINGS_STR      _("Pings")
-#define CYCLE0NO_STR   _("0 for unlimit")
+#define UNLIM0_STR     _("0 for unlimit")
 #define TOS_HINT_STR   _("ToS bits: lowcost(1), reliability(2), throughput(4), lowdelay(8)")
 #define PSIZE_CHNG_STR _("Change payload size")
 #define NEG4RND_STR    _("negative values are for random")
@@ -144,7 +144,7 @@
 
 // option hints
 #define BITPATT_STR    _("Bit pattern")
-#define CYCLESNO_STR   _("Number of cycles")
+#define NCYCLES_STR    _("Number of cycles")
 #define MINTTL_STR     _("First TTL")
 #define MAXTTL_STR     _("Max TTL")
 #define INTERVAL_STR   _("Interval")

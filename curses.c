@@ -187,12 +187,12 @@ static inline void mc_key_h(void) { // help
 }
 
 static inline void mc_key_c(void) { // set number of cycles
-  mvprintw(HINT_YPOS, 0, "%s (%s): %d", CYCLESNO_STR, CYCLE0NO_STR, run_opts.cycles);
-  int xpos = ustrnlen(CYCLESNO_STR, COLS / 2 - 2) + 2 + ustrnlen(CYCLE0NO_STR, COLS / 2 - 3) + 3;
+  mvprintw(HINT_YPOS, 0, "%s (%s): %d", NCYCLES_STR, UNLIM0_STR, run_opts.cycles);
+  int xpos = ustrnlen(NCYCLES_STR, COLS / 2 - 2) + 2 + ustrnlen(UNLIM0_STR, COLS / 2 - 3) + 3;
   char entered[MAXFLD + 1] = {0};
   if (enter_smth(entered, sizeof(entered), HINT_YPOS, xpos)) {
     char emsg[NAMELEN] = {0};
-    int num = arg2int(0, entered, 0, INT_MAX, CYCLESNO_STR, emsg, sizeof(emsg));
+    int num = arg2int(0, entered, 0, INT_MAX, NCYCLES_STR, emsg, sizeof(emsg));
     if (emsg[0]) {
       printw("%s. %s ...", emsg, ANYCONT_STR);
       refresh(); getch();
@@ -907,8 +907,10 @@ static inline void mc_print_title(void) {
     title = screen_title;
     cached_title_ulen = screen_title_ulen;
   }
-  if (title && *title)
-    mvprintw(0, 0, "%*s", (COLS + cached_title_ulen) / 2, title);
+  if (title && *title) {
+    int x = (COLS - cached_title_ulen) / 2;
+    mvprintw(0, (x > 0) ? x : 0, "%s", title);
+  }
 }
 
 static inline void mc_print_hints_n_time(void) {

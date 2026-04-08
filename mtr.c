@@ -654,7 +654,7 @@ static void short_set(char opt, const char *progname) {
       break;
     case OPT_COUNT:
       assert(optarg);
-      ini_opts.cycles = arg2int(opt, optarg, -1, INT_MAX, CYCLESNO_STR, NULL, 0);
+      ini_opts.cycles = arg2int(opt, optarg, -1, INT_MAX, NCYCLES_STR, NULL, 0);
       break;
 #ifdef TUIMODE
     case OPT_DISPLAY:
