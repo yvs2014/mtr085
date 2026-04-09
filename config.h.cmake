@@ -17,8 +17,9 @@
 #cmakedefine HAVE_NCURSES_CURSES_H
 #cmakedefine HAVE_NCURSES_H
 #cmakedefine HAVE_CURSES_H
-#cmakedefine HAVE_USE_DEFAULT_COLORS
 #cmakedefine HAVE_CURSES_VERSION
+#cmakedefine HAVE_USE_DEFAULT_COLORS
+#cmakedefine HAVE_MOUSEMASK
 #cmakedefine TUIKIND "@TUIKIND@"
 
 /* Unicode related */

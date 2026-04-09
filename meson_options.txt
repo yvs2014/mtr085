@@ -1,5 +1,6 @@
-option('TUI',       type: 'boolean', value: true,  description: '[N]Curses version')
 option('CAP',       type: 'boolean', value: true,  description: 'Linux capabilities')
+option('TUI',       type: 'boolean', value: true,  description: '[N]Curses TUI')
+option('MOUSE',     type: 'boolean', value: true,  description: 'Mouse support in TUI mode')
 option('UNICODE',   type: 'boolean', value: true,  description: 'Unicode support')
 option('NLS',       type: 'boolean', value: true,  description: 'I18n support')
 option('DNS',       type: 'boolean', value: true,  description: 'DNS support')

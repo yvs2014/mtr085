@@ -1,1 +1,1 @@
-TUI: add mouse support
+TUI: redraw title/menu/status if it needs only

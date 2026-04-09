@@ -26,6 +26,7 @@ config.set_quoted('VERSION', '.'.join(version))
 optlist = []
 cap        = get_option('CAP')
 tui        = get_option('TUI')
+mouse      = get_option('MOUSE')
 unicode    = get_option('UNICODE')
 nls        = get_option('NLS')
 dns        = get_option('DNS')
@@ -121,7 +122,10 @@ if tui
   endif
   config.set_quoted('TUIKIND', lib)
   deps += libcurses
-  fns = ['use_default_colors', 'curses_version']
+  fns = ['curses_version', 'use_default_colors']
+  if mouse
+    fns += 'mousemask'
+  endif
   foreach fn: fns
     if cc.has_function(fn, dependencies: libcurses)
       config.set('HAVE_' + fn.underscorify().to_upper(), 1)
@@ -137,8 +141,11 @@ if tui
     fn = 'add_wch'
     assert(cc.has_function(fn, dependencies: libcurses), 'UNICODE is enabled, but no wchar library found')
   endif
-  srcn += 'curses'
+  srcn += 'tui'
   optlist += '+TUI'
+  if mouse
+    optlist += '+MOUSE'
+  endif
   config.set('TUIMODE', 1)
 else
   optlist += '-TUI'
@@ -426,11 +433,14 @@ endforeach
 #
 
 if meson.version().version_compare('>=0.53')
-  summary({
-   'TUI': tui, 'CAP': cap, 'UNICODE': unicode, 'NLS': nls,
-   'DNS': dns, 'IDN': idn, 'IPINFO': ipinfo,
-   'SPLIT': split, 'IPV6': ipv6, 'MPLS': mpls},
-    bool_yn: true)
+  sum_ops = {'CAP': cap, 'TUI': tui}
+  if tui
+    sum_ops += {'MOUSE': mouse}
+  endif
+  sum_ops += {'UNICODE': unicode, 'NLS': nls,
+    'DNS': dns, 'IDN': idn, 'IPINFO': ipinfo,
+    'SPLIT': split, 'IPV6': ipv6, 'MPLS': mpls}
+  summary(sum_ops, bool_yn: true)
 endif
 
 # fin

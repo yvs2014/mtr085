@@ -70,20 +70,32 @@
 #include "ipinfo.h"
 #endif
 
-#if defined(WITH_UNICODE) && defined(MOUSE_SUPPORT)
-#define MOUSEMODE
+#ifdef HAVE_MOUSEMASK
+#define WITH_MOUSE
+#ifdef UNICODE
 #define MENU_ICON "≡"
+#endif
+#define MOUSE_ON  do { moused = true;  } while (0)
+#define MOUSE_OFF do { moused = false; } while (0)
+bool moused;
+#else
+#define MOUSE_ON  NOOP
+#define MOUSE_OFF NOOP
 #endif
 
 #define MSEC_FMT "%.*f %s"
 
 enum {
-  LINEMAXLEN  = 1024,
+  INDENT_NUMB =    4, /* "NN. " */
+  INDENT_HINT =   12,
   HOSTINFOMAX =   30,
-  X_INDENT    =    4, /* "NN. " */
+  GETCH_BATCH =  100,
+  LINEMAXLEN  = 1024,
 };
 
-enum {NDX_TITLE = 0, NDX_MENU, NDX_LABEL, NDX_WORK, NDX_STATUS, MAX_AREA_NDX};
+enum {NDX_TITLE = 0, NDX_MENU, NDX_LABEL, NDX_WORK,
+//  NDX_STATUS, /*not yet*/
+  MAX_AREA_NDX};
 static WINDOW* area[MAX_AREA_NDX];
 
 static char screen_title[NAMELEN]; // progname + arguments + destination
@@ -94,6 +106,26 @@ typedef struct {
   int screen, stat, chart;
 } title_len_s;
 static title_len_s titlelen;
+
+#ifdef WITH_MOUSE
+typedef struct { int x0, y0, x1, y1; } crd_s;
+typedef struct { crd_s hint, quit; } item_crd_s;
+static item_crd_s crd;
+#endif
+
+//
+
+#ifdef WITH_MOUSE
+void anygetch(WINDOW *win) {
+  // skip buffered mouse clicks
+  for (int i = 0; i < GETCH_BATCH; i++) {
+    int ch = wgetch(win);
+    if (ch != KEY_MOUSE) break;
+  }
+}
+#else
+#define anygetch wgetch
+#endif
 
 static size_t enter_smth(WINDOW *win, char *buf, size_t size, int x) NONNULL(1);
 static size_t enter_smth(WINDOW *win, char *buf, size_t size, int x) {
@@ -136,6 +168,7 @@ static void mc_get_int(WINDOW *win, int *val, int min, int max,
 static void mc_get_int(WINDOW *win, int *val, int min, int max,
   const char *what, const char *hint)
 {
+  MOUSE_OFF;
   mvwprintw(win, 0, 0, "%s: %d", what, *val);
   if (hint)
     mvwprintw(win, 1, 0, "-> %s", hint);
@@ -147,14 +180,16 @@ static void mc_get_int(WINDOW *win, int *val, int min, int max,
     if (emsg[0]) {
       wprintw(win, "%s. %s ...", emsg, ANYCONT_STR);
       wrefresh(win);
-      wgetch(win);
+      anygetch(win);
     } else
       *val = num;
   }
+  MOUSE_ON;
 }
 
 static void mc_key_h(WINDOW *win) NONNULL(1);
 static void mc_key_h(WINDOW *win) { // help
+  MOUSE_OFF;
   t_cmd_hint cmd[] = {
     {.key = "b", .hint = CMD_B_STR,  .type = CH_INT},
     {.key = "c", .hint = CMD_C_STR,  .type = CH_INT},
@@ -191,11 +226,10 @@ static void mc_key_h(WINDOW *win) { // help
   };
   werase(win);
   int x = 2, y = 1;
-#define INDENT 12
   int maxx = getmaxx(win);
   mvwprintw(win, y++, 0, "%s:", COMMANDS_STR);
   for (uint i = 0; i < ARRAY_LEN(cmd); i++) {
-    int pad = INDENT - ustrnlen(cmd[i].key, INDENT);
+    int pad = INDENT_HINT - ustrnlen(cmd[i].key, INDENT_HINT);
     const char *type = cmd[i].type == CH_INT ? CH_NUM_STR :
                        cmd[i].type == CH_STR ? CH_STR_STR : NULL;
     if (type) {
@@ -204,14 +238,15 @@ static void mc_key_h(WINDOW *win) { // help
     } else
       mvwprintw(win, y++, x, "%s%*s %s", cmd[i].key, (pad < 0) ? 0 : pad, "", cmd[i].hint);
   }
-#undef INDENT
   mvwprintw(win, ++y, 0, "%s ...", ANYCONT_STR);
   wrefresh(win);
-  wgetch(win);
+  anygetch(win);
+  MOUSE_ON;
 }
 
 static inline void mc_key_c(WINDOW *win) NONNULL(1);
 static inline void mc_key_c(WINDOW *win) { // set number of cycles
+  MOUSE_OFF;
   mvwprintw(win, 0, 0, "%s (%s): %d", NCYCLES_STR, UNLIM0_STR, run_opts.cycles);
   int dx = 2;
   int maxc = getmaxx(win) / 2 - dx;
@@ -232,10 +267,12 @@ static inline void mc_key_c(WINDOW *win) { // set number of cycles
       OPT_SUM(cycles);
     }
   }
+  MOUSE_ON;
 }
 
 static void mc_key_o(WINDOW *win) NONNULL(1);
 static void mc_key_o(WINDOW *win) { // set fields to display and their order
+  MOUSE_OFF;
   mvwprintw(win, 0, 0, "%s: %s\n\n", FIELDS_STR, fld_active);
   for (int i = 0; i < stat_max; i++) if (stats[i].hint)
     wprintw(win, "  %c: %s\n", stats[i].key, stats[i].hint);
@@ -243,16 +280,18 @@ static void mc_key_o(WINDOW *win) { // set fields to display and their order
   wmove(win, 0, (maxc > 0) ? (ustrnlen(FIELDS_STR, maxc) + 2) : 0);
   wrefresh(win);
   enter_stat_fields(win);
+  MOUSE_ON;
 }
 
 #ifdef IP_TOS
 static inline void mc_key_Q(WINDOW *win) NONNULL(1);
 static inline void mc_key_Q(WINDOW *win) { // set QoS
+  MOUSE_OFF;
 #if defined(ENABLE_IPV6) && !defined(IPV6_TCLASS)
   if (af == AF_INET6) {
     mvwprintw(win, 0, 0, "%s", TCLASS6_ERR);
     mvwprintw(win, 1, 0, "-> %s ...", ANYCONT_STR);
-    wgetch(win);
+    anygetch(win);
   } else
 #endif
   { int qos = run_opts.qos;
@@ -260,11 +299,13 @@ static inline void mc_key_Q(WINDOW *win) { // set QoS
     run_opts.qos = qos;
     OPT_SUM(qos);
   }
+  MOUSE_ON;
 }
 #endif
 
 static inline void mc_key_s(WINDOW *win) NONNULL(1);
 static inline void mc_key_s(WINDOW *win) { // set payload size
+  MOUSE_OFF;
   mvwprintw(win, 0, 0, "%s: %d", PSIZE_CHNG_STR, run_opts.size);
   const int max = MAXPACKET - MINPACKET;
   mvwprintw(win, 1, 0, "-> %s[%d,%d], %s", RANGE_STR, -max, max, NEG4RND_STR);
@@ -276,27 +317,45 @@ static inline void mc_key_s(WINDOW *win) { // set payload size
     if (emsg[0]) {
       wprintw(win, "%s. %s ...", emsg, ANYCONT_STR);
       wrefresh(win);
-      wgetch(win);
+      anygetch(win);
     } else {
       run_opts.size = num;
       OPT_SUM(size);
       reset_pldsize = true;
     }
   }
+  MOUSE_ON;
 }
 
+#define CRD_ENCLOSE(crd) (                       \
+  ((crd).x0 <= event.x) && (event.x <= (crd).x1) \
+  &&                                             \
+  ((crd).y0 <= event.y) && (event.y <= (crd).y1) \
+)
 static key_action_t keyaction_body(WINDOW *win, int ch) NONNULL(1);
 static key_action_t keyaction_body(WINDOW *win, int ch) {
 #ifdef KEY_RESIZE
-#define GETCH_BATCH 100
+  // skip resize keys
   if (ch == KEY_RESIZE) { // cleanup by batch
     for (int i = 0; (ch == KEY_RESIZE) && (i < GETCH_BATCH); i++)
       ch = wgetch(win);
     if (ch == KEY_RESIZE) // otherwise flush
       flushinp();
   }
-#undef GETCH_BATCH
 #endif
+#ifdef WITH_MOUSE
+  // map mouse events to keys
+  if (moused && ch == KEY_MOUSE) {
+    MEVENT event = {0};
+    if (getmouse(&event) == OK
+      // && (event.bstate & BUTTON1_CLICKED) /*already filtered*/
+    ) {
+      if      (CRD_ENCLOSE(crd.hint)) ch = 'h';
+      else if (CRD_ENCLOSE(crd.quit)) ch = 'q';
+    }
+  }
+#endif
+//
   switch (ch) {
     case '+':
     case KEY_UP:
@@ -998,17 +1057,30 @@ static void display_title(WINDOW *win) {
   wrefresh(win);
 }
 
+#define PRINT_MENUITEM(ch, fmt, txt) do {            \
+  wattron (win, A_BOLD); waddch(win, (ch));          \
+  wattroff(win, A_BOLD); wprintw(win, (fmt), (txt)); \
+} while (0)
+#define PRINT_MENUKEEP(ch, fmt, txt, crd) do {       \
+  (crd).x0 = dx + getcurx(win);                      \
+  (crd).y0 = dy + getcury(win);                      \
+  PRINT_MENUITEM((ch), (fmt), (txt));                \
+  (crd).x1 = dx + getcurx(win) - 1;                  \
+  (crd).y1 = dx + getcurx(win) - 1;                  \
+} while (0)
+
 static void display_menuline(WINDOW *win) NONNULL(1);
 static void display_menuline(WINDOW *win) {
   werase(win);
-#ifdef MOUSEMODE
-  mvwprintw(win, 0, 0, "%s", MENU_ICON);
-#else
   mvwprintw(win, 0, 0, "%s: ", MENU_STR);
-  wattron(win, A_BOLD); waddch(win, 'h'); wattroff(win, A_BOLD);
-  wprintw(win, "%s ", _HINTS_STR);
-  wattron(win, A_BOLD); waddch(win, 'q'); wattroff(win, A_BOLD);
-  wprintw(win, "%s\n", _QUIT_STR);
+  //
+#ifdef WITH_MOUSE
+  { int dx = getbegx(win), dy = getbegy(win);
+    PRINT_MENUKEEP('h', "%s ", _HINTS_STR, crd.hint);
+    PRINT_MENUKEEP('q', "%s" , _QUIT_STR , crd.quit); }
+#else
+  PRINT_MENUITEM('h', "%s ", _HINTS_STR);
+  PRINT_MENUITEM('q', "%s", _QUIT_STR);
 #endif
   char buff[LINEMAXLEN] = {0};
   // source host
@@ -1031,7 +1103,7 @@ static inline void display_mainbody(WINDOW *label, WINDOW *work) {
   if (chart_mode)
     display_charts(label, work);
   else
-    display_stat_area(work, display_stat_labels(label, X_INDENT));
+    display_stat_area(work, display_stat_labels(label, INDENT_NUMB));
 }
 
 static WINDOW* create_area(int h, int *y) NONNULL(2);
@@ -1060,10 +1132,11 @@ static bool init_areas(void) {
   if ((area[NDX_TITLE] = create_area(1, &y)))
     if ((area[NDX_MENU] = create_area(1, &y)))
       if ((area[NDX_LABEL] = create_area(2, &y))) {
-        int h = LINES - (y + 1);
+//      int h = LINES - (y + 1);
+        int h = LINES - y;
         if ((area[NDX_WORK] = create_area(h > 0 ? h : 1, &y)))
-          if ((area[NDX_STATUS] = create_area(1, &y)))
-            return true;
+//        if ((area[NDX_STATUS] = create_area(1, &y)))
+          return true;
       }
   return false;
 }
@@ -1094,8 +1167,12 @@ bool tui_open(void) {
   raw();
   noecho();
   keypad(stdscr, TRUE);
-  refresh();
   if (!init_areas()) return false;
+#ifdef WITH_MOUSE
+  mousemask(BUTTON1_CLICKED | REPORT_MOUSE_POSITION, NULL);
+  MOUSE_ON;
+#endif
+  refresh();
   //
   // reset cached titles
   titlelen = (title_len_s){.screen = -1, .stat = -1, .chart = -1};
@@ -1154,13 +1231,15 @@ void tui_confirm(void) {
   wmove(win, y++, 0); wclrtoeol(win);
   wmove(win, y--, 0); wclrtoeol(win);
   int maxx = getmaxx(win);
-  int len = ustrnlen(ANYQUIT_STR, maxx - 4) + 4;
-  mvwprintw(win, y, (maxx - len) / 2, "%s ...", ANYQUIT_STR);
+  int len = (maxx > 4) ? ustrnlen(ANYQUIT_STR, maxx - 4) + 4 : maxx;
+  mvwprintw(win, y, (maxx - len) / 2, "%s", ANYQUIT_STR);
+  waddstr(win, " ...");
   flushinp();
-  wgetch(win);
+  anygetch(win);
 }
 
 void tui_close(void) {
+  MOUSE_OFF;
   if (stdscr && screen_ready) {
     free_areas();
     endwin();

@@ -50,7 +50,7 @@
 #endif
 
 #ifndef GITREV
-#define GITREV "268"
+#define GITREV "269"
 #endif
 
 #ifndef HAVE_UINT
@@ -95,9 +95,9 @@ typedef struct s_cmd_hint {
 } t_cmd_hint;
 
 enum {
-  MAXLABELS = 8, // mpls labels
-  MAXFLD = 20,   // fields in custom set to display stats
-  NAMELEN = 256,
+  MAXLABELS =   8, // mpls labels
+  MAXFLD    =  20, // fields in custom set to display stats
+  NAMELEN   = 256,
 };
 
 typedef enum {
