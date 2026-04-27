@@ -115,6 +115,9 @@ enum OPTIONS {
   OPT_IPINFO   = 'L',
 #endif
   OPT_TTLMAX   = 'm',
+#if defined(TUIMODE) && defined(WITH_MOUSE)
+  OPT_MOUSE    = 'M',
+#endif
 #ifdef ENABLE_DNS
   OPT_NODNS    = 'n',
   OPT_NS       = 'N',
@@ -220,9 +223,12 @@ static bool af_specified;     // set with -4/-6 options
 int sum_sock[2];              // socket summary: open()/close() calls
 // chart related
 int display_offset;
-int chart_mode;               // 1st and 2nd bits, 3rd is reserved
 #ifdef TUIMODE
+int chart_mode;               // 1st and 2nd bits, 3rd is reserved
 int chart_mode_max = 3;
+#ifdef WITH_MOUSE
+bool mouse_enabled;           // disabled by default, enabled with -M
+#endif
 #endif
 //
 t_stat stats[] = {
@@ -272,6 +278,9 @@ static struct option long_options[] = {
   {"ipinfo",     1, 0, OPT_IPINFO},
 #endif
   {"max-ttl",    1, 0, OPT_TTLMAX},   // borrowed from traceroute
+#if defined(TUIMODE) && defined(WITH_MOUSE)
+  {"mouse",      0, 0, OPT_MOUSE},
+#endif
 #ifdef ENABLE_DNS
   {"no-dns",     0, 0, OPT_NODNS},
   {"ns",         1, 0, OPT_NS},
@@ -594,7 +603,7 @@ static inline void option_version(uint count UNUSED) {
   QEXIT(EXIT_SUCCESS);
 }
 
-static inline void ineractive_modes(display_mode_t mode) {
+static inline void mode_interactivity(display_mode_t mode) {
   switch (mode) {
     case DisplayReport:
 #ifdef OUTPUT_FORMAT_RAW
@@ -686,6 +695,11 @@ static void short_set(char opt, const char *progname) {
       assert(optarg);
       ini_opts.maxttl = arg2int(opt, optarg, ini_opts.minttl, MAXHOST - 1, MAXTTL_STR, NULL, 0);
       break;
+#if defined(TUIMODE) && defined(WITH_MOUSE)
+    case OPT_MOUSE:
+      mouse_enabled = true;
+      break;
+#endif
 #ifdef ENABLE_DNS
     case OPT_NODNS:
       ini_opts.dns = false;
@@ -797,13 +811,17 @@ static void parse_options(int argc, char **argv) {
   }
   if (countv > 0)
     option_version(countv);
+#if defined(TUIMODE) && defined(WITH_MOUSE)
+  if (mouse_enabled && !((display_mode == DisplayTUI) || (display_mode == DisplayAuto)))
+    warnx("%s", MOUSE_OUT_STR);
+#endif
   run_opts = ini_opts; // to reflect possible interactive changes
   for (int i = 1, len = 0; (i < optind) && (i < argc) && argv[i] && ((uint)len < sizeof(mtr_args)); i++) {
     int inc = snprinte(mtr_args + len, sizeof(mtr_args) - len, (i > 1) ? " %s" : "%s", argv[i]);
     if (inc < 0) break;
     if (inc > 0) len += inc;
   }
-  ineractive_modes(display_mode);
+  mode_interactivity(display_mode);
 }
 
 static inline const struct addrinfo* find_ai_af(const struct addrinfo *res) {

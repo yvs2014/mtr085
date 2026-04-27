@@ -427,6 +427,9 @@ msgstr "Tiempo de espera de TCP"
 msgid "Cache timeout"
 msgstr "Tiempo de espera de caché"
 
+msgid "Mouse is supported only in TUI mode"
+msgstr "Ratón solo es compatible en modo TUI"
+
 
 ## misc
 

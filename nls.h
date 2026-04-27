@@ -154,6 +154,7 @@
 #define MUTEXCL_ERR    _("Mutually exclusive options")
 #define TCP_TOUT_STR   _("TCP timeout")
 #define CACHE_TOUT_STR _("Cache timeout")
+#define MOUSE_OUT_STR  _("Mouse is supported only in TUI mode")
 
 // misc
 #define SOURCE_STR   _("Source")

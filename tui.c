@@ -70,14 +70,13 @@
 #include "ipinfo.h"
 #endif
 
-#ifdef HAVE_MOUSEMASK
-#define WITH_MOUSE
+#ifdef WITH_MOUSE
 #ifdef UNICODE
 #define MENU_ICON "≡"
 #endif
-#define MOUSE_ON  do { moused = true;  } while (0)
-#define MOUSE_OFF do { moused = false; } while (0)
-bool moused;
+static bool moused;
+#define MOUSE_ON  do { if (mouse_enabled) moused = true;  } while (0)
+#define MOUSE_OFF do { if (mouse_enabled) moused = false; } while (0)
 #else
 #define MOUSE_ON  NOOP
 #define MOUSE_OFF NOOP
@@ -1169,8 +1168,10 @@ bool tui_open(void) {
   keypad(stdscr, TRUE);
   if (!init_areas()) return false;
 #ifdef WITH_MOUSE
-  mousemask(BUTTON1_CLICKED | REPORT_MOUSE_POSITION, NULL);
-  MOUSE_ON;
+  if (mouse_enabled) {
+    mousemask(BUTTON1_CLICKED | REPORT_MOUSE_POSITION, NULL);
+    MOUSE_ON;
+  }
 #endif
   refresh();
   //

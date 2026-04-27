@@ -27,6 +27,7 @@ optlist = []
 cap        = get_option('CAP')
 tui        = get_option('TUI')
 mouse      = get_option('MOUSE')
+moused     = false # autoset later
 unicode    = get_option('UNICODE')
 nls        = get_option('NLS')
 dns        = get_option('DNS')
@@ -143,12 +144,16 @@ if tui
   endif
   srcn += 'tui'
   optlist += '+TUI'
-  if mouse
-    optlist += '+MOUSE'
-  endif
+  moused = mouse and config.has('HAVE_MOUSEMASK')
   config.set('TUIMODE', 1)
 else
   optlist += '-TUI'
+endif
+#
+if moused
+  optlist += '+MOUSE'
+else
+  manexcl += 'M'
 endif
 
 # unicode support
@@ -435,7 +440,7 @@ endforeach
 if meson.version().version_compare('>=0.53')
   sum_ops = {'CAP': cap, 'TUI': tui}
   if tui
-    sum_ops += {'MOUSE': mouse}
+    sum_ops += {'MOUSE': moused}
   endif
   sum_ops += {'UNICODE': unicode, 'NLS': nls,
     'DNS': dns, 'IDN': idn, 'IPINFO': ipinfo,

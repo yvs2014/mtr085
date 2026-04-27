@@ -50,7 +50,7 @@
 #endif
 
 #ifndef GITREV
-#define GITREV "269"
+#define GITREV "270"
 #endif
 
 #ifndef HAVE_UINT
@@ -58,6 +58,10 @@ typedef unsigned int uint;
 #endif
 #ifndef HAVE_ULONG
 typedef unsigned long int ulong;
+#endif
+
+#ifdef HAVE_MOUSEMASK
+#define WITH_MOUSE
 #endif
 
 typedef union inaddr_union {
@@ -101,7 +105,7 @@ enum {
 };
 
 typedef enum {
-  DisplayAuto, // curses mode if available, otherwise split mode
+  DisplayAuto,     // auto: TUI if available, otherwise report mode
   DisplayReport,
   DisplayTUI,
   DisplaySplit,
@@ -344,6 +348,7 @@ extern int display_offset;
 #ifdef TUIMODE
 extern int chart_mode;
 extern int chart_mode_max;
+extern bool mouse_enabled;
 #endif
 
 // keys: the value in the array is the index number in stats[]

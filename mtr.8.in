@@ -2,6 +2,7 @@
 .ds ob "b
 .ds oe "e
 .ds ol "lL
+.ds oM "M
 .ds on "n
 .ds oN "N
 .ds oo "o
@@ -21,7 +22,7 @@
 .Nd a network diagnostic tool
 .Sh SYNOPSIS
 .Nm
-.Op Fl a\*[ob]Bcd\*[oe]fFi\*[ol]m\*[on]\*[oN]\*[oo]\*[op]\*[oq]rsStTuvx\*[o6]
+.Op Fl a\*[ob]Bcd\*[oe]fFi\*[ol]m\*[oM]\*[on]\*[oN]\*[oo]\*[op]\*[oq]rsStTuvx\*[o6]
 TARGET[:PORT] ...
 .Sh DESCRIPTION
 .Nm
@@ -186,6 +187,10 @@ origin.asn.cymru.com: ASN
 .\}
 .It Fl m, Fl -max-ttl Ar NUM
 Specify maximum number of hops (max time-to-live value) traceroute will probe.  Default is 30.
+.ie "M"\*[oM]" \{\
+.It Fl M, Fl -mouse
+Run with mouse support
+.\}
 .ie "n"\*[on]" \{\
 .It Fl n, Fl -no-dns
 Don't resolve IP addresses

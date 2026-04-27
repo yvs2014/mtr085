@@ -428,6 +428,9 @@ msgstr "Tempo limite TCP"
 msgid "Cache timeout"
 msgstr "Tempo limite cache"
 
+msgid "Mouse is supported only in TUI mode"
+msgstr "Rato é compatível apenas no modo TUI"
+
 
 ## misc
 
