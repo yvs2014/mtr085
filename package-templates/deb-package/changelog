@@ -1,5 +1,5 @@
-mtr085 (270) trixie; urgency=low
+mtr085 (271) trixie; urgency=low
 
   * mtr085 fork with whois info, IDN, NLS, unicode, etc.
 
- -- yvs <VSYakovetsky@gmail.com>  Mon, 27 Apr 2026 14:00:13 +0300
+ -- yvs <VSYakovetsky@gmail.com>  Thu, 30 Apr 2026 15:50:34 +0300

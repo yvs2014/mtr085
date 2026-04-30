@@ -285,7 +285,7 @@ static key_action_t keyboard_events(key_action_t action) {
 #ifdef TUIMODE
     case ActionDisplay: {
       int mode = (chart_mode + 1) % chart_mode_max;
-      LOGMSG("switch display mode: %d -> %d", curses_mode, mode);
+      LOGMSG("switch display mode: %d -> %d", chart_mode, mode);
       chart_mode = mode;
       run_opts.chart = mode & 3; // chart bits
       OPT_SUM(chart);

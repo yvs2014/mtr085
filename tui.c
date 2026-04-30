@@ -58,7 +58,7 @@
 #elif defined(HAVE_CURSES_H)
 #  include <curses.h>
 #else
-#  error No curses header file available
+#  error No *curses header file given
 #endif
 
 #include "aux.h"
@@ -92,10 +92,20 @@ enum {
   LINEMAXLEN  = 1024,
 };
 
-enum {NDX_TITLE = 0, NDX_MENU, NDX_LABEL, NDX_WORK,
-//  NDX_STATUS, /*not yet*/
-  MAX_AREA_NDX};
-static WINDOW* area[MAX_AREA_NDX];
+enum {NDX_TITLE = 0, NDX_MENU, NDX_LABEL, NDX_WORK, NDX_STATUS, MAX_AREA_NDX};
+typedef struct {
+  WINDOW *win;
+  int height; // not in use yet
+} area_s;
+static area_s area[MAX_AREA_NDX] = {
+  [NDX_TITLE]  = {.height =  1},
+  [NDX_MENU]   = {.height =  1},
+  [NDX_LABEL]  = {.height =  2},
+  [NDX_WORK]   = {.height = -5 /*sum others*/},
+  [NDX_STATUS] = {.height =  1},
+};
+
+static bool stat_labels_redrawn; // if 0: stat_labels need redrawing
 
 static char screen_title[NAMELEN]; // progname + arguments + destination
 static uint screen_title_len;
@@ -162,9 +172,9 @@ static void enter_stat_fields(WINDOW *win) {
   if (curs != ERR) curs_set(curs);
 }
 
-static void mc_get_int(WINDOW *win, int *val, int min, int max,
+static void tui_get_int(WINDOW *win, int *val, int min, int max,
   const char *what, const char *hint) NONNULL(1);
-static void mc_get_int(WINDOW *win, int *val, int min, int max,
+static void tui_get_int(WINDOW *win, int *val, int min, int max,
   const char *what, const char *hint)
 {
   MOUSE_OFF;
@@ -186,8 +196,8 @@ static void mc_get_int(WINDOW *win, int *val, int min, int max,
   MOUSE_ON;
 }
 
-static void mc_key_h(WINDOW *win) NONNULL(1);
-static void mc_key_h(WINDOW *win) { // help
+static void tui_key_h(WINDOW *win) NONNULL(1);
+static void tui_key_h(WINDOW *win) { // help
   MOUSE_OFF;
   t_cmd_hint cmd[] = {
     {.key = "b", .hint = CMD_B_STR,  .type = CH_INT},
@@ -243,8 +253,15 @@ static void mc_key_h(WINDOW *win) { // help
   MOUSE_ON;
 }
 
-static inline void mc_key_c(WINDOW *win) NONNULL(1);
-static inline void mc_key_c(WINDOW *win) { // set number of cycles
+static void tui_key_b(WINDOW *win) NONNULL(1);
+static void tui_key_b(WINDOW *win) { // bit pattern
+  tui_get_int(win, &run_opts.pattern, -1, UINT8_MAX, BITPATT_STR, RANGENEG_STR);
+  OPT_SUM(pattern);
+  reset_pattern = true;
+}
+
+static void tui_key_c(WINDOW *win) NONNULL(1);
+static void tui_key_c(WINDOW *win) { // set number of cycles
   MOUSE_OFF;
   mvwprintw(win, 0, 0, "%s (%s): %d", NCYCLES_STR, UNLIM0_STR, run_opts.cycles);
   int dx = 2;
@@ -269,8 +286,30 @@ static inline void mc_key_c(WINDOW *win) { // set number of cycles
   MOUSE_ON;
 }
 
-static void mc_key_o(WINDOW *win) NONNULL(1);
-static void mc_key_o(WINDOW *win) { // set fields to display and their order
+static void tui_key_f(WINDOW *win) NONNULL(1);
+static void tui_key_f(WINDOW *win) { // first ttl
+  int minttl = run_opts.minttl;
+  tui_get_int(win, &minttl, 1, run_opts.maxttl, MINTTL_STR, NULL);
+  run_opts.minttl = minttl;
+  OPT_SUM(minttl);
+}
+
+static void tui_key_i(WINDOW *win) NONNULL(1);
+static void tui_key_i(WINDOW *win) { // interval
+  tui_get_int(win, &run_opts.interval, 1, INT_MAX, GAPINSEC_STR, NULL);
+  OPT_SUM(interval);
+}
+
+static void tui_key_m(WINDOW *win) NONNULL(1);
+static void tui_key_m(WINDOW *win) { // max ttl
+  int maxttl = run_opts.maxttl;
+  tui_get_int(win, &maxttl, run_opts.minttl, MAXHOST - 1, MAXTTL_STR, NULL);
+  run_opts.maxttl = maxttl;
+  OPT_SUM(maxttl);
+}
+
+static void tui_key_o(WINDOW *win) NONNULL(1);
+static void tui_key_o(WINDOW *win) { // set fields to display and their order
   MOUSE_OFF;
   mvwprintw(win, 0, 0, "%s: %s\n\n", FIELDS_STR, fld_active);
   for (int i = 0; i < stat_max; i++) if (stats[i].hint)
@@ -283,8 +322,8 @@ static void mc_key_o(WINDOW *win) { // set fields to display and their order
 }
 
 #ifdef IP_TOS
-static inline void mc_key_Q(WINDOW *win) NONNULL(1);
-static inline void mc_key_Q(WINDOW *win) { // set QoS
+static void tui_key_Q(WINDOW *win) NONNULL(1);
+static void tui_key_Q(WINDOW *win) { // set QoS
   MOUSE_OFF;
 #if defined(ENABLE_IPV6) && !defined(IPV6_TCLASS)
   if (af == AF_INET6) {
@@ -294,7 +333,7 @@ static inline void mc_key_Q(WINDOW *win) { // set QoS
   } else
 #endif
   { int qos = run_opts.qos;
-    mc_get_int(win, &qos, 0, UINT8_MAX, QOSTOS_STR, TOS_HINT_STR);
+    tui_get_int(win, &qos, 0, UINT8_MAX, QOSTOS_STR, TOS_HINT_STR);
     run_opts.qos = qos;
     OPT_SUM(qos);
   }
@@ -302,8 +341,8 @@ static inline void mc_key_Q(WINDOW *win) { // set QoS
 }
 #endif
 
-static inline void mc_key_s(WINDOW *win) NONNULL(1);
-static inline void mc_key_s(WINDOW *win) { // set payload size
+static void tui_key_s(WINDOW *win) NONNULL(1);
+static void tui_key_s(WINDOW *win) { // set payload size
   MOUSE_OFF;
   mvwprintw(win, 0, 0, "%s: %d", PSIZE_CHNG_STR, run_opts.size);
   const int max = MAXPACKET - MINPACKET;
@@ -326,13 +365,102 @@ static inline void mc_key_s(WINDOW *win) { // set payload size
   MOUSE_ON;
 }
 
+// map: char to action
+static key_action_t action_map[UINT8_MAX] =  {
+  ['+'] = ActionLineDown,
+  ['-'] = ActionLineUp,
+  ['d'] = ActionDisplay,
+#ifdef WITH_MPLS
+  ['e'] = ActionMPLS,
+#endif
+  ['j'] = ActionJitter,
+#ifdef WITH_IPINFO
+  ['l'] = ActionAS,
+  ['L'] = ActionII,
+#endif
+#ifdef ENABLE_DNS
+  ['n'] = ActionDNS,
+#endif
+  [' '] = ActionPauseResume,
+  ['p'] = ActionPauseResume,
+  [3/*^C*/]   = ActionQuit,
+//[27/*Esc*/] = ActionQuit,
+  ['q'] = ActionQuit,
+  ['r'] = ActionReset,
+  ['t'] = ActionTCP,
+  ['u'] = ActionUDP,
+  ['x'] = ActionCache,
+};
+
+typedef void (*tui_key_fn)(WINDOW *win);
+
+// map: local actions
+static tui_key_fn actfn_map[UINT8_MAX] =  {
+  ['?'] = tui_key_h,
+  ['h'] = tui_key_h, // help
+  ['b'] = tui_key_b, // bit pattern
+  ['c'] = tui_key_c, // number of cycles
+  ['f'] = tui_key_f, // first ttl
+  ['i'] = tui_key_i, // interval
+  ['m'] = tui_key_m, // max ttl
+  ['o'] = tui_key_o, // fields to display
+#ifdef IP_TOS
+  ['Q'] = tui_key_Q, // qos
+#endif
+  ['s'] = tui_key_s, // payload size
+};
+
+static inline void reset_actkey_flags(int ch) {
+  switch (ch) {
+    case  3 : // ^C
+//  case  27: // Esc
+    case 'q':
+      at_quit = true;
+      break;
+    case '?':
+    case 'h':
+    case 'b': // bit pattern
+    case 'c': // number of cycles
+    case 'd': // ActionDisplay;
+#ifdef WITH_MPLS
+    case 'e': // ActionMPLS;
+#endif
+    case 'f': // first ttl
+    case 'i': // interval
+    case 'j': // ActionJitter
+#ifdef WITH_IPINFO
+    case 'l': // ActionAS;
+    case 'L': // ActionII;
+#endif
+    case 'm': // max ttl
+#ifdef ENABLE_DNS
+    case 'n': // ActionDNS;
+#endif
+    case 'o': // fields to display and their order
+    case ' ':
+    case 'p': // ActionPauseResume;
+#ifdef IP_TOS
+    case 'Q': // qos
+#endif
+    case 's': // payload size
+    case 't': // ActionTCP;
+    case 'u': // ActionUDP;
+    case 'x': // ActionCache;
+      stat_labels_redrawn = false;
+      titlelen.screen = -1;
+      break;
+    default: break;
+  }
+}
+
 #define CRD_ENCLOSE(crd) (                       \
   ((crd).x0 <= event.x) && (event.x <= (crd).x1) \
   &&                                             \
   ((crd).y0 <= event.y) && (event.y <= (crd).y1) \
 )
-static key_action_t keyaction_body(WINDOW *win, int ch) NONNULL(1);
-static key_action_t keyaction_body(WINDOW *win, int ch) {
+key_action_t tui_keyaction(void) {
+  WINDOW *win = area[NDX_LABEL].win; if (!win)  return ActionNone;
+  int ch = wgetch(win); if (!ch || (ch == ERR)) return ActionNone;
 #ifdef KEY_RESIZE
   // skip resize keys
   if (ch == KEY_RESIZE) { // cleanup by batch
@@ -354,124 +482,31 @@ static key_action_t keyaction_body(WINDOW *win, int ch) {
     }
   }
 #endif
+  reset_actkey_flags(ch);
 //
-  switch (ch) {
-    case '+':
+  key_action_t action = ActionNone /*0*/;
+  if (ch < UINT8_MAX) { // 8bit char
+    tui_key_fn fn = actfn_map[ch];
+    if (fn) // handle it here
+      fn(fn == tui_key_h ? stdscr : win);
+    else    // or somewhere else
+      action = action_map[ch];
+  } else switch (ch) {  // more than 8 bits
     case KEY_UP:
-      return ActionLineDown;
-    case '-':
+      action = ActionLineDown;
+      break;
     case KEY_DOWN:
-      return ActionLineUp;
+      action = ActionLineUp;
+      break;
     case KEY_PPAGE: // PageUp
-      return ActionPageDown;
+      action = ActionPageDown;
+      break;
     case KEY_NPAGE: // PageDown
-      return ActionPageUp;
-    case '?':
-    case 'h':
-      mc_key_h(stdscr);
-      break;
-    case 'b': // bit pattern
-      mc_get_int(win, &run_opts.pattern, -1, UINT8_MAX, BITPATT_STR, RANGENEG_STR);
-      OPT_SUM(pattern);
-      reset_pattern = true;
-      break;
-    case 'c': // number of cycles
-      mc_key_c(win);
-      break;
-    case 'd': return ActionDisplay;
-#ifdef WITH_MPLS
-    case 'e': return ActionMPLS;
-#endif
-    case 'f': { // first ttl
-      int minttl = run_opts.minttl;
-      mc_get_int(win, &minttl, 1, run_opts.maxttl, MINTTL_STR, NULL);
-      run_opts.minttl = minttl;
-      OPT_SUM(minttl);
-    } break;
-    case 'i': { // interval
-      mc_get_int(win, &run_opts.interval, 1, INT_MAX, GAPINSEC_STR, NULL);
-      OPT_SUM(interval);
-    } break;
-    case 'j':
-      titlelen.stat = -1;
-      return ActionJitter;
-#ifdef WITH_IPINFO
-    case 'l': return ActionAS;
-    case 'L': return ActionII;
-#endif
-    case 'm': { // max ttl
-      int maxttl = run_opts.maxttl;
-      mc_get_int(win, &maxttl, run_opts.minttl, MAXHOST - 1, MAXTTL_STR, NULL);
-      run_opts.maxttl = maxttl;
-      OPT_SUM(maxttl);
-    } break;
-#ifdef ENABLE_DNS
-    case 'n': return ActionDNS;
-#endif
-    case 'o': // fields to display and their order
-      mc_key_o(win);
-      titlelen.stat = -1;
-      break;
-    case ' ':
-    case 'p': return ActionPauseResume;
-    case  3 : // ^C
-//  case  27: // Esc
-    case 'q':
-      at_quit = true;
-      return ActionQuit;
-#ifdef IP_TOS
-    case 'Q': // qos
-      mc_key_Q(win);
-      break;
-#endif
-    case 'r': return ActionReset;
-    case 's': // payload size
-      mc_key_s(win);
-      break;
-    case 't': return ActionTCP;
-    case 'u': return ActionUDP;
-    case 'x': return ActionCache;
-    default: break;
-  }
-  return ActionNone; // ignore unknown input
-}
-
-key_action_t tui_keyaction(void) {
-  WINDOW *win = area[NDX_WORK];
-  // wrapper to keyaction_body(): reset 'title_cache' if it needs
-  int ch = wgetch(win);
-  switch (ch) {
-    case 'b': // bit pattern
-    case 'c': // number of cycles
-    case 'd': // ActionDisplay;
-#ifdef WITH_MPLS
-    case 'e': // ActionMPLS;
-#endif
-    case 'f': // first ttl
-    case 'i': // interval
-    case 'j': // ActionJitter
-#ifdef WITH_IPINFO
-    case 'l': // ActionAS;
-    case 'L': // ActionII;
-#endif
-    case 'm': // max ttl
-#ifdef ENABLE_DNS
-    case 'n': // ActionDNS;
-#endif
-    case ' ':
-    case 'p': // ActionPauseResume;
-#ifdef IP_TOS
-    case 'Q': // qos
-#endif
-    case 's': // payload size
-    case 't': // ActionTCP;
-    case 'u': // ActionUDP;
-    case 'x': // ActionCache;
-      titlelen.screen = -1;
+      action = ActionPageUp;
       break;
     default: break;
   }
-  return keyaction_body(win, ch);
+  return action;
 }
 
 #ifdef WITH_MPLS
@@ -990,8 +1025,8 @@ static void display_charts(WINDOW *label, WINDOW *work) {
 #undef CHART_COLS
 }
 
-static int display_stat_labels(WINDOW *win, int indent) NONNULL(1);
-static int display_stat_labels(WINDOW *win, int indent) {
+static int redraw_stat_labels(WINDOW *win, int indent) NONNULL(1);
+static int redraw_stat_labels(WINDOW *win, int indent) {
   werase(win);
   wattron(win, A_BOLD);
 #ifdef WITH_IPINFO
@@ -1101,8 +1136,15 @@ static inline void display_mainbody(WINDOW *label, WINDOW *work) NONNULL(1, 2);
 static inline void display_mainbody(WINDOW *label, WINDOW *work) {
   if (chart_mode)
     display_charts(label, work);
-  else
-    display_stat_area(work, display_stat_labels(label, INDENT_NUMB));
+  else {
+    static int stat_indent;
+    if (!(stat_indent && stat_labels_redrawn)) {
+      stat_indent = redraw_stat_labels(label, INDENT_NUMB);
+      if (!stat_labels_redrawn)
+        stat_labels_redrawn = true;
+    }
+    display_stat_area(work, stat_indent);
+  }
 }
 
 static WINDOW* create_area(int h, int *y) NONNULL(2);
@@ -1117,9 +1159,10 @@ static WINDOW* create_area(int h, int *y) {
 }
 
 static void free_areas(void) {
-  for (uint i = 0; i < ARRAY_LEN(area); i++)
-    if (area[i]) delwin(area[i]);
-  memset(area, 0, sizeof(area));
+  for (uint i = 0; i < ARRAY_LEN(area); i++) if (area[i].win) {
+    delwin(area[i].win);
+    area[i].win = NULL;
+  }
 }
 
 static bool init_areas(void) {
@@ -1128,13 +1171,13 @@ static bool init_areas(void) {
   // create areas
   free_areas();
   int y = 0;
-  if ((area[NDX_TITLE] = create_area(1, &y)))
-    if ((area[NDX_MENU] = create_area(1, &y)))
-      if ((area[NDX_LABEL] = create_area(2, &y))) {
+  if ((area[NDX_TITLE].win = create_area(1, &y)))
+    if ((area[NDX_MENU].win = create_area(1, &y)))
+      if ((area[NDX_LABEL].win = create_area(2, &y))) {
 //      int h = LINES - (y + 1);
         int h = LINES - y;
-        if ((area[NDX_WORK] = create_area(h > 0 ? h : 1, &y)))
-//        if ((area[NDX_STATUS] = create_area(1, &y)))
+        if ((area[NDX_WORK].win = create_area(h > 0 ? h : 1, &y)))
+//        if ((area[NDX_STATUS].win = create_area(1, &y)))
           return true;
       }
   return false;
@@ -1143,24 +1186,28 @@ static bool init_areas(void) {
 void tui_redraw(void) {
   static int my_cols = -1, my_lines = -1;
   if ((my_cols != COLS) || (my_lines != LINES)) {
-    if (!init_areas()) {
+    if (init_areas()) {
+      my_cols  = COLS;
+      my_lines = LINES;
+      // reset caches, redraw labels
+      titlelen = (title_len_s){.screen = -1, .stat = -1, .chart = -1};
+      stat_labels_redrawn = false;
+   } else { // something wrong
       erase();
-      printw("TUI reinit failed");
+      printw("TUI init areas: failed");
       refresh();
+      return;
     }
-    titlelen = (title_len_s){.screen = -1, .stat = -1, .chart = -1};
-    my_cols  = COLS;
-    my_lines = LINES;
   }
-  display_title(area[NDX_TITLE]);
-  display_menuline(area[NDX_MENU]);
-  display_mainbody(area[NDX_LABEL], area[NDX_WORK]);
+  display_title(area[NDX_TITLE].win);
+  display_menuline(area[NDX_MENU].win);
+  display_mainbody(area[NDX_LABEL].win, area[NDX_WORK].win);
 }
 
 bool tui_open(void) {
   screen_ready = initscr();
   if (!screen_ready) {
-    warnx("initscr() failed");
+    warnx("TUI initscr() failed");
     return false;
   }
   raw();
@@ -1215,7 +1262,7 @@ bool tui_open(void) {
     snprinte(screen_title, sizeof(screen_title), "%s %s %s", PACKAGE_NAME, mtr_args, dsthost);
   else
     snprinte(screen_title, sizeof(screen_title), "%s %s", PACKAGE_NAME, dsthost);
-  screen_title_len = screen_title[0] ? ustrnlen(screen_title, getmaxx(area[NDX_TITLE])) : 0;
+  screen_title_len = screen_title[0] ? ustrnlen(screen_title, getmaxx(area[NDX_TITLE].win)) : 0;
   //
   mc_init();
   tui_redraw();
@@ -1224,7 +1271,7 @@ bool tui_open(void) {
 }
 
 void tui_confirm(void) {
-  WINDOW *win = area[NDX_WORK];
+  WINDOW *win = area[NDX_WORK].win;
   if (at_quit || !win || !screen_ready)
     return;
   at_quit = true;
