@@ -311,6 +311,8 @@ static char *short_options;
 char srchost[NAMELEN];
 const char *dsthost;
 display_mode_t display_mode = DisplayAuto;
+const char *dt_space = DT_SPACE_ASCII;
+const char *dt_fmt_nl = DT_FMT_ASCII;
 //
 
 static const char *iface_addr;
@@ -884,7 +886,11 @@ static bool set_target(const struct addrinfo *res) {
 #if defined(WITH_UNICODE) && defined(HAVE_LOCALE_H) && defined(HAVE_LANGINFO_H)
 static void init_locale(void) {
   setlocale(LC_CTYPE, "");
-  if (strcasecmp("UTF-8", nl_langinfo(CODESET)) == 0) { // NOLINT(concurrency-mt-unsafe)
+  bool utf8codeset = !strcasecmp("UTF-8", nl_langinfo(CODESET)); // NOLINT(concurrency-mt-unsafe)
+  if (utf8codeset) {
+    dt_fmt_nl = DT_FMT_UTF8;
+    dt_space = DT_SPACE_UTF8;
+    //
     if (iswprint(L'▁')) {
 #ifdef TUIMODE
       chart_mode_max++;
@@ -894,6 +900,10 @@ static void init_locale(void) {
     warnx("%s", UNOPRINT_ERR);
   }
   setlocale(LC_CTYPE, NULL);
+  //
+  dt_fmt_nl = nl_langinfo(D_T_FMT);
+  dt_space = DT_SPACE_ASCII;
+  setlocale(LC_TIME, "C");
 }
 #define UNICODE_INIT init_locale()
 #define UNICODE_FREE setlocale(LC_CTYPE, NULL)

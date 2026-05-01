@@ -129,7 +129,7 @@ char *datetime(time_t at, char *buff, size_t size) {
   struct tm *tm = (at > 0) ? localtime(&at) : NULL;
 #endif
   if (tm)
-    if (!strftime(buff, size, "%c", tm))
+    if (!strftime(buff, size, dt_fmt_nl ? dt_fmt_nl : DT_FMT_ASCII, tm))
       buff[0] = 0;
   return buff;
 }

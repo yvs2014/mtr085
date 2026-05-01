@@ -50,7 +50,7 @@
 #endif
 
 #ifndef GITREV
-#define GITREV "272"
+#define GITREV "273"
 #endif
 
 #ifndef HAVE_UINT
@@ -154,6 +154,10 @@ typedef enum {
 #define NANO  1000000000
 #define UNKN_ITEM "???"
 #define AT_FMT "%2d."
+#define DT_FMT_UTF8 "%c"
+#define DT_FMT_ASCII "%a, %d-%b-%Y %X %z"
+#define DT_SPACE_UTF8  "│ "
+#define DT_SPACE_ASCII "| "
 
 // options
 typedef struct opts_s {
@@ -327,6 +331,8 @@ typedef union opt_sum_u {
 extern int mtrtype;        // default packet type
 
 extern display_mode_t display_mode;
+extern const char *dt_space;
+extern const char *dt_fmt_nl;
 
 extern int sum_sock[];     // summary open()/close() calls for sockets
 extern char strerr_txt[];  // error text (any target)

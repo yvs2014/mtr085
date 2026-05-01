@@ -83,8 +83,6 @@ static bool moused;
 #endif
 
 #define MSEC_FMT "%.*f %s"
-#define DT_DELIM "│"
-#define DT_SPACE DT_DELIM " "
 
 enum {
   INDENT_NUMB =    4, /* "NN. " */
@@ -1132,8 +1130,8 @@ static void display_status(WINDOW *win) {
   if (date && date[0]) { // right-aligned
     static int menu_dt_len;
     if (!menu_dt_len) // cached dt length
-      menu_dt_len = ustrnlen(DT_SPACE, sizeof(DT_SPACE)) + ustrnlen(str, sizeof(str)) + 1;
-    mvwaddstr(win, 0, getmaxx(win) - menu_dt_len, DT_SPACE);
+      menu_dt_len = ustrnlen(dt_space, sizeof(dt_space)) + ustrnlen(str, sizeof(str)) + 1;
+    mvwaddstr(win, 0, getmaxx(win) - menu_dt_len, dt_space);
     waddstr(win, date);
   }
   wrefresh(win);
