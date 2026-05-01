@@ -10,9 +10,8 @@
 
 // TUI
 #define MENU_ICON      "≡"
-#define MENU_STR       _("Keys")
-#define _HINTS_STR     _("ints") // [h]ints
-#define _QUIT_STR      _("uit")  // [q]uit
+#define _HINTS_STR     _("ints") // [H]ints
+#define _QUIT_STR      _("uit")  // [Q]uit
 #define FIELDS_STR     _("Fields")
 #define USR_FIELDS_STR _("Custom fields")
 #define PACKETS_STR    _("Packets")

@@ -83,6 +83,8 @@ static bool moused;
 #endif
 
 #define MSEC_FMT "%.*f %s"
+#define DT_DELIM "│"
+#define DT_SPACE DT_DELIM " "
 
 enum {
   INDENT_NUMB =    4, /* "NN. " */
@@ -92,20 +94,22 @@ enum {
   LINEMAXLEN  = 1024,
 };
 
-enum {NDX_TITLE = 0, NDX_MENU, NDX_LABEL, NDX_WORK, NDX_STATUS, MAX_AREA_NDX};
+enum {NDX_TITLE = 0, NDX_LABEL, NDX_WORK, NDX_STATUS, MAX_AREA_NDX};
 typedef struct {
   WINDOW *win;
   int height; // not in use yet
 } area_s;
 static area_s area[MAX_AREA_NDX] = {
   [NDX_TITLE]  = {.height =  1},
-  [NDX_MENU]   = {.height =  1},
   [NDX_LABEL]  = {.height =  2},
-  [NDX_WORK]   = {.height = -5 /*sum others*/},
+  [NDX_WORK]   = {.height = -4 /*sum others*/},
   [NDX_STATUS] = {.height =  1},
 };
 
-static bool stat_labels_redrawn; // if 0: stat_labels need redrawing
+typedef struct {
+  bool stats, hints;
+} redrawn_s;
+static redrawn_s redrawn; // need redrawing unless true
 
 static char screen_title[NAMELEN]; // progname + arguments + destination
 static uint screen_title_len;
@@ -446,7 +450,7 @@ static inline void reset_actkey_flags(int ch) {
     case 't': // ActionTCP;
     case 'u': // ActionUDP;
     case 'x': // ActionCache;
-      stat_labels_redrawn = false;
+      memset(&redrawn, 0, sizeof(redrawn));
       titlelen.screen = -1;
       break;
     default: break;
@@ -482,8 +486,9 @@ key_action_t tui_keyaction(void) {
     }
   }
 #endif
+  //
   reset_actkey_flags(ch);
-//
+  //
   key_action_t action = ActionNone /*0*/;
   if (ch < UINT8_MAX) { // 8bit char
     tui_key_fn fn = actfn_map[ch];
@@ -1100,36 +1105,39 @@ static void display_title(WINDOW *win) {
   (crd).y0 = dy + getcury(win);                      \
   PRINT_MENUITEM((ch), (fmt), (txt));                \
   (crd).x1 = dx + getcurx(win) - 1;                  \
-  (crd).y1 = dx + getcurx(win) - 1;                  \
+  (crd).y1 = dy + getcury(win);                      \
 } while (0)
 
-static void display_menuline(WINDOW *win) NONNULL(1);
-static void display_menuline(WINDOW *win) {
-  werase(win);
-  mvwprintw(win, 0, 0, "%s: ", MENU_STR);
-  //
+static void display_status(WINDOW *win) NONNULL(1);
+static void display_status(WINDOW *win) {
+  wattron(win, A_REVERSE);
+  // hints
+  if (!redrawn.hints) {
+    werase(win);
+    wchgat(win, -1, A_REVERSE, 0, NULL);
+    wmove(win, 0, 1);
 #ifdef WITH_MOUSE
-  { int dx = getbegx(win), dy = getbegy(win);
-    PRINT_MENUKEEP('h', "%s ", _HINTS_STR, crd.hint);
-    PRINT_MENUKEEP('q', "%s" , _QUIT_STR , crd.quit); }
+    { int dx = getbegx(win), dy = getbegy(win);
+      PRINT_MENUKEEP('H', "%s ", _HINTS_STR, crd.hint);
+      PRINT_MENUKEEP('Q', "%s" , _QUIT_STR , crd.quit); }
 #else
-  PRINT_MENUITEM('h', "%s ", _HINTS_STR);
-  PRINT_MENUITEM('q', "%s", _QUIT_STR);
+    PRINT_MENUITEM('H', "%s ", _HINTS_STR);
+    PRINT_MENUITEM('Q', "%s", _QUIT_STR);
 #endif
-  char buff[LINEMAXLEN] = {0};
-  // source host
-  int len = snprinte(buff, sizeof(buff), "%.*s", (int)strnlen(srchost, getmaxx(win) / 2), srchost);
-  if (len < 0)
-    return;
-  // timestamp (note: not mandatory)
-  char str[64] = {0};
+    redrawn.hints = true;
+  }
+  // datetime
+  char str[128] = {0};
   const char *date = datetime(time(NULL), str, sizeof(str));
-  if (date && date[0])
-    snprinte(buff + len, sizeof(buff) - len, ": %s", date);
-  //
-  if ((len > 0) && buff[0]) // rigth aligned
-    mvwaddstr(win, 0, getmaxx(win) - ustrnlen(buff, sizeof(buff)) - 1, buff);
+  if (date && date[0]) { // right-aligned
+    static int menu_dt_len;
+    if (!menu_dt_len) // cached dt length
+      menu_dt_len = ustrnlen(DT_SPACE, sizeof(DT_SPACE)) + ustrnlen(str, sizeof(str)) + 1;
+    mvwaddstr(win, 0, getmaxx(win) - menu_dt_len, DT_SPACE);
+    waddstr(win, date);
+  }
   wrefresh(win);
+  wattroff(win, A_REVERSE);
 }
 
 static inline void display_mainbody(WINDOW *label, WINDOW *work) NONNULL(1, 2);
@@ -1138,24 +1146,30 @@ static inline void display_mainbody(WINDOW *label, WINDOW *work) {
     display_charts(label, work);
   else {
     static int stat_indent;
-    if (!(stat_indent && stat_labels_redrawn)) {
+    if (!(stat_indent && redrawn.stats)) {
       stat_indent = redraw_stat_labels(label, INDENT_NUMB);
-      if (!stat_labels_redrawn)
-        stat_labels_redrawn = true;
+      if (!redrawn.stats)
+        redrawn.stats = true;
     }
     display_stat_area(work, stat_indent);
   }
 }
 
-static WINDOW* create_area(int h, int *y) NONNULL(2);
-static WINDOW* create_area(int h, int *y) {
-  WINDOW *win = newwin(h, 0/*i.e.max*/, *y, 0);
-  *y += h;
-  if (win) {
-    wrefresh(win);
-    keypad(win, TRUE);
+static void create_area(uint ndx) {
+  static int y;
+  if (ndx >= MAX_AREA_NDX)
+    y = 0; // indicate y-reset with MAX_AREA_NDX
+  else if (ndx < ARRAY_LEN(area)) {
+    int h = area[ndx].height;
+    if (h < 0) h += LINES;
+    WINDOW *win = newwin(h, 0/*max*/, y, 0);
+    if (win) {
+      wrefresh(win);
+      keypad(win, TRUE);
+      area[ndx].win = win;
+      y += h;
+    }
   }
-  return win;
 }
 
 static void free_areas(void) {
@@ -1165,43 +1179,46 @@ static void free_areas(void) {
   }
 }
 
+static inline bool areas_ready(void) {
+//  for (uint i = 0; i < ARRAY_LEN(area); i++)
+//    if (!area[i].win) return false;
+//  return true;
+  return
+    area[NDX_TITLE].win && area[NDX_LABEL].win && area[NDX_WORK].win && area[NDX_STATUS].win;
+}
+
 static bool init_areas(void) {
-  // reset cached titles
+  static int my_cols, my_lines;
+  if ((my_cols == COLS) && (my_lines == LINES)
+      && areas_ready() /*freed at reset*/)
+    return true;
+  my_cols  = COLS;
+  my_lines = LINES;
+  // reset caches
   titlelen = (title_len_s){.screen = -1, .stat = -1, .chart = -1};
+  memset(&redrawn, 0, sizeof(redrawn));
   // create areas
   free_areas();
-  int y = 0;
-  if ((area[NDX_TITLE].win = create_area(1, &y)))
-    if ((area[NDX_MENU].win = create_area(1, &y)))
-      if ((area[NDX_LABEL].win = create_area(2, &y))) {
-//      int h = LINES - (y + 1);
-        int h = LINES - y;
-        if ((area[NDX_WORK].win = create_area(h > 0 ? h : 1, &y)))
-//        if ((area[NDX_STATUS].win = create_area(1, &y)))
-          return true;
-      }
-  return false;
+  create_area(MAX_AREA_NDX);
+  create_area(NDX_TITLE);
+  create_area(NDX_LABEL);
+  create_area(NDX_WORK);
+  create_area(NDX_STATUS);
+  return areas_ready();
 }
 
 void tui_redraw(void) {
-  static int my_cols = -1, my_lines = -1;
-  if ((my_cols != COLS) || (my_lines != LINES)) {
-    if (init_areas()) {
-      my_cols  = COLS;
-      my_lines = LINES;
-      // reset caches, redraw labels
-      titlelen = (title_len_s){.screen = -1, .stat = -1, .chart = -1};
-      stat_labels_redrawn = false;
-   } else { // something wrong
-      erase();
-      printw("TUI init areas: failed");
-      refresh();
-      return;
-    }
+  if (!init_areas()) {
+    erase();
+    printw("TUI init areas: failed");
+    refresh();
+    return;
   }
-  display_title(area[NDX_TITLE].win);
-  display_menuline(area[NDX_MENU].win);
-  display_mainbody(area[NDX_LABEL].win, area[NDX_WORK].win);
+  if (areas_ready()) {
+    display_title(area[NDX_TITLE].win);
+    display_mainbody(area[NDX_LABEL].win, area[NDX_WORK].win);
+    display_status(area[NDX_STATUS].win);
+  }
 }
 
 bool tui_open(void) {
@@ -1213,7 +1230,10 @@ bool tui_open(void) {
   raw();
   noecho();
   keypad(stdscr, TRUE);
-  if (!init_areas()) return false;
+  if (!init_areas()) {
+    erase(); refresh();
+    return false;
+  }
 #ifdef WITH_MOUSE
   if (mouse_enabled) {
     mousemask(BUTTON1_CLICKED | REPORT_MOUSE_POSITION, NULL);
@@ -1267,7 +1287,7 @@ bool tui_open(void) {
   mc_init();
   tui_redraw();
   curs_set(0);
-  return true;
+  return areas_ready();
 }
 
 void tui_confirm(void) {

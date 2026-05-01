@@ -8,14 +8,11 @@ msgstr ""
 
 ## TUI
 
-msgid "Keys"
-msgstr "Teclas"
-
-# [h]ints
+# [H]ints
 msgid "ints"
 msgstr "(dicas)"
 
-# [q]uit
+# [Q]uit
 msgid "uit"
 msgstr "(sair)"
 

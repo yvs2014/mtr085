@@ -8,14 +8,11 @@ msgstr ""
 
 ## TUI
 
-msgid "Keys"
-msgstr "Tasti"
-
-# [h]ints
+# [H]ints
 msgid "ints"
 msgstr "(guide)"
 
-# [q]uit
+# [Q]uit
 msgid "uit"
 msgstr "(uscita)"
 

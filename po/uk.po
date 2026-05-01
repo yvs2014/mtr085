@@ -8,14 +8,11 @@ msgstr ""
 
 ## TUI
 
-msgid "Keys"
-msgstr "Меню"
-
-# [h]ints
+# [H]ints
 msgid "ints"
 msgstr "(довідка)"
 
-# [q]uit
+# [Q]uit
 msgid "uit"
 msgstr "(вихід)"
 
