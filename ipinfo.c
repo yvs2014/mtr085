@@ -535,10 +535,16 @@ static int send_tcp_query(int sock, const char *q) {
   return rc;
 }
 
-static char* make_tcp_qstr(t_ipaddr *ipaddr) {
-  static char mkqstr[NAMELEN];
-  snprinte(mkqstr, sizeof(mkqstr), "%s%s", origins[origin_no].prefix, strlongip(ipaddr));
-  return mkqstr;
+static const char* make_tcp_qstr(int at, int ndx, char *buff, uint size) NONNULL(3);
+static const char* make_tcp_qstr(int at, int ndx, char *buff, uint size) {
+  char str[MAX_ADDRSTRLEN] = {0};
+  const char *addr = inet_ntop(af, &IP_AT_NDX(at, ndx), str, sizeof(str));
+  if (addr) {
+    snprinte(buff, size, "%s%s", origins[origin_no].prefix, addr);
+    if (buff[0])
+      return buff;
+  }
+  return NULL;
 }
 
 void ipinfo_seq_ready(int seq) {
@@ -547,7 +553,10 @@ void ipinfo_seq_ready(int seq) {
   LOGMSG("seq=%d at=%d ndx=%d", seq, at, ndx);
   ipitseq[seq].state = TSEQ_READY;
   QTXT_TS_AT_NDX(at, ndx) = time(NULL); // save send-time
-  send_tcp_query(ipitseq[seq].sock, make_tcp_qstr(&IP_AT_NDX(at, ndx)));
+  char buff[NAMELEN] = {0};
+  const char *q = make_tcp_qstr(at, ndx, buff, sizeof(buff));
+  if (q)
+    send_tcp_query(ipitseq[seq].sock, q);
 }
 
 static int ipinfo_lookup(int at, int ndx, const char *qstr) {
@@ -616,15 +625,17 @@ static char *get_ipinfo(int at, int ndx, int item_no) {
   } else
 #endif
   { if (!ORIG_HOST) return NULL; }
-  t_ipaddr *ipaddr = &IP_AT_NDX(at, ndx);
   switch (ORIG_TYPE) {
     case OT_HTTP:
-    case OT_WHOIS:
-      ipinfo_lookup(at, ndx, make_tcp_qstr(ipaddr));
-      break;
+    case OT_WHOIS: {
+      char buff[NAMELEN] = {0};
+      const char *q = make_tcp_qstr(at, ndx, buff, sizeof(buff));
+      if (q)
+        ipinfo_lookup(at, ndx, q);
+    } break;
 #ifdef ENABLE_DNS
     default:  // dns
-      ipinfo_lookup(at, ndx, ip2arpa(ipaddr, ORIG_HOST, origins[origin_no].host6));
+      ipinfo_lookup(at, ndx, ip2arpa(&IP_AT_NDX(at, ndx), ORIG_HOST, origins[origin_no].host6));
       break;
 #endif
   }
@@ -857,19 +868,17 @@ static void query_iiaddr(int at, int ndx) {
 }
 
 void query_ipinfo(void) {
-  if (!ii_ready)
-      return;
-  int max = net_max();
-  for (int at = net_min(); at < max; at++) {
-    t_ipaddr *ipaddr = &CURRENT_IP(at);
-    if (addr_exist(ipaddr)) {
-      query_iiaddr(at, host[at].current);
-      for (int i = 0; i < MAXPATH; i++) {
-        if (i == host[at].current)
-          continue; // because already queried
-        t_ipaddr *ipaddr_i = &IP_AT_NDX(at, i);
-        if (addr_exist(ipaddr_i))
-          query_iiaddr(at, i);
+  if (ii_ready) {
+    int max = net_max();
+    for (int at = net_min(); at < max; at++) {
+      if (addr_exist(&CURRENT_IP(at))) {
+        query_iiaddr(at, host[at].current);
+        for (int i = 0; i < MAXPATH; i++) {
+          if (i == host[at].current)
+            continue; // already queried
+          if (addr_exist(&IP_AT_NDX(at, i)))
+            query_iiaddr(at, i);
+        }
       }
     }
   }

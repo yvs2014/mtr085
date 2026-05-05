@@ -79,10 +79,9 @@ void report_started_at(void) { started_at = time(NULL); }
 } while(0)
 #endif
 
-static inline void print_str_width(const char str[], int width) NONNULL(1);
-static inline void print_str_width(const char str[], int width) {
-  if (width < 0) printf("%s", str);
-  else printf("%-*s", width, str);
+static inline int print_str_width(const char str[], int width) NONNULL(1);
+static inline int print_str_width(const char str[], int width) {
+  return (width > 0) ? printf("%-*s", width, str) : printf("%s", str);
 }
 
 static void print_nameaddr(int at, int ndx, int width) {
@@ -90,39 +89,43 @@ static void print_nameaddr(int at, int ndx, int width) {
   t_ipaddr *ipaddr = &IP_AT_NDX(at, ndx);
   if (addr_exist(ipaddr)) {
 #ifdef ENABLE_DNS
+    char str[MAX_ADDRSTRLEN] = {0};
+    const char *addr = inet_ntop(af, ipaddr, str, sizeof(str));
+    if (!addr) addr = UNKN_ITEM;
     const char *name = run_opts.dns ? dns_ptr_cache(at, ndx) : NULL;
     if (name) {
       if (run_opts.both) {
-        if (width > 0) {
-          char buff[MAXDNAME] = {0};
-          snprinte(buff, sizeof(buff), "%s (%s)", name, strlongip(ipaddr));
-          print_str_width(buff, width);
-        } else
-          printf("%s (%s)", name, strlongip(ipaddr));
-      } else print_str_width(name, width);
+        char both[MAXDNAME] = {0};
+        snprinte(both, sizeof(both), "%s (%s)", name, addr);
+        print_str_width(both, width);
+      } else
+        print_str_width(name, width);
     } else
 #endif
-      print_str_width(strlongip(ipaddr), width);
+      print_str_width(addr, width);
   } else
     print_str_width(UNKN_ITEM, width);
 }
 
-static int snprint_addr(char buf[], size_t size, uint at, uint ndx) {
-  if (!buf || !size) return 0;
+static int snprint_addr(char buff[], size_t size, uint at, uint ndx) {
+  if (!buff || !size) return 0;
   int len = 0;
   t_ipaddr *ipaddr = &IP_AT_NDX(at, ndx);
   if (addr_exist(ipaddr)) {
+    char str[MAX_ADDRSTRLEN] = {0};
+    const char *addr = inet_ntop(af, ipaddr, str, sizeof(str));
+    if (!addr) addr = UNKN_ITEM;
 #ifdef ENABLE_DNS
     const char *name = run_opts.dns ? dns_ptr_cache(at, ndx) : NULL;
     if (name) {
       len = run_opts.both ?
-        snprinte(buf, size, "%s (%s)", name, strlongip(ipaddr)) :
-        snprinte(buf, size, "%s",      name);
+        snprinte(buff, size, "%s (%s)", name, addr) :
+        snprinte(buff, size, "%s",      name);
     } else
 #endif
-      len = snprinte(buf, size, "%s", strlongip(ipaddr));
+      len = snprinte(buff, size, "%s", addr);
   } else
-    len = snprinte(buf, size, "%s", UNKN_ITEM);
+    len = snprinte(buff, size, "%s", UNKN_ITEM);
   return (len < 0) ? 0 : len;
 }
 
@@ -530,8 +533,10 @@ void raw_rawping(int at, int usec) {
   fflush(stdout);
 }
 
-void raw_rawhost(int at, t_ipaddr *ipaddr) {
-  printf("h %d %s\n", at, strlongip(ipaddr));
+void raw_rawhost(int at, int ndx) {
+  char str[MAX_ADDRSTRLEN] = {0};
+  const char *addr = inet_ntop(af, &IP_AT_NDX(at, ndx), str, sizeof(str));
+  printf("h %d %s\n", at, addr ? addr : UNKN_ITEM);
   fflush(stdout);
 }
 #endif

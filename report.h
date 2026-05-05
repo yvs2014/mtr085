@@ -29,7 +29,7 @@ void backresolv_lookups(void);
 #endif
 #ifdef OUTPUT_FORMAT_RAW
 void raw_rawping(int at, int usec);
-void raw_rawhost(int at, t_ipaddr *ipaddr);
+void raw_rawhost(int at, int ndx);
 #endif
 #ifdef OUTPUT_FORMAT_CSV
 void csv_head(void);

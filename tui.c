@@ -526,7 +526,7 @@ static int printw_mpls(WINDOW *win, const mpls_data_t *m) {
 
 static void printw_addr(WINDOW *win, int at, int ndx) NONNULL(1);
 static void printw_addr(WINDOW *win, int at, int ndx) {
-  t_ipaddr *addr = &IP_AT_NDX(at, ndx);
+  t_ipaddr *ipaddr = &IP_AT_NDX(at, ndx);
 #ifdef WITH_IPINFO
   if (ipinfo_ready()) {
     char info[NAMELEN] = {0};
@@ -538,15 +538,18 @@ static void printw_addr(WINDOW *win, int at, int ndx) {
   bool down = !host[at].up;
   if (down)
     wattron(win, A_BOLD);
+  char str[MAX_ADDRSTRLEN] = {0};
+  const char *addr = inet_ntop(af, ipaddr, str, sizeof(str));
 #ifdef ENABLE_DNS
   const char *name = dns_ptr_lookup(at, ndx);
   if (name) {
-    wprintw(win, "%s", name);
-    if (run_opts.both)
-      wprintw(win, " (%s)", strlongip(addr));
+    if (run_opts.both && addr)
+      wprintw(win, "%s (%s)", name, addr);
+    else
+      waddstr(win, name);
   } else
 #endif
-  { wprintw(win, "%s", strlongip(addr)); }
+  { if (addr) waddstr(win, addr); }
   if (down)
     wattroff(win, A_BOLD);
 }
@@ -588,9 +591,8 @@ static void print_addr_extra(WINDOW *win, int at) NONNULL(1);
 static void print_addr_extra(WINDOW *win, int at) { // mpls + multipath
   for (int ndx = 0; ndx < MAXPATH; ndx++) {  // multipath
     if (ndx == host[at].current)
-      continue; // because already printed
-    t_ipaddr *addr = &IP_AT_NDX(at, ndx);
-    if (!addr_exist(addr))
+      continue; // already printed
+    if (!addr_exist(&IP_AT_NDX(at, ndx)))
       break;
     wprintw(win, "    ");
     printw_addr(win, at, ndx);
@@ -612,8 +614,7 @@ static void print_hops(WINDOW *win, int statx) {
     if (wmove(win, y, 0) == ERR)
       break;
     wprintw(win, AT_FMT " ", at + 1);
-    t_ipaddr *addr = &CURRENT_IP(at);
-    if (addr_exist(addr)) {
+    if (addr_exist(&CURRENT_IP(at))) {
       printw_addr(win, at, host[at].current);
       if (print_stat(win, at, y, statx, max) == ERR)
         break;
@@ -769,8 +770,8 @@ static cchar_t* mc_saved_cc(int saved_int) {
 
 static void histoaddr(WINDOW *win, int at, int max, int y, int x, int cols) NONNULL(1);
 static void histoaddr(WINDOW *win, int at, int max, int y, int x, int cols) {
-  t_ipaddr *addr = &CURRENT_IP(at);
-  if (addr_exist(addr)) {
+  t_ipaddr *ipaddr = &CURRENT_IP(at);
+  if (addr_exist(ipaddr)) {
     if (!host[at].up)
       wattron(win, A_BOLD);
 #ifdef WITH_IPINFO
@@ -778,18 +779,21 @@ static void histoaddr(WINDOW *win, int at, int max, int y, int x, int cols) {
       char info[NAMELEN] = {0};
       ipinfo_data_fix(info, sizeof(info), at, host[at].current);
       if (info[0])
-        wprintw(win, "%s", info);
+        waddstr(win, info);
     }
 #endif
+    char str[MAX_ADDRSTRLEN] = {0};
+    const char *addr = inet_ntop(af, ipaddr, str, sizeof(str));
+    if (!addr) addr = UNKN_ITEM;
 #ifdef ENABLE_DNS
     const char *name = dns_ptr_lookup(at, host[at].current);
-    wprintw(win, "%s", name ? name : strlongip(addr));
+    waddstr(win, name ? name : addr);
 #else
-    wprintw(win, "%s", strlongip(addr));
+    waddstr(win, addr);
 #endif
     if (!host[at].up)
       wattroff(win, A_BOLD);
-    mvwprintw(win, y, x, " ");
+    mvwaddstr(win, y, x, " ");
 #ifdef WITH_UNICODE
     if (chart_mode == 3)
       for (int i = SAVED_PINGS - cols; i < SAVED_PINGS; i++)
@@ -800,7 +804,7 @@ static void histoaddr(WINDOW *win, int at, int max, int y, int x, int cols) {
         waddch(win, get_saved_ch(host[at].saved[i]));
     if (run_opts.audible || run_opts.visible)
       seal_n_bell(at, max);
-  } else wprintw(win, "%s", UNKN_ITEM);
+  } else waddstr(win, UNKN_ITEM);
 }
 
 static void histogram(WINDOW *win, int x, int cols) NONNULL(1);

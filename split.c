@@ -48,10 +48,13 @@ static inline void split_multipath(int at) {
     printf("%2d:%d", at + 1, i);
 #ifdef ENABLE_DNS
     const char *name = dns_ptr_lookup(at, i);
-    printf("%c%s", DIV_SPLIT, name ? name : strlongip(ipaddr));
+    char str[MAX_ADDRSTRLEN] = {0};
+    const char *addr = inet_ntop(af, ipaddr, str, sizeof(str));
+    if (!addr) addr = UNKN_ITEM;
+    printf("%c%s", DIV_SPLIT, name ? name : addr);
     if (run_opts.both)
 #endif
-    { printf("%c%s", DIV_SPLIT, strlongip(ipaddr)); }
+    { printf("%c%s", DIV_SPLIT, addr); }
 #ifdef WITH_IPINFO
     if (ipinfo_ready()) {
       char info[NAMELEN] = {0};
@@ -73,15 +76,18 @@ void split_redraw(void) {
     t_ipaddr *ipaddr = &CURRENT_IP(at);
     printf("%2d", at + 1);
     if (addr_exist(ipaddr)) {
+      char str[MAX_ADDRSTRLEN] = {0};
+      const char *addr = inet_ntop(af, ipaddr, str, sizeof(str));
+      if (!addr) addr = UNKN_ITEM;
 #ifdef ENABLE_DNS
       { const char *name = dns_ptr_lookup(at, host[at].current);
-        printf("%c%s", DIV_SPLIT, name ? name : strlongip(ipaddr)); }
+        printf("%c%s", DIV_SPLIT, name ? name : addr); }
       if (run_opts.both)
 #endif
-      { printf("%c%s", DIV_SPLIT, strlongip(ipaddr)); }
+      { printf("%c%s", DIV_SPLIT, addr); }
       for (uint i = 0; i < sizeof(fields); i++) {
-        const char *str = net_elem(at, fields[i]);
-        if (str) printf("%c%s", DIV_SPLIT, str);
+        const char *elem = net_elem(at, fields[i]);
+        if (elem) printf("%c%s", DIV_SPLIT, elem);
       }
 #ifdef WITH_IPINFO
       if (ipinfo_ready()) {

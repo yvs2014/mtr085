@@ -203,9 +203,13 @@ struct sequence {
 // global vars
 int af = AF_INET;                   // default address family
 static t_ipaddr unspec_addr;        // 0
-bool  (*addr_exist)(const void *a); // true unless 0
-bool  (*addr_equal)(const void *a, const void *b);
-void* (*addr_copy)(void *dst, const void *src);
+//
+// ip4: addr4xxx (by default)
+// ip6: addr6xxx
+bool  (*addr_exist)(const void *a) NONNULL(1) = addr4exist; // true unless 0
+bool  (*addr_equal)(const void *a, const void *b) NONNULL(1, 2) = addr4equal;
+void* (*addr_copy)(void *dst, const void *src) NONNULL(1, 2) = addr4copy;
+//
 nethost_t host[MAXHOST];
 char localaddr[MAX_ADDRSTRLEN];
 //
@@ -241,8 +245,8 @@ static int recvsock6 = -1;
 static int sendsock = -1;
 static int recvsock = -1;
 
-static t_sockaddr lsa, rsa; // losal and remote sockaddr
-static t_ipaddr *remote_ipaddr;
+static t_sockaddr lsa, rsa; // local and remote sockaddr
+static t_ipaddr *remote_ipaddr = (t_ipaddr*)&rsa.sin.sin_addr; // ip4 by default
 
 static int echo_reply, time_exceed, dst_unreach;
 
@@ -575,7 +579,10 @@ static bool net_send_icmp_udp(int at) {
 
   if (!save_send_ts(seq)) return false;
   if (sendto(sendsock, packet, pktsize, 0, &rsa.sa, salen) < 0) {
-    int rc = errno; const char *dst = strlongip(remote_ipaddr); errno = rc;
+    int rc = errno;
+    char str[MAX_ADDRSTRLEN] = {0};
+    const char *dst = inet_ntop(af, remote_ipaddr, str, sizeof(str));
+    errno = rc;
     FAIL_WITH_WARN(sendsock, "sendto(%s)", dst ? dst : "");
   }
   /*summ*/ net_queries[QR_SUM]++; if (mtrtype == IPPROTO_ICMP) net_queries[QR_ICMP]++; else net_queries[QR_UDP]++;
@@ -624,6 +631,7 @@ static void hop_stats(int at, timemsec_t curr) {
 }
 
 // return index of 'addr' at 'hop', otherwise -1
+static int addr2ndx(int hop, const t_ipaddr *addr) NONNULL(2);
 static int addr2ndx(int hop, const t_ipaddr *addr) {
   for (int i = 0; i < MAXPATH; i++)
     if (addr_equal(&IP_AT_NDX(hop, i), addr))
@@ -640,6 +648,7 @@ static int at2next(int hop) {
 }
 
 // set new ip-addr and clear associated data
+static void set_new_addr(int at, int ndx, const t_ipaddr *ipaddr MPLSFNTAIL(const mpls_data_t *mpls)) NONNULL(3);
 static void set_new_addr(int at, int ndx, const t_ipaddr *ipaddr MPLSFNTAIL(const mpls_data_t *mpls)) {
   addr_copy(&IP_AT_NDX(at, ndx), ipaddr);
 #ifdef WITH_MPLS
@@ -671,6 +680,8 @@ static void set_new_addr(int at, int ndx, const t_ipaddr *ipaddr MPLSFNTAIL(cons
 
 // Got a return
 static int net_stat(uint port, const void *addr, struct timespec *recv_at,
+    int reason MPLSFNTAIL(const mpls_data_t *mpls)) NONNULL(2, 3);
+static int net_stat(uint port, const void *addr, struct timespec *recv_at,
     int reason MPLSFNTAIL(const mpls_data_t *mpls))
 {
   uint seq = port % MAXSEQ;
@@ -695,10 +706,8 @@ static int net_stat(uint port, const void *addr, struct timespec *recv_at,
   if (at > stopper)    // return unless reachable
     return true;
 
-  t_ipaddr copy;
-  addr_copy(&copy, addr); // can it be overwritten?
-  int ndx = addr2ndx(at, &copy);
-  if (ndx < 0) {        // new one
+  int ndx = addr2ndx(at, addr);
+  if (ndx < 0) {       // new one
     ndx = at2next(at);
     if (ndx < 0) {
       // no free slots? - warn once, and change the last one
@@ -709,10 +718,10 @@ static int net_stat(uint port, const void *addr, struct timespec *recv_at,
       }
       ndx = MAXPATH - 1;
     }
-    set_new_addr(at, ndx, &copy MPLSFNTAIL(mpls));
+    set_new_addr(at, ndx, addr MPLSFNTAIL(mpls));
 #ifdef OUTPUT_FORMAT_RAW
     if (run_opts.rawrep)
-      raw_rawhost(at, &IP_AT_NDX(at, ndx));
+      raw_rawhost(at, ndx);
 #endif
   }
 #ifdef WITH_MPLS
@@ -722,14 +731,7 @@ static int net_stat(uint port, const void *addr, struct timespec *recv_at,
   }
 #endif
 
-  struct timespec tv, stated_now;
-  if (!recv_at) { // try again
-    recv_at = &stated_now;
-    if (clock_gettime(CLOCK_MONOTONIC, recv_at) < 0) {
-      keep_error(errno, __func__);
-      return false;
-    }
-  }
+  struct timespec tv = {0};
   timespecsub(recv_at, &seqlist[seq].time, &tv);
   timemsec_t curr = { .ms = time2msec(tv), .frac = time2mfrac(tv) };
   hop_stats(at, curr);
@@ -1112,7 +1114,7 @@ static inline int net_getsock6(void) {
 void net_setsock6(void) { sendsock = sendsock6 = net_getsock6(); }
 #endif
 
-bool net_set_host(t_ipaddr *ipaddr) {
+bool net_set_host(const t_ipaddr *ipaddr) {
   rsa.SA_AF = af;
   switch (af) {
     case AF_INET:
@@ -1158,8 +1160,10 @@ bool net_set_host(t_ipaddr *ipaddr) {
         ((saf == AF_INET) ? (char*)&((struct sockaddr_in  *)&ss)->sin_addr  : NULL);
       if (!addr)
         warnx("%d: %s", saf, strerror(EAFNOSUPPORT));
-      else if (!inet_ntop(saf, addr, localaddr, sizeof(localaddr)))
+      else if (!inet_ntop(saf, addr, localaddr, sizeof(localaddr))) {
         warn("inet_ntop()");
+        localaddr[0] = 0;
+      }
     }
   }
   portpid = IPPORT_RESERVED + mypid % (USHRT_MAX - IPPORT_RESERVED);
@@ -1281,13 +1285,21 @@ bool net_timedout(int seq) {
 #ifdef ENABLE_DNS
 static void save_ptr_answer(int at, int ndx, const char* answer) {
   if (RPTR_AT_NDX(at, ndx)) {
-    LOGMSG("T_PTR dup or update at=%d ndx=%d for %s", at, ndx, strlongip(&IP_AT_NDX(at, ndx)));
+#ifdef LOGMOD
+    char str[MAX_ADDRSTRLEN] = {0};
+    LOGMSG("T_PTR dup or update at=%d ndx=%d for %s", at, ndx,
+      inet_ntop(af, &IP_AT_NDX(at, ndx), str, sizeof(str)));
+#endif
     free(RPTR_AT_NDX(at, ndx));
     RPTR_AT_NDX(at, ndx) = NULL;
   }
-  RPTR_AT_NDX(at, ndx) = strnlen(answer, NAMELEN) ? strndup(answer, NAMELEN) :
-    // if no answer, save ip-address in text representation
-    strndup(strlongip(&IP_AT_NDX(at, ndx)), NAMELEN);
+  if (strnlen(answer, NAMELEN)) {
+    RPTR_AT_NDX(at, ndx) = strndup(answer, NAMELEN);
+  } else { // if no answer, save ip-address in text representation
+    char str[MAX_ADDRSTRLEN] = {0};
+    const char *addr = inet_ntop(af, &IP_AT_NDX(at, ndx), str, sizeof(str));
+    RPTR_AT_NDX(at, ndx) =  strndup(addr ? addr : "", NAMELEN);
+  }
   if (!RPTR_AT_NDX(at, ndx))
     WARN("[%d:%d] strndup()", at, ndx);
 }
@@ -1331,31 +1343,26 @@ void net_settings(enum IPV6_ENDIS ipv6) {
 #endif
   if (ipv6 == IPV6_ENABLED) {
 #ifdef ENABLE_IPV6
-      af = AF_INET6;
-      addr_exist = addr6exist;
-      addr_equal = addr6equal;
-      addr_copy  = addr6copy;
-      iphdr_sz = 0;
-      ipicmphdr_sz = sizeof(struct ip6_hdr) + sizeof(struct _icmphdr);
-      sa_addr_offset = offsetof(struct sockaddr_in6, sin6_addr);
-      NET46SETS(sizeof(struct sockaddr_in6), ICMP6_ECHO_REPLY, ICMP6_TIME_EXCEEDED, ICMP6_DST_UNREACH);
+    af = AF_INET6;
+    addr_exist = addr6exist;
+    addr_equal = addr6equal;
+    addr_copy  = addr6copy;
+    iphdr_sz = 0;
+    ipicmphdr_sz = sizeof(struct ip6_hdr) + sizeof(struct _icmphdr);
+    sa_addr_offset = offsetof(struct sockaddr_in6, sin6_addr);
+    NET46SETS(sizeof(struct sockaddr_in6), ICMP6_ECHO_REPLY, ICMP6_TIME_EXCEEDED, ICMP6_DST_UNREACH);
 #endif
   } else { // IPv4 by default
-      af = AF_INET;
-      addr_exist = addr4exist;
-      addr_equal = addr4equal;
-      addr_copy  = addr4copy;
-      iphdr_sz = sizeof(struct _iphdr);
-      ipicmphdr_sz = iphdr_sz + sizeof(struct _icmphdr);
-      sa_addr_offset = offsetof(struct sockaddr_in, sin_addr);
-      NET46SETS(sizeof(struct sockaddr_in), ICMP_ECHOREPLY, ICMP_TIME_EXCEEDED, ICMP_UNREACH);
+    af = AF_INET;
+    addr_exist = addr4exist;
+    addr_equal = addr4equal;
+    addr_copy  = addr4copy;
+    iphdr_sz = sizeof(struct _iphdr);
+    ipicmphdr_sz = iphdr_sz + sizeof(struct _icmphdr);
+    sa_addr_offset = offsetof(struct sockaddr_in, sin_addr);
+    NET46SETS(sizeof(struct sockaddr_in), ICMP_ECHOREPLY, ICMP_TIME_EXCEEDED, ICMP_UNREACH);
   }
   net_set_type(mtrtype);
-}
-
-const char *strlongip(t_ipaddr *ipaddr) {
-  static char addrstr[MAX_ADDRSTRLEN];
-  return inet_ntop(af, ipaddr, addrstr, sizeof(addrstr));
 }
 
 #ifdef WITH_MPLS

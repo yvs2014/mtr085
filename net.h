@@ -52,9 +52,9 @@ enum { CT_UNKN = -1, CT_UNSENT = -2, CT_SEAL = -3 };
 
 extern int af;
 
-extern bool  (*addr_exist)(const void *a); // true if not 0
-extern bool  (*addr_equal)(const void *a, const void *b);
-extern void* (*addr_copy)(void *dst, const void *src);
+extern bool  (*addr_exist)(const void *a) NONNULL(1); // true if not 0
+extern bool  (*addr_equal)(const void *a, const void *b) NONNULL(1, 2);
+extern void* (*addr_copy)(void *dst, const void *src) NONNULL(1, 2);
 
 extern ulong net_queries[];
 extern ulong net_replies[];
@@ -159,13 +159,13 @@ void net_settings(enum IPV6_ENDIS ipv6_enabled);
 bool net_open(void);
 void net_assert(void);
 void net_set_type(int type);
-bool net_set_host(t_ipaddr *ipaddr);
-bool net_set_ifaddr(const char *ifaddr);
+bool net_set_host(const t_ipaddr *ipaddr) NONNULL(1);
+bool net_set_ifaddr(const char *ifaddr) NONNULL(1);
 void net_reset(void);
 void net_close(void);
 int net_wait(void);
-void net_icmp_parse(struct timespec *recv_at);
-void net_tcp_parse(int sock, int seq, int noerr, struct timespec *recv_at);
+void net_icmp_parse(struct timespec *recv_at) NONNULL(1);
+void net_tcp_parse(int sock, int seq, int noerr, struct timespec *recv_at) NONNULL(4);
 bool net_timedout(int seq);
 int net_min(void);
 int net_max(void);
@@ -177,14 +177,13 @@ int net_duplicate(int at, int seq);
 extern bool reset_pattern;
 extern bool reset_pldsize;
 
-const char *strlongip(t_ipaddr *ipaddr);
-bool  addr4exist(const void *a);
-bool  addr4equal(const void *a, const void *b);
-void* addr4copy(void *dst, const void *src);
+bool  addr4exist(const void *a) NONNULL(1);
+bool  addr4equal(const void *a, const void *b) NONNULL(1, 2);
+void* addr4copy(void *dst, const void *src) NONNULL(1, 2);
 #ifdef ENABLE_IPV6
-bool  addr6exist(const void *a);
-bool  addr6equal(const void *a, const void *b);
-void* addr6copy(void *dst, const void *src);
+bool  addr6exist(const void *a) NONNULL(1);
+bool  addr6equal(const void *a, const void *b) NONNULL(1, 2);
+void* addr6copy(void *dst, const void *src) NONNULL(1, 2);
 void  net_setsock6(void);
 #endif
 #ifdef WITH_MPLS
