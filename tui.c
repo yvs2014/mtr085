@@ -329,7 +329,7 @@ static void tui_key_Q(WINDOW *win) { // set QoS
   MOUSE_OFF;
 #if defined(ENABLE_IPV6) && !defined(IPV6_TCLASS)
   if (af == AF_INET6) {
-    mvwprintw(win, 0, 0, "%s", TCLASS6_ERR);
+    mvwaddstr(win, 0, 0, TCLASS6_ERR);
     mvwprintw(win, 1, 0, "-> %s ...", ANYCONT_STR);
     anygetch(win);
   } else
@@ -513,15 +513,19 @@ key_action_t tui_keyaction(void) {
 }
 
 #ifdef WITH_MPLS
-static int printw_mpls(WINDOW *win, const mpls_data_t *m) NONNULL(1, 2);
-static int printw_mpls(WINDOW *win, const mpls_data_t *m) {
-  for (int i = 0; i < m->n; i++) {
-    wprintw(win, "%s", mpls2str(&(m->label[i]), 4));
+static void printw_mpls(WINDOW *win, const mpls_data_t *data) NONNULL(1, 2);
+static void printw_mpls(WINDOW *win, const mpls_data_t *data) {
+  for (int i = 0; i < data->n; i++) {
+    waddstr(win, mpls2str(&data->label[i], 4));
     if (wmove(win, getcury(win) + 1, 0) == ERR)
-      return ERR;
+      break;
   }
-  return OK;
 }
+#define PRINTW_MPLS(win, data) do { \
+  if (run_opts.mpls) printw_mpls((win), (data)); \
+} while (0);
+#else
+#define PRINTW_MPLS(win, data) NOOP
 #endif
 
 static void printw_addr(WINDOW *win, int at, int ndx) NONNULL(1);
@@ -532,7 +536,7 @@ static void printw_addr(WINDOW *win, int at, int ndx) {
     char info[NAMELEN] = {0};
     ipinfo_data_fix(info, sizeof(info), at, ndx);
     if (info[0])
-      wprintw(win, "%s", info);
+      waddstr(win, info);
   }
 #endif
   bool down = !host[at].up;
@@ -598,11 +602,7 @@ static void print_addr_extra(WINDOW *win, int at) { // mpls + multipath
     printw_addr(win, at, ndx);
     if (wmove(win, getcury(win) + 1, 0) == ERR)
       break;
-#ifdef WITH_MPLS
-    if (run_opts.mpls)
-      if (printw_mpls(win, &MPLS_AT_NDX(at, ndx)) == ERR)
-        break;
-#endif
+    PRINTW_MPLS(win, &MPLS_AT_NDX(at, ndx));
   }
 }
 
@@ -618,13 +618,10 @@ static void print_hops(WINDOW *win, int statx) {
       printw_addr(win, at, host[at].current);
       if (print_stat(win, at, y, statx, max) == ERR)
         break;
-#ifdef WITH_MPLS
-      if (run_opts.mpls)
-        printw_mpls(win, &CURRENT_MPLS(at));
-#endif
+      PRINTW_MPLS(win, &CURRENT_MPLS(at));
       print_addr_extra(win, at);
     } else {
-      wprintw(win, "%s", UNKN_ITEM);
+      waddstr(win, UNKN_ITEM);
       if (wmove(win, y + 1, 0) == ERR)
         break;
       if ((at < (max - 1)) && (print_stat(win, at, y, statx, max) == ERR))
@@ -852,7 +849,7 @@ static void display_main_labels(WINDOW *win, int indent) {
       } else if (!custom) {
         const char *sub = i ? PINGS_STR : PACKETS_STR;
         int len = ustrnlen(sub, maxx);
-        mvwprintw(win, 0, mc_fit_posx(pos, len, maxx), "%s", i ? PINGS_STR : PACKETS_STR);
+        mvwaddstr(win, 0, mc_fit_posx(pos, len, maxx), i ? PINGS_STR : PACKETS_STR);
       }
       wmove(win, 1, curx);
     }
@@ -1014,7 +1011,7 @@ static void display_charts(WINDOW *label, WINDOW *work) {
   }
   if (titlelen.chart > 0) {
     int x = (getmaxx(label) - titlelen.chart) / 2;
-    mvwprintw(label, 0, (x > 0) ? x : 0, "%s", chart_title);
+    mvwaddstr(label, 0, (x > 0) ? x : 0, chart_title);
   }
   wrefresh(label);
   //
@@ -1041,11 +1038,11 @@ static int redraw_stat_labels(WINDOW *win, int indent) {
     char info[NAMELEN] = {0};
     ipinfo_head_fix(info, sizeof(info));
     if (info[0])
-      mvwprintw(win, 1, indent, "%s", info);
+      mvwaddstr(win, 1, indent, info);
     indent += ipinfo_width(); // indent: "NN. " + IPINFO
   }
 #endif
-  mvwprintw(win, 1, indent, "%s", HOST_STR);
+  mvwaddstr(win, 1, indent, HOST_STR);
   if (titlelen.stat < 0)
     titlelen.stat = get_stat_title_len();
   indent = getmaxx(win) - (titlelen.stat + 1);
@@ -1093,7 +1090,7 @@ static void display_title(WINDOW *win) {
   }
   if (title && *title) {
     int x = (getmaxx(win) - titlelen.screen) / 2;
-    mvwprintw(win, 0, (x > 0) ? x : 0, "%s", title);
+    mvwaddstr(win, 0, (x > 0) ? x : 0, title);
   }
   wrefresh(win);
 }
@@ -1302,8 +1299,7 @@ void tui_confirm(void) {
   wmove(win, y--, 0); wclrtoeol(win);
   int maxx = getmaxx(win);
   int len = (maxx > 4) ? ustrnlen(ANYQUIT_STR, maxx - 4) + 4 : maxx;
-  mvwprintw(win, y, (maxx - len) / 2, "%s", ANYQUIT_STR);
-  waddstr(win, " ...");
+  mvwprintw(win, y, (maxx - len) / 2, "%s ...", ANYQUIT_STR);
   flushinp();
   anygetch(win);
 }
