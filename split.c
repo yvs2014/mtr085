@@ -56,7 +56,7 @@ static inline void split_multipath(int at) {
 #endif
     { printf("%c%s", DIV_SPLIT, addr); }
 #ifdef WITH_IPINFO
-    if (ipinfo_ready()) {
+    if (IPINFOED) {
       char info[NAMELEN] = {0};
       ipinfo_data_div(info, sizeof(info), at, i, DIV_SPLIT);
       if (info[0])
@@ -90,7 +90,7 @@ void split_redraw(void) {
         if (elem) printf("%c%s", DIV_SPLIT, elem);
       }
 #ifdef WITH_IPINFO
-      if (ipinfo_ready()) {
+      if (IPINFOED) {
         char info[NAMELEN] = {0};
         ipinfo_data_div(info, sizeof(info), at, host[at].current, DIV_SPLIT);
         if (info[0])

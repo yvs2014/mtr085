@@ -92,20 +92,20 @@ enum {
   LINEMAXLEN  = 1024,
 };
 
-enum {NDX_TITLE = 0, NDX_LABEL, NDX_WORK, NDX_STATUS, MAX_AREA_NDX};
+enum {NDX_TOP = 0, NDX_LABEL, NDX_WORK, NDX_STATUS, MAX_AREA_NDX};
 typedef struct {
   WINDOW *win;
   int height; // not in use yet
 } area_s;
 static area_s area[MAX_AREA_NDX] = {
-  [NDX_TITLE]  = {.height =  1},
+  [NDX_TOP]    = {.height =  1},
   [NDX_LABEL]  = {.height =  2},
   [NDX_WORK]   = {.height = -4 /*sum others*/},
   [NDX_STATUS] = {.height =  1},
 };
 
 typedef struct {
-  bool stats, hints;
+  bool top, labels, hints, chart_title;
 } redrawn_s;
 static redrawn_s redrawn; // need redrawing unless true
 
@@ -412,6 +412,11 @@ static tui_key_fn actfn_map[UINT8_MAX] =  {
   ['s'] = tui_key_s, // payload size
 };
 
+static inline void tui_reset_caches(void) {
+  titlelen = (title_len_s){.screen = -1, .stat = -1, .chart = -1};
+  memset(&redrawn, 0, sizeof(redrawn));
+}
+
 static inline void reset_actkey_flags(int ch) {
   switch (ch) {
     case  3 : // ^C
@@ -448,8 +453,7 @@ static inline void reset_actkey_flags(int ch) {
     case 't': // ActionTCP;
     case 'u': // ActionUDP;
     case 'x': // ActionCache;
-      memset(&redrawn, 0, sizeof(redrawn));
-      titlelen.screen = -1;
+      tui_reset_caches();
       break;
     default: break;
   }
@@ -528,22 +532,21 @@ static void printw_mpls(WINDOW *win, const mpls_data_t *data) {
 #define PRINTW_MPLS(win, data) NOOP
 #endif
 
-static void printw_addr(WINDOW *win, int at, int ndx) NONNULL(1);
-static void printw_addr(WINDOW *win, int at, int ndx) {
+static void printw_addr(WINDOW *win, int at, int ndx, attr_t attr) NONNULL(1);
+static void printw_addr(WINDOW *win, int at, int ndx, attr_t attr) {
   t_ipaddr *ipaddr = &IP_AT_NDX(at, ndx);
 #ifdef WITH_IPINFO
-  if (ipinfo_ready()) {
+  if (IPINFOED) {
     char info[NAMELEN] = {0};
     ipinfo_data_fix(info, sizeof(info), at, ndx);
     if (info[0])
       waddstr(win, info);
   }
 #endif
-  bool down = !host[at].up;
-  if (down)
-    wattron(win, A_BOLD);
+  if (attr)
+    wattron(win, attr);
   char str[MAX_ADDRSTRLEN] = {0};
-  const char *addr = inet_ntop(af, ipaddr, str, sizeof(str));
+  const char *addr = inet_ntop(af, ipaddr, str, sizeof(str)); // TODO: add addrstr cache
 #ifdef ENABLE_DNS
   const char *name = dns_ptr_lookup(at, ndx);
   if (name) {
@@ -554,8 +557,8 @@ static void printw_addr(WINDOW *win, int at, int ndx) {
   } else
 #endif
   { if (addr) waddstr(win, addr); }
-  if (down)
-    wattroff(win, A_BOLD);
+  if (attr)
+    wattroff(win, attr);
 }
 
 static void seal_n_bell(int at, int max) {
@@ -591,16 +594,16 @@ static int print_stat(WINDOW *win, int at, int y, int x, int max) { // statistic
   return wmove(win, y + 1, 0);
 }
 
-static void print_addr_extra(WINDOW *win, int at) NONNULL(1);
-static void print_addr_extra(WINDOW *win, int at) { // mpls + multipath
+static inline void print_addr_extra(WINDOW *win, int at, int y) NONNULL(1);
+static inline void print_addr_extra(WINDOW *win, int at, int y) { // mpls + multipath
   for (int ndx = 0; ndx < MAXPATH; ndx++) {  // multipath
     if (ndx == host[at].current)
       continue; // already printed
     if (!addr_exist(&IP_AT_NDX(at, ndx)))
       break;
-    wprintw(win, "    ");
-    printw_addr(win, at, ndx);
-    if (wmove(win, getcury(win) + 1, 0) == ERR)
+    wmove(win, y, AT_FMT_LEN);
+    printw_addr(win, at, ndx, host[at].up ? 0 : A_BOLD);
+    if (wmove(win, y + 1, 0) == ERR)
       break;
     PRINTW_MPLS(win, &MPLS_AT_NDX(at, ndx));
   }
@@ -611,15 +614,13 @@ static void print_hops(WINDOW *win, int statx) {
   int max = net_max();
   for (int at = net_min() + display_offset; at < max; at++) {
     int y = getcury(win);
-    if (wmove(win, y, 0) == ERR)
-      break;
-    wprintw(win, AT_FMT " ", at + 1);
+    mvwprintw(win, y, 0, AT_FMT, at + 1);
     if (addr_exist(&CURRENT_IP(at))) {
-      printw_addr(win, at, host[at].current);
+      printw_addr(win, at, host[at].current, host[at].up ? 0 : A_BOLD);
       if (print_stat(win, at, y, statx, max) == ERR)
         break;
       PRINTW_MPLS(win, &CURRENT_MPLS(at));
-      print_addr_extra(win, at);
+      print_addr_extra(win, at, y + 1);
     } else {
       waddstr(win, UNKN_ITEM);
       if (wmove(win, y + 1, 0) == ERR)
@@ -687,7 +688,7 @@ static inline void dmode_init(double *factors, int num) {
   }
 }
 
-static void mc_init(void) {
+static void chart_maps_init(void) {
   // display mode 2
   dmode_init(factors2, NUM_FACTORS2);
 #ifdef WITH_UNICODE
@@ -765,54 +766,64 @@ static cchar_t* mc_saved_cc(int saved_int) {
 }
 #endif
 
-static void histoaddr(WINDOW *win, int at, int max, int y, int x, int cols) NONNULL(1);
-static void histoaddr(WINDOW *win, int at, int max, int y, int x, int cols) {
-  t_ipaddr *ipaddr = &CURRENT_IP(at);
-  if (addr_exist(ipaddr)) {
-    if (!host[at].up)
-      wattron(win, A_BOLD);
+static inline void histogram_addr(WINDOW *win, int at, t_ipaddr *ip, attr_t attr) NONNULL(1, 3);
+static inline void histogram_addr(WINDOW *win, int at, t_ipaddr *ip, attr_t attr) {
+  if (attr)
+    wattron(win, attr);
 #ifdef WITH_IPINFO
-    if (ipinfo_ready()) {
-      char info[NAMELEN] = {0};
-      ipinfo_data_fix(info, sizeof(info), at, host[at].current);
-      if (info[0])
-        waddstr(win, info);
-    }
+  if (IPINFOED) {
+    char info[NAMELEN] = {0};
+    ipinfo_data_fix(info, sizeof(info), at, host[at].current);
+    if (info[0])
+      waddstr(win, info);
+  }
 #endif
-    char str[MAX_ADDRSTRLEN] = {0};
-    const char *addr = inet_ntop(af, ipaddr, str, sizeof(str));
-    if (!addr) addr = UNKN_ITEM;
+  char str[MAX_ADDRSTRLEN] = {0};
+  const char *addr = inet_ntop(af, ip, str, sizeof(str)); // TODO: add addrstr cache
+  if (!addr) addr = UNKN_ITEM;
 #ifdef ENABLE_DNS
-    const char *name = dns_ptr_lookup(at, host[at].current);
-    waddstr(win, name ? name : addr);
+  const char *name = dns_ptr_lookup(at, host[at].current);
+  waddstr(win, name ? name : addr);
 #else
-    waddstr(win, addr);
+  waddstr(win, addr);
 #endif
-    if (!host[at].up)
-      wattroff(win, A_BOLD);
-    mvwaddstr(win, y, x, " ");
+  if (attr)
+    wattroff(win, attr);
+}
+
+static inline void histogram_char(WINDOW *win, int at, int max, int cols) NONNULL(1);
+static inline void histogram_char(WINDOW *win, int at, int max, int cols) {
 #ifdef WITH_UNICODE
-    if (chart_mode == 3)
-      for (int i = SAVED_PINGS - cols; i < SAVED_PINGS; i++)
-        wadd_wch(win, mc_saved_cc(host[at].saved[i]));
-    else
+  if (chart_mode == 3)
+    for (int i = SAVED_PINGS - cols; i < SAVED_PINGS; i++)
+      wadd_wch(win, mc_saved_cc(host[at].saved[i]));
+  else
 #endif
-      for (int i = SAVED_PINGS - cols; i < SAVED_PINGS; i++)
-        waddch(win, get_saved_ch(host[at].saved[i]));
-    if (run_opts.audible || run_opts.visible)
-      seal_n_bell(at, max);
-  } else waddstr(win, UNKN_ITEM);
+    for (int i = SAVED_PINGS - cols; i < SAVED_PINGS; i++)
+      waddch(win, get_saved_ch(host[at].saved[i]));
+  if (run_opts.audible || run_opts.visible)
+    seal_n_bell(at, max);
+}
+
+static inline void hopchart(WINDOW *win, int at, int max, t_ipaddr *ip, int y, int x, int cols) NONNULL(1, 4);
+static inline void hopchart(WINDOW *win, int at, int max, t_ipaddr *ip, int y, int x, int cols) {
+  histogram_addr(win, at, ip, host[at].up ? 0 : A_BOLD);
+  mvwaddch(win, y, x - 1, ' ');
+  histogram_char(win, at, max, cols);
 }
 
 static void histogram(WINDOW *win, int x, int cols) NONNULL(1);
 static void histogram(WINDOW *win, int x, int cols) {
   int max = net_max();
-  for (int at = net_min() + display_offset; at < max; at++) {
-    int y = getcury(win);
+  for (int y = getcury(win), at = net_min() + display_offset;
+       at < max; y++, at++) {
     if (wmove(win, y, 0) == ERR) break;
-    wprintw(win, AT_FMT " ", at + 1);
-    histoaddr(win, at, max, y, x, cols);
-    if (wmove(win, y + 1, 0) == ERR) break;
+    wprintw(win, AT_FMT, at + 1);
+    t_ipaddr *ipaddr = &CURRENT_IP(at);
+    if (addr_exist(ipaddr))
+      hopchart(win, at, max, ipaddr, y, x, cols);
+    else
+      waddstr(win, UNKN_ITEM);
   }
 }
 
@@ -990,51 +1001,57 @@ static int mc_print_args(char buf[], size_t size) {
 #undef INT_OPT2STR
 #undef BOOL_OPT2STR
 
-static void display_charts(WINDOW *label, WINDOW *work) NONNULL(1, 2);
-static void display_charts(WINDOW *label, WINDOW *work) {
-#define CHART_COLS(mx) (((mx) <= (SAVED_PINGS + dx)) ? ((mx) - dx) : SAVED_PINGS)
-  int dx = HOSTINFOMAX;
-#ifdef WITH_IPINFO
-  if (ipinfo_ready()) dx += ipinfo_width();
-#endif
-  //
-  // title part
-  werase(label);
-  static char chart_title[256];
+#define CHART_COLS ((maxx <= (SAVED_PINGS + indent)) ? (maxx - indent) : SAVED_PINGS)
+//
+static void redraw_chart_title(WINDOW *win, int indent) NONNULL(1);
+static void redraw_chart_title(WINDOW *win, int indent) {
+  werase(win);
+  static char chart_title[256]; // long enough?
   if (titlelen.chart < 0) {
     memset(chart_title, 0, sizeof(chart_title));
-    int maxx = getmaxx(label);
+    int maxx = getmaxx(win);
     int len = snprinte(chart_title, sizeof(chart_title),
-      "%s: %d %s", HISTOGRAM_STR, CHART_COLS(maxx), HCOLS_STR);
+      "%s: %d %s", HISTOGRAM_STR, CHART_COLS, HCOLS_STR);
     if (len >= 0)
-      titlelen.chart = ustrnlen(chart_title, getmaxx(label));
+      titlelen.chart = ustrnlen(chart_title, getmaxx(win));
   }
-  if (titlelen.chart > 0) {
-    int x = (getmaxx(label) - titlelen.chart) / 2;
-    mvwaddstr(label, 0, (x > 0) ? x : 0, chart_title);
-  }
-  wrefresh(label);
-  //
-  // chart part
-  werase(work);
-  if (wmove(work, 0, 0) != ERR) {
-    wattroff(work, A_BOLD);
-    dmode_scale_map();
-    int maxx = getmaxx(work);
-    histogram(work, dx - 2 /* right_pad(1) + 1 */, CHART_COLS(maxx));
-    if (wmove(work, getcury(work) + 1, 0) != ERR)
-      print_scale(work);
-  }
-  wrefresh(work);
+  if (titlelen.chart > 0)
+    mvwaddstr(win, 1, indent, chart_title);
+  wrefresh(win);
+}
+//
+static void redraw_histogram(WINDOW *win, int indent) NONNULL(1);
+static void redraw_histogram(WINDOW *win, int indent) {
+  werase(win);
+  dmode_scale_map();
+  int maxx = getmaxx(win);
+  histogram(win, indent, CHART_COLS);
+  if (wmove(win, getcury(win) + 1, 0) != ERR)
+    print_scale(win);
+  wrefresh(win);
+}
 #undef CHART_COLS
+
+static void redraw_charts(WINDOW *label, WINDOW *work) NONNULL(1, 2);
+static void redraw_charts(WINDOW *label, WINDOW *work) {
+#define CHART_COLS(mx) (((mx) <= (SAVED_PINGS + dx)) ? ((mx) - dx) : SAVED_PINGS)
+  int dx = HOSTINFOMAX + 1;
+#ifdef WITH_IPINFO
+  if (IPINFOED) dx += ipinfo_width();
+#endif
+  if (!redrawn.chart_title) {
+    redraw_chart_title(label, dx);
+    redrawn.chart_title = true;
+  }
+  redraw_histogram(work, dx);
 }
 
-static int redraw_stat_labels(WINDOW *win, int indent) NONNULL(1);
-static int redraw_stat_labels(WINDOW *win, int indent) {
+static int redraw_labels(WINDOW *win, int indent) NONNULL(1);
+static int redraw_labels(WINDOW *win, int indent) {
   werase(win);
   wattron(win, A_BOLD);
 #ifdef WITH_IPINFO
-  if (ipinfo_ready()) {
+  if (IPINFOED) {
     char info[NAMELEN] = {0};
     ipinfo_head_fix(info, sizeof(info));
     if (info[0])
@@ -1053,15 +1070,8 @@ static int redraw_stat_labels(WINDOW *win, int indent) {
   return indent;
 }
 
-static void display_stat_area(WINDOW *win, int stat_indent) NONNULL(1);
-static void display_stat_area(WINDOW *win, int stat_indent) {
-  werase(win);
-  print_hops(win, stat_indent);
-  wrefresh(win);
-}
-
-static void display_title(WINDOW *win) NONNULL(1);
-static void display_title(WINDOW *win) {
+static void redraw_top(WINDOW *win) NONNULL(1);
+static void redraw_top(WINDOW *win) {
   static char title_cache[LINEMAXLEN];
   werase(win);
   if (titlelen.screen < 0) { // generate title and cache it
@@ -1107,51 +1117,46 @@ static void display_title(WINDOW *win) {
   (crd).y1 = dy + getcury(win);                      \
 } while (0)
 
-static void display_status(WINDOW *win) NONNULL(1);
-static void display_status(WINDOW *win) {
+static inline void redraw_hints(WINDOW *win) NONNULL(1);
+static inline void redraw_hints(WINDOW *win) {
+  werase(win);
+  wchgat(win, -1, A_REVERSE, 0, NULL);
+  wmove(win, 0, 1);
+#ifdef WITH_MOUSE
+  int dx = getbegx(win), dy = getbegy(win);
+  PRINT_MENUKEEP('H', "%s ", _HINTS_STR, crd.hint);
+  PRINT_MENUKEEP('Q', "%s" , _QUIT_STR , crd.quit);
+#else
+  PRINT_MENUITEM('H', "%s ", _HINTS_STR);
+  PRINT_MENUITEM('Q', "%s", _QUIT_STR);
+#endif
+}
+
+static inline void redraw_datetime(WINDOW *win) NONNULL(1);
+static inline void redraw_datetime(WINDOW *win) {
+  char dt_str[128] = {0};
+  const char *date = datetime(time(NULL), dt_str, sizeof(dt_str));
+  if (!date) return;
+  static int menu_dt_len;
+  if (!menu_dt_len) // cached dt length
+    menu_dt_len = ustrnlen(dt_space, sizeof(dt_space)) + ustrnlen(dt_str, sizeof(dt_str)) + 1;
+  // right-aligned
+  mvwaddstr(win, 0, getmaxx(win) - menu_dt_len, dt_space);
+  waddstr(win, date);
+}
+
+static inline void display_status(WINDOW *win) NONNULL(1);
+static inline void display_status(WINDOW *win) {
   wattron(win, A_REVERSE);
   // hints
   if (!redrawn.hints) {
-    werase(win);
-    wchgat(win, -1, A_REVERSE, 0, NULL);
-    wmove(win, 0, 1);
-#ifdef WITH_MOUSE
-    { int dx = getbegx(win), dy = getbegy(win);
-      PRINT_MENUKEEP('H', "%s ", _HINTS_STR, crd.hint);
-      PRINT_MENUKEEP('Q', "%s" , _QUIT_STR , crd.quit); }
-#else
-    PRINT_MENUITEM('H', "%s ", _HINTS_STR);
-    PRINT_MENUITEM('Q', "%s", _QUIT_STR);
-#endif
+    redraw_hints(win);
     redrawn.hints = true;
   }
   // datetime
-  char str[128] = {0};
-  const char *date = datetime(time(NULL), str, sizeof(str));
-  if (date && date[0]) { // right-aligned
-    static int menu_dt_len;
-    if (!menu_dt_len) // cached dt length
-      menu_dt_len = ustrnlen(dt_space, sizeof(dt_space)) + ustrnlen(str, sizeof(str)) + 1;
-    mvwaddstr(win, 0, getmaxx(win) - menu_dt_len, dt_space);
-    waddstr(win, date);
-  }
+  redraw_datetime(win);
   wrefresh(win);
   wattroff(win, A_REVERSE);
-}
-
-static inline void display_mainbody(WINDOW *label, WINDOW *work) NONNULL(1, 2);
-static inline void display_mainbody(WINDOW *label, WINDOW *work) {
-  if (chart_mode)
-    display_charts(label, work);
-  else {
-    static int stat_indent;
-    if (!(stat_indent && redrawn.stats)) {
-      stat_indent = redraw_stat_labels(label, INDENT_NUMB);
-      if (!redrawn.stats)
-        redrawn.stats = true;
-    }
-    display_stat_area(work, stat_indent);
-  }
 }
 
 static void create_area(uint ndx) {
@@ -1183,40 +1188,59 @@ static inline bool areas_ready(void) {
 //    if (!area[i].win) return false;
 //  return true;
   return
-    area[NDX_TITLE].win && area[NDX_LABEL].win && area[NDX_WORK].win && area[NDX_STATUS].win;
+    area[NDX_TOP].win && area[NDX_LABEL].win && area[NDX_WORK].win && area[NDX_STATUS].win;
 }
 
 static bool init_areas(void) {
   static int my_cols, my_lines;
-  if ((my_cols == COLS) && (my_lines == LINES)
-      && areas_ready() /*freed at reset*/)
+  if (areas_ready() && (my_cols == COLS) && (my_lines == LINES))
     return true;
   my_cols  = COLS;
   my_lines = LINES;
-  // reset caches
-  titlelen = (title_len_s){.screen = -1, .stat = -1, .chart = -1};
-  memset(&redrawn, 0, sizeof(redrawn));
+  tui_reset_caches();
   // create areas
   free_areas();
-  create_area(MAX_AREA_NDX);
-  create_area(NDX_TITLE);
+  create_area(MAX_AREA_NDX); // reset `y' position
+  create_area(NDX_TOP);
   create_area(NDX_LABEL);
   create_area(NDX_WORK);
   create_area(NDX_STATUS);
   return areas_ready();
 }
 
+static inline void redraw_areas(void) {
+  // title & menu
+  if (!redrawn.top) {
+    redraw_top(area[NDX_TOP].win);
+    redrawn.top = true;
+  }
+  // main area
+  { WINDOW *work = area[NDX_WORK].win;
+    if (chart_mode)
+      redraw_charts(area[NDX_LABEL].win, work);
+    else {
+      static int stat_indent;
+      if (!(stat_indent && redrawn.labels)) {
+        stat_indent = redraw_labels(area[NDX_LABEL].win, INDENT_NUMB);
+        if (!redrawn.labels)
+          redrawn.labels = true;
+      }
+      werase(work);
+      print_hops(work, stat_indent);
+      wrefresh(work);
+    }
+  }
+  // status line
+  display_status(area[NDX_STATUS].win);
+}
+
 void tui_redraw(void) {
-  if (!init_areas()) {
+  if (init_areas())
+    redraw_areas();
+  else {
     erase();
     printw("TUI init areas: failed");
     refresh();
-    return;
-  }
-  if (areas_ready()) {
-    display_title(area[NDX_TITLE].win);
-    display_mainbody(area[NDX_LABEL].win, area[NDX_WORK].win);
-    display_status(area[NDX_STATUS].win);
   }
 }
 
@@ -1228,6 +1252,7 @@ bool tui_open(void) {
   }
   raw();
   noecho();
+  curs_set(0);
   keypad(stdscr, TRUE);
   if (!init_areas()) {
     erase(); refresh();
@@ -1281,11 +1306,10 @@ bool tui_open(void) {
     snprinte(screen_title, sizeof(screen_title), "%s %s %s", PACKAGE_NAME, mtr_args, dsthost);
   else
     snprinte(screen_title, sizeof(screen_title), "%s %s", PACKAGE_NAME, dsthost);
-  screen_title_len = screen_title[0] ? ustrnlen(screen_title, getmaxx(area[NDX_TITLE].win)) : 0;
+  screen_title_len = screen_title[0] ? ustrnlen(screen_title, getmaxx(area[NDX_TOP].win)) : 0;
   //
-  mc_init();
+  chart_maps_init();
   tui_redraw();
-  curs_set(0);
   return areas_ready();
 }
 

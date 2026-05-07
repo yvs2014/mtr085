@@ -521,7 +521,7 @@ bool poll_loop(void) {
       } else {
         EACHPASS;
 #ifdef WITH_IPINFO
-        if (ipinfo_ready())
+        if (IPINFOED)
           proceed_ipinfo();
 #endif
         if (!svc(&lasttime, &interval, &timeout)) {

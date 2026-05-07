@@ -68,7 +68,7 @@ uint ipinfo_queries[3];  // number of queries (sum, http, whois)
 uint ipinfo_replies[3];  // number of replies (sum, http, whois)
 //
 
-static bool ii_ready;
+bool ipinfo_ready;
 static int origin_no;     // set once at init
 static int itemname_max;  // set once at init
 
@@ -103,6 +103,7 @@ typedef struct {
 #define ORIG_WIDTH(num) (origins[origin_no].width[num])
 
 static int ipinfo_no[MAX_TXT_ITEMS] = {-1}; // max is #8 getcitydetails.geobytes.com
+static int ipinfo_width_cached = -1;
 
 enum { IPAPI_STATUS_NDX = 1, IPAPI_QUERYIP_NDX = 14};
 
@@ -220,6 +221,8 @@ static void adjust_width(char** record) {
     if (ORIG_WIDTH(i) < width)
       ORIG_WIDTH(i) = width;
   }
+  if (ipinfo_width_cached >= 0) // reset width-cache
+    ipinfo_width_cached = -1;
 }
 
 static void save_fields(int at, int ndx, char **record) {
@@ -437,6 +440,7 @@ static void parse_whois(void *txt, atndx_t id) {
 
 
 static void close_ipitseq(int seq) {
+  if (!ipitseq) return;
   int sock = ipitseq[seq].sock;
   if (sock >= 0) {
     if (ipitseq[seq].slot >= 0)
@@ -643,12 +647,14 @@ static char *get_ipinfo(int at, int ndx, int item_no) {
 }
 
 int ipinfo_width(void) {
-  int width = 0;
-  for (int i = 0; (i < MAX_TXT_ITEMS)
-      && (ipinfo_no[i] >= 0) && (ipinfo_no[i] < itemname_max)
-      && (width < NAMELEN); i++)
-    width += ORIG_WIDTH(ipinfo_no[i]) + 1;
-  return width;
+  if (ipinfo_width_cached < 0) {
+    int w = 0;
+    for (int i = 0; (i < MAX_TXT_ITEMS) && (w < NAMELEN) &&
+      (ipinfo_no[i] >= 0) && (ipinfo_no[i] < itemname_max); i++, w++)
+        w += ORIG_WIDTH(ipinfo_no[i]);
+    ipinfo_width_cached = w;
+  }
+  return ipinfo_width_cached;
 }
 
 // 'div'-separated output
@@ -712,47 +718,46 @@ void ipinfo_data_div(char buff[], size_t size, int at, int ndx, char div) {
 inline void ipinfo_data_fix(char buff[], size_t size, int at, int ndx) {
   ipinfo_data_div(buff, size, at, ndx, 0); }
 
-bool ipinfo_ready(void) { return (run_opts.lookup && ii_ready); }
-
 static bool alloc_ipitseq(void) {
-  size_t size = sizeof(ipitseq_t) * MAXHOST * MAXPATH;
-  ipitseq = malloc(size);
   if (!ipitseq) {
-    WARN("tcpseq malloc(%zd)", size);
-    return false;
+    size_t size = sizeof(ipitseq_t) * MAXHOST * MAXPATH;
+    ipitseq = malloc(size);
+    if (ipitseq) {
+      memset(ipitseq, -1, size);
+      LOGMSG("allocated %zd bytes for tcp-sockets", size);
+    } else
+      WARN("tcpseq malloc(%zd)", size);
   }
-  memset(ipitseq, -1, size);
-  LOGMSG("allocated %zd bytes for tcp-sockets", size);
-  return true;
+  return ipitseq;
 }
 
 static void ipinfo_open(void) {
-  if (ii_ready)
-    return;
-  ii_ready = true;
-  if (ORIG_TYPE != OT_DNS) { // i.e. tcp (http or whois)
-    if (!ipitseq && !alloc_ipitseq())
-      ii_ready = false;
-  } else
+  if (!ipinfo_ready) {
+    ipinfo_ready = (ORIG_TYPE == OT_DNS) ?
 #ifdef ENABLE_DNS
-    if (!dns_open())
+      dns_open()
+#else
+      true
 #endif
-    ii_ready = false;
+      : alloc_ipitseq(); // http or whois
+//
 #ifdef ENABLE_DNS
-  dns_txt_handler = save_txt_answer; // handler is used in ipinfo only
+    if (!dns_txt_handler) // use-note: only in ipinfo so far
+      dns_txt_handler = save_txt_answer;
 #endif
-  LOGMSG("%s", ii_ready ? "ok" : "failed");
+    LOGMSG("%s", ipinfo_ready ? "ok" : "failed");
+  }
 }
 
 void ipinfo_close(void) {
-  if (ii_ready) {
+  if (ipinfo_ready) {
     if (ipitseq) {
       for (int i = 0; i < MAXHOST * MAXPATH; i++)
         close_ipitseq(i);
       free(ipitseq);
       LOGMSG("%s", "free tcp-sockets memory");
     }
-    ii_ready = false;
+    ipinfo_ready = false;
     LOGMSG("%s", "ok");
   }
 #ifdef ENABLE_DNS
@@ -814,6 +819,7 @@ bool ipinfo_init(const char *arg) {
     ipinfo_no[i] = -1;
   if (ipinfo_no[0] < 0)
     ipinfo_no[0] = 0;
+  ipinfo_width_cached = -1;
   //
   free(args[0]);
   //
@@ -834,16 +840,16 @@ bool ipinfo_init(const char *arg) {
 
 bool ipinfo_action(int action) {
   if (ipinfo_no[0] < 0) { // not at start, set default
-    if (!ipinfo_init(ASLOOKUP_DEFAULT))
+    if (!ipinfo_init(ASLOOKUP))
       return false;
   };
-  if (!ii_ready)
-    ipinfo_open();
-  if (!ii_ready)
+  ipinfo_open();
+  if (!ipinfo_ready)
     return false;
   switch (action) {
     case ActionAS: // `l'
       run_opts.lookup = !run_opts.lookup;
+      ipinfo_width_cached = -1;
       break;
     case ActionII: // `L'
       run_opts.lookup = true;
@@ -854,6 +860,7 @@ bool ipinfo_action(int action) {
         if (ipinfo_no[i] == itemname_max)
           run_opts.lookup = false;
       }
+      ipinfo_width_cached = -1;
       break;
     case ActionNone: // first time only
       ini_opts.lookup = true;
@@ -868,7 +875,7 @@ static void query_iiaddr(int at, int ndx) {
 }
 
 void query_ipinfo(void) {
-  if (ii_ready) {
+  if (ipinfo_ready) {
     int max = net_max();
     for (int at = net_min(); at < max; at++) {
       if (addr_exist(&CURRENT_IP(at))) {

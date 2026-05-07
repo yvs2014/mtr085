@@ -50,7 +50,7 @@
 #endif
 
 #ifndef GITREV
-#define GITREV "275"
+#define GITREV "276"
 #endif
 
 #ifndef HAVE_UINT
@@ -153,7 +153,8 @@ typedef enum {
 #define MICRO 1000000
 #define NANO  1000000000
 #define UNKN_ITEM "???"
-#define AT_FMT "%2d."
+#define AT_FMT "%2d. "
+#define AT_FMT_LEN 4
 #define DT_FMT_UTF8 "%c"
 #define DT_FMT_ASCII "%a, %d-%b-%Y %X %z"
 #define DT_SPACE_UTF8  "│ "

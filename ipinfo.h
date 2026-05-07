@@ -24,11 +24,13 @@
 
 #include "common.h"
 
+#define ASLOOKUP "2,2" // ripe whois
+#define IPINFOED (run_opts.lookup && ipinfo_ready)
+
 bool ipinfo_init(const char *arg);
 void ipinfo_close(void);
 bool ipinfo_action(int action); // open() if necessary
 void ipinfo_parse(int sock, int seq);
-bool ipinfo_ready(void);
 int  ipinfo_width(void);
 bool ipinfo_timedout(int seq);
 void ipinfo_seq_ready(int seq);
@@ -40,7 +42,7 @@ void ipinfo_data_div(char buff[], size_t size, int at, int ndx, char div) NONNUL
 
 void query_ipinfo(void);
 
-#define ASLOOKUP_DEFAULT   "2,2" // ripe whois
+extern bool ipinfo_ready;
 extern bool ipinfo_tcpmode;
 extern uint ipinfo_queries[];
 extern uint ipinfo_replies[];

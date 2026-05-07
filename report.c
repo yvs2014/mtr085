@@ -260,13 +260,13 @@ void report_close(bool next, bool with_header) {
   int hostlen = longest_hopname(ustrnlen(HOST_STR, MAXDNAME)) + 1;
   int infolen =
 #ifdef WITH_IPINFO
-    ipinfo_ready() ? ipinfo_width() :
+    IPINFOED ? ipinfo_width() :
 #endif
     0;
   report_print_header(hostlen, infolen);
   int max = net_max();
   for (int at = net_min(); at < max; at++) {
-    report_print_body(at, AT_FMT " ", hostlen, infolen);
+    report_print_body(at, AT_FMT, hostlen, infolen);
     report_print_rest(at, hostlen, infolen); // multipath, mpls, etc.
   }
   if (tgterr_txt[0])
@@ -302,7 +302,7 @@ void xml_close(void) {
     printf("%s", "\">\n");
     foreach_stat(at, xml_statline, 0);
 #ifdef WITH_IPINFO
-    if (ipinfo_ready()) {
+    if (IPINFOED) {
       char info[NAMELEN] = {0};
       ipinfo_data_div(info, sizeof(info), at, host[at].current, DIV_XML);
       if (info[0])
@@ -361,7 +361,7 @@ void json_close(bool next) {
       DIV_JSON, _(ACTIVE_STR), _(host[at].up ? YES_STR : NO_STR));
     foreach_stat(at, json_statline, 0);
 #ifdef WITH_IPINFO
-    if (ipinfo_ready()) {
+    if (IPINFOED) {
       char info[NAMELEN] = {0};
       ipinfo_data_div(info, sizeof(info), at, host[at].current, DIV_JSON);
       if (info[0])
@@ -419,7 +419,7 @@ void toon_close(void) {
   printf("{\"%s\"%c\"%s\"%c\"%s\"", _(HOST_STR), DIV_TOON, _(HOP_STR), DIV_TOON, _(ACTIVE_STR));
   foreach_stat(0, toon_headline, 0);
 #ifdef WITH_IPINFO
-  if (ipinfo_ready()) {
+  if (IPINFOED) {
     char info[NAMELEN] = {0};
     ipinfo_head_div(info, sizeof(info), DIV_TOON);
     if (info[0])
@@ -434,7 +434,7 @@ void toon_close(void) {
       _(host[at].up ? YES_STR : NO_STR) /*ACTIVE_STR*/);
     foreach_stat(at, toon_statline, 0);
 #ifdef WITH_IPINFO
-    if (ipinfo_ready()) {
+    if (IPINFOED) {
       char info[NAMELEN] = {0};
       ipinfo_data_div(info, sizeof(info), at, host[at].current, DIV_TOON);
       if (info[0])
@@ -480,7 +480,7 @@ static inline void csv_body(int at) {
   //
   foreach_stat(at, csv_bodyline, DIV_CSV);
 #ifdef WITH_IPINFO
-  if (ipinfo_ready()) {
+  if (IPINFOED) {
     char info[NAMELEN] = {0};
     ipinfo_data_div(info, sizeof(info), at, host[at].current, DIV_CSV);
     if (info[0])
@@ -496,7 +496,7 @@ void csv_close(bool next) {
   printf("%s%c%s", HOP_STR, DIV_CSV, HOST_STR);
   foreach_stat(0, csv_headline, 0);
 #ifdef WITH_IPINFO
-  if (ipinfo_ready()) {
+  if (IPINFOED) {
     char info[NAMELEN] = {0};
     ipinfo_head_div(info, sizeof(info), DIV_CSV);
     if (info[0])

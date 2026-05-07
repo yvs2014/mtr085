@@ -774,7 +774,7 @@ static void short_set(char opt, const char *progname) {
         ini_opts.ipinfo = true;
       } else
         ini_opts.asn    = true;
-      if (!ipinfo_init(extra ? optarg : ASLOOKUP_DEFAULT))
+      if (!ipinfo_init(extra ? optarg : ASLOOKUP))
         QEXIT(EXIT_FAILURE);
       if (!ipinfo_action(ActionNone)) // fail to init
         QEXIT(EXIT_FAILURE);
