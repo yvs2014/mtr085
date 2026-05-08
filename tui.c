@@ -368,7 +368,7 @@ static void tui_key_s(WINDOW *win) { // set payload size
 }
 
 // map: char to action
-static key_action_t action_map[UINT8_MAX] =  {
+static key_action_t tui_action_map[UINT8_MAX] =  {
   ['+'] = ActionLineDown,
   ['-'] = ActionLineUp,
   ['d'] = ActionDisplay,
@@ -396,8 +396,8 @@ static key_action_t action_map[UINT8_MAX] =  {
 
 typedef void (*tui_key_fn)(WINDOW *win);
 
-// map: local actions
-static tui_key_fn actfn_map[UINT8_MAX] =  {
+// map: TUI local actions
+static tui_key_fn tui_actfn_map[UINT8_MAX] =  {
   ['?'] = tui_key_h,
   ['h'] = tui_key_h, // help
   ['b'] = tui_key_b, // bit pattern
@@ -493,11 +493,11 @@ key_action_t tui_keyaction(void) {
   //
   key_action_t action = ActionNone /*0*/;
   if (ch < UINT8_MAX) { // 8bit char
-    tui_key_fn fn = actfn_map[ch];
+    tui_key_fn fn = tui_actfn_map[ch];
     if (fn) // handle it here
       fn(fn == tui_key_h ? stdscr : win);
     else    // or somewhere else
-      action = action_map[ch];
+      action = tui_action_map[ch];
   } else switch (ch) {  // more than 8 bits
     case KEY_UP:
       action = ActionLineDown;
