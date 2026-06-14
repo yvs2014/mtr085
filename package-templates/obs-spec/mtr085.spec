@@ -22,7 +22,11 @@ BuildRequires: libcap-progs
 %endif
 %endif
 %else
+%if 0%{?mageia} || 0%{?is_mageia}
+BuildRequires: locales-en, libncursesw-devel
+%else
 BuildRequires: glibc-langpack-en
+%endif
 %endif
 Conflicts: mtr, mtr-gtk
 
