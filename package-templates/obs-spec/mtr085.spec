@@ -11,7 +11,8 @@ URL:        https://github.com/yvs2014/%{name}
 Source0:    %{name}-%{version}.tar.gz
 
 Requires: ncurses
-BuildRequires: meson, git, sed, pkgconf, gettext-runtime, ncurses-devel, libcap-devel
+BuildRequires: meson, git, sed, pkgconf, ncurses-devel, libcap-devel
+BuildRequires: (gettext-runtime or gettext)
 BuildRequires: (gcc or clang)
 %if 0%{?is_opensuse}
 BuildRequires: libcap-progs
