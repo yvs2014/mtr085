@@ -485,7 +485,7 @@ static int create_tcpsock(int seq) {
     .ai_protocol = IPPROTO_TCP };
   int ecode = getaddrinfo(ORIG_HOST, srv, &hints, &rp);
   if (ecode || !rp)
-    LOG_RE(-1, "getaddrinfo(%s): %s", ORIG_HOST, gai_strerror(ecode));
+    LOGRET_RC(-1, "getaddrinfo(%s): %s", ORIG_HOST, gai_strerror(ecode));
   int rc = -1;
   int sock = socket(rp->ai_family, rp->ai_socktype, rp->ai_protocol);
   if (sock < 0) {

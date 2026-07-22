@@ -170,11 +170,11 @@ struct PACKIT icmpext_object { // RFC4884
 
 #define CLOSE(fd) if ((fd) >= 0) { close(fd); (fd) = -1; /*summ*/ sum_sock[1]++; }
 
-#define NET_FAIL_WARN(fmt, ...) do {                  \
-  WARNX(fmt ": %s", __VA_ARGS__, tgterr_txt);         \
-  snprinte(logerr_txt, sizeof(logerr_txt),            \
-    fmt ": %s", __VA_ARGS__, tgterr_txt);             \
-  LOG_RE(false, fmt ": %s", __VA_ARGS__, tgterr_txt); \
+#define NET_FAIL_WARN(fmt, ...) do {                     \
+  WARNX(fmt ": %s", __VA_ARGS__, tgterr_txt);            \
+  snprinte(logerr_txt, sizeof(logerr_txt),               \
+    fmt ": %s", __VA_ARGS__, tgterr_txt);                \
+  LOGRET_RC(false, fmt ": %s", __VA_ARGS__, tgterr_txt); \
 } while (0)
 
 #define FAIL_POSTPONE(rcode, rvalue) do  { \
@@ -990,7 +990,7 @@ int net_send_batch(void) {
           ping = false;
     if (ping && !( (mtrtype == IPPROTO_TCP) ?
         net_send_tcp(batch_at) : net_send_icmp_udp(batch_at) ))
-      LOG_RE(-1, "%s", "failed");
+      LOGRET_RC(-1, "%s", "failed");
   }
 
   { // Calculate rc for caller

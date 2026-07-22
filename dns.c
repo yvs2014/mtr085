@@ -45,13 +45,6 @@
 #include "nls.h"
 #include "aux.h"
 
-#ifndef MAXNS
-#define MAXNS 3
-#endif
-#ifndef PACKETSZ
-#define PACKETSZ 512
-#endif
-
 #ifdef ENABLE_IPV6
 #if defined(__GLIBC__) || defined(__linux__)
 #define NSADDRS6(i) (myres._u._ext.nsaddrs[i])
@@ -119,10 +112,9 @@ uint dns_replies[3];     // number of replies (sum, ptr, txt)
 t_sockaddr *custom_res;  // -N option
 
 // external callbacks for T_PTR and T_TXT replies
-//   first one is used by net-module
-//   and second one - by ipinfo-module
-void (*dns_ptr_handler)(int at, int ndx, const char* answer);
-void (*dns_txt_handler)(int at, int ndx, const char* answer);
+//   first one by net-module
+//   second by ipinfo-module
+dns_handler_fn dns_ptr_handler, dns_txt_handler;
 //
 
 static bool dns_ready;
@@ -295,13 +287,13 @@ char* ip2arpa(const t_ipaddr *ipaddr, const char *suff4, const char *suff6) {
   LOGMSG("[%d:%d type=%d id=%d] err=%d: %s", at, ndx, type, hp->id, errno, strerror(errno)); \
 }
 int dns_send_query(int at, int ndx, const char *qstr, int type) {
-  static uint8_t req_buf[PACKETSZ];
+  static uint8_t req_buf[NS_PACKETSZ];
   if (!dns_ready)
     return -1;
   int len = MYRES_QUERY(myres, QUERY, qstr, C_IN, type, NULL, 0, NULL, req_buf, sizeof(req_buf));
   if (len < 0) {
     WARN("[%d:%d type=%d]", at, ndx, type);
-    LOG_RE(-1, "[%d:%d type=%d] failed", at, ndx, type);
+    LOGRET_RC(-1, "[%d:%d type=%d] failed", at, ndx, type);
   }
 
   HEADER *hp = (HEADER*)req_buf;
@@ -360,7 +352,7 @@ static atndx_t *get_qatn(const char* q, int at, int ndx) {
   };
   int qmax = ARRAY_LEN(query); // 1 or 2
   for (int t = 0; t < qmax; t++)
-    if (query[t] && !strncasecmp(query[t], q, MAXDNAME)) {
+    if (query[t] && !strncasecmp(query[t], q, NS_MAXDNAME)) {
       static atndx_t qatn;
       qatn = (atndx_t){.at = at, .ndx = ndx, .type = t}; // type: 0 - t_ptr, 1 - t_txt
       return &qatn;
@@ -382,148 +374,167 @@ static atndx_t *find_query(const char* q, uint16_t hint) {
   return NULL;     // not found
 }
 
-static atndx_t *expand_query(const uint8_t *packet, ssize_t psize, const uint8_t *dn, char *answer, int asize, uint16_t id,
-	uint *datalen) NONNULL(1, 3, 4);
-static atndx_t *expand_query(const uint8_t *packet, ssize_t psize, const uint8_t *dn, char *answer, int asize, uint16_t id,
-	uint *datalen) {
-  int rc = dn_expand(packet, packet + psize, dn, answer, asize);
+static atndx_t *expand_query(const uint8_t *data, size_t len, size_t *offset, char *answer, int asize, uint16_t id) NONNULL(1, 3, 4);
+static atndx_t *expand_query(const uint8_t *data, size_t len, size_t *offset, char *answer, int asize, uint16_t id) {
+  int rc = dn_expand(data, data + len, data + *offset, answer, asize);
   if (rc < 0)
-    LOG_RE(NULL, "dn_expand() %s", "failed while expanding query");
-  if (datalen) *datalen = rc; // keep it
+    LOGRET_RC(NULL, "dn_expand() %s", "failed while expanding query");
+  *offset += rc; // shift cursor behind name
   atndx_t *an = find_query(answer, id); // id as a hint
   if (!an)
     LOGMSG("Unknown response with id=%u q=%s", id, answer);
   return an;
 }
 
-
-static void dns_parse_reply(uint8_t *buf, ssize_t len) {
-  if (len < (int)sizeof(HEADER))
-    LOGRET("Packet: %s", "too short");
-  if (len == (int)sizeof(HEADER))
-    LOGRET("Packet: %s", "no payload");
-  HEADER *hp = (HEADER*)buf;
-
-  LOGMSG("got %zd bytes, id=%u at=%u ndx=%u", len, hp->id, ID2AT(hp->id), ID2NDX(hp->id));
-  dns_replies[0]++; /*summ*/
-
-  hp->qdcount = ntohs(hp->qdcount);
-  hp->ancount = ntohs(hp->ancount);
-  hp->nscount = ntohs(hp->nscount);
-  hp->arcount = ntohs(hp->arcount);
-//  LOGMSG("qd:%u an:%u ns:%u ar:%u", hp->qdcount, hp->ancount, hp->nscount, hp->arcount);
-  if (hp->tc)     // truncated packet
-    LOGRET("Packet: %s", "truncated");
-  if (!hp->qr)    // not a reply
-    LOGRET("Packet: %s", "not a reply");
-  if (hp->opcode) // non-standard query
-    LOGRET("Packet: %s", "invalid opcode");
-  uint8_t *eob = buf + len;
-  uint8_t *c = buf + sizeof(HEADER);
-
-  char answer[MAXDNAME] = {0};
-  if (hp->rcode != NOERROR) {
-    if (hp->rcode == NXDOMAIN) {
-      LOGMSG("'No such name' with id=%d", hp->id);
-      atndx_t *an = expand_query(buf, len, c, answer, sizeof(answer) - 1, hp->id, NULL);
-      if (an) {
-        answer[0] = 0;
-        if      ((an->type == 0) && dns_ptr_handler)
-          dns_ptr_handler(an->at, an->ndx, answer);
-#ifdef WITH_IPINFO
-        else if ((an->type == 1) && dns_txt_handler)
-          dns_txt_handler(an->at, an->ndx, answer);
-#endif
-        /*summ*/ { if (an->type == 0) dns_replies[1]++; else if (an->type == 1) dns_replies[2]++; }
-      }
-    } else
-      LOGRET("Response error %d", hp->rcode);
-    return;
-  }
-
-  if (!hp->ancount)
-    LOGRET("Reply: %s", "neither error nor answer");
-  if (hp->qdcount != 1)
-    LOGRET("Reply: %d queries (must be 1)", hp->qdcount);
-  if (c > eob)
-    LOGRET("Reply: %s", "too short");
-
-  memset(answer, 0, sizeof(answer));
-  { uint datalen = 0;
-    if (!expand_query(buf, len, c, answer, sizeof(answer) - 1, hp->id, &datalen))
-      return;
-    c += datalen; }
-  LOGMSG("Response for %s", answer);
-
-  if ((c + 4) > eob)
-    LOGRET("%s", "Query resource record truncated");
-
-  { uint type = 0; GETSHORT(type, c);
-    switch (type) {
-      case T_PTR: /*summ*/ dns_replies[1]++; break;
-#ifdef WITH_IPINFO
-      case T_TXT: /*summ*/ dns_replies[2]++; break;
-#endif
-      default: LOGRET("Unknown query type %u in reply", type);
-    }
-  }
-
-  c += INT16SZ; // skip class
-
-  for (int i = hp->ancount + hp->nscount + hp->arcount; i; i--) {
-    if (c > eob)
-      LOGRET("%s", "Packet does not contain all specified records");
-    memset(answer, 0, sizeof(answer));
-    uint datalen = 0;
-    atndx_t *an = expand_query(buf, len, c, answer, sizeof(answer) - 1, hp->id, &datalen);
-    c += datalen;
-    if ((c + 10) > eob)
-      LOGRET("%s", "Truncated record");
-    uint type = 0;
-    GETSHORT(type, c);
-    c += INT16SZ; // skip class
-    c += INT32SZ; // skip ttl
-    uint size = 0;
-    GETSHORT(size, c);
-    if (!size)
-      LOGRET("%s", "Empty rdata");
-    if ((c + size) > eob)
-      LOGRET("%s", "Specified rdata length exceeds packet size");
-
-    if (an && ((type == T_PTR) || (type == T_TXT))) { // answer to us
-      memset(answer, 0, sizeof(answer));
-      if (type == T_TXT) {
-        datalen = *c;
-        if (!datalen || (datalen >= size))
-          LOGRET("Broken TXT record (len=%d, size=%d)", datalen, size);
-        uint max = (datalen < sizeof(answer)) ? datalen : (sizeof(answer) - 1);
-        memcpy(answer, c + 1, max);
-        answer[max] = 0;
-      } else {
-        int rc = dn_expand(buf, buf + len, c, answer, sizeof(answer) - 1);
-        if (rc < 0)
-          LOGRET("dn_expand() %s", "failed while expanding domain");
-        datalen = rc;
-      }
-      LOGMSG("Answer[%d](%.*s)", datalen, datalen, answer);
-      switch (an->type) {
-        case 0: if (dns_ptr_handler) dns_ptr_handler(an->at, an->ndx, answer); break;
-#ifdef WITH_IPINFO
-        case 1: if (dns_txt_handler) dns_txt_handler(an->at, an->ndx, answer); break;
-#endif
-        default: break;
-      }
-      return; // let's take the first answer
-    }
-    c += size;
+static void dns_expand_n_handle(const uint8_t *data, size_t len, size_t *offset) NONNULL(1, 3);
+static void dns_expand_n_handle(const uint8_t *data, size_t len, size_t *offset) {
+  char answer[NS_MAXDNAME] = {0};
+  atndx_t *an = expand_query(data, len, offset, answer, sizeof(answer) - 1, ((HEADER*)data)->id);
+  if (an) {
+    answer[0] = 0;
+    if      (dns_ptr_handler && (an->type == 0))
+      dns_ptr_handler(an->at, an->ndx, answer);
+    else if (dns_txt_handler && (an->type == 1))
+      dns_txt_handler(an->at, an->ndx, answer);
+    /*summ*/ { if (an->type == 0) dns_replies[1]++; else if (an->type == 1) dns_replies[2]++; }
   }
 }
 
+static void dns_data_ptr(int at, int ndx, dns_handler_fn handler,
+  const uint8_t *data, size_t len, size_t offset) NONNULL(3, 4);
+static void dns_data_ptr(int at, int ndx, dns_handler_fn handler,
+  const uint8_t *data, size_t len, size_t offset)
+{
+  char answer[NS_MAXDNAME] = {0};
+  int rc = dn_expand(data, data + len, data + offset, answer, sizeof(answer) - 1);
+  if (rc < 0)
+    LOGMSG("dn_expand() %s", "failed while expanding domain");
+  else {
+    uint bound = sizeof(answer) - 1;
+    uint len = ((uint)rc > bound) ? bound : (uint)rc;
+    answer[len] = 0;
+    LOGMSG("Answer[%u]: %.*s", len, len, answer);
+    handler(at, ndx, answer/*, len*/);
+  }
+}
+
+static void dns_data_txt(int at, int ndx, dns_handler_fn handler, const uint8_t *cursor, uint16_t max) NONNULL(3, 4);
+static void dns_data_txt(int at, int ndx, dns_handler_fn handler, const uint8_t *cursor, uint16_t max) {
+  char answer[NS_MAXDNAME] = {0};
+  uint8_t len = *cursor++; /*uint8_t*/
+  if (len && (len < max)) {
+    uint bound = sizeof(answer) - 1;
+    if (len > bound)
+      len = bound;
+    memcpy(answer, cursor, len);
+    answer[len] = 0;
+    LOGMSG("Answer[%u]: %.*s", len, len, answer);
+    handler(at, ndx, answer/*, len*/);
+  } else
+    LOGRET("Broken TXT record (len=%u, max=%u)", len, max);
+}
+
+static const char* dns_expand_loop(const uint8_t *data, size_t len, size_t offset) NONNULL(1);
+static const char* dns_expand_loop(const uint8_t *data, size_t len, size_t offset) {
+  char answer[NS_MAXDNAME] = {0};
+  HEADER *header = (HEADER*)data;
+  for (int i = header->ancount + header->nscount + header->arcount; i; i--) {
+    if (offset > len)
+      return LOGSTR("Packet does not contain all specified records");
+    atndx_t *an = expand_query(data, len, &offset, answer, sizeof(answer) - 1, header->id);
+    if ((offset + 10/*type(2)+class(2)+ttl(4)+size(2)*/) > len)
+      return LOGSTR("Truncated record");
+    uint16_t type = ns_get16(data + offset);
+    offset += INT16SZ; //  got type
+    offset += INT16SZ; // skip class
+    offset += INT32SZ; // skip ttl
+    uint16_t size = ns_get16(data + offset);
+    offset += INT16SZ; //  got size
+    if (!size)
+      return LOGSTR("Empty rdata");
+    if ((offset + size) > len)
+      return LOGSTR("Specified rdata length exceeds packet size");
+    //
+    if (an) {
+      // TODO: an->type [T_PTR, T_TXT, ...]
+      if      ((type == T_PTR) && (an->type == 0) && dns_ptr_handler)
+        dns_data_ptr(an->at, an->ndx, dns_ptr_handler, data, len, offset);
+      else if ((type == T_TXT) && (an->type == 1) && dns_txt_handler)
+        dns_data_txt(an->at, an->ndx, dns_txt_handler, data + offset, size);
+      // let's take the first record and break
+      break;
+    }
+    offset += size;
+  }
+  return NULL;
+}
+
+static const char* dns_parse_reply(const uint8_t *data, size_t len) {
+  if (len < sizeof(HEADER))
+    return LOGSTR("Packet too short");
+  dns_replies[0]++; /*summ*/
+  //
+  HEADER *header = (HEADER*)data;
+  header->qdcount = ntohs(header->qdcount);
+  header->ancount = ntohs(header->ancount);
+  header->nscount = ntohs(header->nscount);
+  header->arcount = ntohs(header->arcount);
+  LOGMSG("got %zu bytes, id=%u at=%u ndx=%u, counts(qd:%u an:%u ns:%u ar:%u)",
+    len, header->id, ID2AT(header->id), ID2NDX(header->id),
+    header->qdcount, header->ancount, header->nscount, header->arcount);
+  if (len == sizeof(HEADER))
+    return LOGSTR("No payload");
+  if (header->tc)     // truncated packet
+    return LOGSTR("Truncated packet");
+  if (!header->qr)    // not a reply
+    return LOGSTR("Not a reply");
+  if (header->opcode) // non-standard query
+    return LOGSTR("Invalid opcode");
+  //
+  size_t offset = sizeof(*header);
+  if (header->rcode != NOERROR) {
+    if (header->rcode != NXDOMAIN)
+      LOGMSG("Response error %d", header->rcode);
+    else {
+      LOGMSG("'No such name' with id=%d", header->id);
+      dns_expand_n_handle(data, len, &offset);
+    }
+    return NULL;
+  }
+  if (!header->ancount)
+    return LOGSTR("Neither error nor answer");
+  if (header->qdcount != 1)
+    return LOGSTR("Not exactly one query (must be 1)");
+  if (offset > len)
+    return LOGSTR("Reply too short");
+  //
+  { char answer[NS_MAXDNAME] = {0};
+    if (!expand_query(data, len, &offset, answer, sizeof(answer) - 1, header->id))
+      return NULL;
+    LOGMSG("Response for %s", answer);
+  }
+  //
+  if ((offset + 4/*type(2)+class(2)*/) > len)
+    return "Query resource record truncated";
+  uint16_t type = ns_get16(data + offset);
+  offset += INT16SZ; // got type
+  switch (type) {
+    case T_PTR: /*summ*/ dns_replies[1]++; break;
+#ifdef WITH_IPINFO
+    case T_TXT: /*summ*/ dns_replies[2]++; break;
+    default: return LOGSTR("Neither PTR nor TXT query type");
+#else
+    default: return LOGSTR("Not TXT query type");
+#endif
+  }
+  offset += INT16SZ; // skip class
+  return dns_expand_loop(data, len, offset);
+}
 
 // Validate if this server is actually one we sent to
-static bool validate_ns(int family) {
+static bool validns(int family) {
 #ifdef ENABLE_IPV6
-  if (family == AF_INET6) {
+  if        (family == AF_INET6) {
     bool local = !addr6exist(&sa_from.S6ADDR);
     for (int i = 0; i < nscount6; i++) {
       struct in6_addr *addr = &nsaddrs6[i].sin6_addr;
@@ -545,16 +556,24 @@ static bool validate_ns(int family) {
   } return false;
 }
 
-void dns_parse(int fd, int family) {
-  uint8_t buf[PACKETSZ];
+static const char* _dns_parse(int fd, int family) {
+  uint8_t packet[NS_PACKETSZ];
   socklen_t fromlen = sizeof(sa_from);
-  ssize_t r = recvfrom(fd, buf, sizeof(buf), 0, &sa_from.sa, &fromlen);
-  if (r > 0) {
-    if (validate_ns(family))
-      dns_parse_reply(buf, r);
-    else
-      LOGRET("%s", "Reply from unknown source");
-  } else if (r < 0)
-    WARN("recvfrom(fd=%d)", fd);
+  ssize_t r = recvfrom(fd, packet, sizeof(packet), 0, &sa_from.sa, &fromlen);
+  if      (r > 0)
+    return validns(family) ? dns_parse_reply(packet, r) : LOGSTR("Reply from unknown source");
+  else if (r < 0)
+    warn("recvfrom(fd=%d)", fd);
+  return NULL;
+}
+
+void dns_parse(int fd, int family) {
+#ifdef LOGMOD
+   const char *error = _dns_parse(fd, family);
+   if (error)
+     LOGMSG("%s", error);
+#else
+   _dns_parse(fd, family);
+#endif
 }
 

@@ -50,7 +50,7 @@
 #endif
 
 #ifndef GITREV
-#define GITREV "270"
+#define GITREV "271"
 #endif
 
 #ifndef HAVE_UINT
@@ -241,10 +241,12 @@ typedef union opt_sum_u {
 //
 #ifdef LOGMOD
 #include <syslog.h>
+#define LOGSTR(str) (str)
 #else
+#define LOGSTR(str) NULL
 #define LOGMSG(fmt, ...) ((void)0)
 #define LOGRET(fmt, ...) return
-#define LOG_RE(re, fmt, ...) return (re)
+#define LOGRET_RC(rcode, fmt, ...) return (rcode)
 #endif
 // note, VA_OPT min compat: gcc8, clang6
 #if (__GNUC__ >= 8) || (__clang_major__ >= 6) || (__STDC_VERSION__ >= 202311L)
@@ -255,11 +257,10 @@ typedef union opt_sum_u {
 #define FAIL(fmt, ...)         errx(EXIT_FAILURE, "%s: " fmt, __func__ __VA_OPT__(,) __VA_ARGS__)
 #ifdef LOGMOD
 #define LOGMSG(fmt, ...) syslog(LOG_PRIORITY, "%s: " fmt, __func__ __VA_OPT__(,) __VA_ARGS__)
-#define LOGMSG(fmt, ...) syslog(LOG_PRIORITY, "%s: " fmt, __func__ __VA_OPT__(,) __VA_ARGS__)
 #define LOGRET(fmt, ...) do { \
   syslog(LOG_PRIORITY, "%s: " fmt, __func__ __VA_OPT__(,) __VA_ARGS__); return; } while(0)
-#define LOG_RE(re, fmt, ...) do { \
-  syslog(LOG_PRIORITY, "%s: " fmt, __func__ __VA_OPT__(,) __VA_ARGS__); return (re); } while(0)
+#define LOGRET_RC(rcode, fmt, ...) do { \
+  syslog(LOG_PRIORITY, "%s: " fmt, __func__ __VA_OPT__(,) __VA_ARGS__); return (rcode); } while(0)
 #endif
 #else // no VA_OPT, use GNU extension
 #define WARN(fmt, ...)   warn("%s: " fmt, __func__, ##__VA_ARGS__)
@@ -271,8 +272,8 @@ typedef union opt_sum_u {
 #define LOGMSG(fmt, ...) syslog(LOG_PRIORITY, "%s: " fmt, __func__, ##__VA_ARGS__)
 #define LOGRET(fmt, ...) do { \
   syslog(LOG_PRIORITY, "%s: " fmt, __func__, ##__VA_ARGS__); return; } while(0)
-#define LOG_RE(re, fmt, ...) do { \
-  syslog(LOG_PRIORITY, "%s: " fmt, __func__, ##__VA_ARGS__); return (re); } while(0)
+#define LOGRET_RC(rcode, fmt, ...) do { \
+  syslog(LOG_PRIORITY, "%s: " fmt, __func__, ##__VA_ARGS__); return (rcode); } while(0)
 #endif
 #endif // VA_OPT
 

@@ -34,7 +34,7 @@ const char *dns_ptr_cache(uint at, uint ndx);
 int dns_send_query(int at, int ndx, const char *qstr, int type);
 char* ip2arpa(const t_ipaddr *ipaddr, const char *suff4, const char *suff6) NONNULL(1);
 
-extern void (*dns_ptr_handler)(int at, int ndx, const char* answer);
-extern void (*dns_txt_handler)(int at, int ndx, const char* answer);
+typedef void (*dns_handler_fn)(int at, int ndx, const char* answer);
+extern dns_handler_fn dns_ptr_handler, dns_txt_handler;
 
 #endif

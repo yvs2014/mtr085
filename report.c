@@ -37,8 +37,8 @@
 #include "ipinfo.h"
 #endif
 
-#ifndef MAXDNAME
-#define MAXDNAME 1025
+#ifndef MAXNAME
+#define MAXNAME 1025
 #endif
 
 enum INDENTS_N_DIVIDERS {
@@ -94,7 +94,7 @@ static void print_nameaddr(int at, int ndx, int width) {
     if (name) {
       if (run_opts.both) {
         if (width > 0) {
-          char buff[MAXDNAME] = {0};
+          char buff[MAXNAME] = {0};
           snprinte(buff, sizeof(buff), "%s (%s)", name, strlongip(ipaddr));
           print_str_width(buff, width);
         } else
@@ -134,7 +134,7 @@ static void print_mpls(const mpls_data_t *mpls) {
 #endif
 
 static int longest_hopname(int longest) {
-  char buff[MAXDNAME] = {0};
+  char buff[MAXNAME] = {0};
   int nmax = net_max();
   for (int at = net_min(); at < nmax; at++) {
     for (uint i = 0; i < MAXPATH; i++) {
@@ -245,7 +245,7 @@ void report_close(bool next, bool with_header) {
     PRINT_DATETIME("[%s] ", date);
     printf("%s: %s %s %s\n", srchost, PACKAGE_NAME, mtr_args, dsthost);
   }
-  int hostlen = longest_hopname(ustrnlen(HOST_STR, MAXDNAME)) + 1;
+  int hostlen = longest_hopname(ustrnlen(HOST_STR, MAXNAME)) + 1;
   int infolen =
 #ifdef WITH_IPINFO
     ipinfo_ready() ? ipinfo_width() :
