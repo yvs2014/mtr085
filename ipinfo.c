@@ -593,7 +593,7 @@ static int ipinfo_lookup(int at, int ndx, const char *qstr) {
 
   return
 #ifdef ENABLE_DNS
-    (ORIG_TYPE == OT_DNS) ? dns_send_query(at, ndx, qstr, T_TXT) :
+    (ORIG_TYPE == OT_DNS) ? dns_send_query(at, ndx, qstr, ns_t_txt) :
 #endif
     send_tcp_query(ipitseq[seq].sock, qstr);
 }

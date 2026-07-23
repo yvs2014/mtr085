@@ -34,6 +34,7 @@
 #define MAXHOST 64          // if you choose 256, then adjust IDMASK ID2AT AT2ID ID2NDX
 #define MAXPATH 8           // if you change it, then adjust macros
 #define MAXSEQ 16384        // maximum pings in processing
+#define MAX_MPLS_LABEL 8    // maximum mpls labels
 // 16bits as [hash:7 at:6 ndx:3]
 #define IDMASK    (0xFE00)
 #define AT2ID(n)  (((n) & 0x003F) << 3)
@@ -93,7 +94,7 @@ typedef union PACKIT mpls_label { // RFC4950
 } mpls_label_t; /* must be 4 bytes */
 
 typedef struct mpls_data {
-  mpls_label_t label[MAXLABELS]; // N x 32b labels
+  mpls_label_t label[MAX_MPLS_LABEL]; // N x 32b labels
   uint8_t n;
 } mpls_data_t;
 #endif

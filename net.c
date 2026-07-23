@@ -778,13 +778,13 @@ static mpls_data_t *decodempls(const uint8_t *data, int size) {
   uint8_t n = (ieo->len - IEO_SZ) / LAB_SZ;
   off += IEO_SZ;
   // limit number of MPLS labels
-  if (n > MAXLABELS) {
-    LOGMSG("got %d MPLS labels, limit=%d", n, MAXLABELS);
-    n = MAXLABELS;
-  }
   static mpls_data_t mplsdata;
-  memset(&mplsdata, 0, sizeof(mplsdata));
+  if (n > ARRAY_LEN(mplsdata.label)) {
+    LOGMSG("got %d MPLS labels, limit=%d", n, ARRAY_LEN(mplsdata.label));
+    n = ARRAY_LEN(mplsdata.label);
+  }
   // mpls labels
+  memset(&mplsdata, 0, sizeof(mplsdata));
   while ((mplsdata.n < n) && ((off + LAB_SZ) <= (size_t)size)) {
     mplsdata.label[mplsdata.n++].u32 = ntohl(*(uint32_t*)&data[off]);
     off += LAB_SZ;
@@ -1281,7 +1281,7 @@ bool net_timedout(int seq) {
 #ifdef ENABLE_DNS
 static void save_ptr_answer(int at, int ndx, const char* answer) {
   if (RPTR_AT_NDX(at, ndx)) {
-    LOGMSG("T_PTR dup or update at=%d ndx=%d for %s", at, ndx, strlongip(&IP_AT_NDX(at, ndx)));
+    LOGMSG("resolv update at=%d ndx=%d for %s", at, ndx, strlongip(&IP_AT_NDX(at, ndx)));
     free(RPTR_AT_NDX(at, ndx));
     RPTR_AT_NDX(at, ndx) = NULL;
   }

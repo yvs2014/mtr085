@@ -111,7 +111,7 @@ uint dns_queries[3];     // number of queries (sum, ptr, txt)
 uint dns_replies[3];     // number of replies (sum, ptr, txt)
 t_sockaddr *custom_res;  // -N option
 
-// external callbacks for T_PTR and T_TXT replies
+// external callbacks for 'ns_t_ptr' and 'ns_t_txt' replies
 //   first one by net-module
 //   second by ipinfo-module
 dns_handler_fn dns_ptr_handler, dns_txt_handler;
@@ -279,35 +279,43 @@ char* ip2arpa(const t_ipaddr *ipaddr, const char *suff4, const char *suff6) {
   return lqbuf;
 }
 
-#define SEND2NS(sendto_fd, sendto_addr, sendto_socktype) { \
-  int rc = sendto(sendto_fd, req_buf, len, 0, \
-    (const struct sockaddr*)(sendto_addr), sizeof(struct sendto_socktype)); \
-  /*summ*/ dns_queries[0]++; if (tndx > 0) dns_queries[tndx]++; \
-  if (rc >= 0) return rc; \
-  LOGMSG("[%d:%d type=%d id=%d] err=%d: %s", at, ndx, type, hp->id, errno, strerror(errno)); \
+static int send2ns(int nses, int fd, uint8_t *query, uint len,
+  const struct sockaddr *dest, socklen_t addrlen, int tndx) NONNULL(3, 5);
+static int send2ns(int nses, int fd, uint8_t *query, uint len,
+  const struct sockaddr *dest, socklen_t addrlen, int tndx)
+{
+  for (int i = 0; i < nses; i++, dest += addrlen) {
+    int rc = sendto(fd, query, len, 0, dest, addrlen);
+    /*summ*/ dns_queries[0]++; if (tndx > 0) dns_queries[tndx]++;
+    if (rc >= 0)
+      return rc;
+//  LOGMSG("[%d:%d type=%d id=%d] err=%d: %s", at, ndx, type, header->id, errno, strerror(errno));
+  }
+  return -1;
 }
+
 int dns_send_query(int at, int ndx, const char *qstr, int type) {
-  static uint8_t req_buf[NS_PACKETSZ];
+  static uint8_t ns_query_buff[NS_PACKETSZ];
   if (!dns_ready)
     return -1;
-  int len = MYRES_QUERY(myres, QUERY, qstr, C_IN, type, NULL, 0, NULL, req_buf, sizeof(req_buf));
+  int len = MYRES_QUERY(myres, QUERY, qstr, C_IN, type, NULL, 0, NULL,
+    ns_query_buff, sizeof(ns_query_buff));
   if (len < 0) {
     WARN("[%d:%d type=%d]", at, ndx, type);
     LOGRET_RC(-1, "[%d:%d type=%d] failed", at, ndx, type);
   }
-
-  HEADER *hp = (HEADER*)req_buf;
-  hp->id = str2hint(qstr, at, ndx);
-  LOGMSG("[%d:%d type=%d id=%d]: %s", at, ndx, type, hp->id, qstr);
-
-  { int tndx = (type == T_PTR) ? 1 : ((type == T_TXT) ? 2 : -1);
-    for (int i = 0; i < nscount; i++)
-      SEND2NS(resfd, &nsaddrs[i], sockaddr_in);
+  //
+  HEADER *header = (HEADER*)ns_query_buff; // TODO: rewrite with nameser.h API
+  header->id = str2hint(qstr, at, ndx);
+  LOGMSG("[%d:%d type=%d id=%d]: %s", at, ndx, type, header->id, qstr);
+  //
+  int tndx = (type == ns_t_ptr) ? 1 : ((type == ns_t_txt) ? 2 : -1);
+  int rc = send2ns(nscount,  resfd,  ns_query_buff, len, (struct sockaddr *)nsaddrs,  sizeof(nsaddrs[0]),  tndx);
 #ifdef ENABLE_IPV6
-    for (int i = 0; i < nscount6; i++)
-      SEND2NS(resfd6, &nsaddrs6[i], sockaddr_in6);
+  if (rc < 0)
+      rc = send2ns(nscount6, resfd6, ns_query_buff, len, (struct sockaddr *)nsaddrs6, sizeof(nsaddrs6[0]), tndx);
 #endif
-  } return -1;
+  return rc;
 }
 #undef SENDTONS
 
@@ -338,7 +346,7 @@ const char *dns_ptr_lookup(int at, int ndx) {
 #endif
      ) {
     QPTR_TS_AT_NDX(at, ndx) = now; // save time of trying to send
-    dns_send_query(at, ndx, QPTR_AT_NDX(at, ndx), T_PTR);
+    dns_send_query(at, ndx, QPTR_AT_NDX(at, ndx), ns_t_ptr);
   }
   return NULL;
 }
@@ -374,24 +382,30 @@ static atndx_t *find_query(const char* q, uint16_t hint) {
   return NULL;     // not found
 }
 
-static atndx_t *expand_query(const uint8_t *data, size_t len, size_t *offset, char *answer, int asize, uint16_t id) NONNULL(1, 3, 4);
-static atndx_t *expand_query(const uint8_t *data, size_t len, size_t *offset, char *answer, int asize, uint16_t id) {
-  int rc = dn_expand(data, data + len, data + *offset, answer, asize);
-  if (rc < 0)
-    LOGRET_RC(NULL, "dn_expand() %s", "failed while expanding query");
-  *offset += rc; // shift cursor behind name
-  atndx_t *an = find_query(answer, id); // id as a hint
+static atndx_t* find_query_with_id(const char *query, uint16_t id) NONNULL(1);
+static atndx_t* find_query_with_id(const char *query, uint16_t id) {
+  atndx_t *an = find_query(query, id); // id as a hint
   if (!an)
-    LOGMSG("Unknown response with id=%u q=%s", id, answer);
+    LOGMSG("Unknown response with id=%u q=%s", id, query);
   return an;
 }
 
-static void dns_expand_n_handle(const uint8_t *data, size_t len, size_t *offset) NONNULL(1, 3);
-static void dns_expand_n_handle(const uint8_t *data, size_t len, size_t *offset) {
-  char answer[NS_MAXDNAME] = {0};
-  atndx_t *an = expand_query(data, len, offset, answer, sizeof(answer) - 1, ((HEADER*)data)->id);
+#ifdef LOGMOD
+static void dns_printrr(const ns_msg *msg, const ns_rr *rr) NONNULL(1, 2);
+static void dns_printrr(const ns_msg *msg, const ns_rr *rr) {
+  char buff[NS_MAXDNAME * 2] = {0};
+  ns_sprintrr(msg, rr, NULL, NULL, buff, sizeof(buff));
+  LOGMSG("RR: %.*s", (int)sizeof(buff), buff);
+}
+#else
+#define dns_printrr(msg, rr) NOOP
+#endif
+
+static void dns_got_nosuch_name(const char *query, uint16_t id) NONNULL(1);
+static void dns_got_nosuch_name(const char *query, uint16_t id) {
+  atndx_t *an = find_query_with_id(query, id);
   if (an) {
-    answer[0] = 0;
+    char answer[NS_MAXDNAME] = {0};
     if      (dns_ptr_handler && (an->type == 0))
       dns_ptr_handler(an->at, an->ndx, answer);
     else if (dns_txt_handler && (an->type == 1))
@@ -400,135 +414,160 @@ static void dns_expand_n_handle(const uint8_t *data, size_t len, size_t *offset)
   }
 }
 
-static void dns_data_ptr(int at, int ndx, dns_handler_fn handler,
-  const uint8_t *data, size_t len, size_t offset) NONNULL(3, 4);
-static void dns_data_ptr(int at, int ndx, dns_handler_fn handler,
-  const uint8_t *data, size_t len, size_t offset)
-{
+static void dns_handle_ptr(int at, int ndx, dns_handler_fn handler, const ns_msg *msg, const ns_rr *rr) NONNULL(3, 4, 5);
+static void dns_handle_ptr(int at, int ndx, dns_handler_fn handler, const ns_msg *msg, const ns_rr *rr) {
   char answer[NS_MAXDNAME] = {0};
-  int rc = dn_expand(data, data + len, data + offset, answer, sizeof(answer) - 1);
+  int rc = ns_name_uncompress(ns_msg_base(*msg), ns_msg_end(*msg), ns_rr_rdata(*rr), answer, sizeof(answer) - 1);
   if (rc < 0)
-    LOGMSG("dn_expand() %s", "failed while expanding domain");
+    LOGMSG("failed expanding domain: errno=%d (%s)", errno, strerror(errno));
   else {
     uint bound = sizeof(answer) - 1;
     uint len = ((uint)rc > bound) ? bound : (uint)rc;
-    answer[len] = 0;
-    LOGMSG("Answer[%u]: %.*s", len, len, answer);
-    handler(at, ndx, answer/*, len*/);
+    answer[len] = 0; // be sure
+    LOGMSG("Answer: %.*s", len, answer);
+    handler(at, ndx, answer/*, strnlen(answer, len)*/); // answer can be shorter than 'len'
   }
 }
 
-static void dns_data_txt(int at, int ndx, dns_handler_fn handler, const uint8_t *cursor, uint16_t max) NONNULL(3, 4);
-static void dns_data_txt(int at, int ndx, dns_handler_fn handler, const uint8_t *cursor, uint16_t max) {
+static void dns_handle_txt(int at, int ndx, dns_handler_fn handler, const uint8_t *rdata, int rlen) NONNULL(3, 4);
+static void dns_handle_txt(int at, int ndx, dns_handler_fn handler, const uint8_t *rdata, int rlen) {
   char answer[NS_MAXDNAME] = {0};
-  uint8_t len = *cursor++; /*uint8_t*/
-  if (len && (len < max)) {
-    uint bound = sizeof(answer) - 1;
-    if (len > bound)
-      len = bound;
-    memcpy(answer, cursor, len);
-    answer[len] = 0;
-    LOGMSG("Answer[%u]: %.*s", len, len, answer);
-    handler(at, ndx, answer/*, len*/);
-  } else
-    LOGRET("Broken TXT record (len=%u, max=%u)", len, max);
+  char *cursor = answer;
+  int alen = sizeof(answer) - 1;
+  uint txtlen = 0;
+  while ((alen > 0) && (rlen > 0)) {
+    // every chunk
+    uint8_t len = *rdata++;
+    rlen--;
+    if (len && (len <= rlen)) {
+      if (len > alen) {
+        LOGMSG("TXT record buffer: %s", strerror(EMSGSIZE));
+        return;
+      }
+      memcpy(cursor, rdata, len);
+      cursor += len;
+      alen   -= len;
+      rdata  += len;
+      rlen   -= len;
+      txtlen += len;
+    } else {
+      LOGMSG("%s", "Broken TXT record");
+      return;
+    }
+  }
+  LOGMSG("Answer: %.*s", txtlen, answer);
+  handler(at, ndx, answer/*, txtlen*/);
 }
 
-static const char* dns_expand_loop(const uint8_t *data, size_t len, size_t offset) NONNULL(1);
-static const char* dns_expand_loop(const uint8_t *data, size_t len, size_t offset) {
-  char answer[NS_MAXDNAME] = {0};
-  HEADER *header = (HEADER*)data;
-  for (int i = header->ancount + header->nscount + header->arcount; i; i--) {
-    if (offset > len)
-      return LOGSTR("Packet does not contain all specified records");
-    atndx_t *an = expand_query(data, len, &offset, answer, sizeof(answer) - 1, header->id);
-    if ((offset + 10/*type(2)+class(2)+ttl(4)+size(2)*/) > len)
-      return LOGSTR("Truncated record");
-    uint16_t type = ns_get16(data + offset);
-    offset += INT16SZ; //  got type
-    offset += INT16SZ; // skip class
-    offset += INT32SZ; // skip ttl
-    uint16_t size = ns_get16(data + offset);
-    offset += INT16SZ; //  got size
-    if (!size)
-      return LOGSTR("Empty rdata");
-    if ((offset + size) > len)
-      return LOGSTR("Specified rdata length exceeds packet size");
-    //
-    if (an) {
-      // TODO: an->type [T_PTR, T_TXT, ...]
-      if      ((type == T_PTR) && (an->type == 0) && dns_ptr_handler)
-        dns_data_ptr(an->at, an->ndx, dns_ptr_handler, data, len, offset);
-      else if ((type == T_TXT) && (an->type == 1) && dns_txt_handler)
-        dns_data_txt(an->at, an->ndx, dns_txt_handler, data + offset, size);
-      // let's take the first record and break
-      break;
+static void dns_extract_answer(ns_msg *msg, int section) NONNULL(1);
+static void dns_extract_answer(ns_msg *msg, int section) {
+  int count = ns_msg_count(*msg, section);
+  for (int i = 0; i < count; i++) {
+    ns_rr rr = {0};
+    if (ns_parserr(msg, section, i, &rr) >= 0) {
+      int type = ns_rr_type(rr);
+      if ((type == ns_t_ptr) || (type == ns_t_txt)) {
+        atndx_t *an = find_query_with_id(ns_rr_name(rr), ns_msg_id(*msg));
+        if (an) {
+          dns_printrr(msg, &rr);
+          // TODO: an->type [ns_t_ptr, ns_t_txt, ...]
+          if      ((type == ns_t_ptr) && (an->type == 0) && dns_ptr_handler) {
+            dns_handle_ptr(an->at, an->ndx, dns_ptr_handler, msg, &rr);
+            /*summ*/ dns_replies[1]++;
+          } else if ((type == ns_t_txt) && (an->type == 1) && dns_txt_handler) {
+            const uint8_t *rdata = ns_rr_rdata(rr);
+            int32_t rlen = (int)ns_rr_rdlen(rr); // uint16_t
+            if (rdata && rlen)
+              dns_handle_txt(an->at, an->ndx, dns_txt_handler, rdata, rlen);
+            /*summ*/ dns_replies[2]++;
+          }
+          // let's take the first record and break
+          return;
+        }
+      }
     }
-    offset += size;
   }
-  return NULL;
-}
-
-static const char* dns_parse_reply(const uint8_t *data, size_t len) {
-  if (len < sizeof(HEADER))
-    return LOGSTR("Packet too short");
-  dns_replies[0]++; /*summ*/
-  //
-  HEADER *header = (HEADER*)data;
-  header->qdcount = ntohs(header->qdcount);
-  header->ancount = ntohs(header->ancount);
-  header->nscount = ntohs(header->nscount);
-  header->arcount = ntohs(header->arcount);
-  LOGMSG("got %zu bytes, id=%u at=%u ndx=%u, counts(qd:%u an:%u ns:%u ar:%u)",
-    len, header->id, ID2AT(header->id), ID2NDX(header->id),
-    header->qdcount, header->ancount, header->nscount, header->arcount);
-  if (len == sizeof(HEADER))
-    return LOGSTR("No payload");
-  if (header->tc)     // truncated packet
-    return LOGSTR("Truncated packet");
-  if (!header->qr)    // not a reply
-    return LOGSTR("Not a reply");
-  if (header->opcode) // non-standard query
-    return LOGSTR("Invalid opcode");
-  //
-  size_t offset = sizeof(*header);
-  if (header->rcode != NOERROR) {
-    if (header->rcode != NXDOMAIN)
-      LOGMSG("Response error %d", header->rcode);
-    else {
-      LOGMSG("'No such name' with id=%d", header->id);
-      dns_expand_n_handle(data, len, &offset);
-    }
-    return NULL;
-  }
-  if (!header->ancount)
-    return LOGSTR("Neither error nor answer");
-  if (header->qdcount != 1)
-    return LOGSTR("Not exactly one query (must be 1)");
-  if (offset > len)
-    return LOGSTR("Reply too short");
-  //
-  { char answer[NS_MAXDNAME] = {0};
-    if (!expand_query(data, len, &offset, answer, sizeof(answer) - 1, header->id))
-      return NULL;
-    LOGMSG("Response for %s", answer);
-  }
-  //
-  if ((offset + 4/*type(2)+class(2)*/) > len)
-    return "Query resource record truncated";
-  uint16_t type = ns_get16(data + offset);
-  offset += INT16SZ; // got type
-  switch (type) {
-    case T_PTR: /*summ*/ dns_replies[1]++; break;
 #ifdef WITH_IPINFO
-    case T_TXT: /*summ*/ dns_replies[2]++; break;
-    default: return LOGSTR("Neither PTR nor TXT query type");
+  LOGMSG("Neither '%s' nor '%s' query type", "ns_t_ptr", "ns_t_txt");
 #else
-    default: return LOGSTR("Not TXT query type");
+  LOGMSG("Not '%s' query type", "ns_t_txt");
 #endif
+}
+
+static bool dns_query_checkin(ns_msg *msg) NONNULL(1);
+static bool dns_query_checkin(ns_msg *msg) {
+  bool fail = !ns_msg_count(*msg, ns_s_an);
+  if (fail)
+    LOGMSG("%s", "No answer");
+  else {
+    uint16_t qd = ns_msg_count(*msg, ns_s_qd);
+    fail = (qd != 1);
+    if (fail)
+      LOGMSG("More than one query: %u", qd);
+    else {
+      ns_rr rr = {0};
+      fail = (ns_parserr(msg, ns_s_qd, 0, &rr) < 0);
+      if (fail)
+        LOGMSG("Parsing query: %s", strerror(errno));
+      else {
+        fail = !find_query_with_id(ns_rr_name(rr), ns_msg_id(*msg));
+        if (fail)
+          LOGMSG("Not our request: %s", ns_rr_name(rr));
+        else
+          LOGMSG("Response for %s", ns_rr_name(rr));
+      }
+    }
   }
-  offset += INT16SZ; // skip class
-  return dns_expand_loop(data, len, offset);
+  return !fail;
+}
+
+static bool dns_qd_okay(ns_msg *msg) NONNULL(1);
+static bool dns_qd_okay(ns_msg *msg) {
+  bool fail = ns_msg_getflag(*msg, ns_f_tc);
+  if (fail)
+    LOGMSG("%s", "Truncated packet");
+  else {
+    fail = !ns_msg_getflag(*msg, ns_f_qr);
+    if (fail)
+      LOGMSG("%s", "Not a reply");
+    else {
+      fail = ns_msg_getflag(*msg, ns_f_opcode);
+      LOGMSG("%s", "Invalid opcode");
+    }
+  }
+  return !fail;
+}
+
+static void dns_parse_reply(const uint8_t *data, size_t len) NONNULL(1);
+static void dns_parse_reply(const uint8_t *data, size_t len) {
+  dns_replies[0]++; /*summ*/
+  ns_msg msg = {0};
+  if (ns_initparse(data, len, &msg) < 0)
+    LOGMSG("Parse reply: %s", strerror(errno));
+  else {
+    LOGMSG("got %zu bytes, id=%u at=%u ndx=%u, counts(qd:%u an:%u ns:%u ar:%u)",
+      len, ns_msg_id(msg), ID2AT(ns_msg_id(msg)), ID2NDX(ns_msg_id(msg)),
+      ns_msg_count(msg, ns_s_qd),
+      ns_msg_count(msg, ns_s_an),
+      ns_msg_count(msg, ns_s_ns),
+      ns_msg_count(msg, ns_s_ar));
+    if (dns_qd_okay(&msg)) {
+      int rcode = ns_msg_getflag(msg, ns_f_rcode);
+      if (rcode == ns_r_noerror) {
+        if (dns_query_checkin(&msg))
+          dns_extract_answer(&msg, ns_s_an);
+      } else {
+        if (rcode != ns_r_nxdomain)
+          LOGMSG("Response error %d", rcode);
+        else {
+          LOGMSG("'No such name' with id=%d", ns_msg_id(msg));
+          ns_rr rr = {0};
+          if ((ns_msg_count(msg, ns_s_qd) > 0) && (ns_parserr(&msg, ns_s_qd, 0, &rr) >= 0))
+            dns_got_nosuch_name(ns_rr_name(rr), ns_msg_id(msg));
+        }
+      }
+    }
+  }
 }
 
 // Validate if this server is actually one we sent to
@@ -556,24 +595,16 @@ static bool validns(int family) {
   } return false;
 }
 
-static const char* _dns_parse(int fd, int family) {
+void dns_parse(int fd, int family) {
   uint8_t packet[NS_PACKETSZ];
   socklen_t fromlen = sizeof(sa_from);
   ssize_t r = recvfrom(fd, packet, sizeof(packet), 0, &sa_from.sa, &fromlen);
-  if      (r > 0)
-    return validns(family) ? dns_parse_reply(packet, r) : LOGSTR("Reply from unknown source");
-  else if (r < 0)
+  if (r > 0) {
+    if (validns(family))
+      dns_parse_reply(packet, r);
+    else
+      LOGMSG("%s", "Reply from unknown source");
+  } else if (r < 0)
     warn("recvfrom(fd=%d)", fd);
-  return NULL;
-}
-
-void dns_parse(int fd, int family) {
-#ifdef LOGMOD
-   const char *error = _dns_parse(fd, family);
-   if (error)
-     LOGMSG("%s", error);
-#else
-   _dns_parse(fd, family);
-#endif
 }
 
