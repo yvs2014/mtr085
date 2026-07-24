@@ -1368,7 +1368,7 @@ const char *mpls2str(const mpls_label_t *label, int indent) {
 }
 #endif
 
-// type must correspond 'id' in resolve HEADER (uint id:16)
+// type must correspond 'id' in 'ns_msg' (uint16_t)
 // it's used as a hint for fast search, 16bits as [hash:7 at:6 ndx:3]
 uint16_t str2hint(const char* str, uint16_t at, uint16_t ndx) {
   uint16_t hint = 0, ch;
