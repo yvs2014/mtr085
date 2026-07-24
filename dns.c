@@ -320,7 +320,7 @@ int dns_send_query(int at, int ndx, const char *qstr, int type) {
   static uint8_t ns_query_buff[NS_PACKETSZ];
   if (!dns_ready)
     return -1;
-  int len = MYRES_QUERY(myres, QUERY, qstr, ns_c_in, type, NULL, 0, NULL,
+  int len = MYRES_QUERY(myres, ns_o_query, qstr, ns_c_in, type, NULL, 0, NULL,
     ns_query_buff, sizeof(ns_query_buff));
   if (len < 0) {
     WARN("[%d:%d type=%d]", at, ndx, type);
@@ -437,9 +437,9 @@ static void dns_got_nosuch_name(const char *query, uint16_t id) {
   if (an) {
     char answer[NS_MAXDNAME] = {0};
     if      (dns_ptr_handler && (an->type == 0))
-      dns_ptr_handler(an->at, an->ndx, answer);
+      dns_ptr_handler(an->at, an->ndx, answer, 1);
     else if (dns_txt_handler && (an->type == 1))
-      dns_txt_handler(an->at, an->ndx, answer);
+      dns_txt_handler(an->at, an->ndx, answer, 1);
     /*summ*/ { if (an->type == 0) dns_replies[1]++; else if (an->type == 1) dns_replies[2]++; }
   }
 }
@@ -452,10 +452,10 @@ static void dns_handle_ptr(int at, int ndx, dns_handler_fn handler, const ns_msg
     LOGMSG("failed expanding domain: errno=%d (%s)", errno, strerror(errno));
   else {
     uint bound = sizeof(answer) - 1;
-    uint len = ((uint)rc > bound) ? bound : (uint)rc;
+    uint len = ((uint)rc < bound) ? (uint)rc : bound;
     answer[len] = 0; // be sure
     LOGMSG("%.*s", len, answer);
-    handler(at, ndx, answer/*, strnlen(answer, len)*/); // answer can be shorter than 'len'
+    handler(at, ndx, answer, strnlen(answer, len)); // answer can be shorter than 'len'
   }
 }
 
@@ -464,9 +464,7 @@ static void dns_handle_txt(int at, int ndx, dns_handler_fn handler, const uint8_
   char answer[NS_MAXDNAME] = {0};
   char *cursor = answer;
   int alen = sizeof(answer) - 1;
-#ifdef LOGMOD
   uint txtlen = 0;
-#endif
   while ((alen > 0) && (rlen > 0)) {
     // every chunk
     uint8_t len = *rdata++;
@@ -481,16 +479,16 @@ static void dns_handle_txt(int at, int ndx, dns_handler_fn handler, const uint8_
       alen   -= len;
       rdata  += len;
       rlen   -= len;
-#ifdef LOGMOD
       txtlen += len;
-#endif
     } else {
       LOGMSG("%s", "Broken TXT record");
       return;
     }
   }
+  if (txtlen >= sizeof(answer))
+    txtlen = sizeof(answer) - 1;
   LOGMSG("%.*s", txtlen, answer);
-  handler(at, ndx, answer/*, txtlen*/);
+  handler(at, ndx, answer, txtlen);
 }
 
 static void dns_extract_answer(ns_msg *msg, int section) NONNULL(1);

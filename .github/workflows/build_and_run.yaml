@@ -17,7 +17,7 @@ jobs:
     runs-on: ${{matrix.os}}
     strategy:
       matrix:
-        os: [ubuntu-22.04, ubuntu-24.04, ubuntu-slim]
+        os: [ubuntu-22.04, ubuntu-22.04-arm, ubuntu-24.04, ubuntu-24.04-arm, ubuntu-26.04, ubuntu-26.04-arm, ubuntu-slim]
         compiler: [gcc, clang]
     steps:
       - uses: actions/checkout@v6
@@ -28,7 +28,7 @@ jobs:
           sudo apt update
           sudo apt install -y build-essential gcc clang
           sudo apt install -y devscripts debhelper meson git sed pkgconf
-          sudo apt install -y libncurses-dev libcap2-bin libcap-dev libbsd-dev
+          sudo apt install -y libncurses-dev libcap2-bin libcap-dev
       - name: Create deb package with ${{matrix.compiler}}
         env:
           CC: ${{matrix.compiler}}
@@ -43,7 +43,7 @@ jobs:
     runs-on: ${{matrix.os}}
     strategy:
       matrix:
-        os: [macos-14, macos-15, macos-26]
+        os: [macos-15, macos-15-intel, macos-26, macos-26-intel]
         compiler: [gcc, clang]
     steps:
       - uses: actions/checkout@v6
@@ -60,5 +60,84 @@ jobs:
           meson setup _build -DCAP=false -DNLS=false
           meson compile -C _build
       - name: Run on ${{matrix.os}}
+        run: sudo ./_build/mtr -r localhost
+
+  build_debs_on_debian_and_run:
+    name: Build-n-Run on ${{matrix.image}} container with ${{matrix.compiler}}
+    runs-on: ubuntu-latest
+    container:
+      image: ${{matrix.image}}
+    strategy:
+      matrix:
+        image: [debian:12, debian:13]
+        compiler: [gcc, clang]
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: master
+      - name: Install mandatory packages for building
+        run: |
+          sudo apt update
+          sudo apt install -y build-essential gcc clang
+          sudo apt install -y devscripts debhelper meson git sed pkgconf gettext
+          sudo apt install -y libncurses-dev libcap2-bin libcap-dev dpkg-dev
+      - name: Create deb package with ${{matrix.compiler}}
+        env:
+          CC: ${{matrix.compiler}}
+        run: ./misc/build_deb.sh
+      - name: Install deb package built with ${{matrix.compiler}}
+        run: sudo dpkg -i debs/mtr085_*.deb
+      - name: Run on ${{matrix.image}}
+        run: mtr -r localhost
+
+  build_exec_on_alpine_and_run:
+    name: Build-n-Run on ${{matrix.image}} container with ${{matrix.compiler}}
+    runs-on: ubuntu-latest
+    container:
+      image: ${{matrix.image}}
+    strategy:
+      matrix:
+        image: [alpine-latest]
+        compiler: [gcc, clang]
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: master
+      - name: Install mandatory packages for building
+        run: |
+          apk update || true
+          apk add git meson pkgconf gcc clang libintl gettext gettext-dev ncurses-dev libcap-dev libidn-dev
+      - name: Create executable with ${{matrix.compiler}}
+        env:
+          CC: ${{matrix.compiler}}
+        run: |
+          meson setup _build
+          meson compile -C _build
+      - name: Run on ${{matrix.image}}
+        run: sudo ./_build/mtr -r localhost
+
+  build_debs_on_archlinux_and_run:
+    name: Build-n-Run on ${{matrix.image}} container with ${{matrix.compiler}}
+    runs-on: ubuntu-latest
+    container:
+      image: ${{matrix.image}}
+    strategy:
+      matrix:
+        image: [archlinux:base-devel]
+        compiler: [gcc, clang]
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: master
+      - name: Install mandatory packages for building
+        run: |
+          pacman -Sy --noconfirm git gcc clang meson pkgconf gettext ncurses libcap
+      - name: Create executable with ${{matrix.compiler}}
+        env:
+          CC: ${{matrix.compiler}}
+        run: |
+          meson setup _build
+          meson compile -C _build
+      - name: Run on ${{matrix.image}}
         run: sudo ./_build/mtr -r localhost
 

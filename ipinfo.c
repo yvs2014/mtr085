@@ -246,10 +246,11 @@ static void save_fields(int at, int ndx, char **record) {
 }
 
 #ifdef ENABLE_DNS
-static void save_txt_answer(int at, int ndx, const char *answer) {
+static void save_txt_answer(int at, int ndx, const char *answer, size_t alen) {
   char *copy = NULL, **data = NULL;
-  if (answer && strnlen(answer, NAMELEN)) {
-    copy = strndup(answer, NAMELEN);
+  size_t lim = (alen < NAMELEN) ? alen : NAMELEN;
+  if (answer && strnlen(answer, lim)) {
+    copy = strndup(answer, lim);
     if (!copy) {
       WARN("[%d:%d]: strndup()", at, ndx);
       return;

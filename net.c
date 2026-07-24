@@ -1279,14 +1279,15 @@ bool net_timedout(int seq) {
 }
 
 #ifdef ENABLE_DNS
-static void save_ptr_answer(int at, int ndx, const char* answer) {
+static void save_ptr_answer(int at, int ndx, const char* answer, size_t alen) {
   if (RPTR_AT_NDX(at, ndx)) {
     LOGMSG("resolv update at=%d ndx=%d for %s", at, ndx, strlongip(&IP_AT_NDX(at, ndx)));
     free(RPTR_AT_NDX(at, ndx));
     RPTR_AT_NDX(at, ndx) = NULL;
   }
-  RPTR_AT_NDX(at, ndx) = strnlen(answer, NAMELEN) ? strndup(answer, NAMELEN) :
-    // if no answer, save ip-address in text representation
+  size_t lim = (alen < NAMELEN) ? alen : NAMELEN;
+  RPTR_AT_NDX(at, ndx) = strnlen(answer, lim) ? strndup(answer, lim) :
+    // if no answer, save ip-address as plain text
     strndup(strlongip(&IP_AT_NDX(at, ndx)), NAMELEN);
   if (!RPTR_AT_NDX(at, ndx))
     WARN("[%d:%d] strndup()", at, ndx);
