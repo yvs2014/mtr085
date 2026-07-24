@@ -79,16 +79,16 @@ jobs:
         run: |
           apt update
           apt install -y build-essential gcc clang
-          apt install -y devscripts debhelper meson git sed pkgconf gettext
-          apt install -y libncurses-dev libcap2-bin libcap-dev dpkg-dev
-      - name: Create deb package with ${{matrix.compiler}}
+          apt install -y meson git sed pkgconf gettext
+          apt install -y libncurses-dev libcap2-bin libcap-dev
+      - name: Create executable with ${{matrix.compiler}}
         env:
           CC: ${{matrix.compiler}}
-        run: ./misc/build_deb.sh
-      - name: Install deb package built with ${{matrix.compiler}}
-        run: dpkg -i debs/mtr085_*.deb
+        run: |
+          meson setup _build
+          meson compile -C _build
       - name: Run on ${{matrix.image}}
-        run: mtr -r localhost
+        run: ./_build/mtr -r localhost
 
   build_exec_on_alpine_and_run:
     name: Build-n-Run on ${{matrix.image}} container with ${{matrix.compiler}}
@@ -99,6 +99,9 @@ jobs:
       matrix:
         image: [alpine:latest]
         compiler: [gcc, clang]
+    defaults:
+      run:
+        shell: sh
     steps:
       - uses: actions/checkout@v6
         with:
