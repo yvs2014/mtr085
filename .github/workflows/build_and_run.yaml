@@ -52,7 +52,7 @@ jobs:
       - name: Install mandatory packages for building
         run: |
           brew update || true
-          brew upgrade meson || brew install meson
+          brew install meson
       - name: Create executable with ${{matrix.compiler}}
         env:
           CC: ${{matrix.compiler}}

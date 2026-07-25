@@ -459,14 +459,24 @@ static void dns_handle_ptr(int at, int ndx, dns_handler_fn handler, const ns_msg
   }
 }
 
-static void dns_handle_txt(int at, int ndx, dns_handler_fn handler, const uint8_t *rdata, int rlen) NONNULL(3, 4);
-static void dns_handle_txt(int at, int ndx, dns_handler_fn handler, const uint8_t *rdata, int rlen) {
+static void dns_handle_txt(int at, int ndx, dns_handler_fn handler, const uint8_t *rdata, int rlen, char delim) NONNULL(3, 4);
+static void dns_handle_txt(int at, int ndx, dns_handler_fn handler, const uint8_t *rdata, int rlen, char delim) {
   char answer[NS_MAXDNAME] = {0};
   char *cursor = answer;
   int alen = sizeof(answer) - 1;
-  uint txtlen = 0;
+  uint txtlen = 0, chunkno = 0;
   while ((alen > 0) && (rlen > 0)) {
     // every chunk
+    if (delim && chunkno) {
+      if (alen > 0) {
+        *cursor++ = delim;
+        alen--;
+        txtlen++;
+      } else {
+        LOGMSG("TXT record buffer, chunk=%u, delimiter='%c': %s", chunkno, delim, strerror(EMSGSIZE));
+        return;
+      }
+    }
     uint8_t len = *rdata++;
     rlen--;
     if (len && (len <= rlen)) {
@@ -484,10 +494,15 @@ static void dns_handle_txt(int at, int ndx, dns_handler_fn handler, const uint8_
       LOGMSG("%s", "Broken TXT record");
       return;
     }
+    chunkno++;
   }
   if (txtlen >= sizeof(answer))
     txtlen = sizeof(answer) - 1;
-  LOGMSG("%.*s", txtlen, answer);
+#ifdef LOGMOD
+  LOGMSG("got in %u chunk%s: %.*s", chunkno, chunkno > 1 ? "s" : "", txtlen, answer);
+  if (delim)
+    LOGMSG("chunks delimited with '%c'", delim);
+#endif
   handler(at, ndx, answer, txtlen);
 }
 
@@ -510,7 +525,7 @@ static void dns_extract_answer(ns_msg *msg, int section) {
             const uint8_t *rdata = ns_rr_rdata(rr);
             int32_t rlen = (int)ns_rr_rdlen(rr); // uint16_t
             if (rdata && rlen)
-              dns_handle_txt(an->at, an->ndx, dns_txt_handler, rdata, rlen);
+              dns_handle_txt(an->at, an->ndx, dns_txt_handler, rdata, rlen, VSLASH);
             /*summ*/ dns_replies[2]++;
           }
           // let's take the first record and break

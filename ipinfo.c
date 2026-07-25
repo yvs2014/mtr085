@@ -49,10 +49,10 @@
 #include "aux.h"
 #include "nls.h"
 
-enum { COMMA = ',', VSLASH = '|', WHOIS_COMMENT = '%' };
 #define UNKN "?"
 #define CHAR_QUOTES   "\"'"
 #define CHAR_BRACKETS "{}"
+#define WHOIS_COMMENT PERCENT
 
 enum { TCP_CONN_TIMEOUT = 3, IPINFO_TCP_TIMEOUT = 10 /* in seconds */ };
 enum { TCP_RESP_LINES = 100, NETDATA_MAXSIZE = 3000 };
@@ -91,6 +91,7 @@ typedef struct {
   int   skip_ndx[MAX_TXT_ITEMS]; // skip by index: 1, ...
   int   width[MAX_TXT_ITEMS];
   char  sep;
+  char  comb_last_fields;
 } origin_t;
 
 #define ORIG_TYPE (origins[origin_no].type)
@@ -126,18 +127,22 @@ static origin_t origins[] = {
 #else
       "2001:67c:2e8:25::c100:b05",
 #endif
-    .name  = {_II_ROUTE_STR, _II_ORIGIN_STR, _II_DESC_STR, _II_CC_STR},
-    .sep   = 0, .type = OT_WHOIS, .prefix = "-m ",
+    .name   = {_II_ROUTE_STR, _II_ORIGIN_STR, _II_DESC_STR, _II_CC_STR},
+    .sep    = 0,
+    .type   = OT_WHOIS,
+    .prefix = "-m ",
   },
 // 3
-  { .host  = "peer.asn.shadowserver.org",
-    .name  = {_II_ASPATH_STR, _II_ASN_STR, _II_ROUTE_STR, /*_II_ASNAME_STR,*/ _II_CC_STR, _II_ORG_STR},
-    .sep   = VSLASH, .skip_ndx = {4},
+  { .host     = "peer.asn.shadowserver.org",
+    .name     = {_II_ASPATH_STR, _II_ASN_STR, _II_ROUTE_STR, /*_II_ASNAME_STR,*/ _II_CC_STR, _II_ORG_STR},
+    .sep      = VSLASH,
+    .skip_ndx = {4},
   },
 // 4
   { .host  = "origin.asn.spameatingmonkey.net",
     .name  = {_II_ROUTE_STR, _II_ASN_STR, _II_ORG_STR, _II_ALLOC_STR, _II_CC_STR},
-    .unkn  = "Unknown", .sep = VSLASH,
+    .unkn  = "Unknown",
+    .sep   = VSLASH,
   },
 // 5
   { .host  =
@@ -146,14 +151,18 @@ static origin_t origins[] = {
 #else
       "208.95.112.1",
 #endif
-    .name  = {/*Status,*/ _II_CNAME_STR, _II_CC_STR, _II_RC_STR, _II_RNAME_STR, _II_CITY_STR, _II_ZIP_STR,
-              _II_LAT_STR, _II_LNG_STR, _II_TZ_STR, _II_ISP_STR, _II_ORG_STR, _II_ASNAME_STR /*,QueryIP*/},
-    .sep   = COMMA, .type = OT_HTTP, .skip_ndx = {IPAPI_STATUS_NDX, IPAPI_QUERYIP_NDX}, .prefix = "/csv/",
+    .name     = {/*Status,*/ _II_CNAME_STR, _II_CC_STR, _II_RC_STR, _II_RNAME_STR, _II_CITY_STR, _II_ZIP_STR,
+                 _II_LAT_STR, _II_LNG_STR, _II_TZ_STR, _II_ISP_STR, _II_ORG_STR, _II_ASNAME_STR /*,QueryIP*/},
+    .sep      = COMMA,
+    .type     = OT_HTTP,
+    .skip_ndx = {IPAPI_STATUS_NDX, IPAPI_QUERYIP_NDX}, .prefix = "/csv/",
   },
 // 6
   { .host  = "asn.routeviews.org",
-    .name  = {_II_ASN_STR},
+    .name  = {_II_ASN_STR, _II_ROUTE_STR},
     .unkn  = "4294967295",
+    .sep   = VSLASH,
+    .comb_last_fields = '/', /* route / prefix */
   },
 };
 
@@ -246,6 +255,15 @@ static void save_fields(int at, int ndx, char **record) {
 }
 
 #ifdef ENABLE_DNS
+static inline void save_txt_prepare(char *txt, char comb, char delim) NONNULL(1);
+static inline void save_txt_prepare(char *txt, char comb, char delim) {
+  if (comb && delim) {
+    char *found = strrchr(txt, delim);
+    if (found)
+        *found = comb;
+  }
+}
+
 static void save_txt_answer(int at, int ndx, const char *answer, size_t alen) {
   char *copy = NULL, **data = NULL;
   size_t lim = (alen < NAMELEN) ? alen : NAMELEN;
@@ -255,6 +273,7 @@ static void save_txt_answer(int at, int ndx, const char *answer, size_t alen) {
       WARN("[%d:%d]: strndup()", at, ndx);
       return;
     }
+    save_txt_prepare(copy, origins[origin_no].comb_last_fields, origins[origin_no].sep);
     data = split_record(copy);
   }
   if (data)
@@ -270,20 +289,30 @@ static void save_txt_answer(int at, int ndx, const char *answer, size_t alen) {
 #endif
 
 static char trim_c(char *str, const char *quotes) {
-  char ch = 0;
-  while ((ch = *quotes++)) if (*str == ch) { *str = 0; break; }
+  char ch;
+  while ((ch = *quotes++))
+    if (*str == ch) {
+      *str = 0;
+      break;
+    }
   return (*str);
 }
 
-static char* trim_str(char *str, const char *quotes) {
-  { int len = ustrnlen(str, NETDATA_MAXSIZE);
-    char *ptr = str + len - 1;
-    for (int i = len; i > 0; i--, ptr--)
-      if (trim_c(ptr, quotes)) break; }
-  { char *ptr = str;
-    for (; ptr; ptr++)
-      if (trim_c(ptr, quotes)) break;
-    return ptr; }
+static char* trim_quotes(uint slen, char str[slen], const char *quotes) NONNULL(3);
+static char* trim_quotes(uint slen, char str[slen], const char *quotes) {
+  if (!str)
+    return str;
+  int len = ustrnlen(str, slen);
+  char *ptr = str + len - 1;
+  for (int i = len; i > 0; i--, ptr--)
+    if (trim_c(ptr, quotes))
+      break;
+  //
+  ptr = str;
+  for (; ptr; ptr++)
+    if (trim_c(ptr, quotes))
+      break;
+  return ptr;
 }
 
 static void save_records(atndx_t id, char **record) {
@@ -371,10 +400,15 @@ static void parse_http(char *buf, ssize_t recv_size, atndx_t id) {
     }
 
     LOGMSG("record line: %s", txt);
-    char **records = split_record(trim_str(trim_str(txt, CHAR_QUOTES), CHAR_BRACKETS));
+    char *trimmed = trim_quotes(sizeof(txt), txt, CHAR_QUOTES);
+    trimmed = trim_quotes(sizeof(txt), trimmed, CHAR_BRACKETS);
+    char **records = trimmed ? split_record(trimmed) : NULL;
     if (records) {
       int got = count_records(records);
-      if (got == itemname_max) { save_records(id, records); return; }
+      if (got == itemname_max) {
+        save_records(id, records);
+        return;
+      }
       LOGMSG("Expected %d records, got %d", itemname_max, got);
     }
   }

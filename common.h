@@ -50,7 +50,7 @@
 #endif
 
 #ifndef GITREV
-#define GITREV "276"
+#define GITREV "277"
 #endif
 
 #ifndef HAVE_UINT
@@ -350,9 +350,10 @@ extern int chart_mode_max;
 extern const char *fld_active;
 extern t_stat stats[];
 extern const int stat_max;
-enum { BLANK_INDICATOR = '_' };
-//
+
 extern char srchost[];
 extern const char *dsthost;
+
+enum { COMMA = ',', SEMICOLON = ';', VSLASH = '|', PERCENT = '%', UNDERSCORE = '_' };
 
 #endif

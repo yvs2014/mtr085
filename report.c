@@ -41,21 +41,23 @@
 #define MAXNAME 1025
 #endif
 
+#define BLANK_INDICATOR UNDERSCORE
+
 enum INDENTS_N_DIVIDERS {
   IND_REP     = 4,
 #ifdef OUTPUT_FORMAT_CSV
-  DIV_CSV     = ';',
+  DIV_CSV     = SEMICOLON,
 #endif
 #ifdef OUTPUT_FORMAT_JSON
-  DIV_JSON    = ',',
+  DIV_JSON    = COMMA,
   IND_JSON    = 4,
 #endif
 #ifdef OUTPUT_FORMAT_TOON
-  DIV_TOON    = ',',
+  DIV_TOON    = COMMA,
   IND_TOON    = 2,
 #endif
 #ifdef OUTPUT_FORMAT_XML
-  DIV_XML     = ',',
+  DIV_XML     = COMMA,
   IND_XML     = 2,
 #endif
 };
@@ -329,7 +331,7 @@ static void json_statline(int at, const t_stat *stat) {
   int len = strnlen(elem, NETELEM_MAXLEN);
   if (len > 0) {
     const char *q = QUOTE(elem, DIV_JSON);
-    if (elem[len - 1] == '%') // print '%' with name
+    if (elem[len - 1] == PERCENT) // print '%' with name
       printf("%c\"%s%%\":%s%.*s%s", DIV_JSON, stat->name, q, len - 1, elem, q);
     else
       printf("%c\"%s\":%s%s%s",     DIV_JSON, stat->name, q,          elem, q);
@@ -393,7 +395,7 @@ static void toon_statline(int at, const t_stat *stat) {
   int len = strnlen(elem, NETELEM_MAXLEN);
   if (len > 0) {
     const char *q = QUOTE(elem, DIV_TOON);
-    if (elem[len - 1] == '%') // print '%' with name
+    if (elem[len - 1] == PERCENT) // print '%' with name
       printf("%c%s%.*s%s", DIV_TOON, q, len - 1, elem, q);
     else
       printf("%c%s%s%s",   DIV_TOON, q,          elem, q);

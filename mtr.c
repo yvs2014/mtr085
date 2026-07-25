@@ -226,7 +226,7 @@ int chart_mode_max = 3;
 #endif
 //
 t_stat stats[] = {
-  {.name = "",      .min = 1, .key = BLANK_INDICATOR, .hint = _GAP_HINT},
+  {.name = "",      .min = 1, .key = UNDERSCORE, .hint = _GAP_HINT},
   {.name = _LOSS_STR,  .min = 6, .key = 'L', .hint = _LOSS_HINT},
   {.name = _DROP_STR,  .min = 5, .key = 'D', .hint = _DROP_HINT},
   {.name = _RECV_STR,  .min = 6, .key = 'R', .hint = _RECV_HINT},
@@ -349,7 +349,8 @@ static int my_getopt_long(int argc, char *argv[]) {
 #ifdef OUTPUT_FORMAT
 #define ADD_OCHAR(ch) do {        \
   if (len < (sizeof(oopt)) - 1) { \
-    if (len) oopt[len++] = '|';   \
+    if (len)                      \
+      oopt[len++] = VSLASH;       \
     oopt[len++] = (ch);           \
   }                               \
 } while (0)
@@ -516,13 +517,13 @@ static inline void option_display(char opt) {
 static inline void option_fields(char opt) {
   if (strnlen(optarg, MAXFLD + 1) > MAXFLD)
     errx(EINVAL, "-%c: %s (%s=%d): %s", opt, OVERFLD_ERR, MAX_STR, MAXFLD, optarg);
-  for (int i = 0; optarg[i]; i++) {
-    int cnt = 0;
-    for (; cnt < stat_max; cnt++)
-      if (optarg[i] == stats[cnt].key)
+  for (char *c = optarg; c && *c; c++) {
+    uint cnt = 0;
+    for (; cnt < ARRAY_LEN(stats); cnt++)
+      if (*c == stats[cnt].key)
         break;
-    if (cnt >= stat_max)
-      errx(EINVAL, "-%c: %s: %c", opt, UNKNFLD_ERR, optarg[i]);
+    if (cnt >= ARRAY_LEN(stats))
+      errx(EINVAL, "-%c: %s: %c", opt, UNKNFLD_ERR, *c);
   }
   set_fld_active(optarg);
 }
@@ -992,7 +993,7 @@ static inline void main_prep(int argc, char **argv) {
 #ifndef HAVE_ARC4RANDOM_UNIFORM
   srand(mypid); // reset random seed
 #endif
-  for (int i = 0; i < stat_max; i++)
+  for (uint i = 0; i < ARRAY_LEN(stats); i++)
     fld_index[(uint8_t)stats[i].key] = i;
   UNICODE_INIT;
   set_fld_active(NULL);
