@@ -136,6 +136,9 @@ enum OPTIONS {
   OPT_UDP      = 'u',
   OPT_VERSION  = 'v',
   OPT_CACHE    = 'x',
+#ifdef WITH_IPINFO
+  OPT_MULTI_II = 'y',
+#endif
 };
 
 enum TTL_OPTS {
@@ -295,6 +298,10 @@ static struct option long_options[] = {
   {"version",    0, 0, OPT_VERSION},
   {"cache",      1, 0, OPT_CACHE},    // enable cache with timeout in seconds
                                       // (0 means default 60sec)
+#ifdef WITH_IPINFO
+  {"multi",      0, 0, OPT_MULTI_II}, // show ipinfo-records for all sources
+                                      // otherwise it's marked with '*' character
+#endif
   { 0, 0, 0, 0 }
 };
 static char *short_options;
@@ -764,6 +771,9 @@ static void short_set(char opt, const char *progname) {
       if (!ipinfo_action(ActionNone)) // fail to init
         QEXIT(EXIT_FAILURE);
     } break;
+    case OPT_MULTI_II:
+      ini_opts.multi = true;
+      break;
 #endif
     default:
       usage(progname);

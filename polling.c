@@ -332,18 +332,13 @@ static key_action_t keyboard_events(key_action_t action) {
 #ifdef WITH_IPINFO
     case ActionAS:
     case ActionII:
+    case ActionMultiII:
       LOGMSG("toggle %s", "ipinfo-mode");
       ipinfo_action(action);
-      run_opts.asn = run_opts.ipinfo = false;
-      if (run_opts.lookup) {
-        if (action == ActionAS)
-          run_opts.asn    = true;
-        else
-          run_opts.ipinfo = true;
-      }
       OPT_SUM(asn);
       OPT_SUM(ipinfo);
       OPT_SUM(lookup);
+      OPT_SUM(multi);
       break;
 #endif
 #ifdef TUIMODE

@@ -13,6 +13,7 @@
 .ds oox "x
 .ds op "p
 .ds oq "q
+.ds oy "y
 .Dd $Mdocdate$
 .Dt MTR 8 SMM
 .Os
@@ -21,7 +22,7 @@
 .Nd a network diagnostic tool
 .Sh SYNOPSIS
 .Nm
-.Op Fl a\*[ob]Bcd\*[oe]fFi\*[ol]m\*[on]\*[oN]\*[oo]\*[op]\*[oq]rsStTuvx\*[o6]
+.Op Fl a\*[ob]Bcd\*[oe]fFi\*[ol]m\*[on]\*[oN]\*[oo]\*[op]\*[oq]rsStTuvx\*[oy]\*[o6]
 TARGET[:PORT] ...
 .Sh DESCRIPTION
 .Nm
@@ -252,6 +253,10 @@ Print
 version, features, and TUI info
 .It Fl x, Fl -cache Ar SECONDS
 Cache mode. Don't ping known hops during cache-timeout period (0 means default 60 seconds).
+.ie "y"\*[oy]" \{\
+.It Fl y, Fl -multi
+Display ipinfo-records for all sources, otherwise only records from the first source are displayed. If it's not enabled and there's more than one record, than records are marked with '*' character.
+.\}
 .ie "46"\*[o6]" \{\
 .It Fl 4
 Use IPv4 only

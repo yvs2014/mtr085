@@ -88,6 +88,9 @@ msgstr "mpls"
 msgid "asn"
 msgstr "asn"
 
+msgid "multi-sources"
+msgstr "декілька-джерел"
+
 msgid "dns"
 msgstr "днс"
 
@@ -336,6 +339,9 @@ msgstr "вкл/викл UDP пінги"
 
 msgid "toggle cache mode"
 msgstr "вкл/викл режим кешування"
+
+msgid "toggle IP-info multi-source mode"
+msgstr "вкл/викл режим показу IP-інфо з кількох джерел"
 
 msgid "up/down by one line"
 msgstr "на один рядок вгору/донизу"

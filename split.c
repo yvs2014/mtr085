@@ -146,6 +146,9 @@ static void split_help(void) {
     {.key = "t", .hint = CMD_T_STR},
     {.key = "u", .hint = CMD_U_STR},
     {.key = "x", .hint = CMD_X_STR},
+#ifdef WITH_IPINFO
+    {.key = "y", .hint = CMD_Y_STR},
+#endif
     {.key = "SPACE", .hint = CMD_SP_STR},
   };
   //
@@ -161,23 +164,23 @@ static void split_help(void) {
 }
 
 key_action_t split_keyaction(void) {
+  key_action_t rc = ActionNone;
   char ch = 0;
-  if (read(0, &ch, 1) < 0) {
+  if (read(0, &ch, 1) < 0)
     WARN("%s", "read()");
-    return 0;
-  }
-  switch (ch) {
-    case 'e': return ActionMPLS;
+  else switch (ch) {
+    case 'e': rc = ActionMPLS;    break;
     case 'h':
       split_help();
-      return ActionPauseResume;
-    case 'j': return ActionJitter;
+      rc = ActionPauseResume;
+      break;
+    case 'j': rc = ActionJitter;  break;
 #ifdef WITH_IPINFO
-    case 'l': return ActionAS;
-    case 'L': return ActionII;
+    case 'l': rc = ActionAS;      break;
+    case 'L': rc = ActionII;      break;
 #endif
 #ifdef ENABLE_DNS
-    case 'n': return ActionDNS;
+    case 'n': rc = ActionDNS;     break;
 #endif
     case ' ':
     case 'p':
@@ -187,19 +190,24 @@ key_action_t split_keyaction(void) {
         printf("%s ... ", ANYLTTR_STR);
         (void)fflush(stdout);
       }
-      return ActionPauseResume;
+      rc = ActionPauseResume;
+      break;
     case  3 : // ^C
 //  case  27: // Esc
     case 'q':
       if (run_opts.pause)
         putchar('\n');
-      return ActionQuit;
-    case 'r': return ActionReset;
-    case 't': return ActionTCP;
-    case 'u': return ActionUDP;
-    case 'x': return ActionCache;
+      rc = ActionQuit;
+      break;
+    case 'r': rc = ActionReset;   break;
+    case 't': rc = ActionTCP;     break;
+    case 'u': rc = ActionUDP;     break;
+    case 'x': rc = ActionCache;   break;
+#ifdef WITH_IPINFO
+    case 'y': rc = ActionMultiII; break;
+#endif
     default: break;
   }
-  return ActionNone;
+  return rc;
 }
 

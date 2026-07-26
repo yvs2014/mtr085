@@ -50,7 +50,7 @@
 #endif
 
 #ifndef GITREV
-#define GITREV "277"
+#define GITREV "278"
 #endif
 
 #ifndef HAVE_UINT
@@ -137,7 +137,7 @@ typedef enum { ActionNone, ActionQuit,
   ActionDNS,
 #endif
 #ifdef WITH_IPINFO
-  ActionAS, ActionII,
+  ActionAS, ActionII, ActionMultiII,
 #endif
 } key_action_t;
 
@@ -157,19 +157,23 @@ typedef struct opts_s {
     //
     both,     // -b
     mpls,     // -e
+    endpoint, // -fa
     jitter,   // -j
+#ifdef WITH_IPINFO
     asn,      // -l
+    ipinfo,   // -L
+    lookup,   // either -l or -L
+#endif
     dns,      // -n
     pause,    // -p
     rawrep,   // -r (raw report mode)
+    stat,     // -S
     tcp,      // -t
     udp,      // -u
     oncache,  // -x
-    ipinfo,   // -L
-    endpoint, // -fa
-    lookup,   // -l or -L
-    stat,     // -S
-    //
+#ifdef WITH_IPINFO
+    multi,    // -y
+#endif
     bell,     // -d 7th bit (beep at target)
     visible,  // -d 6th bit (visible bell: flash)
     audible,  // -d 5th bit (beep)
@@ -197,18 +201,19 @@ typedef union opt_sum_u {
     //
     both     :1, // -b
     mpls     :1, // -e
+    endpoint :1, // -fa
     jitter   :1, // -j
     asn      :1, // -l
+    ipinfo   :1, // -L
+    lookup   :1, // -l or -L
+    multi    :1, // -y (multi ipinfo sources)
     dns      :1, // -n
     pause    :1, // -p
     rawrep   :1, // -r (raw report mode)
+    stat     :1, // -S
     tcp      :1, // -t
     udp      :1, // -u
     oncache  :1, // -x
-    ipinfo   :1, // -L
-    endpoint :1, // -fa
-    lookup   :1, // -l or -L
-    stat     :1, // -S
     //
     bell     :1, // -d 7th bit (beep at target)
     visible  :1, // -d 6th bit (visible bell: flash)

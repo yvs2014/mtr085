@@ -54,6 +54,8 @@
 #define CHAR_BRACKETS "{}"
 #define WHOIS_COMMENT PERCENT
 
+#define STR_NEQ(a, b, n) (strncmp((a), (b), n))
+
 enum { TCP_CONN_TIMEOUT = 3, IPINFO_TCP_TIMEOUT = 10 /* in seconds */ };
 enum { TCP_RESP_LINES = 100, NETDATA_MAXSIZE = 3000 };
 enum { WHOIS_LAST_NDX = 2 };
@@ -78,6 +80,7 @@ static ipitseq_t *ipitseq;             // for tcp-origins
 // origin types: dns txt, http csv, whois pairs
 enum { OT_DNS = 0 /*sure*/, OT_HTTP, OT_WHOIS };
 enum { WHOIS_PORT = 43, HTTP_PORT = 80 };
+enum { SETFIELDS = false, ADDFIELDS = true };
 
 typedef struct {
   const char* host;
@@ -166,12 +169,7 @@ static origin_t origins[] = {
   },
 };
 
-static int skip_whois_comments(char** lines, int max) {
-  for (int i = 0; i < max; i++)
-    if (lines[i] && lines[i][0] && (lines[i][0] != WHOIS_COMMENT))
-      return i;
-  return -1;
-}
+//
 
 static int str_in_skip_list(const char *str, const char** list) {
     for (int i = 0; (i < MAX_TXT_ITEMS) && list[i]; i++)
@@ -187,22 +185,26 @@ static int ndx_in_skip_list(const int ndx, const int* list) {
     return -1;
 }
 
-static int split_with_sep(char** args, int max, char sep, char quote) {
-  if (!args || !*args)
+static int split_with_sep(uint len, char* list[len], char sep, char quote) NONNULL(2);
+static int split_with_sep(uint len, char* list[len], char sep, char quote) {
+  if (!*list)
     return 0;
-  int cnt = 0, inside = 0;
-  for (char *ptr = *args, **next = args + 1; *ptr; ptr++) {
+  uint count = 1;
+  bool inside = false;
+  //
+  for (char *ptr = *list, **next = list + 1; *ptr; ptr++) {
     if ((*ptr == sep) && !inside) {
-      cnt++;
-      if (cnt >= max) break;
+      if (count >= len)
+        break;
+      count++;
       *ptr = 0;
       *next++ = ptr + 1;
     } else if (*ptr == quote)
       inside = !inside;
   }
-  for (int j = 0; (j < max) && args[j]; j++)
-    args[j] = trim(args[j]);
-  return (cnt < max) ? (cnt + 1) : max;
+  for (uint i = 0; (i < count) && list[i]; i++)
+    list[i] = trim(list[i]);
+  return (count > len) ? len : count;
 }
 
 static void unkn2norm(char **record) {
@@ -214,13 +216,11 @@ static void unkn2norm(char **record) {
   }
 }
 
-static char** split_record(char *record) {
-  static char* recbuf[MAX_TXT_ITEMS];
-  memset(recbuf, 0, sizeof(recbuf));
-  recbuf[0] = record;
-  split_with_sep(recbuf, MAX_TXT_ITEMS, origins[origin_no].sep, '"');
-  unkn2norm(recbuf);
-  return recbuf;
+static char** split_record(char *record, uint len, char* list[len]) {
+  list[0] = record;
+  split_with_sep(len, list, origins[origin_no].sep, '"');
+  unkn2norm(list);
+  return list;
 }
 
 static void adjust_width(char** record) {
@@ -231,26 +231,49 @@ static void adjust_width(char** record) {
   }
 }
 
-static void save_fields(int at, int ndx, char **record) {
+static inline char* set_newrec(int at, int ndx, int j, char *dup) {
+  if (dup) {
+    char **r = &RTXT_AT_NDX(at, ndx, j);
+    if (*r)
+      free(*r);
+    *r = dup;
+  } else
+    WARN("dup[%d:%d:%d]", at, ndx, j);
+  return dup;
+}
+
+static inline int snprint_addmulti(uint len, char buff[len],
+  const char *prev, const char *str, bool multi) NONNULL(2, 3, 4);
+static inline int snprint_addmulti(uint len, char buff[len],
+  const char *prev, const char *str, bool multi)
+{
+  return multi ?
+    snprinte(buff, len, "%s, %s", prev, str) :
+    snprinte(buff, len, "%s*", prev);
+}
+
+static void save_fields(int at, int ndx, uint rlen, char* record[rlen], bool add) {
   unkn2norm(record);
   for (int i = 0; i < itemname_max; i++)
     if (!record[i])
       record[i] = UNKN;
-  for (int i = 0, j = 0; (i < MAX_TXT_ITEMS) && record[i]; i++) {
-    if (ndx_in_skip_list(i, ORIG_SKIP_NDX) >= 0) // skip it
-      continue;
-    char *str = trim(record[i]);
-    if (str_in_skip_list(str, ORIG_SKIP_STR) >= 0) // skip it
-      continue;
-    if (RTXT_AT_NDX(at, ndx, j))
-      free(RTXT_AT_NDX(at, ndx, j));
-    RTXT_AT_NDX(at, ndx, j) = strndup(str, NAMELEN);
-    if (!RTXT_AT_NDX(at, ndx, j)) {
-      WARN("[%d:%d:%d]: strndup()", at, ndx, j);
-      break;
+  for (uint i = 0, j = 0; (i < rlen) && record[i]; i++) {
+    if (ndx_in_skip_list(i, ORIG_SKIP_NDX) < 0) {
+      char *str = trim(record[i]);
+      if (str && str[0] && (str_in_skip_list(str, ORIG_SKIP_STR) < 0)) {
+        char buff[NAMELEN] = {0};
+        char *prev = RTXT_AT_NDX(at, ndx, j);
+        int len = (prev && add) ?
+          snprint_addmulti(sizeof(buff), buff, prev, str, run_opts.multi) :
+          snprinte(buff, sizeof(buff), "%s", str);
+        if (len >= 0)
+          if (!set_newrec(at, ndx, j, strndup(buff, sizeof(buff))))
+            break;
+        //
+        LOGMSG("[%d] %s", j, RTXT_AT_NDX(at, ndx, j));
+        j++;
+      }
     }
-    LOGMSG("[%d] %s", j, RTXT_AT_NDX(at, ndx, j));
-    j++;
   }
 }
 
@@ -265,7 +288,8 @@ static inline void save_txt_prepare(char *txt, char comb, char delim) {
 }
 
 static void save_txt_answer(int at, int ndx, const char *answer, size_t alen) {
-  char *copy = NULL, **data = NULL;
+  char* copy = NULL;
+  char* data[MAX_TXT_ITEMS] = {0};
   size_t lim = (alen < NAMELEN) ? alen : NAMELEN;
   if (answer && strnlen(answer, lim)) {
     copy = strndup(answer, lim);
@@ -274,14 +298,9 @@ static void save_txt_answer(int at, int ndx, const char *answer, size_t alen) {
       return;
     }
     save_txt_prepare(copy, origins[origin_no].comb_last_fields, origins[origin_no].sep);
-    data = split_record(copy);
+    split_record(copy, ARRAY_LEN(data), data);
   }
-  if (data)
-    save_fields(at, ndx, data);
-  else {
-    char* empty[MAX_TXT_ITEMS] = {0};
-    save_fields(at, ndx, empty); // it sets as unknown
-  }
+  save_fields(at, ndx, ARRAY_LEN(data), data, SETFIELDS); // if data is empty, it's set as unknown
   if (copy)
     free(copy);
   adjust_width(&(RTXT_AT_NDX(at, ndx, 0)));
@@ -315,23 +334,23 @@ static char* trim_quotes(uint slen, char str[slen], const char *quotes) {
   return ptr;
 }
 
-static void save_records(atndx_t id, char **record) {
+static void save_records(atndx_t id, uint rlen, char* record[rlen], bool add) {
   // save results of parsing
-  save_fields(id.at, id.ndx, record);
+  save_fields(id.at, id.ndx, rlen, record, add);
   adjust_width(&RTXT_AT_NDX(id.at, id.ndx, 0));
 }
 
-static int count_records(char **record) {
-  int nth = 0;
-  for (int i = 0; (i < MAX_TXT_ITEMS) && record[i]; i++) {
+static int trim_n_count_records(uint len, char* record[len]) {
+  int count = 0;
+  for (uint i = 0; (i < len) && record[i]; i++) {
     if (ndx_in_skip_list(i, ORIG_SKIP_NDX) >= 0) // skip it
       continue;
     record[i] = trim(record[i]);
     if (str_in_skip_list(record[i], ORIG_SKIP_STR) >= 0) // skip it
       continue;
-    nth++;
+    count++;
   }
-  return nth;
+  return count;
 }
 
 static inline int parse_http_content_len(uint lines_no, char* lines[TCP_RESP_LINES],
@@ -341,7 +360,7 @@ static inline int parse_http_content_len(uint lines_no, char* lines[TCP_RESP_LIN
   static char CNT_LEN_HEADER[] = "Content-Length:";
   for (uint i = 0; i < min; i++) {
     char* tagvalue[2] = {lines[i], NULL};
-    if (split_with_sep(tagvalue, 2, ' ', 0) == 2) {
+    if (split_with_sep(ARRAY_LEN(tagvalue), tagvalue, ' ', 0) == ARRAY_LEN(tagvalue)) {
       if (strncmp(CNT_LEN_HEADER, tagvalue[0], sizeof(CNT_LEN_HEADER)) == 0) {
         if (tagvalue[1]) {
           errno = 0; long n = str2l(tagvalue[1]);
@@ -366,79 +385,86 @@ static inline int parse_http_content_len(uint lines_no, char* lines[TCP_RESP_LIN
   return (len < NETDATA_MAXSIZE) ? len : NETDATA_MAXSIZE;
 }
 
-
-static void parse_http(char *buf, ssize_t recv_size, atndx_t id) {
-  static char h11[] = "HTTP/1.1";
-  static int h11_ln = sizeof(h11) - 1;
-  static char h11ok[] = "HTTP/1.1 200 OK";
-  static int h11ok_ln = sizeof(h11ok) - 1;
-
+static void parse_http(atndx_t id, int len, char txt[len]) {
   /*summ*/ ipinfo_replies[0]++; ipinfo_replies[1]++;
-
-  for (char *ptr = buf; (ptr = strstr(ptr, h11)) && ((ptr - buf) < recv_size); ptr += h11_ln) {
-    if (strncmp(ptr, h11ok, h11ok_ln)) { // not HTTP OK
-      LOGMSG("not OK: %.*s", h11ok_ln, ptr);
-      break; // i.e. set as unknown
-    }
-    char* lines[TCP_RESP_LINES] = {0};
-    lines[0] = buf;
-    uint lines_no = split_with_sep(lines, TCP_RESP_LINES, '\n', 0);
-    if (lines_no < 4) { // HEADER + NL + NL + DATA
-      LOGMSG("No data after header (got %d lines only)", lines_no);
-      continue;
-    }
-
-    uint cndx = 0;
-    uint clen = parse_http_content_len(lines_no, lines, recv_size, &cndx);
-
-    char txt[clen + 1]; memset(txt, 0, sizeof(txt));
-    // combine into one line
-    for (uint i = cndx, len = 0; (i < lines_no) && (len < clen); i++) {
-      int inc = snprinte(txt + len, clen - len, "%s", lines[i]);
-      if (inc < 0) break;
-      if (inc > 0) len += inc;
-    }
-
-    LOGMSG("record line: %s", txt);
-    char *trimmed = trim_quotes(sizeof(txt), txt, CHAR_QUOTES);
-    trimmed = trim_quotes(sizeof(txt), trimmed, CHAR_BRACKETS);
-    char **records = trimmed ? split_record(trimmed) : NULL;
-    if (records) {
-      int got = count_records(records);
-      if (got == itemname_max) {
-        save_records(id, records);
-        return;
+  char* list[MAX_TXT_ITEMS] = {0};
+  const char http1_1[] = "HTTP/1.1";
+  //
+  int got = -1;
+  char *ptr =
+#ifdef HAVE_MEMMEM
+    memmem(txt, len, http1_1, sizeof(http1_1) - 1);
+#else
+    strstr(txt, http1_1);
+#endif
+  if (ptr) {
+    ptr += sizeof(http1_1); // i.e. beyond 'HTTP/1.1 '
+    char okay[] = "200 OK";
+    int olen = sizeof(okay) - 1;
+    if (STR_NEQ(ptr, okay, olen)) // HTTP OK, or not
+      LOGMSG("not OK: %.*s", olen, ptr);
+    else {
+      char* lines[TCP_RESP_LINES] = {txt};
+      uint lines_no = split_with_sep(ARRAY_LEN(lines), lines, '\n', 0);
+      if (lines_no < 4) // HEADER + NL + NL + DATA
+        LOGMSG("No data after header (got %d lines only)", lines_no);
+      else {
+        uint cndx = 0, clen = parse_http_content_len(lines_no, lines, len, &cndx);
+        char txt[clen + 1];
+        memset(txt, 0, sizeof(txt));
+        // combine into one line
+        for (uint i = cndx, len = 0; (i < lines_no) && (len < clen); i++) {
+          int inc = snprinte(txt + len, clen - len, "%s", lines[i]);
+          if (inc < 0)
+            break;
+          if (inc > 0)
+            len += inc;
+        }
+        //
+        LOGMSG("record line: %s", txt);
+        char *trimmed = trim_quotes(sizeof(txt), txt, CHAR_QUOTES);
+        trimmed = trim_quotes(sizeof(txt), trimmed, CHAR_BRACKETS);
+        if (trimmed)
+          split_record(trimmed, ARRAY_LEN(list), list);
+        got = trim_n_count_records(ARRAY_LEN(list), list);
       }
-      LOGMSG("Expected %d records, got %d", itemname_max, got);
     }
   }
-
-  // not found
-  char* empty[MAX_TXT_ITEMS] = {0};
-  save_records(id, empty); // it sets as unknown
+  // fin
+  if (got != itemname_max) {
+    memset(list, 0, sizeof(list)); // as unknown
+    if (got >= 0)
+      LOGMSG("Expected %d records, got %d", itemname_max, got);
+  }
+  save_records(id, ARRAY_LEN(list), list, SETFIELDS);
 }
 
-
-static void parse_whois_tagvalue(char* line, char* record[MAX_TXT_ITEMS]) {
+static void parse_whois_tagvalue(char* line, uint rlen, char* record[rlen]) {
   char* tagvalue[2] = {line, NULL};
-  if (split_with_sep(tagvalue, 2, ':', 0) != 2) return;
-  if (!(tagvalue[0] && tagvalue[1])) return;
+  if (split_with_sep(ARRAY_LEN(tagvalue), tagvalue, ':', 0) != ARRAY_LEN(tagvalue))
+    return;
+  if (!tagvalue[0] || !tagvalue[1])
+    return;
   LOGMSG("whois-in: %s=\"%s\"", tagvalue[0], tagvalue[1]);
   if (af == AF_INET6) { // trim trailing '6' to test IPv6 fields as well
     size_t end = strnlen(tagvalue[0], NAMELEN) - 1;
     if ((end > 0) && (tagvalue[0][end] == '6'))
       tagvalue[0][end] = 0;
   }
-  for (uint j = 0; (j < MAX_TXT_ITEMS) && ORIG_NAME(j); j++) {
-    if (!strcasecmp(ORIG_NAME(j), tagvalue[0])) {
-      record[j] = tagvalue[1];
-      if (j == WHOIS_LAST_NDX) { // split the last item (description, country)
-        char *cc = record[j] ? strrchr(record[j], COMMA) : NULL;
+  if (rlen > ARRAY_LEN(origins[0].name))
+    rlen = ARRAY_LEN(origins[0].name);
+  for (uint i = 0; (i < rlen) && ORIG_NAME(i); i++) {
+    if (!strcasecmp(ORIG_NAME(i), tagvalue[0])) {
+      record[i] = tagvalue[1];
+      if (i == WHOIS_LAST_NDX) { // split the last item (description, country)
+        char *cc = record[i] ? strrchr(record[i], COMMA) : NULL;
         if (cc) {
-          *cc++ = 0;
-          uint jc = j + 1;
-          record[jc] = cc;
-          LOGMSG("whois-out: %s=\"%s\"", ORIG_NAME(jc), record[jc]);
+          uint ic = i + 1;
+          if (ic < rlen) {
+            *cc++ = 0;
+            record[ic] = cc;
+            LOGMSG("whois-out: %s=\"%s\"", ORIG_NAME(ic), record[ic]);
+          }
         }
       }
       LOGMSG("whois-out: %s=\"%s\"", tagvalue[0], tagvalue[1]);
@@ -447,29 +473,70 @@ static void parse_whois_tagvalue(char* line, char* record[MAX_TXT_ITEMS]) {
   }
 }
 
-
-static void parse_whois(void *txt, atndx_t id) {
-  /*summ*/ ipinfo_replies[0]++; ipinfo_replies[2]++;
-
-  char* record[MAX_TXT_ITEMS] = {0};
-  char* lines[TCP_RESP_LINES] = {0};
-  lines[0] = txt;
-
-  int lines_no = split_with_sep(lines, TCP_RESP_LINES, '\n', 0);
-  int start_no = skip_whois_comments(lines, lines_no);
-  if (start_no >= 0) { // not empty segments
-    for (int i = start_no; (i < lines_no) && (i < TCP_RESP_LINES) && lines[i]; i++) {
-      if (!lines[i][0] || (lines[i][0] == WHOIS_COMMENT))
-        continue; // skip empty lines and comments
-      parse_whois_tagvalue(lines[i], record);
+static void split_by_empty_lines(int len, char txt[len], uint n, char* arr[n]) {
+  uint ndx = 0;
+  arr[ndx] = txt;
+  while (txt && (len > 0) && (ndx < n)) {
+    char *mark = memchr(txt, '\n', len); // 1st NL
+    if (!mark)
+      break;
+    len -= ++mark - txt;
+    txt = mark;
+    if (txt && (*txt == '\n')) { // 2nd NL
+      len--;
+      *txt++ = 0;
+      if (!*txt)
+        break;
+      arr[++ndx] = txt;
     }
-  } else
-    LOGMSG("%s", "Skip empty segment");
-
-  // save results of parsing
-  save_records(id, record);
+  }
 }
 
+static int skip_whois_nodata(uint len, char* lines[len]) NONNULL(2);
+static int skip_whois_nodata(uint len, char* lines[len]) {
+  char* data[len];
+  memset(data, 0, sizeof(data));
+  uint count = 0;
+  for (uint i = 0; i < len; i++)
+    if (lines[i] && lines[i][0]) {
+      char *s = trim(lines[i]);
+      if (s && s[0] && s[0] != WHOIS_COMMENT)
+        data[count++] = s;
+    }
+  memcpy(lines, data, sizeof(data));
+  return count;
+}
+
+#define MAX_WHOIS_SOURCES 10
+static void parse_whois(atndx_t id, uint len, char txt[len]) {
+  /*summ*/ ipinfo_replies[0]++; ipinfo_replies[2]++;
+  char* msrc[MAX_WHOIS_SOURCES + 1] = {0};
+  split_by_empty_lines(len, txt, ARRAY_LEN(msrc) - 1, msrc);
+  int op = SETFIELDS;
+  for (char **src = msrc; *src; src++) {
+    char* lines[TCP_RESP_LINES] = {*src};
+    uint count = split_with_sep(ARRAY_LEN(lines), lines, '\n', 0);
+    if (count) {
+      char* record[MAX_TXT_ITEMS] = {0};
+      uint datacnt = skip_whois_nodata(count, lines);
+      if (!datacnt) // empty segment
+        LOGMSG("%s", "Skip empty segment");
+      else {
+        if (datacnt > ARRAY_LEN(lines))
+          datacnt = ARRAY_LEN(lines);
+        for (uint i = 0; (i < datacnt) && lines[i]; i++)
+          parse_whois_tagvalue(lines[i], ARRAY_LEN(record), record);
+        save_records(id, ARRAY_LEN(record), record, op);
+        if (op == SETFIELDS)
+          op = ADDFIELDS;
+      }
+    }
+  }
+  if (op == SETFIELDS) { // save empty data as unknown
+    char* record[MAX_TXT_ITEMS] = {0};
+    save_records(id, ARRAY_LEN(record), record, op);
+  }
+}
 
 static void close_ipitseq(int seq) {
   int sock = ipitseq[seq].sock;
@@ -486,19 +553,19 @@ static void close_ipitseq(int seq) {
 }
 
 void ipinfo_parse(int sock, int seq) { // except dns, dns.ack in dns.c
-  char buf[NETDATA_MAXSIZE] = {0};
+  char data[NETDATA_MAXSIZE + 1] = {0};
   seq %= MAXSEQ;
-  ssize_t received = recv(sock, buf, sizeof(buf), 0);
+  ssize_t received = recv(sock, data, sizeof(data) - 1, 0);
   if (received > 0) {
     atndx_t id = { .at = seq / MAXPATH, .ndx = seq % MAXPATH };
     switch ORIG_TYPE {
       case OT_HTTP:
-        LOGMSG( "HTTP: got[%zd]: \"%.*s\"", received, (int)received, buf);
-        parse_http(buf, received, id);
+        LOGMSG( "HTTP: got[%zd]: \"%.*s\"", received, (int)received, data);
+        parse_http(id, received, data);
         return;
       case OT_WHOIS:
-        LOGMSG("WHOIS: got[%zd]: \"%.*s\"", received, (int)received, buf);
-        parse_whois(buf, id);
+        LOGMSG("WHOIS: got[%zd]: \"%.*s\"", received, (int)received, data);
+        parse_whois(id, received, data);
         return;
       default: break;
     }
@@ -788,22 +855,30 @@ void ipinfo_close(void) {
 #define LIM_CHARS 20
 
 bool ipinfo_init(const char *arg) {
-  if (!arg) return false;
+  if (!arg)
+    return false;
   char* args[MAX_TXT_ITEMS + 1] = {0};
   args[0] = strdup(arg);
-  if (!args[0]) { WARN("strdup(%s)", arg); return false; }
-  split_with_sep(args, MAX_TXT_ITEMS + 1, COMMA, 0);
-  if (!args[0]) { errno = EINVAL; WARN("split_with_sep(%s)", arg); return false; }
+  if (!args[0]) {
+    WARN("strdup(%s)", arg);
+    return false;
+  }
+  split_with_sep(ARRAY_LEN(args) - 1, args, COMMA, 0);
+  if (!args[0]) {
+    errno = EINVAL;
+    WARN("split_with_sep(%s)", arg);
+    return false;
+  }
   //
-  int max = ARRAY_LEN(origins);
+  int omax = ARRAY_LEN(origins);
   int org = -1;
   errno = 0;
   if (*args[0]) {
     long n = str2l(args[0]);
-    if (!errno && (0 <= n) && (n <= max))
+    if (!errno && (0 <= n) && (n <= omax))
       org = n;
   }
-  if ((org > 0) && (org <= max)) {
+  if ((org > 0) && (org <= omax)) {
     origin_no = org - 1;
     ipinfo_tcpmode = (ORIG_TYPE != OT_DNS);
   } else {
@@ -811,37 +886,41 @@ bool ipinfo_init(const char *arg) {
       warn("%s: -L%.*s...", IPINFO_STR, LIM_CHARS, args[0]);
     else {
       errno = ERANGE;
-      warn("%s %s[1..%d]: %.*s", IPINFO_STR, RANGE_STR, max, LIM_CHARS, args[0]);
+      warn("%s %s[1..%d]: %.*s", IPINFO_STR, RANGE_STR, omax, LIM_CHARS, args[0]);
     }
     errno = 0;
     free(args[0]);
     return false;
   }
   itemname_max = 0;
-  while (ORIG_NAME(itemname_max)) itemname_max++;
+  while (ORIG_NAME(itemname_max))
+    itemname_max++;
   //
-  int j = 0;
-  for (int i = 1; args[i] && (i <= MAX_TXT_ITEMS) && (j < MAX_TXT_ITEMS); i++) {
+  uint j = 0;
+  for (uint i = 1; args[i] && (i < ARRAY_LEN(args)) && (j < ARRAY_LEN(args) - 1); i++) {
     if (*args[i]) {
       errno = 0; long n = str2l(args[i]);
       if (errno) {
-        warn("%s: -L%d [%d]=%.*s", IPINFO_STR, org, i + 1, LIM_CHARS, args[i]);
+        warn("%s: -L%u [%u]=%.*s", IPINFO_STR, org, i + 1, LIM_CHARS, args[i]);
         errno = 0;
       } else if ((0 < n) && (n <= itemname_max))
         ipinfo_no[j++] = n - 1;
       else
-        warnx("%s: -L%d [%d]=%.*s: %s", IPINFO_STR, org, i + 1, LIM_CHARS, args[i], SKIPPED_STR);
+        warnx("%s: -L%u [%u]=%.*s: %s", IPINFO_STR, org, i + 1, LIM_CHARS, args[i], SKIPPED_STR);
     } else
-      warnx("%s: -L%d [%d]: %s", IPINFO_STR, org, i + 1, NONE_STR);
+      warnx("%s: -L%u [%u]: %s", IPINFO_STR, org, i + 1, NONE_STR);
   }
-  for (int i = j; i < MAX_TXT_ITEMS; i++)
+  for (uint i = j; i < MAX_TXT_ITEMS; i++)
     ipinfo_no[i] = -1;
   if (ipinfo_no[0] < 0)
     ipinfo_no[0] = 0;
   //
   free(args[0]);
   //
-  for (int i = 0; (i < MAX_TXT_ITEMS) && ORIG_NAME(i); i++) {
+  uint imax = ARRAY_LEN(origins[0].name);
+  if (ARRAY_LEN(origins[0].width) < imax)
+    imax = ARRAY_LEN(origins[0].width);
+  for (uint i = 0; (i < imax) && ORIG_NAME(i); i++) {
     ORIG_UNAME(i) = _(ORIG_NAME(i));
     if (!ORIG_UNAME(i))
       ORIG_UNAME(i) = ORIG_NAME(i);
@@ -868,6 +947,7 @@ bool ipinfo_action(int action) {
   switch (action) {
     case ActionAS: // `l'
       run_opts.lookup = !run_opts.lookup;
+      run_opts.asn = run_opts.lookup;
       break;
     case ActionII: // `L'
       run_opts.lookup = true;
@@ -878,6 +958,10 @@ bool ipinfo_action(int action) {
         if (ipinfo_no[i] == itemname_max)
           run_opts.lookup = false;
       }
+      run_opts.ipinfo = run_opts.lookup;
+      break;
+    case ActionMultiII: // `y'
+      run_opts.multi = !run_opts.multi;
       break;
     case ActionNone: // first time only
       ini_opts.lookup = true;

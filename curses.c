@@ -158,6 +158,9 @@ static inline void mc_key_h(void) { // help
     {.key = "t", .hint = CMD_T_STR},
     {.key = "u", .hint = CMD_U_STR},
     {.key = "x", .hint = CMD_X_STR},
+#ifdef WITH_IPINFO
+    {.key = "y", .hint = CMD_Y_STR},
+#endif
     {.key =
 #ifdef WITH_UNICODE
             "↑↓"
@@ -336,6 +339,9 @@ static key_action_t keyaction_body(int ch) {
     case 't': return ActionTCP;
     case 'u': return ActionUDP;
     case 'x': return ActionCache;
+#ifdef WITH_IPINFO
+    case 'y': return ActionMultiII;
+#endif
     default: break;
   }
   return ActionNone; // ignore unknown input
@@ -371,6 +377,7 @@ key_action_t tui_keyaction(void) {
     case 't': // ActionTCP;
     case 'u': // ActionUDP;
     case 'x': // ActionCache;
+    case 'y': // ActionMultiII;
       cached_title_ulen = -1;
       break;
     default: break;
@@ -806,6 +813,7 @@ static int mc_print_args(char buf[], size_t size) {
 #ifdef WITH_IPINFO
   BOOL_OPT2STR(asn,    PAR_ASN_STR);
   BOOL_OPT2STR(ipinfo, IPINFO_STR);
+  BOOL_OPT2STR(multi,  PAR_MII_STR);
 #endif
 #ifdef ENABLE_DNS
   BOOL_OPT2STR(dns,    PAR_DNS_STR);

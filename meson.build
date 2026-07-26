@@ -66,13 +66,14 @@ srcn += 'report'
 
 # probes
 fndesc = {
-  'pow': {'libs': ['m'], 'hdr': 'math.h'},
-  'warnx': {'libs': ['bsd'], 'hdr': 'err.h'},
-  'socket': {'libs': ['socket', 'network'], 'hdr': 'sys/socket.h'},
-  'arc4random_uniform': {'libs': [], 'hdr': 'stdlib.h', 'libhdr': true, 'req': false},
-  'quick_exit':  {'libs': [], 'hdr': 'stdlib.h', 'req': false},
-  'localtime_r': {'libs': [], 'hdr': 'time.h',   'req': false},
-  'uselocale':   {'libs': [], 'hdr': 'locale.h', 'req': false},
+  'pow':    {'hdr': 'math.h',       'libs': ['m']},
+  'warnx':  {'hdr': 'err.h',        'libs': ['bsd']},
+  'socket': {'hdr': 'sys/socket.h', 'libs': ['socket', 'network']},
+  'arc4random_uniform': {'hdr': 'stdlib.h', 'req': false, 'libhdr': true},
+  'quick_exit':         {'hdr': 'stdlib.h', 'req': false},
+  'localtime_r':        {'hdr': 'time.h',   'req': false},
+  'uselocale':          {'hdr': 'locale.h', 'req': false},
+  'memmem':             {'hdr': 'string.h', 'req': false},
 }
 
 ## optional fetaures
@@ -164,7 +165,7 @@ if nls
     deps += cc.find_library('intl', has_headers: ['libintl.h'],
       dirs: ['/usr/local/lib'], header_args: ['-isystem/usr/local/include'])
   else
-    fndesc += {'gettext': {'libs': ['intl'], 'hdr': 'libintl.h', 'req': true}}
+    fndesc += {'gettext': {'hdr': 'libintl.h', 'libs': ['intl'], 'req': true}}
   endif
   subdir('po')
   optlist += '+NLS'
@@ -253,6 +254,7 @@ if ipinfo
 else
   optlist += '-IPINFO'
   manexcl += 'l'
+  manexcl += 'y'
 endif
 
 # split mode
@@ -374,9 +376,9 @@ endforeach
 
 #
 foreach fn, desc: fndesc
-  libs   = desc['libs']
   incl   = ''
-  hdr    = 'hdr' in desc ? desc['hdr'] : ''
+  hdr    = 'hdr'  in desc ? desc['hdr']  : ''
+  libs   = 'libs' in desc ? desc['libs'] : []
   if hdr != ''
     incl += cc.has_header(hdr) ? '#include <' + hdr + '>' : ''
   endif

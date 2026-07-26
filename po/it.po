@@ -88,6 +88,9 @@ msgstr "mpls"
 msgid "asn"
 msgstr "asn"
 
+msgid "multi-sources"
+msgstr "multi-fonti"
+
 msgid "dns"
 msgstr "dns"
 
@@ -336,6 +339,9 @@ msgstr "(dis)attiva ping UDP"
 
 msgid "toggle cache mode"
 msgstr "(dis)attiva modo cache"
+
+msgid "toggle IP info multi-source mode"
+msgstr "(dis)attiva modo per visualizzare IP-info da più fonti"
 
 msgid "up/down by one line"
 msgstr "su/giù di una riga"
