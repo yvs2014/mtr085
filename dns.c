@@ -268,7 +268,10 @@ void dns_close(void) {
     resfd6 = -1;
   }
 #endif
-  if (custom_res) { free(custom_res); custom_res = NULL; }
+  if (custom_res) {
+    free(custom_res);
+    custom_res = NULL;
+  }
   MYRES_CLOSE(myres);
   LOGMSG("%s", "ok");
 }

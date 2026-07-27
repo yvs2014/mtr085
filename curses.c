@@ -717,7 +717,7 @@ static void mc_stat_title(int x, int y) {
 }
 
 #ifdef WITH_UNICODE
-static void mc_print_scale3(int min, int max, int step) {
+static void tui_print_scale3(int min, int max, int step) {
   for (int i = min; i < max; i += step) {
     addstr("  ");
     add_wch(&map3[i]);
@@ -771,9 +771,9 @@ static void print_scale(void) {
 #ifdef WITH_UNICODE
   else if (chart_mode == 3) {
     if (run_opts.color)
-      mc_print_scale3(1, NUM_FACTORS3 - 1,  2);
+      tui_print_scale3(1, NUM_FACTORS3 - 1,  2);
     else
-      mc_print_scale3(0, NUM_FACTORS3_MONO, 1);
+      tui_print_scale3(0, NUM_FACTORS3_MONO, 1);
   }
 #endif
 }
@@ -800,8 +800,8 @@ static void print_scale(void) {
     ADD_FMT_ARG("%s%s" fmt, IASP, prfx, run_opts.tag); \
 } while (0)
 
-static int mc_print_args(char buf[], size_t size) NONNULL(1);
-static int mc_print_args(char buf[], size_t size) {
+static int tui_print_args(char buf[], size_t size) NONNULL(1);
+static int tui_print_args(char buf[], size_t size) {
   int len = snprinte(buf, size, " (");
   if (len < 0) return len;
   int iasp = len;
@@ -813,7 +813,8 @@ static int mc_print_args(char buf[], size_t size) {
 #ifdef WITH_IPINFO
   BOOL_OPT2STR(asn,    PAR_ASN_STR);
   BOOL_OPT2STR(ipinfo, IPINFO_STR);
-  BOOL_OPT2STR(multi,  PAR_MII_STR);
+  if (run_opts.lookup)
+    BOOL_OPT2STR(multi,  PAR_MII_STR);
 #endif
 #ifdef ENABLE_DNS
   BOOL_OPT2STR(dns,    PAR_DNS_STR);
@@ -889,7 +890,7 @@ static inline void display_charts(void) {
   }
 }
 
-static inline void mc_print_title(void) {
+static inline void tui_print_title(void) {
   static char title_cache[LINEMAXLEN];
   if (cached_title_ulen < 0) { // generate title and cache it
     char buff[LINEMAXLEN] = {0};
@@ -898,8 +899,9 @@ static inline void mc_print_title(void) {
       int len = snprinte(buff, sizeof(buff), "%s", screen_title);
       if (len >= 0) {
         pretitle = buff;
-        int inc = mc_print_args(buff + len, sizeof(buff) - len);
-        if (inc < 0) pretitle = screen_title; // else len += inc;
+        int inc = tui_print_args(buff + len, sizeof(buff) - len);
+        if (inc < 0)
+          pretitle = screen_title; // else len += inc;
       }
     }
     memset(title_cache, 0, sizeof(title_cache));
@@ -921,7 +923,7 @@ static inline void mc_print_title(void) {
   }
 }
 
-static inline void mc_print_hints_n_time(void) {
+static inline void tui_print_hints_n_time(void) {
   mvprintw(1, 0, "%s: ", OPTS_STR);
   attron(A_BOLD); addch('h'); attroff(A_BOLD); printw("%s ", _HINTS_STR);
   attron(A_BOLD); addch('q'); attroff(A_BOLD); printw("%s\n", _QUIT_STR);
@@ -940,15 +942,15 @@ static inline void mc_print_hints_n_time(void) {
     mvaddstr(1, COLS - ustrnlen(buff, sizeof(buff)) - 1, buff);
 }
 
-static inline void mc_print_main_body(void) {
+static inline void tui_print_main_body(void) {
   chart_mode ? display_charts() : display_stats();
 }
 
 void tui_redraw(void) {
   erase();
-  mc_print_title();
-  mc_print_hints_n_time();
-  mc_print_main_body();
+  tui_print_title();
+  tui_print_hints_n_time();
+  tui_print_main_body();
   refresh();
 }
 

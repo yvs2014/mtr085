@@ -61,7 +61,8 @@ extern ulong net_queries[];
 extern ulong net_replies[];
 
 #ifdef WITH_IPINFO
-#define MAX_TXT_ITEMS 25
+#define MAX_II_ITEMS      25
+#define MAX_WHOIS_SOURCES 10
 #endif
 
 #define PAUSE_BETWEEN_QUERIES 3 // pause between identical queries (and ipinfo too), in seconds
@@ -99,15 +100,24 @@ typedef struct mpls_data {
 } mpls_data_t;
 #endif
 
+#ifdef WITH_IPINFO
+typedef struct ii_record_view {
+  char *view;
+  char *src[MAX_WHOIS_SOURCES]; // records from all sources
+} ii_record_view_t;
+#endif
+
 // Address(es) plus associated data
 typedef struct eaddr {
   t_ipaddr ipaddr;
-  char *q_ptr, *r_ptr; // t_ptr query, reply
-  time_t q_ptr_ts;     // timestamp when 'q_ptr' is sent
+  char *q_ptr, *r_ptr;                // query, reply
 #ifdef WITH_IPINFO
-  char *q_txt;                // t_txt query
-  char *r_txt[MAX_TXT_ITEMS]; // t_txt parsed reply
-  time_t q_txt_ts;            // timestamp when 'q_txt' is sent
+  char *q_txt;                        // query
+  ii_record_view_t rec[MAX_II_ITEMS]; // parsed reply
+#endif
+  time_t q_ptr_ts; // timestamp when 'q_ptr' is sent
+#ifdef WITH_IPINFO
+  time_t q_txt_ts; // timestamp when 'q_txt' is sent
 #endif
 #ifdef WITH_MPLS
   mpls_data_t mpls;
@@ -145,13 +155,18 @@ extern char localaddr[];
 #define CURRENT_MPLS(at) (host[at].eaddr[host[at].current].mpls)
 #define MPLS_AT_NDX(at, ndx) (host[at].eaddr[ndx].mpls)
 #endif
+#define QPTR_TS_AT_NDX(at, ndx) (host[at].eaddr[ndx].q_ptr_ts)
 #define QPTR_AT_NDX(at, ndx) (host[at].eaddr[ndx].q_ptr)
 #define RPTR_AT_NDX(at, ndx) (host[at].eaddr[ndx].r_ptr)
-#define QPTR_TS_AT_NDX(at, ndx) (host[at].eaddr[ndx].q_ptr_ts)
 #ifdef WITH_IPINFO
-#define QTXT_AT_NDX(at, ndx) (host[at].eaddr[ndx].q_txt)
-#define RTXT_AT_NDX(at, ndx, num) (host[at].eaddr[ndx].r_txt[num])
 #define QTXT_TS_AT_NDX(at, ndx) (host[at].eaddr[ndx].q_txt_ts)
+#define QTXT_AT_NDX(at, ndx) (host[at].eaddr[ndx].q_txt)
+#define II_VIEW_AT(at, ndx, num) (host[at].eaddr[ndx].rec[num].view)
+#define II_SRC_AT(at, ndx, num, sndx) (host[at].eaddr[ndx].rec[num].src[sndx])
+#define II_REC_ARR(at, ndx) (host[at].eaddr[ndx].rec)
+#define II_REC_ARR_LEN ARRAY_LEN(II_REC_ARR(0, 0))
+#define II_SRC_ARR(at, ndx, num) (host[at].eaddr[ndx].rec[num].src)
+#define II_SRC_ARR_LEN ARRAY_LEN(II_SRC_ARR(0, 0, 0))
 #endif
 
 enum IPV6_ENDIS { IPV6_UNDEF = -1, IPV6_DISABLED = 0, IPV6_ENABLED = 1 };

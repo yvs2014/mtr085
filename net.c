@@ -659,10 +659,16 @@ static void set_new_addr(int at, int ndx, const t_ipaddr *ipaddr MPLSFNTAIL(cons
     free(QTXT_AT_NDX(at, ndx));
     QTXT_AT_NDX(at, ndx) = NULL;
   }
-  for (int i = 0; i < MAX_TXT_ITEMS; i++) {
-    if (RTXT_AT_NDX(at, ndx, i)) {
-      free(RTXT_AT_NDX(at, ndx, i));
-      RTXT_AT_NDX(at, ndx, i) = NULL;
+  for (uint i = 0; i < II_REC_ARR_LEN; i++) {
+    if (II_VIEW_AT(at, ndx, i)) {
+      free(II_VIEW_AT(at, ndx, i));
+      II_VIEW_AT(at, ndx, i) = NULL;
+    }
+    for (uint j = 0; j < II_SRC_ARR_LEN; j++) {
+      if (II_SRC_AT(at, ndx, i, j)) {
+        free(II_SRC_AT(at, ndx, i, j));
+        II_SRC_AT(at, ndx, i, j) = NULL;
+      }
     }
   }
 #endif
@@ -756,14 +762,14 @@ static mpls_data_t *decodempls(const uint8_t *data, int size) {
   static const size_t mplsoff = MPLSMIN - (IES_SZ + IEO_SZ + LAB_SZ);
   static const size_t ieomin = IEO_SZ + LAB_SZ;
   if (size < MPLSMIN) {
-    LOGMSG("got %d bytes of data, whereas mpls min is %d", size, MPLSMIN);
+    LOGMSG("got %u bytes of data, whereas mpls min is %u", size, MPLSMIN);
     return NULL;
   }
   uint off = mplsoff; // at least 12bytes ahead: icmp_ext_struct(4) icmp_ext_object(4) label(4) [label(4) ...]
   // icmp extension structure
   struct icmpext_struct *ies = (struct icmpext_struct *)&data[off];
   if ((ies->ver != ICMP_EXT_VER) || ies->res || !ies->sum) {
-    LOGMSG("got ver=%d res=%d sum=%d, expected ver=%d res=0 sum!=0", ies->ver, ies->res, ies->sum, ICMP_EXT_VER);
+    LOGMSG("got ver=%u res=%u sum=%u, expected ver=%u res=0 sum!=0", ies->ver, ies->res, ies->sum, ICMP_EXT_VER);
     return NULL;
   }
   off += IES_SZ;
@@ -771,7 +777,7 @@ static mpls_data_t *decodempls(const uint8_t *data, int size) {
   struct icmpext_object *ieo = (struct icmpext_object *)&data[off];
   ieo->len = ntohs(ieo->len);
   if ((ieo->len < ieomin) || (ieo->class != ICMP_EXT_CLASS_MPLS) || (ieo->type != ICMP_EXT_TYPE_MPLS)) {
-    LOGMSG("got len=%d class=%d type=%d, expected len>=%zd class=%d type=%d",
+    LOGMSG("got len=%u class=%u type=%u, expected len>=%zd class=%u type=%u",
       ieo->len, ieo->class, ieo->type, ieomin, ICMP_EXT_CLASS_MPLS, ICMP_EXT_TYPE_MPLS);
     return NULL;
   }
@@ -780,7 +786,7 @@ static mpls_data_t *decodempls(const uint8_t *data, int size) {
   // limit number of MPLS labels
   static mpls_data_t mplsdata;
   if (n > ARRAY_LEN(mplsdata.label)) {
-    LOGMSG("got %d MPLS labels, limit=%d", n, ARRAY_LEN(mplsdata.label));
+    LOGMSG("got %u MPLS labels, limit=%zu", n, ARRAY_LEN(mplsdata.label));
     n = ARRAY_LEN(mplsdata.label);
   }
   // mpls labels

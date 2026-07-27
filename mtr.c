@@ -937,12 +937,16 @@ static void getaddrinfo_e(t_res_rc *rr, const char *name) {
 
 #if !defined(AI_IDN) && (defined(LIBIDN2) || defined(LIBIDN))
 static void idn_resolv(t_res_rc *rr, int (*idn2ascii)(const char*, char**, int)) {
-  if (!rr || !idn2ascii) return;
-  char *name = NULL;
-  rr->rc = idn2ascii(rr->target, &name, 0);
-  if (!rr->rc && name) getaddrinfo_e(rr, name);
-  else rr->error = IDN_STRERROR(rr->rc);
-  if (name) free(name);
+  if (rr && idn2ascii) {
+    char *name = NULL;
+    rr->rc = idn2ascii(rr->target, &name, 0);
+    if (!rr->rc && name)
+      getaddrinfo_e(rr, name);
+    else
+      rr->error = IDN_STRERROR(rr->rc);
+    if (name)
+      free(name);
+  }
 }
 #endif
 
