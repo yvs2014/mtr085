@@ -985,22 +985,22 @@ static inline void set_payload_size(void) {
 }
 
 int net_send_batch(void) {
-  if (reset_pattern) set_bit_pattern();
-  if (reset_pldsize) set_payload_size();
-
-  { // Send packet if needed
-    bool ping = true;
-    if (run_opts.oncache)
-      if (host[batch_at].up && (host[batch_at].seen > 0))
-        if ((time(NULL) - host[batch_at].seen) <= run_opts.cache)
-          ping = false;
+  if (reset_pattern)
+    set_bit_pattern();
+  if (reset_pldsize)
+    set_payload_size();
+  //
+  // Send packet if needed
+  { bool ping = true;
+    if (run_opts.oncache && host[batch_at].up && (host[batch_at].seen > 0)
+      && ((time(NULL) - host[batch_at].seen) <= run_opts.cache))
+        ping = false;
     if (ping && !( (mtrtype == IPPROTO_TCP) ?
         net_send_tcp(batch_at) : net_send_icmp_udp(batch_at) ))
       LOGRET_RC(-1, "%s", "failed");
   }
-
-  { // Calculate rc for caller
-    int n_unknown = 0;
+  // Calculate rc for caller
+  { int n_unknown = 0;
     for (int at = net_min(); at < batch_at; at++) {
       if (!addr_exist(&CURRENT_IP(at)))
         n_unknown++;
@@ -1017,7 +1017,7 @@ int net_send_batch(void) {
       return 1;
     }
   }
-
+  //
   batch_at++;
   return 0;
 }
@@ -1378,7 +1378,8 @@ const char *mpls2str(const mpls_label_t *label, int indent) {
 // type must correspond 'id' in 'ns_msg' (uint16_t)
 // it's used as a hint for fast search, 16bits as [hash:7 at:6 ndx:3]
 uint16_t str2hint(const char* str, uint16_t at, uint16_t ndx) {
-  uint16_t hint = 0, ch;
+  uint16_t hint = 0;
+  uint8_t ch;
   while ((ch = *str++))
     hint = ((hint << 5) + hint) ^ ch; // h * 33 ^ ch
   hint &= IDMASK;

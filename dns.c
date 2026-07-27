@@ -219,21 +219,10 @@ static inline void dns_open_finlog(void) {
   for (uint i = 0; i < nscount4; i++)
     if (inet_ntop(nsaddr4[i].sin_family, &nsaddr4[i].sin_addr, buff, sizeof(buff)))
       LOGMSG("ns4#%u: %s:%u (af=%u)", i, buff, ntohs(nsaddr4[i].sin_port), nsaddr4[i].sin_family);
-    else
-      LOGMSG("ns4#%u: %08x:%u (af=%u)", i, nsaddr4[i].sin_addr.s_addr, ntohs(nsaddr4[i].sin_port), nsaddr4[i].sin_family);
   LOGMSG("nscount6=%d", nscount6);
-  for (uint i = 0; i < nscount6; i++) {
-    if (!inet_ntop(nsaddr6[i].sin6_family, &nsaddr6[i].sin6_addr, buff, sizeof(buff))) {
-      for (size_t j = 0, l = 0; (j < sizeof(nsaddr6[i].sin6_addr.s6_addr)) && (l < sizeof(buff)); j++) {
-        int inc = snprinte(buff + l, sizeof(buff) - l, "%02x", nsaddr6[i].sin6_addr.s6_addr[j]);
-        if (inc > 0)
-          l += inc;
-        else
-          break;
-      }
-    }
-    LOGMSG("ns6#%u: [%s]:%u (af=%u)", i, buff, ntohs(nsaddr6[i].sin6_port), nsaddr6[i].sin6_family);
-  }
+  for (uint i = 0; i < nscount6; i++)
+    if (inet_ntop(nsaddr6[i].sin6_family, &nsaddr6[i].sin6_addr, buff, sizeof(buff)))
+      LOGMSG("ns6#%u: [%s]:%u (af=%u)", i, buff, ntohs(nsaddr6[i].sin6_port), nsaddr6[i].sin6_family);
 }
 #endif
 
@@ -279,28 +268,31 @@ void dns_close(void) {
 #ifdef ENABLE_IPV6
 #define HEXMASK 0xf
 // fill ip6.arpa str
-static void ip2arpa6(const uint8_t *ptr, char *buf, int size, const char *suff) NONNULL(1, 2, 4);
-static void ip2arpa6(const uint8_t *ptr, char *buf, int size, const char *suff) {
-  int len = 0;
+static void ip2arpa6(uint size, char buff[size], const uint8_t addr6[16], const char *suff) NONNULL(2, 3, 4);
+static void ip2arpa6(uint size, char buff[size], const uint8_t addr6[16], const char *suff) {
+  uint len = 0;
   for (int i = HEXMASK; (i >= 0) && (len < size); i--) {
-    int inc = snprinte(buf + len, size - len, "%x.%x.", ptr[i] & HEXMASK, ptr[i] >> 4);
-    if (inc > 0) len += inc; else break;
+    int inc = snprinte(buff + len, size - len, "%x.%x.", addr6[i] & HEXMASK, addr6[i] >> 4);
+    if (inc <= 0)
+      break;
+    len += inc;
   }
   if (len < size)
-    snprinte(buf + len, size - len, "%s", suff);
+    snprinte(buff + len, size - len, "%s", suff);
 }
 #endif
 
-char* ip2arpa(const t_ipaddr *ipaddr, const char *suff4, const char *suff6) {
-  static char lqbuf[NAMELEN];
-  const uint8_t *p = ipaddr->s_addr8;
+void ip2arpa(uint size, char buff[size], const t_ipaddr *ipaddr,
+  const char *suff4, const char *suff6) // NONNULL(2, 3)
+{
 #ifdef ENABLE_IPV6
-  if (af == AF_INET6) {
-    ip2arpa6(p, lqbuf, sizeof(lqbuf), suff6 ? suff6 : ARPA6_SUFFIX);
-  } else
+  if (af == AF_INET6)
+    ip2arpa6(size, buff, ipaddr->in6.s6_addr, suff6 ? suff6 : ARPA6_SUFFIX);
+  else
 #endif
-  { snprinte(lqbuf, sizeof(lqbuf), "%d.%d.%d.%d.%s", p[3], p[2], p[1], p[0], suff4 ? suff4 : ARPA4_SUFFIX); }
-  return lqbuf;
+  { snprinte(buff, size, "%d.%d.%d.%d.%s",
+      ipaddr->s_addr8[3], ipaddr->s_addr8[2], ipaddr->s_addr8[1], ipaddr->s_addr8[0],
+     suff4 ? suff4 : ARPA4_SUFFIX); }
 }
 
 static int send2ns(int fd, uint ns_max,  const struct sockaddr *ns_list, socklen_t ns_addrlen,
@@ -364,7 +356,9 @@ const char *dns_ptr_lookup(int at, int ndx) {
 
   // set query string if not yet (setting a new ip, free this query)
   if (!QPTR_AT_NDX(at, ndx)) {
-    QPTR_AT_NDX(at, ndx) = strndup(ip2arpa(&IP_AT_NDX(at, ndx), NULL, NULL), NAMELEN);
+    char query[NAMELEN] = {0};
+    ip2arpa(sizeof(query), query, &IP_AT_NDX(at, ndx), NULL, NULL);
+    QPTR_AT_NDX(at, ndx) = strndup(query, sizeof(query));
     if (!QPTR_AT_NDX(at, ndx)) {
       WARN("[%d:%d]: strndup()", at, ndx);
       return NULL;
@@ -526,9 +520,9 @@ static void dns_extract_answer(ns_msg *msg, int section) {
             /*summ*/ dns_replies[1]++;
           } else if ((type == ns_t_txt) && (an->type == 1) && dns_txt_handler) {
             const uint8_t *rdata = ns_rr_rdata(rr);
-            int32_t rlen = (int)ns_rr_rdlen(rr); // uint16_t
+            uint16_t rlen = ns_rr_rdlen(rr);
             if (rdata && rlen)
-              dns_handle_txt(an->at, an->ndx, dns_txt_handler, rdata, rlen, VSLASH);
+              dns_handle_txt(an->at, an->ndx, dns_txt_handler, rdata, rlen/*uint16->int32*/, VSLASH);
             /*summ*/ dns_replies[2]++;
           }
           // let's take the first record and break

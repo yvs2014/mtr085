@@ -426,9 +426,8 @@ static void seal_n_bell(int at, int max) {
   const int bell_at = SAVED_PINGS - 3; // wait at least -i interval for reliability
   if (host[at].saved[bell_at] == CT_UNKN) {
     host[at].saved[bell_at] = CT_SEAL; // sealed
-    if (run_opts.bell)
-      if (at != (max - 1))
-        return;
+    if (run_opts.bell && (at != (max - 1)))
+      return;
     if (run_opts.audible)
       beep();
     if (run_opts.visible)
@@ -968,9 +967,8 @@ bool tui_open(void) {
   cached_title_ulen = -1;
   stat_title_len = -1;
   //
-  if (run_opts.color)
-    if (!has_colors())
-      run_opts.color = false;
+  if (run_opts.color && !has_colors())
+    run_opts.color = false;
   //
   if (run_opts.color) {
     start_color();

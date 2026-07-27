@@ -128,7 +128,8 @@ int ustrnlen(const char *str, int max) {
 }
 
 char *datetime(time_t at, char *buff, size_t size) {
-  if (!size) return NULL;
+  if (!size)
+    return NULL;
   buff[0] = 0;
 #ifdef HAVE_LOCALTIME_R
   struct tm re;
@@ -136,9 +137,8 @@ char *datetime(time_t at, char *buff, size_t size) {
 #else
   struct tm *tm = (at > 0) ? localtime(&at) : NULL;
 #endif
-  if (tm)
-    if (!strftime(buff, size, "%c", tm))
-      buff[0] = 0;
+  if (tm && !strftime(buff, size, "%c", tm))
+    buff[0] = 0;
   return buff;
 }
 
