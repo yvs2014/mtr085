@@ -299,20 +299,36 @@ static void save_fields(int at, int ndx, uint rlen, char* record[rlen], bool add
   }
 }
 
+// test out if sources are the same
+static bool same_ii_src(int at, int ndx, int num, const char *first) NONNULL(4);
+static bool same_ii_src(int at, int ndx, int num, const char *first) {
+    bool same = true;
+    for (uint i = 1; i < II_SRC_ARR_LEN; i++) {
+      char *str = II_SRC_AT(at, ndx, num, i);
+      if (str)
+        same = STR_EQ(first, str, NAMELEN);
+      if (!same || !str)
+        break;
+    }
+    return same;
+}
+
 static void review_at(int at, int ndx) {
   for (uint i = 0; i < II_REC_ARR_LEN; i++) {
-    bool fin = true;
-    //
     const char *first  = II_SRC_AT(at, ndx, i, 0);
-    if (first && first[0]) {
+    if (!first)
+      continue;
+    bool fin  = true;
+    bool same = same_ii_src(at, ndx, i, first);
+    if (first) {
       char buff[NAMELEN] = {0};
       bool more = II_SRC_AT(at, ndx, i, 1) != NULL;
-      int len = (more && !run_opts.multi) ?
+      int len = (more && !run_opts.multi && !same) ?
         snprinte(buff, sizeof(buff), "%s*", first) :
         snprinte(buff, sizeof(buff), "%s", first);
       if ((len > 0) && !set_newrec(at, ndx, i, strndup(buff, sizeof(buff)), -1))
         break;
-      fin = !more || (more && !run_opts.multi);
+      fin = !more || (more && !run_opts.multi) || same;
     }
     //
     if (!fin) {
@@ -601,7 +617,9 @@ static void parse_whois(atndx_t id, uint len, char txt[len]) {
       }
     }
   }
-  if (op == SETFIELDS) { // save empty data as unknown
+  if (op == ADDFIELDS) // i.e. some records are saved
+    reset_view();
+  else {      // otherwise save empty data as unknown
     char* record[II_REC_ARR_LEN] = {0};
     save_records(id, ARRAY_LEN(record), record, op, 0);
   }
