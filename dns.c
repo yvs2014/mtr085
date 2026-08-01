@@ -95,7 +95,6 @@ static struct __res_state myres;
 #define MYRES_CLOSE(res) res_nclose(&(res))
 #define MYRES_QUERY(res, ...) res_nmkquery(&(res), __VA_ARGS__)
 #else
-extern struct __res_state _res;
 #define myres _res
 #define MYRES_INIT(res) res_init()
 #define MYRES_INIT_STR "res_init()"
