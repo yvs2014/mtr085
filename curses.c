@@ -377,8 +377,11 @@ key_action_t tui_keyaction(void) {
     case 't': // ActionTCP;
     case 'u': // ActionUDP;
     case 'x': // ActionCache;
-    case 'y': // ActionMultiII;
       cached_title_ulen = -1;
+      break;
+    case 'y': // ActionMultiII;
+      if (run_opts.lookup)
+        cached_title_ulen = -1;
       break;
     default: break;
   }
@@ -802,7 +805,8 @@ static void print_scale(void) {
 static int tui_print_args(char buf[], size_t size) NONNULL(1);
 static int tui_print_args(char buf[], size_t size) {
   int len = snprinte(buf, size, " (");
-  if (len < 0) return len;
+  if (len < 0)
+    return len;
   int iasp = len;
   BOOL_OPT2STR(udp,    PAR_UDP_STR);
   BOOL_OPT2STR(tcp,    PAR_TCP_STR);
