@@ -21,7 +21,6 @@ bool is_custom_fld(void);
 void onoff_jitter(void);
 #endif
 const t_stat* active_stats(size_t nth);
-void foreach_stat(int at, void (*body)(int at, const t_stat *stat), char fin) NONNULL(2);
 
 long str2l(const char *arg);
 int arg2int(int8_t opt, const char *arg, int min, int max,

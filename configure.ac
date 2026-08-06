@@ -53,7 +53,7 @@ AM_CONDITIONAL([SPLITMODE], [test "x$splitmode" = "xyes"])
 AS_IF([test "x$splitmode" = "xyes"], [AC_DEFINE([SPLITMODE], [1], [Define to enable split-mode])])
 
 AC_ARG_WITH(tui,
-	AS_HELP_STRING([--without-tui], [without Curses library]),
+	AS_HELP_STRING([--without-tui], [without Curses TUI]),
 	[tui=${withval}], [tui=yes])
 AM_CONDITIONAL([TUI], [test "x$tui" = "xyes"])
 _unicode="no"
@@ -61,10 +61,10 @@ AS_IF([test "x$tui" = "xyes"], [
 	AC_DEFINE(TUIMODE, 1, [Build with TUI (curses library)])
 	AC_CHECK_HEADERS([ncursesw/ncurses.h ncursesw/curses.h ncurses/ncurses.h ncurses/curses.h ncurses.h curses.h], break)
 	_curses_libs="ncursesw ncurses curses tinfo"
-	AC_SEARCH_LIBS([use_default_colors], [$_curses_libs],
-		AC_DEFINE([HAVE_USE_DEFAULT_COLORS], [1], [Define this if curses library has use_default_colors()]))
 	AC_SEARCH_LIBS([curses_version], [$_curses_libs],
 		AC_DEFINE([HAVE_CURSES_VERSION], [1], [Define this if curses library has curses_version()]))
+	AC_SEARCH_LIBS([use_default_colors], [$_curses_libs],
+		AC_DEFINE([HAVE_USE_DEFAULT_COLORS], [1], [Define this if curses library has colors support]))
 	AC_ARG_WITH(unicode,
 		AS_HELP_STRING([--without-unicode], [without Unicode histogram]),
 		[unicode=${withval}], [unicode=yes])
@@ -107,6 +107,7 @@ AS_IF([test "x$dns" = "xyes"], [
 	AC_DEFINE([ENABLE_DNS], [], [Define to enable DNS])
 	AC_HEADER_RESOLV
 	AC_SEARCH_LIBS([dn_expand], [resolv],, AC_SEARCH_LIBS([__dn_expand], [resolv],, AC_MSG_ERROR(No resolv found)))
+	AC_SEARCH_LIBS([ns_put16],  [resolv],, AC_SEARCH_LIBS([__ns_put16],  [resolv],, AC_MSG_ERROR(No suitable resolv API)))
 	dnl res_xxx is resolved via macros on MacOS, so let's suggest some mkquery() is present there unconditionaly
 	AS_IF([test "x$macos" = "xyes"], [AC_DEFINE([HAVE_RES_NMKQUERY], [1], [Define this if res_nmkquery() is present])], true, [
 	AC_SEARCH_LIBS([res_nmkquery], [resolv],

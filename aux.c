@@ -51,14 +51,6 @@ const t_stat* active_stats(size_t nth) {
   return ((ndx >= 0) && (ndx < stat_max)) ? &stats[ndx] : NULL;
 }
 
-void foreach_stat(int at, void (*body)(int at, const t_stat *stat), char fin) {
-  for (uint i = 0; i < MAXFLD; i++) {
-    const t_stat *stat = active_stats(i);
-    if (stat) body(at, stat); else break;
-  }
-  if (fin) putchar(fin);
-}
-
 long str2l(const char *arg) {
   long num = 0;
   if (arg && *arg) {

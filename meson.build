@@ -122,7 +122,7 @@ if tui
   endif
   config.set_quoted('TUIKIND', lib)
   deps += libcurses
-  fns = ['use_default_colors', 'curses_version']
+  fns = ['curses_version', 'use_default_colors']
   foreach fn: fns
     if cc.has_function(fn, dependencies: libcurses)
       config.set('HAVE_' + fn.underscorify().to_upper(), 1)
@@ -138,7 +138,7 @@ if tui
     fn = 'add_wch'
     assert(cc.has_function(fn, dependencies: libcurses), 'UNICODE is enabled, but no wchar library found')
   endif
-  srcn += 'curses'
+  srcn += 'tui'
   optlist += '+TUI'
   config.set('TUIMODE', 1)
 else
@@ -429,7 +429,7 @@ endforeach
 
 if meson.version().version_compare('>=0.53')
   summary({
-   'TUI': tui, 'CAP': cap, 'UNICODE': unicode, 'NLS': nls,
+   'CAP': cap, 'TUI': tui, 'UNICODE': unicode, 'NLS': nls,
    'DNS': dns, 'IDN': idn, 'IPINFO': ipinfo,
    'SPLIT': split, 'IPV6': ipv6, 'MPLS': mpls},
     bool_yn: true)

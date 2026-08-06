@@ -34,7 +34,7 @@ mtr_SOURCES += dns.c dns.h
 endif
 
 if TUI
-mtr_SOURCES += curses.c tui.h
+mtr_SOURCES += tui.c tui.h
 endif
 
 if SPLITMODE

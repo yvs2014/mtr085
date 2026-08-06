@@ -163,6 +163,18 @@ void backresolv_lookups(void) {
 }
 #endif
 
+static void foreach_stat(int at, void (*body)(int at, const t_stat *stat), char fin) NONNULL(2);
+static void foreach_stat(int at, void (*body)(int at, const t_stat *stat), char fin) {
+  for (uint i = 0; i < MAXFLD; i++) {
+    const t_stat *stat = active_stats(i);
+    if (!stat)
+      break;
+    body(at, stat);
+  }
+  if (fin)
+    putchar(fin);
+}
+
 #ifdef WITH_IPINFO
 static void report_info(int infolen, const char info[]) NONNULL(2);
 static void report_info(int infolen, const char info[]) {

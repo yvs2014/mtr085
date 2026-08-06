@@ -50,7 +50,7 @@
 #endif
 
 #ifndef GITREV
-#define GITREV "283"
+#define GITREV "284"
 #endif
 
 #ifndef HAVE_UINT
@@ -95,8 +95,9 @@ typedef struct s_cmd_hint {
 } t_cmd_hint;
 
 enum {
-  MAXFLD  = 20, // fields in custom set to display stats
-  NAMELEN = 256,
+  NAMELEN   = 256,
+  MAXFLD    =  20, // fields in custom set to display stats
+  MAXLABELS =   8, // mpls labels
 };
 
 typedef enum {
@@ -124,8 +125,8 @@ typedef enum {
 #endif
 } display_mode_t;
 
-typedef enum { ActionNone, ActionQuit,
-  ActionReset, ActionDisplay, ActionClear, ActionPauseResume,
+typedef enum {
+  ActionNone = 0, ActionQuit, ActionReset, ActionDisplay, ActionClear, ActionPauseResume,
 #ifdef TUIMODE
   ActionLineUp, ActionLineDown, ActionPageUp, ActionPageDown,
 #endif
