@@ -33,6 +33,7 @@
 #if defined(LOG_NET) && !defined(LOGMOD)
 #define LOGMOD
 #endif
+
 #if !defined(LOG_NET) && defined(LOGMOD)
 #undef LOGMOD
 #endif
@@ -40,11 +41,11 @@
 #ifdef LIBCAP
 #include <sys/capability.h>
 #endif
+
 #ifdef HAVE_NETDB_H
 #include <netdb.h>
 #endif
 
-#include "common.h"
 #include "net.h"
 #include "aux.h"
 #include "nls.h"
@@ -54,22 +55,23 @@
 #ifdef ENABLE_DNS
 #include "dns.h"
 #endif
+
 #ifdef OUTPUT_FORMAT_RAW
 #include "report.h"
 #endif
 
 #ifdef HAVE_ARC4RANDOM_UNIFORM
-#define RANDUNIFORM(base) arc4random_uniform(base)
+#  define RANDUNIFORM(base) arc4random_uniform(base)
 #else // original version
-#define RANDUNIFORM(base) ((base - 1) * (rand() / (RAND_MAX + 0.1)))
+#  define RANDUNIFORM(base) ((base - 1) * (rand() / (RAND_MAX + 0.1)))
 #endif
 
 #if   __STDC_VERSION__ > 202312L
-#define SASSERT  static_assert
+#  define SASSERT  static_assert
 #elif __STDC_VERSION__ > 201112L
-#define SASSERT _Static_assert
+#  define SASSERT _Static_assert
 #else
-#define SASSERT(expression, ...) assert(expression)
+#  define SASSERT(expression, ...) assert(expression)
 #endif
 
 // iphdr, icmphdr are defined because no common field names among OSes
@@ -95,8 +97,8 @@ struct PACKIT _icmphdr {
   uint16_t sum, id, seq;
 }; /* must be 8 bytes */
 
-#ifndef ICMP_TIME_EXCEEDED  // not defined on old systems
-#define ICMP_TIME_EXCEEDED  11
+#if !defined(ICMP_TIME_EXCEEDED) && defined(ICMP_TIMXCEED)
+#define ICMP_TIME_EXCEEDED ICMP_TIMXCEED
 #endif
 
 // struct tcphdr /* common because RFC793 */
@@ -112,15 +114,15 @@ struct PACKIT _udpph {
 
 #ifdef WITH_MPLS
 struct PACKIT icmpext_struct { // RFC4884
-#if BYTE_ORDER == LITTLE_ENDIAN
+  #if BYTE_ORDER == LITTLE_ENDIAN
   uint8_t res:4;
   uint8_t ver:4;
-#elif BYTE_ORDER == BIG_ENDIAN
+  #elif BYTE_ORDER == BIG_ENDIAN
   uint8_t ver:4;
   uint8_t res:4;
-#else
-#error "Undefined byte order"
-#endif
+  #else
+    #error "Undefined byte order"
+  #endif
   uint8_t rest;
   uint16_t sum;
 }; /* must be 4 bytes */
@@ -131,20 +133,15 @@ struct PACKIT icmpext_object { // RFC4884
   uint8_t type;
 }; /* must be 4 bytes */
 
-#define ICMP_EXT_VER        2
-#define ICMP_EXT_CLASS_MPLS 1
-#define ICMP_EXT_TYPE_MPLS  1
+  #define ICMP_EXT_VER        2
+  #define ICMP_EXT_CLASS_MPLS 1
+  #define ICMP_EXT_TYPE_MPLS  1
 
-#define IES_SZ sizeof(struct icmpext_struct)
-#define IEO_SZ sizeof(struct icmpext_object)
-#define LAB_SZ sizeof(mpls_label_t)
-#define MPLSMIN 120 // min after: [ip] icmp ip
-
-#define MPLSFNTAIL(arg) , arg
-#else
-#define MPLSFNTAIL(arg)
+  #define IES_SZ sizeof(struct icmpext_struct)
+  #define IEO_SZ sizeof(struct icmpext_object)
+  #define LAB_SZ sizeof(mpls_label_t)
+  #define MPLSMIN 120 // min after: [ip] icmp ip
 #endif /*MPLS*/
-
 
 #define LO_UDPPORT 33433  // start from LO_UDPPORT+1
 #define UDPPORTS 90       // go thru udp:33434-33523 acl
@@ -640,12 +637,9 @@ static int at2next(int hop) {
 }
 
 // set new ip-addr and clear associated data
-static void set_new_addr(int at, int ndx, const t_ipaddr *ipaddr MPLSFNTAIL(const mpls_data_t *mpls)) {
+static void set_new_addr(int at, int ndx, const t_ipaddr *ipaddr) NONNULL(3);
+static void set_new_addr(int at, int ndx, const t_ipaddr *ipaddr) {
   addr_copy(&IP_AT_NDX(at, ndx), ipaddr);
-#ifdef WITH_MPLS
-  mpls ? memcpy(&MPLS_AT_NDX(at, ndx), mpls, sizeof(mpls_data_t))
-    : memset(&MPLS_AT_NDX(at, ndx), 0, sizeof(mpls_data_t));
-#endif
   if (QPTR_AT_NDX(at, ndx)) {
     free(QPTR_AT_NDX(at, ndx));
     QPTR_AT_NDX(at, ndx) = NULL;
@@ -674,11 +668,36 @@ static void set_new_addr(int at, int ndx, const t_ipaddr *ipaddr MPLSFNTAIL(cons
 #endif
 }
 
+// set mpls for new ip-addr
+#ifdef WITH_MPLS
+static inline void set_new_mpls(int at, int ndx, const mpls_data_t *mpls) {
+  void *atndx = &MPLS_AT_NDX(at, ndx);
+  size_t size = sizeof(mpls_data_t);
+  if (mpls)
+    memcpy(atndx, mpls, size);
+  else
+    memset(atndx, 0,    size);
+}
+#define SET_NEW_ADDR(addr, mpls) do { \
+  set_new_addr(at, ndx, (addr));      \
+  set_new_mpls(at, ndx, (mpls));      \
+} while (0)
+#else
+#define SET_NEW_ADDR(addr, unused) set_new_addr(at, ndx, (addr))
+#endif
+
 
 // Got a return
-static int net_stat(uint port, const void *addr, struct timespec *recv_at,
-    int reason MPLSFNTAIL(const mpls_data_t *mpls))
-{
+static int net_stat(uint port, const void *addr, struct timespec *recv_at, int reason
+#ifdef WITH_MPLS
+  , const mpls_data_t *mpls
+#endif
+) NONNULL(2, 3);
+static int net_stat(uint port, const void *addr, struct timespec *recv_at, int reason
+#ifdef WITH_MPLS
+  , const mpls_data_t *mpls
+#endif
+) {
   uint seq = port % MAXSEQ;
   if (!seqlist[seq].transit)
     return true;
@@ -715,7 +734,7 @@ static int net_stat(uint port, const void *addr, struct timespec *recv_at,
       }
       ndx = MAXPATH - 1;
     }
-    set_new_addr(at, ndx, &copy MPLSFNTAIL(mpls));
+    SET_NEW_ADDR(&copy, mpls);
 #ifdef OUTPUT_FORMAT_RAW
     if (run_opts.rawrep)
       raw_rawhost(at, &IP_AT_NDX(at, ndx));
@@ -724,20 +743,13 @@ static int net_stat(uint port, const void *addr, struct timespec *recv_at,
 #ifdef WITH_MPLS
   else if (mpls && memcmp(&MPLS_AT_NDX(at, ndx), mpls, sizeof(mpls_data_t))) {
     LOGMSG("update mpls at=%d ndx=%d (labels=%d)", at, ndx, mpls->n);
-    memcpy(&MPLS_AT_NDX(at, ndx), mpls, sizeof(mpls_data_t));
+    set_new_mpls(at, ndx, mpls);
   }
 #endif
 
-  struct timespec tv, stated_now;
-  if (!recv_at) { // try again
-    recv_at = &stated_now;
-    if (clock_gettime(CLOCK_MONOTONIC, recv_at) < 0) {
-      keep_error(errno, __func__);
-      return false;
-    }
-  }
+  struct timespec tv;
   timespecsub(recv_at, &seqlist[seq].time, &tv);
-  timemsec_t curr = { .ms = time2msec(tv), .frac = time2mfrac(tv) };
+  timemsec_t curr = {.ms = time2msec(tv), .frac = time2mfrac(tv)};
   hop_stats(at, curr);
 
 #ifdef TUIMODE
@@ -751,6 +763,12 @@ static int net_stat(uint port, const void *addr, struct timespec *recv_at,
 #endif
   return true;
 }
+
+#ifdef WITH_MPLS
+#define NET_STAT(port, addr, recvat, reason, mpls)   net_stat((port), (addr), (recvat), (reason), (mpls))
+#else
+#define NET_STAT(port, addr, recvat, reason, unused) net_stat((port), (addr), (recvat), (reason))
+#endif
 
 #ifdef WITH_MPLS
 static inline bool mplslike(ssize_t psize, ssize_t hsize) {
@@ -800,7 +818,7 @@ static mpls_data_t *decodempls(const uint8_t *data, int size) {
 #endif
 
 
-void net_icmp_parse(struct timespec *recv_at) {
+void net_icmp_parse(struct timespec *recv_at) { // NONNULL(1)
 #define ICMPSEQID { seq = icmp->seq; if (icmp->id != (uint16_t)mypid) \
   LOGRET("icmp(myid=%u): got unknown id=%u (type=%u seq=%u)", mypid, icmp->id, icmp->type, seq); }
 
@@ -879,8 +897,9 @@ void net_icmp_parse(struct timespec *recv_at) {
 
   /*summ*/ net_replies[QR_SUM]++;
 
-  if (seq >= 0) net_stat(seq, ((uint8_t*)&sa_in) + sa_addr_offset, recv_at,
-    reason MPLSFNTAIL(mplson ? decodempls(data, size - (data - packet)) : NULL));
+  if (seq >= 0)
+    NET_STAT(seq, ((uint8_t*)&sa_in) + sa_addr_offset, recv_at, reason,
+             mplson ? decodempls(data, size - (data - packet)) : NULL);
 #undef ICMPSEQID
 }
 
@@ -1173,9 +1192,11 @@ bool net_set_host(t_ipaddr *ipaddr) {
 }
 
 void net_reset(void) {
+  // clear all query-response cache
   for (int at = 0; at < MAXHOST; at++)
     for (int ndx = 0; ndx < MAXPATH; ndx++)
-      set_new_addr(at, ndx, &unspec_addr MPLSFNTAIL(NULL));  // clear all query-response cache
+      SET_NEW_ADDR(&unspec_addr, NULL);
+  //
   memset(host, 0, sizeof(host));
 #ifdef TUIMODE
   for (int at = 0; at < MAXHOST; at++) {
@@ -1229,7 +1250,7 @@ void net_close(void) {
   // clear memory allocated for query-response cache
   for (int at = 0; at < MAXHOST; at++)
     for (int ndx = 0; ndx < MAXPATH; ndx++)
-      set_new_addr(at, ndx, &unspec_addr MPLSFNTAIL(NULL));
+      SET_NEW_ADDR(&unspec_addr, NULL);
 }
 
 int net_wait(void) { return recvsock; }
@@ -1246,7 +1267,7 @@ static int err_slippage(int sock) {
 }
 
 // Check connection state with error-slippage
-void net_tcp_parse(int sock, int seq, int noerr, struct timespec *recv_at) {
+void net_tcp_parse(int sock, int seq, int noerr, struct timespec *recv_at) { // NONNULL(4)
   int reason = -1, e = err_slippage(sock);
   LOGMSG("recv <e=%d> sock=%d ts=%lld.%09ld", e, sock,
     recv_at ? (long long)(recv_at->tv_sec) : 0, recv_at ? recv_at->tv_nsec : 0);
@@ -1259,7 +1280,9 @@ void net_tcp_parse(int sock, int seq, int noerr, struct timespec *recv_at) {
     case EHOSTDOWN:
     case ECONNREFUSED:
     case 0: // no error
-      net_stat(seq, remote_ipaddr, recv_at, reason MPLSFNTAIL(NULL)); /*no MPLS decoding?*/
+      /*no MPLS decoding?*/
+      if (remote_ipaddr)
+        NET_STAT(seq, remote_ipaddr, recv_at, reason, NULL);
       LOGMSG("stat seq=%d for sock=%d", seq, sock);
       break;
 //  case EAGAIN: // need to wait more

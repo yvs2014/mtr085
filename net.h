@@ -19,16 +19,15 @@
 #ifndef NET_H
 #define NET_H
 
-#include <stdint.h>
 #include <arpa/inet.h>
 #include <time.h>
-
-#include "common.h"
 
 #ifdef ENABLE_IPV6
 #include <netinet/ip6.h>
 #include <netinet/icmp6.h>
 #endif
+
+#include "common.h"
 
 #define PAYLOAD_SIZE 56     // default ICMP,UDP payload size (64 byte IP payload - 8 byte header)
 #define MAXHOST 64          // if you choose 256, then adjust IDMASK ID2AT AT2ID ID2NDX
@@ -180,8 +179,8 @@ bool net_set_ifaddr(const char *ifaddr);
 void net_reset(void);
 void net_close(void);
 int net_wait(void);
-void net_icmp_parse(struct timespec *recv_at);
-void net_tcp_parse(int sock, int seq, int noerr, struct timespec *recv_at);
+void net_icmp_parse(struct timespec *recv_at) NONNULL(1);
+void net_tcp_parse(int sock, int seq, int noerr, struct timespec *recv_at) NONNULL(4);
 bool net_timedout(int seq);
 int net_min(void);
 int net_max(void);

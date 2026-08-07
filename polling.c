@@ -188,6 +188,7 @@ static void tcp_timedout(void) {
   }
 }
 
+static void proceed_tcp(struct timespec *polled_at) NONNULL(1);
 static void proceed_tcp(struct timespec *polled_at) {
   for (int i = FD_MAX; i < maxfd; i++) {
     int sock = allfds[i].fd;
@@ -420,6 +421,7 @@ static inline bool tcpish(void) {
 }
 
 // work out events
+static int conclude(struct timespec *polled_at) NONNULL(1);
 static int conclude(struct timespec *polled_at) {
   int rc = ActionNone;
   if (IN_ISSET(FD_STDIN)) { // check keyboard events
@@ -529,7 +531,7 @@ int poll_loop(void) {
       rv = poll(allfds, maxfd, timeout);
     } while ((rv < 0) && (errno == EINTR));
 
-    static struct timespec polled_now;
+    static struct timespec polled_now = {0};
     PL_GETTIME(&polled_now);
 
     if (rv < 0) {

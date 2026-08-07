@@ -18,31 +18,26 @@
 
 #include <stdio.h>
 #include <string.h>
-#include <sys/types.h>
-
-#include "common.h"
-#include "nls.h"
-#include "tui.h"
 
 #ifdef WITH_UNICODE
-#ifndef _XOPEN_SOURCE_EXTENDED
-#define _XOPEN_SOURCE_EXTENDED
-#endif
-#ifdef HAVE_WCHAR_H
-#  include <wchar.h>
-#endif
-#ifdef __NetBSD__
-#define CCHAR_attr attributes
-#define CCHAR_chars vals
+#  ifndef _XOPEN_SOURCE_EXTENDED
+#    define _XOPEN_SOURCE_EXTENDED
+#  endif
+#  ifdef HAVE_WCHAR_H
+#    include <wchar.h>
+#  endif
+#  ifdef __NetBSD__
+#    define CCHAR_attr attributes
+#    define CCHAR_chars vals
 /*
-#elif defined(OPENSOLARIS_CURSES)
-#define CCHAR_attr _at
-#define CCHAR_chars _wc
+#  elif defined(OPENSOLARIS_CURSES)
+#    define CCHAR_attr _at
+#    define CCHAR_chars _wc
 */
-#else
-#define CCHAR_attr attr
-#define CCHAR_chars chars
-#endif
+#  else
+#    define CCHAR_attr attr
+#    define CCHAR_chars chars
+#  endif
 #endif // WITH_UNICODE
 
 #if   defined(HAVE_NCURSESW_NCURSES_H)
@@ -61,11 +56,15 @@
 #  error No *curses header file given
 #endif
 
+#include "tui.h"
+#include "nls.h"
 #include "aux.h"
 #include "net.h"
+
 #ifdef ENABLE_DNS
 #include "dns.h"
 #endif
+
 #ifdef WITH_IPINFO
 #include "ipinfo.h"
 #endif
@@ -208,7 +207,7 @@ static void tui_key_h(WINDOW *win) { // help
 #endif
     {.key =
 #ifdef WITH_UNICODE
-            "↑↓"
+            utf_compat ? "↑↓+-" :
 #endif
             "+-",         .hint = CMD_UD1_STR},
     {.key = PGUPDOWN_STR, .hint = CMD_UD5_STR},
@@ -393,9 +392,12 @@ static key_action_t action_map[UINT8_MAX] =  {
   ['t'] = ActionTCP,
   ['u'] = ActionUDP,
   ['x'] = ActionCache,
+#ifdef WITH_IPINFO
+  ['y'] = ActionMultiII,
+#endif
 };
 
-typedef void (*tui_key_fn)(WINDOW *win);
+typedef void (*tui_key_fn)(WINDOW *win) NONNULL(1);
 
 // map: local actions
 static tui_key_fn actfn_map[UINT8_MAX] =  {
@@ -413,6 +415,11 @@ static tui_key_fn actfn_map[UINT8_MAX] =  {
   ['s'] = tui_key_s, // payload size
 };
 
+static inline void require_redraw(void) {
+  stat_labels_redrawn = false;
+  titlelen.screen = -1;
+}
+
 static inline void reset_actkey_flags(int ch) {
   switch (ch) {
     case  3 : // ^C
@@ -424,34 +431,39 @@ static inline void reset_actkey_flags(int ch) {
     case 'h':
     case 'b': // bit pattern
     case 'c': // number of cycles
-    case 'd': // ActionDisplay;
+    case 'd': // [ActionDisplay]
 #ifdef WITH_MPLS
-    case 'e': // ActionMPLS;
+    case 'e': // [ActionMPLS]
 #endif
     case 'f': // first ttl
     case 'i': // interval
-    case 'j': // ActionJitter
+    case 'j': // [ActionJitter]
 #ifdef WITH_IPINFO
-    case 'l': // ActionAS;
-    case 'L': // ActionII;
+    case 'l': // [ActionAS]
+    case 'L': // [ActionII]
 #endif
     case 'm': // max ttl
 #ifdef ENABLE_DNS
-    case 'n': // ActionDNS;
+    case 'n': // [ActionDNS]
 #endif
     case 'o': // fields to display and their order
     case ' ':
-    case 'p': // ActionPauseResume;
+    case 'p': // [ActionPauseResume]
 #ifdef IP_TOS
     case 'Q': // qos
 #endif
     case 's': // payload size
-    case 't': // ActionTCP;
-    case 'u': // ActionUDP;
-    case 'x': // ActionCache;
-      stat_labels_redrawn = false;
-      titlelen.screen = -1;
+    case 't': // [ActionTCP]
+    case 'u': // [ActionUDP]
+    case 'x': // [ActionCache]
+      require_redraw();
       break;
+#ifdef WITH_IPINFO
+    case 'y': // [ActionMultiII]
+      if (run_opts.lookup)
+        require_redraw();
+      break;
+#endif
     default: break;
   }
 }
@@ -473,9 +485,11 @@ key_action_t tui_keyaction(void) {
   key_action_t action = ActionNone /*0*/;
   if (ch < UINT8_MAX) { // 8bit char
     tui_key_fn fn = actfn_map[ch];
-    if (fn) // handle it here
-      fn(fn == tui_key_h ? stdscr : win);
-    else    // or somewhere else
+    if (fn) { // handle it here
+      WINDOW *w = (fn == tui_key_h) ? stdscr : win;
+      if (w)
+        fn(w);
+    } else    // or somewhere else
       action = action_map[ch];
   } else switch (ch) {  // more than 8 bits
     case KEY_UP:
@@ -513,7 +527,7 @@ static void printw_addr(WINDOW *win, int at, int ndx) {
 #ifdef WITH_IPINFO
   if (ipinfo_ready()) {
     char info[NAMELEN] = {0};
-    ipinfo_data_fix(info, sizeof(info), at, ndx);
+    ipinfo_data_fix(sizeof(info), info, at, ndx);
     if (info[0])
       waddstr(win, info);
   }
@@ -764,7 +778,7 @@ static void histoaddr(WINDOW *win, int at, int max, int y, int x, int cols) {
 #ifdef WITH_IPINFO
     if (ipinfo_ready()) {
       char info[NAMELEN] = {0};
-      ipinfo_data_fix(info, sizeof(info), at, host[at].current);
+      ipinfo_data_fix(sizeof(info), info, at, host[at].current);
       if (info[0])
         waddstr(win, info);
     }
@@ -993,7 +1007,7 @@ static int tui_print_args(char buf[], size_t size) {
   //
   ADD_FMT_ARG("%c", ')');
 #define EMPTY_ARGS " ()"
-  if (!strncmp(buf, EMPTY_ARGS, sizeof(EMPTY_ARGS)))
+  if (STR_EQ(buf, EMPTY_ARGS, sizeof(EMPTY_ARGS)))
     len = 0;
 #undef EMPTY_ARGS
   if (run_opts.pause != ini_opts.pause)
@@ -1052,7 +1066,7 @@ static int redraw_stat_labels(WINDOW *win, int indent) {
 #ifdef WITH_IPINFO
   if (ipinfo_ready()) {
     char info[NAMELEN] = {0};
-    ipinfo_head_fix(info, sizeof(info));
+    ipinfo_head_fix(sizeof(info), info);
     if (info[0])
       mvwaddstr(win, 1, indent, info);
     indent += ipinfo_width(); // indent: "NN. " + IPINFO
@@ -1132,7 +1146,7 @@ static void display_menuline(WINDOW *win) {
     return;
   // timestamp (note: not mandatory)
   char str[64] = {0};
-  const char *date = datetime(time(NULL), str, sizeof(str));
+  const char *date = datetime(time(NULL), sizeof(str), str);
   if (date && date[0])
     snprinte(buff + len, sizeof(buff) - len, ": %s", date);
   //

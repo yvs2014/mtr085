@@ -2,7 +2,6 @@
 #define AUX_H
 
 #include <stddef.h>
-#include <stdint.h>
 #include <limits.h>
 
 #include "common.h"
@@ -26,7 +25,7 @@ long str2l(const char *arg);
 int arg2int(int8_t opt, const char *arg, int min, int max,
   const char *what, char *buff, size_t size) NONNULL(2);
 int ustrnlen(const char *str, int max);
-char *datetime(time_t at, char *buff, size_t size) NONNULL(2);
+char *datetime(time_t at, size_t size, char buff[size]) NONNULL(3);
 int snprinte(char str[], size_t size, const char *format, ...);
 
 #endif

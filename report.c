@@ -24,15 +24,16 @@
 #include <netdb.h>
 #endif
 
+#include "report.h"
 #include "common.h"
+#include "aux.h"
+#include "net.h"
 #include "nls.h"
 
-#include "aux.h"
-#include "report.h"
-#include "net.h"
 #ifdef ENABLE_DNS
 #include "dns.h"
 #endif
+
 #ifdef WITH_IPINFO
 #include "ipinfo.h"
 #endif
@@ -70,13 +71,13 @@ void report_started_at(void) { started_at = time(NULL); }
 #if (__GNUC__ >= 8) || (__clang_major__ >= 6) || (__STDC_VERSION__ >= 202311L)
 #define PRINT_DATETIME(fmt, ...) do {                           \
   char str[64] = {0};                                           \
-  const char *date = datetime(started_at, str, sizeof(str));    \
+  const char *date = datetime(started_at, sizeof(str), str);    \
   if (date && date[0]) printf((fmt) __VA_OPT__(,) __VA_ARGS__); \
 } while(0)
 #else
 #define PRINT_DATETIME(fmt, ...) do {                           \
   char str[64] = {0};                                           \
-  const char *date = datetime(started_at, str, sizeof(str));    \
+  const char *date = datetime(started_at, sizeof(str), str);    \
   if (date && date[0]) printf((fmt), ##__VA_ARGS__);            \
 } while(0)
 #endif
@@ -201,7 +202,7 @@ static void report_print_header(int hostlen, int infolen) {
   printf("%*s", IND_REP, "");
   // left
   { char info[NAMELEN] = {0};
-    ipinfo_head_fix(info, sizeof(info));
+    ipinfo_head_fix(sizeof(info), info);
     REPORT_INFO(infolen, info); }
   { printf("%s", HOST_STR);
     int len = hostlen - ustrnlen(HOST_STR, hostlen);
@@ -224,7 +225,7 @@ static void report_print_body(int at, const char *fmt, int hostlen, int infolen)
   // body: left
   if (fmt) printf(fmt, at + 1);
   { char info[NAMELEN] = {0};
-    ipinfo_data_fix(info, sizeof(info), at, host[at].current);
+    ipinfo_data_fix(sizeof(info), info, at, host[at].current);
     REPORT_INFO(infolen, info); }
   print_nameaddr(at, host[at].current, hostlen);
   // body: right
@@ -242,7 +243,7 @@ static void report_print_rest(int at, int hostlen, int infolen) {
       break; // done
     printf("%*s", IND_REP, "");
     { char info[NAMELEN] = {0};
-      ipinfo_data_fix(info, sizeof(info), at, i);
+      ipinfo_data_fix(sizeof(info), info, at, i);
       REPORT_INFO(infolen, info); }
     print_nameaddr(at, i, hostlen);
     putchar('\n');
@@ -306,7 +307,7 @@ void xml_close(void) {
 #ifdef WITH_IPINFO
     if (ipinfo_ready()) {
       char info[NAMELEN] = {0};
-      ipinfo_data_div(info, sizeof(info), at, host[at].current, DIV_XML);
+      ipinfo_data_div(sizeof(info), info, at, host[at].current, DIV_XML);
       if (info[0])
         printf("%*s<%s>[%s]</%s>\n", IND_XML * 3, "", IPINFO_STR, info, IPINFO_STR);
     }
@@ -365,7 +366,7 @@ void json_close(bool next) {
 #ifdef WITH_IPINFO
     if (ipinfo_ready()) {
       char info[NAMELEN] = {0};
-      ipinfo_data_div(info, sizeof(info), at, host[at].current, DIV_JSON);
+      ipinfo_data_div(sizeof(info), info, at, host[at].current, DIV_JSON);
       if (info[0])
         printf("%c\"%s\":[%s]", DIV_JSON, _(IPINFO_STR), info);
     }
@@ -423,7 +424,7 @@ void toon_close(void) {
 #ifdef WITH_IPINFO
   if (ipinfo_ready()) {
     char info[NAMELEN] = {0};
-    ipinfo_head_div(info, sizeof(info), DIV_TOON);
+    ipinfo_head_div(sizeof(info), info, DIV_TOON);
     if (info[0])
       printf("%c%s", DIV_TOON, info);
   }
@@ -438,7 +439,7 @@ void toon_close(void) {
 #ifdef WITH_IPINFO
     if (ipinfo_ready()) {
       char info[NAMELEN] = {0};
-      ipinfo_data_div(info, sizeof(info), at, host[at].current, DIV_TOON);
+      ipinfo_data_div(sizeof(info), info, at, host[at].current, DIV_TOON);
       if (info[0])
         printf("%c%s", DIV_TOON, info);
     }
@@ -484,7 +485,7 @@ static inline void csv_body(int at) {
 #ifdef WITH_IPINFO
   if (ipinfo_ready()) {
     char info[NAMELEN] = {0};
-    ipinfo_data_div(info, sizeof(info), at, host[at].current, DIV_CSV);
+    ipinfo_data_div(sizeof(info), info, at, host[at].current, DIV_CSV);
     if (info[0])
       printf("%s", info);
   }
@@ -500,7 +501,7 @@ void csv_close(bool next) {
 #ifdef WITH_IPINFO
   if (ipinfo_ready()) {
     char info[NAMELEN] = {0};
-    ipinfo_head_div(info, sizeof(info), DIV_CSV);
+    ipinfo_head_div(sizeof(info), info, DIV_CSV);
     if (info[0])
       printf("%c%s", DIV_CSV, info);
   }
@@ -535,7 +536,7 @@ void raw_rawping(int at, int usec) {
   fflush(stdout);
 }
 
-void raw_rawhost(int at, t_ipaddr *ipaddr) {
+void raw_rawhost(int at, t_ipaddr *ipaddr) { // NONNULL(2)
   printf("h %d %s\n", at, strlongip(ipaddr));
   fflush(stdout);
 }

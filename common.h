@@ -50,15 +50,11 @@
 #endif
 
 #ifndef GITREV
-#define GITREV "284"
+#define GITREV "285"
 #endif
 
-#ifndef HAVE_UINT
-typedef unsigned int uint;
-#endif
-#ifndef HAVE_ULONG
-typedef unsigned long int ulong;
-#endif
+#define STR_EQ(a, b, n) (!strncmp((a), (b), n))
+#define STR_NEQ(a, b, n) (strncmp((a), (b), n))
 
 typedef union inaddr_union {
   struct in_addr in;
@@ -347,9 +343,12 @@ extern opt_sum_t opt_sum;  // checksum changes
 #if defined(TUIMODE) || defined(SPLITMODE)
 extern int display_offset;
 #endif
-#ifdef TUIMODE
 extern int chart_mode;
+#ifdef TUIMODE
 extern int chart_mode_max;
+#endif
+#ifdef WITH_UNICODE
+extern bool utf_compat;
 #endif
 
 // keys: the value in the array is the index number in stats[]

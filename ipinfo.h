@@ -19,9 +19,6 @@
 #ifndef IPINFO_H
 #define IPINFO_H
 
-#include <stdbool.h>
-#include <sys/types.h>
-
 #include "common.h"
 
 bool ipinfo_init(const char *arg);
@@ -33,10 +30,10 @@ int  ipinfo_width(void);
 bool ipinfo_timedout(int seq);
 void ipinfo_seq_ready(int seq);
 
-void ipinfo_head_fix(char buff[], size_t size) NONNULL(1);
-void ipinfo_head_div(char buff[], size_t size, char div) NONNULL(1);
-void ipinfo_data_fix(char buff[], size_t size, int at, int ndx) NONNULL(1);
-void ipinfo_data_div(char buff[], size_t size, int at, int ndx, char div) NONNULL(1);
+void ipinfo_head_fix(size_t size, char buff[size]) NONNULL(2);
+void ipinfo_head_div(size_t size, char buff[size], char div) NONNULL(2);
+void ipinfo_data_fix(size_t size, char buff[size], int at, int ndx) NONNULL(2);
+void ipinfo_data_div(size_t size, char buff[size], int at, int ndx, char div) NONNULL(2);
 
 void query_ipinfo(void);
 

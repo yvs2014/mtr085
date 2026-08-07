@@ -21,23 +21,22 @@
 #include <strings.h>
 
 #if defined(LOG_DNS) && !defined(LOGMOD)
-#include <errno.h>
-#define LOGMOD
+  #include <errno.h>
+  #define LOGMOD
 #endif
+
 #if !defined(LOG_DNS) && defined(LOGMOD)
-#undef LOGMOD
+  #undef LOGMOD
 #endif
-#include "common.h"
 
 #ifdef HAVE_ARPA_NAMESER_H
-#ifndef BIND_8_COMPAT
-#define BIND_8_COMPAT
+  #include <arpa/nameser.h>
 #endif
-#include <arpa/nameser.h>
-#endif
+
 #ifdef HAVE_NETDB_H
-#include <netdb.h>
+  #include <netdb.h>
 #endif
+
 #include <resolv.h>
 
 #include "dns.h"

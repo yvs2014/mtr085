@@ -7,7 +7,6 @@
 #include <stdarg.h>
 
 #include "aux.h"
-#include "common.h"
 
 static const double float_upto = 10;
 static const double float_dec2 = 0.1;
@@ -38,15 +37,20 @@ void set_fld_active(const char *str) {
   snprinte(fld_custom, sizeof(fld_custom), "%s", str ? str : fld_default);
   fld_active = fld_custom;
 }
-#ifdef TUIMODE
-bool is_custom_fld(void) { return (strncmp(fld_active, fld_jitter, sizeof(fld_jitter)) != 0) && (strncmp(fld_active, fld_default, sizeof(fld_default)) != 0); }
-#endif
+
 #if defined(TUIMODE) || defined(SPLITMODE)
-void onoff_jitter(void) { int cmp = strncmp(fld_active, fld_jitter, sizeof(fld_jitter)); fld_active = cmp ? fld_jitter : fld_custom; }
+#define NOT_JITTER_FLD  STR_NEQ(fld_active, fld_jitter,  sizeof(fld_jitter))
+#define NOT_DEFAULT_FLD STR_NEQ(fld_active, fld_default, sizeof(fld_default))
+void onoff_jitter(void) { fld_active = NOT_JITTER_FLD ? fld_jitter : fld_custom; }
+#endif
+
+#ifdef TUIMODE
+bool is_custom_fld(void) { return NOT_JITTER_FLD && NOT_DEFAULT_FLD; }
 #endif
 
 const t_stat* active_stats(size_t nth) {
-  if (!fld_active || (nth > MAXFLD)) return NULL;
+  if (!fld_active || (nth > MAXFLD))
+    return NULL;
   int ndx = fld_index[(uint8_t)fld_active[nth]];
   return ((ndx >= 0) && (ndx < stat_max)) ? &stats[ndx] : NULL;
 }
@@ -86,12 +90,15 @@ long str2l(const char *arg) {
     OPTARG_BUFERR(       fmt,       __VA_ARGS__); \
 } while (0)
 
-int arg2int(int8_t opt, const char *arg, int min, int max, const char *what, char *buff, size_t size) {
+int arg2int(int8_t opt, const char *arg, int min, int max, // NONNULL(2)
+  const char *what, char *buff, size_t size)
+{
 // in buff (opt == 0)
 // opt < 0: warn() on error
 // opt > 0: err()  on error
   bool inbuf = buff && size;
-  if (inbuf) buff[0] = 0;
+  if (inbuf)
+    buff[0] = 0;
   long value = str2l(arg);
   if ((value < min) || (value > max)) {
     value = (value < min) ? min : max;
@@ -101,7 +108,8 @@ int arg2int(int8_t opt, const char *arg, int min, int max, const char *what, cha
     WHATARG_BUFFERR("%s", strerror(errno));
   }
   // keep errno for "opt < 0 (warn)" case only, otherwise clean
-  if (opt >= 0) errno = 0;
+  if (opt >= 0)
+    errno = 0;
   return value;
 }
 #undef BUFWARNERR
@@ -119,7 +127,7 @@ int ustrnlen(const char *str, int max) {
   return len;
 }
 
-char *datetime(time_t at, char *buff, size_t size) {
+char *datetime(time_t at, size_t size, char buff[size]) { // NONNULL(3)
   if (!size)
     return NULL;
   buff[0] = 0;
@@ -135,13 +143,16 @@ char *datetime(time_t at, char *buff, size_t size) {
 }
 
 int snprinte(char str[], size_t size, const char *format, ...) {
-  if (!str || !format) return 0;
+  if (!str || !size || !format)
+    return 0;
   va_list args;
   va_start(args, format);
   int len = vsnprintf(str, size, format, args);
   va_end(args);
-  if (len >= (int)size) len = -1; // truncation as error
-  if (len < 0) str[0] = 0;
+  if (len >= (int)size)
+    len = -1; // truncation as error
+  if (len < 0)
+    str[0] = 0;
   return len;
 }
 

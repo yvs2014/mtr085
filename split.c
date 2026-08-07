@@ -55,7 +55,7 @@ static inline void split_multipath(int at) {
 #ifdef WITH_IPINFO
     if (ipinfo_ready()) {
       char info[NAMELEN] = {0};
-      ipinfo_data_div(info, sizeof(info), at, i, DIV_SPLIT);
+      ipinfo_data_div(sizeof(info), info, at, i, DIV_SPLIT);
       if (info[0])
         printf("%c%s", DIV_SPLIT, info);
     }
@@ -86,7 +86,7 @@ void split_redraw(void) {
 #ifdef WITH_IPINFO
       if (ipinfo_ready()) {
         char info[NAMELEN] = {0};
-        ipinfo_data_div(info, sizeof(info), at, host[at].current, DIV_SPLIT);
+        ipinfo_data_div(sizeof(info), info, at, host[at].current, DIV_SPLIT);
         if (info[0])
           printf("%c%s", DIV_SPLIT, info);
       }
@@ -169,7 +169,9 @@ key_action_t split_keyaction(void) {
   if (read(0, &ch, 1) < 0)
     WARN("%s", "read()");
   else switch (ch) {
+#ifdef WITH_MPLS
     case 'e': rc = ActionMPLS;    break;
+#endif
     case 'h':
       split_help();
       rc = ActionPauseResume;

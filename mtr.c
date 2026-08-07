@@ -34,8 +34,6 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 
-#include "common.h"
-
 #ifdef HAVE_NETDB_H
 #include <netdb.h>
 #endif
@@ -50,43 +48,45 @@
 #endif
 
 #ifndef AI_IDN
-#ifdef LIBIDN2
-#  ifdef HAVE_IDN2_IDN2_H
-#    include <idn2/idn2.h>
-#  else
-#    include <idn2.h>
+#  ifdef LIBIDN2
+#    ifdef HAVE_IDN2_IDN2_H
+#      include <idn2/idn2.h>
+#    else
+#      include <idn2.h>
+#    endif
+#    define IDN_TO_ASCII_LZ idn2_to_ascii_lz
+#    define IDN_TO_ASCII_8Z idn2_to_ascii_8z
+#    define IDN_STRERROR    idn2_strerror
+#  elif defined(LIBIDN)
+#    include <idna.h>
+#    define IDN_TO_ASCII_LZ idna_to_ascii_lz
+#    define IDN_TO_ASCII_8Z idna_to_ascii_8z
+#    define IDN_STRERROR    idna_strerror
 #  endif
-#  define IDN_TO_ASCII_LZ idn2_to_ascii_lz
-#  define IDN_TO_ASCII_8Z idn2_to_ascii_8z
-#  define IDN_STRERROR    idn2_strerror
-#elif defined(LIBIDN)
-#  include <idna.h>
-#  define IDN_TO_ASCII_LZ idna_to_ascii_lz
-#  define IDN_TO_ASCII_8Z idna_to_ascii_8z
-#  define IDN_STRERROR    idna_strerror
-#endif
 #endif
 
 #ifdef WITH_UNICODE
-#ifdef HAVE_WCTYPE_H
-#include <wctype.h>
-#endif
-#ifdef HAVE_LOCALE_H
-#include <locale.h>
-#endif
-#ifdef HAVE_LANGINFO_H
-#include <langinfo.h>
-#endif
+#  ifdef HAVE_WCTYPE_H
+#    include <wctype.h>
+#  endif
+#  ifdef HAVE_LOCALE_H
+#    include <locale.h>
+#  endif
+#  ifdef HAVE_LANGINFO_H
+#    include <langinfo.h>
+#  endif
 #endif
 
 #if defined(OUTPUT_FORMAT_RAW) || defined(OUTPUT_FORMAT_TXT) || defined(OUTPUT_FORMAT_CSV) || defined(OUTPUT_FORMAT_JSON) || defined(OUTPUT_FORMAT_TOON) || defined(OUTPUT_FORMAT_XML)
-#define OUTPUT_FORMAT
-#include <ctype.h>
+#  define OUTPUT_FORMAT
+#  include <ctype.h>
 #endif
 
+#include "common.h"
 #include "nls.h"
+
 #ifdef TUIMODE
-#include "tui.h"
+#  include "tui.h"
 #endif
 
 enum OPTIONS {
@@ -171,20 +171,23 @@ enum OUTPUT_OPTS {
 #include "aux.h"
 #include "net.h"
 #include "display.h"
+
 #ifdef ENABLE_DNS
 #include "dns.h"
 #endif
+
 #ifdef WITH_IPINFO
 #include "ipinfo.h"
 #endif
+
 #ifdef OUTPUT_FORMAT_RAW
 #include "report.h"
 #endif
 
 #ifdef HAVE_QUICK_EXIT
-#define QEXIT quick_exit
+#  define QEXIT quick_exit
 #else
-#define QEXIT exit
+#  define QEXIT exit
 #endif
 
 enum { REPORT_PINGS = 100, CACHE_TIMEOUT = 60, TCPSYN_TOUT_MAX = 60 };
@@ -226,6 +229,9 @@ int display_offset;
 int chart_mode;               // 1st and 2nd bits, 3rd is reserved
 #ifdef TUIMODE
 int chart_mode_max = 3;
+#endif
+#ifdef WITH_UNICODE
+bool utf_compat;
 #endif
 //
 t_stat stats[] = {
@@ -508,8 +514,9 @@ static bool split_hostport(char *buff, char* hostport[2]) {
 
 #ifdef TUIMODE
 #define VAL_TRU(nth) ((val & (1u << ((nth) - 1))) ? true : false)
-static inline void option_display(char opt) {
-  int val = arg2int(opt, optarg, 0, INT8_MAX, DISPMODE_ERR, NULL, 0);
+static inline void option_display(char opt, const char *optstr) NONNULL(2);
+static inline void option_display(char opt, const char *optstr) {
+  int val = arg2int(opt, optstr, 0, INT8_MAX, DISPMODE_ERR, NULL, 0);
   chart_mode = (val & ~8) % chart_mode_max;
   ini_opts.chart   = val & 3;    // first two bits
                                  // 3rd reserved
@@ -648,8 +655,8 @@ static void short_set(char opt, const char *progname) {
       break;
 #endif
     case OPT_ADDR:
-      assert(optarg);
-      iface_addr = optarg;
+      if (optarg)
+        iface_addr = optarg;
       break;
 #ifdef ENABLE_DNS
     case OPT_BOTH:
@@ -657,17 +664,17 @@ static void short_set(char opt, const char *progname) {
       break;
 #endif
     case OPT_BITS:
-      assert(optarg);
-      ini_opts.pattern = arg2int(opt, optarg, -1, UINT8_MAX, BITPATT_STR, NULL, 0);
+      if (optarg)
+        ini_opts.pattern = arg2int(opt, optarg, -1, UINT8_MAX, BITPATT_STR, NULL, 0);
       break;
     case OPT_COUNT:
-      assert(optarg);
-      ini_opts.cycles = arg2int(opt, optarg, -1, INT_MAX, NCYCLES_STR, NULL, 0);
+      if (optarg)
+        ini_opts.cycles = arg2int(opt, optarg, -1, INT_MAX, NCYCLES_STR, NULL, 0);
       break;
 #ifdef TUIMODE
     case OPT_DISPLAY:
-      assert(optarg);
-      option_display(opt);
+      if (optarg)
+        option_display(opt, optarg);
       break;
 #endif
 #ifdef WITH_MPLS
@@ -675,24 +682,23 @@ static void short_set(char opt, const char *progname) {
       ini_opts.mpls = true;
       break;
 #endif
-    case OPT_TTLFIRST:
-      assert(optarg);
+    case OPT_TTLFIRST: if (optarg) {
       if ((optarg[0] == AUTOTTL) && !optarg[1])
         ini_opts.endpoint = true;
       else
         ini_opts.minttl = arg2int(opt, optarg, 1, ini_opts.maxttl, MINTTL_STR, NULL, 0);
-      break;
+    } break;
     case OPT_FIELDS:
-      assert(optarg);
-      option_fields(opt);
+      if (optarg)
+        option_fields(opt);
       break;
     case OPT_INTERVAL:
-      assert(optarg);
-      ini_opts.interval = arg2int(opt, optarg, 1, INT_MAX, INTERVAL_STR, NULL, 0);
+      if (optarg)
+        ini_opts.interval = arg2int(opt, optarg, 1, INT_MAX, INTERVAL_STR, NULL, 0);
       break;
     case OPT_TTLMAX:
-      assert(optarg);
-      ini_opts.maxttl = arg2int(opt, optarg, ini_opts.minttl, MAXHOST - 1, MAXTTL_STR, NULL, 0);
+      if (optarg)
+        ini_opts.maxttl = arg2int(opt, optarg, ini_opts.minttl, MAXHOST - 1, MAXTTL_STR, NULL, 0);
       break;
 #ifdef ENABLE_DNS
     case OPT_NODNS:
@@ -716,8 +722,8 @@ static void short_set(char opt, const char *progname) {
 #endif
 #ifdef IP_TOS
     case OPT_QOS:
-      assert(optarg);
-      ini_opts.qos = arg2int(opt, optarg, 0, UINT8_MAX, QOSTOS_STR, NULL, 0);
+      if (optarg)
+        ini_opts.qos = arg2int(opt, optarg, 0, UINT8_MAX, QOSTOS_STR, NULL, 0);
       TOS4TOS(QOSTOS_STR, ini_opts.qos);
       break;
 #endif
@@ -726,8 +732,7 @@ static void short_set(char opt, const char *progname) {
       if (ini_opts.cycles <= 0)
         ini_opts.cycles = REPORT_PINGS;
       break;
-    case OPT_SIZE: {
-      assert(optarg);
+    case OPT_SIZE: if (optarg) {
       int max = MAXPACKET - MINPACKET;
       ini_opts.size = arg2int(opt, optarg, -max, max, PSIZE_STR, NULL, 0);
     } break;
@@ -741,8 +746,8 @@ static void short_set(char opt, const char *progname) {
       ini_opts.tcp = true;
       break;
     case OPT_TIMEOUT:
-      assert(optarg);
-      ini_opts.syn = arg2int(opt, optarg, 1, TCPSYN_TOUT_MAX, TCP_TOUT_STR, NULL, 0) * MIL;
+      if (optarg)
+        ini_opts.syn = arg2int(opt, optarg, 1, TCPSYN_TOUT_MAX, TCP_TOUT_STR, NULL, 0) * MIL;
       break;
     case OPT_UDP:
       if (mtrtype == IPPROTO_TCP)
@@ -752,11 +757,10 @@ static void short_set(char opt, const char *progname) {
       break;
     case OPT_VERSION:
       break;
-    case OPT_CACHE:
-      assert(optarg);
-      ini_opts.cache   = arg2int(opt, optarg, 1, INT_MAX, CACHE_TOUT_STR, NULL, 0);
+    case OPT_CACHE: if (optarg) {
+      ini_opts.cache = arg2int(opt, optarg, 1, INT_MAX, CACHE_TOUT_STR, NULL, 0);
       ini_opts.oncache = true;
-      break;
+    } break;
 #ifdef WITH_IPINFO
     case OPT_LOOKUP:
     case OPT_IPINFO: {
@@ -882,6 +886,7 @@ static void init_locale(void) {
 #ifdef TUIMODE
       chart_mode_max++;
 #endif
+      utf_compat = true;
       return;
     }
     warnx("%s", UNOPRINT_ERR);
@@ -1073,7 +1078,7 @@ static inline void main_fin(void) {
   UNICODE_FREE;
 }
 
-#ifdef USE_NLS
+#if defined(USE_NLS) && defined(UNICODE)
 static void bind_nls(void) {
   setlocale(LC_ALL, "");
   bindtextdomain(PACKAGE_NAME, LOCALEDIR);

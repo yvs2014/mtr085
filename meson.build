@@ -357,17 +357,6 @@ endif
 config.set_quoted('BUILD_OPTIONS', ' '.join(optlist))
 ## end of optional fetaures
 
-
-# test types: uint, ulong
-utypes = ['uint', 'ulong']
-uhdr   = 'sys/types.h'
-uinc   = cc.has_header(uhdr) ? '\n#include <' + uhdr + '>'  : ''
-foreach t: utypes
-  if cc.has_type(t, prefix: uinc)
-    config.set('HAVE_' + t.to_upper(), 1)
-  endif
-endforeach
-
 # aux
 srcs = []
 foreach c: srcn

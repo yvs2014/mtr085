@@ -22,22 +22,21 @@
 #include <errno.h>
 #include <fcntl.h>
 
-#ifdef HAVE_ARPA_NAMESER_H
-#ifndef BIND_8_COMPAT
-#define BIND_8_COMPAT
-#endif
-#include <arpa/nameser.h>
-#endif
 #ifdef HAVE_NETDB_H
-#include <netdb.h>
+  #include <netdb.h>
 #endif
+
 #include <resolv.h>
 
-#if defined(LOG_IPINFO) && !defined(LOGMOD)
-#define LOGMOD
+#ifdef HAVE_ARPA_NAMESER_H
+  #include <arpa/nameser.h>
 #endif
-#if !defined(LOG_IPINFO) && defined(LOGMOD)
-#undef LOGMOD
+
+#if defined(LOG_IPINFO) && !defined(LOGMOD)
+  #define LOGMOD
+#endif
+  #if !defined(LOG_IPINFO) && defined(LOGMOD)
+  #undef LOGMOD
 #endif
 
 #include "ipinfo.h"
@@ -53,9 +52,6 @@
 #define CHAR_QUOTES   "\"'"
 #define CHAR_BRACKETS "{}"
 #define WHOIS_COMMENT PERCENT
-
-#define STR_EQ(a, b, n) (!strncmp((a), (b), n))
-#define STR_NEQ(a, b, n) (strncmp((a), (b), n))
 
 enum { TCP_CONN_TIMEOUT = 3, IPINFO_TCP_TIMEOUT = 10 /* in seconds */ };
 enum { TCP_RESP_LINES = 100, NETDATA_MAXSIZE = 3000 };
@@ -179,7 +175,7 @@ static origin_t origins[] = {
 static bool str_in_skip_list(const char *str, uint len, const char* list[len]) NONNULL(1, 3);
 static bool str_in_skip_list(const char *str, uint len, const char* list[len]) {
     for (uint i = 0; (i < len) && list[i]; i++)
-        if (strncmp(str, list[i], NAMELEN) == 0)
+        if (STR_EQ(str, list[i], NAMELEN))
             return true;
     return false;
 }
@@ -216,10 +212,10 @@ static int split_with_sep(uint len, char* list[len], char sep, char quote) {
 
 static void unkn2norm(uint len, char* record[len]) NONNULL(2);
 static void unkn2norm(uint len, char* record[len]) {
-  if (ORIG_UNKN) { // change to std UNKN
+  if (ORIG_UNKN) { // change to common UNKN
     size_t lim = strnlen(ORIG_UNKN, NAMELEN);
     for (uint i = 0; (i < len) && record[i]; i++)
-      if (!strncmp(record[i], ORIG_UNKN, lim))
+      if (STR_EQ(record[i], ORIG_UNKN, lim))
         record[i] = UNKN;
   }
 }
@@ -830,7 +826,7 @@ int ipinfo_width(void) {
 }
 
 // 'div'-separated output
-void ipinfo_head_div(char buff[], size_t size, char div) {
+void ipinfo_head_div(size_t size, char buff[size], char div) { // NONNULL(2)
   for (uint i = 0, len = 0; (i < ARRAY_LEN(ipinfo_no))
       && (ipinfo_no[i] >= 0) && (ipinfo_no[i] < itemname_max)
       && ORIG_UNAME(ipinfo_no[i]) && (len < size); i++) {
@@ -843,7 +839,7 @@ void ipinfo_head_div(char buff[], size_t size, char div) {
 }
 
 // fixed width output
-void ipinfo_head_fix(char buff[], size_t size) {
+void ipinfo_head_fix(size_t size, char buff[size]) { // NONNULL(2)
   for (uint i = 0, len = 0; (i < ARRAY_LEN(ipinfo_no))
       && (ipinfo_no[i] >= 0) && (ipinfo_no[i] < itemname_max)
       && ORIG_UNAME(ipinfo_no[i]) && (len < size); i++) {
@@ -874,7 +870,7 @@ static int str_filler(char *buf, int size, const char *str, t_fmtdata fmt) {
 }
 
 // formatted output
-void ipinfo_data_div(char buff[], size_t size, int at, int ndx, char div) {
+void ipinfo_data_div(size_t size, char buff[size], int at, int ndx, char div) { // NONNULL(2)
   t_fmtdata fmtdata = { .ch = div };
   filler_fn filler = fmtdata.ch ? str_filler : fmt_filler;
   for (uint i = 0, len = 0; (i < ARRAY_LEN(ipinfo_no)) && (len < size)
@@ -887,8 +883,8 @@ void ipinfo_data_div(char buff[], size_t size, int at, int ndx, char div) {
     if (inc > 0) len += inc;
   }
 }
-inline void ipinfo_data_fix(char buff[], size_t size, int at, int ndx) {
-  ipinfo_data_div(buff, size, at, ndx, 0); }
+inline void ipinfo_data_fix(size_t size, char buff[size], int at, int ndx) { // NONNULL(2)
+  ipinfo_data_div(size, buff, at, ndx, 0); }
 
 bool ipinfo_ready(void) { return (run_opts.lookup && ii_ready); }
 
