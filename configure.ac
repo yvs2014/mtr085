@@ -24,6 +24,11 @@ m4_ifdef([AX_CHECK_COMPILE_FLAG],
 	)]
 )
 
+AC_CHECK_HEADERS([sys/types.h], [
+	AC_CHECK_TYPE([uint],  AC_DEFINE([HAVE_UINT],  [1], [type 'uint' exists] ),, [#include <sys/types.h>])
+	AC_CHECK_TYPE([ulong], AC_DEFINE([HAVE_ULONG], [1], [type 'ulong' exists]),, [#include <sys/types.h>])
+])
+
 AC_CHECK_HEADERS([netdb.h], AC_DEFINE(HAVE_NETDB_H, 1))
 AC_CHECK_HEADERS([sys/param.h], AC_DEFINE(HAVE_SYS_PARAM_H, 1))
 

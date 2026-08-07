@@ -50,7 +50,14 @@
 #endif
 
 #ifndef GITREV
-#define GITREV "286"
+#define GITREV "287"
+#endif
+
+#ifndef HAVE_UINT
+typedef unsigned int uint;
+#endif
+#ifndef HAVE_ULONG
+typedef unsigned long int ulong;
 #endif
 
 #define STR_EQ(a, b, n) (!strncmp((a), (b), n))

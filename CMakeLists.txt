@@ -315,6 +315,17 @@ if(DEBIPINFO)
   set(LOG_IPINFO ON)
 endif()
 
+# test types: uint, ulong
+#
+set(UTYPES uint ulong)
+foreach(t ${UTYPES})
+  CHECK_TYPE_SIZE(${t} SIZEOF_T)
+  if(SIZEOF_T)
+    string(TOUPPER "HAVE_${t}" T_DEF)
+    set(${T_DEF} ON)
+  endif()
+endforeach()
+
 # misc aux checkouts
 #
 check_include_file("netdb.h" HAVE_NETDB_H)
