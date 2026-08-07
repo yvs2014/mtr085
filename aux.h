@@ -7,6 +7,7 @@
 #include "common.h"
 
 #define LENVALMIL(val) double _v = (val) / (double)MIL; int _l = val2len(_v);
+#define INDENT_NUMB 4 // "NN. " length
 
 char* trim(char *str);
 int val2len(double val);

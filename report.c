@@ -130,9 +130,11 @@ static int snprint_addr(char buf[], size_t size, uint at, uint ndx) {
 }
 
 #ifdef WITH_MPLS
+static void print_mpls(const mpls_data_t *mpls) NONNULL(1);
 static void print_mpls(const mpls_data_t *mpls) {
+  char buff[64] = {0};
   for (int i = 0; i < mpls->n; i++)
-    printf("%s\n", mpls2str(&mpls->label[i], 4));
+    printf("%s\n", mpls2str(&mpls->label[i], sizeof(buff), buff));
 }
 #endif
 
@@ -231,7 +233,8 @@ static void report_print_body(int at, const char *fmt, int hostlen, int infolen)
   // body: right
   foreach_stat(at, report_bodystat, '\n');
 #ifdef WITH_MPLS
-  if (run_opts.mpls) print_mpls(&CURRENT_MPLS(at));
+  if (run_opts.mpls)
+    print_mpls(&CURRENT_MPLS(at));
 #endif
 }
 

@@ -65,6 +65,7 @@ enum { TSEQ_CREATED, TSEQ_READY };  // tcp-socket state: created or ready, other
 bool ipinfo_tcpmode;     // true if ipinfo origin is tcp (http or whois)
 uint ipinfo_queries[3];  // number of queries (sum, http, whois)
 uint ipinfo_replies[3];  // number of replies (sum, http, whois)
+bool ipinfo_rewidth;     // indicator to redraw titles
 //
 
 static bool ii_ready;
@@ -228,13 +229,18 @@ static char** split_record(char *data, uint len, char* list[len]) {
   return list;
 }
 
+static void readjust_nth_width(uint nth, int width) {
+  if (ORIG_WIDTH(nth) < width) {
+    ORIG_WIDTH(nth) = width;
+    if (!ipinfo_rewidth)
+        ipinfo_rewidth = true;
+  }
+}
+
 static void adjust_width(uint len, ii_record_view_t record[len]) NONNULL(2);
 static void adjust_width(uint len, ii_record_view_t record[len]) {
-  for (uint i = 0; (i < len) && record[i].view; i++) {
-    int width = ustrnlen(record[i].view, NAMELEN); // ? mbstowcs(NULL, records[i], 0);
-    if (ORIG_WIDTH(i) < width)
-      ORIG_WIDTH(i) = width;
-  }
+  for (uint i = 0; (i < len) && record[i].view; i++)
+    readjust_nth_width(i, ustrnlen(record[i].view, NAMELEN));
 }
 
 static bool set_newrec(int at, int ndx, int j, char *dup, int sndx) {
@@ -346,8 +352,7 @@ static void review_at(int at, int ndx) {
     int uname = ustrnlen(ORIG_UNAME(i), NAMELEN);
     if (width < uname)
       width = uname;
-    if (ORIG_WIDTH(i) < width)
-      ORIG_WIDTH(i) = width;
+    readjust_nth_width(i, width);
   }
 }
 
@@ -833,8 +838,9 @@ void ipinfo_head_div(size_t size, char buff[size], char div) { // NONNULL(2)
     int inc = (i && div) ?
       snprinte(buff + len, size - len, "%c\"%s\"", div, ORIG_UNAME(ipinfo_no[i])) :
       snprinte(buff + len, size - len,   "\"%s\"",      ORIG_UNAME(ipinfo_no[i]));
-    if (inc < 0) break;
-    if (inc > 0) len += inc;
+    if (inc < 0)
+      break;
+    len += inc;
   }
 }
 
@@ -844,11 +850,13 @@ void ipinfo_head_fix(size_t size, char buff[size]) { // NONNULL(2)
       && (ipinfo_no[i] >= 0) && (ipinfo_no[i] < itemname_max)
       && ORIG_UNAME(ipinfo_no[i]) && (len < size); i++) {
     int gap = ORIG_WIDTH(ipinfo_no[i]) - ustrnlen(ORIG_UNAME(ipinfo_no[i]), NAMELEN);
-    if (gap < 0) gap = 0;
+    if (gap < 0)
+      gap = 0;
     int inc = snprinte(buff + len, size - len, "%s%*s",
       ORIG_UNAME(ipinfo_no[i]), ++gap, "");
-    if (inc < 0) break;
-    if (inc > 0) len += inc;
+    if (inc < 0)
+      break;
+    len += inc;
   }
 }
 
@@ -871,7 +879,7 @@ static int str_filler(char *buf, int size, const char *str, t_fmtdata fmt) {
 
 // formatted output
 void ipinfo_data_div(size_t size, char buff[size], int at, int ndx, char div) { // NONNULL(2)
-  t_fmtdata fmtdata = { .ch = div };
+  t_fmtdata fmtdata = {.ch = div};
   filler_fn filler = fmtdata.ch ? str_filler : fmt_filler;
   for (uint i = 0, len = 0; (i < ARRAY_LEN(ipinfo_no)) && (len < size)
       && (ipinfo_no[i] >= 0) && (ipinfo_no[i] < itemname_max); i++) {
@@ -879,8 +887,9 @@ void ipinfo_data_div(size_t size, char buff[size], int at, int ndx, char div) { 
       get_ipinfo(at, ndx, ipinfo_no[i]) : NULL;
     fmtdata.num = fmtdata.ch ? (int)i : ORIG_WIDTH(ipinfo_no[i]);
     int inc = filler(buff + len, size - len, rec ? rec : UNKN, fmtdata);
-    if (inc < 0) break;
-    if (inc > 0) len += inc;
+    if (inc < 0)
+      break;
+    len += inc;
   }
 }
 inline void ipinfo_data_fix(size_t size, char buff[size], int at, int ndx) { // NONNULL(2)
@@ -1007,7 +1016,7 @@ bool ipinfo_init(const char *arg) {
     ORIG_UNAME(i) = _(ORIG_NAME(i));
     if (!ORIG_UNAME(i))
       ORIG_UNAME(i) = ORIG_NAME(i);
-    ORIG_WIDTH(i) = ustrnlen(ORIG_UNAME(i), NAMELEN);
+    readjust_nth_width(i, ustrnlen(ORIG_UNAME(i), NAMELEN));
   }
   //
   LOGMSG("Source: %s%s%s", ORIG_HOST, origins[origin_no].host6 ? ", " : "",

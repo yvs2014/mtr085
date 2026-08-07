@@ -1389,12 +1389,10 @@ const char *strlongip(t_ipaddr *ipaddr) {
 }
 
 #ifdef WITH_MPLS
-const char *mpls2str(const mpls_label_t *label, int indent) {
-  static const char mpls_fmt[] = "%*s[Lbl:%u Exp:%u S:%u TTL:%u]";
-  static char mpls2s_buf[64];
-  snprinte(mpls2s_buf, sizeof(mpls2s_buf), mpls_fmt, indent, "",
+const char *mpls2str(const mpls_label_t *label, size_t size, char buff[size]) { // NONNULL(1, 3)
+  snprinte(buff, size, "%*s[Lbl:%u Exp:%u S:%u TTL:%u]", INDENT_NUMB, "",
     label->u.lab, label->u.exp, label->u.bos, label->u.ttl);
-  return mpls2s_buf;
+  return buff;
 }
 #endif
 

@@ -70,7 +70,6 @@
 #endif
 
 enum {
-  INDENT_NUMB =    4, /* "NN. " */
   INDENT_HINT =   12,
   HOSTINFOMAX =   30,
   GETCH_BATCH =  100,
@@ -90,7 +89,7 @@ static area_s area[MAX_AREA_NDX] = {
   [NDX_STATUS] = {.height =  1},
 };
 
-static bool stat_labels_redrawn; // if 0: stat_labels need redrawing
+static bool labels_redrawn; // if 0: column labels need redrawing
 
 static char screen_title[NAMELEN]; // progname + arguments + destination
 static uint screen_title_len;
@@ -416,7 +415,7 @@ static tui_key_fn actfn_map[UINT8_MAX] =  {
 };
 
 static inline void require_redraw(void) {
-  stat_labels_redrawn = false;
+  labels_redrawn = false;
   titlelen.screen = -1;
 }
 
@@ -512,8 +511,9 @@ key_action_t tui_keyaction(void) {
 #ifdef WITH_MPLS
 static int printw_mpls(WINDOW *win, const mpls_data_t *m) NONNULL(1, 2);
 static int printw_mpls(WINDOW *win, const mpls_data_t *m) {
+  char buff[64] = {0};
   for (int i = 0; i < m->n; i++) {
-    waddstr(win, mpls2str(&(m->label[i]), 4));
+    waddstr(win, mpls2str(&m->label[i], sizeof(buff), buff));
     if (wmove(win, getcury(win) + 1, 0) == ERR)
       return ERR;
   }
@@ -825,7 +825,8 @@ static int get_stat_title_len(void) {
   int len = 0;
   for (uint i = 0; i < MAXFLD; i++) {
     const t_stat *stat = active_stats(i);
-    if (stat) len += (stat->min > stat->len) ? stat->min : stat->len + 1;
+    if (stat)
+      len += (stat->min > stat->len) ? stat->min : stat->len + 1;
   }
   return (len < 0) ? 0 : len;
 }
@@ -843,19 +844,27 @@ static void display_main_labels(WINDOW *win, int indent) {
   int maxx = getmaxx(win);
   for (uint i = 0; i < MAXFLD; i++) {
     const t_stat *stat = active_stats(i);
-    if (!stat) break;
-    if (!i || (i == 3)) { // add subtitles
+    if (!stat)
+      break;
+#define SUP1_NDX 0 // "Packets" or "Custom fields"
+#define SUP2_NDX 3 // "Pings"
+    if ((i == SUP1_NDX) || (i == SUP2_NDX)) {
+      // add suptitles
       int curx = getcurx(win);
       int dx   = (stat->min > stat->len) ? (stat->min - stat->len) : 1;
       int pos  = curx + dx;
-      if (!i && custom) {
-        int ufl = (maxx > 2) ? ustrnlen(USR_FIELDS_STR, maxx - 2) : 0;
-        int len = ufl + 2 + strnlen(fld_active, MAXFLD);
+      if ((i == SUP1_NDX) && custom) {
+        // "Custom fields"
+        const char div[] = ": ";
+        int div_len = sizeof(div) - 1;
+        int ufl = (maxx > div_len) ? ustrnlen(USR_FIELDS_STR, maxx - div_len) : 0;
+        int len = ufl + div_len + strnlen(fld_active, MAXFLD);
         mvwaddstr(win, 0, tui_fit_posx(pos, len, maxx), USR_FIELDS_STR);
-        waddstr(win, ": ");
+        waddstr(win, div);
         waddstr(win, fld_active);
       } else if (!custom) {
-        const char *sub = i ? PINGS_STR : PACKETS_STR;
+        // "Packets" or "Pings"
+        const char *sub = (i == SUP1_NDX) ? PINGS_STR : PACKETS_STR;
         int len = ustrnlen(sub, maxx);
         mvwaddstr(win, 0, tui_fit_posx(pos, len, maxx),  i ? PINGS_STR : PACKETS_STR);
       }
@@ -1059,8 +1068,8 @@ static void display_charts(WINDOW *label, WINDOW *work) {
 #undef CHART_COLS
 }
 
-static int redraw_stat_labels(WINDOW *win, int indent) NONNULL(1);
-static int redraw_stat_labels(WINDOW *win, int indent) {
+static int redraw_labels(WINDOW *win, int indent) NONNULL(1);
+static int redraw_labels(WINDOW *win, int indent) {
   werase(win);
   wattron(win, A_BOLD);
 #ifdef WITH_IPINFO
@@ -1076,7 +1085,8 @@ static int redraw_stat_labels(WINDOW *win, int indent) {
   if (titlelen.stat < 0)
     titlelen.stat = get_stat_title_len();
   indent = getmaxx(win) - (titlelen.stat + 1);
-  if (indent < 0) indent = 0;
+  if (indent < 0)
+    indent = 0;
   display_main_labels(win, indent);
   wattroff(win, A_BOLD);
   wrefresh(win);
@@ -1161,10 +1171,16 @@ static inline void display_mainbody(WINDOW *label, WINDOW *work) {
     display_charts(label, work);
   else {
     static int stat_indent;
-    if (!(stat_indent && stat_labels_redrawn)) {
-      stat_indent = redraw_stat_labels(label, INDENT_NUMB);
-      if (!stat_labels_redrawn)
-        stat_labels_redrawn = true;
+#ifdef WITH_IPINFO
+    if (ipinfo_rewidth) {
+      ipinfo_rewidth = false;
+      stat_indent = 0; // indicate to redraw labels
+    }
+#endif
+    if (!(stat_indent && labels_redrawn)) {
+      stat_indent = redraw_labels(label, INDENT_NUMB);
+      if (!labels_redrawn)
+        labels_redrawn = true;
     }
     display_stat_area(work, stat_indent);
   }
@@ -1220,7 +1236,7 @@ void tui_redraw(void) {
     my_lines = LINES;
     // reset caches, redraw labels
     titlelen = (title_len_s){.screen = -1, .stat = -1, .chart = -1};
-    stat_labels_redrawn = false;
+    labels_redrawn = false;
   }
   display_title(area[NDX_TITLE].win);
   display_menuline(area[NDX_MENU].win);

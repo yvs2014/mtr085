@@ -41,5 +41,6 @@ void query_ipinfo(void);
 extern bool ipinfo_tcpmode;
 extern uint ipinfo_queries[];
 extern uint ipinfo_replies[];
+extern bool ipinfo_rewidth;
 
 #endif
