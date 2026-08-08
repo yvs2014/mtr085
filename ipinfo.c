@@ -49,8 +49,6 @@
 #include "nls.h"
 
 #define UNKN "?"
-#define CHAR_QUOTES   "\"'"
-#define CHAR_BRACKETS "{}"
 #define WHOIS_COMMENT PERCENT
 
 enum { TCP_CONN_TIMEOUT = 3, IPINFO_TCP_TIMEOUT = 10 /* in seconds */ };
@@ -66,9 +64,9 @@ bool ipinfo_tcpmode;     // true if ipinfo origin is tcp (http or whois)
 uint ipinfo_queries[3];  // number of queries (sum, http, whois)
 uint ipinfo_replies[3];  // number of replies (sum, http, whois)
 bool ipinfo_rewidth;     // indicator to redraw titles
+bool ipinfo_ready;
 //
 
-static bool ii_ready;
 static int origin_no;     // set once at init
 static int itemname_max;  // set once at init
 
@@ -395,33 +393,6 @@ static void save_txt_answer(int at, int ndx, const char *answer, size_t alen) {
 }
 #endif
 
-static char trim_q(char *str, const char *quotes) {
-  char ch;
-  while ((ch = *quotes++))
-    if (*str == ch) {
-      *str = 0;
-      break;
-    }
-  return (*str);
-}
-
-static char* trim_quotes(uint slen, char str[slen], const char *quotes) NONNULL(3);
-static char* trim_quotes(uint slen, char str[slen], const char *quotes) {
-  if (!str)
-    return str;
-  int len = ustrnlen(str, slen);
-  char *ptr = str + len - 1;
-  for (int i = len; i > 0; i--, ptr--)
-    if (trim_q(ptr, quotes))
-      break;
-  //
-  ptr = str;
-  for (; ptr; ptr++)
-    if (trim_q(ptr, quotes))
-      break;
-  return ptr;
-}
-
 static void save_records(atndx_t id, uint rlen, char* record[rlen], bool add, uint sndx) {
   // save results of parsing
   save_fields(id.at, id.ndx, rlen, record, add, sndx);
@@ -446,12 +417,13 @@ static inline int parse_http_content_len(uint lines_no, char* lines[TCP_RESP_LIN
   uint min = lines_no < TCP_RESP_LINES ? lines_no : TCP_RESP_LINES;
   const char cntx_len_tag[] = "Content-Length:";
   for (uint i = 0; i < min; i++) {
-    char* tagvalue[2] = {lines[i], NULL};
-    if (split_with_sep(ARRAY_LEN(tagvalue), tagvalue, ' ', 0) == ARRAY_LEN(tagvalue)
-      && STR_EQ(cntx_len_tag, tagvalue[0], sizeof(cntx_len_tag))
-      && tagvalue[1])
+    char* pair[2] = {lines[i], NULL};
+    if (split_with_sep(ARRAY_LEN(pair), pair, ' ', 0) == ARRAY_LEN(pair)
+      && STR_EQ(cntx_len_tag, pair[0], sizeof(cntx_len_tag))
+      && pair[1])
     {
-        errno = 0; long n = str2l(tagvalue[1]);
+        errno = 0;
+        long n = str2l(pair[1]);
         if (errno)
           errno = 0;
         else if ((0 < n) && (n <= INT_MAX))
@@ -496,32 +468,29 @@ static void parse_http(atndx_t id, int len, char txt[len]) {
         LOGMSG("No data after header (got %d lines only)", lines_no);
       else {
         uint cndx = 0, clen = parse_http_content_len(lines_no, lines, len, &cndx);
-        char txt[clen + 1];
-        memset(txt, 0, sizeof(txt));
         // combine into one line
+        char context[clen + 1];
+        memset(context, 0, sizeof(context));
         for (uint i = cndx, len = 0; (i < lines_no) && (len < clen); i++) {
-          int inc = snprinte(txt + len, clen - len, "%s", lines[i]);
+          int inc = snprinte(context + len, clen - len, "%s", lines[i]);
           if (inc < 0)
             break;
-          if (inc > 0)
-            len += inc;
+          len += inc;
         }
+        LOGMSG("context(%.*s)", clen, context);
         //
-        LOGMSG("record line: %s", txt);
-        char *trimmed = trim_quotes(sizeof(txt), txt, CHAR_QUOTES);
-        trimmed = trim_quotes(sizeof(txt), trimmed, CHAR_BRACKETS);
-        if (trimmed)
-          split_record(trimmed, ARRAY_LEN(list), list);
+        split_record(context, ARRAY_LEN(list), list);
         got = trim_n_count_records(ARRAY_LEN(list), list);
+        if (got == itemname_max) { // success
+          save_records(id, ARRAY_LEN(list), list, SETFIELDS, 0);
+          return;
+        }
       }
     }
   }
-  // fin
-  if (got != itemname_max) {
-    memset(list, 0, sizeof(list)); // as unknown
-    if (got >= 0)
-      LOGMSG("Expected %d records, got %d", itemname_max, got);
-  }
+  // fail
+  LOGMSG("Expected %d records, got %d", itemname_max, got < 0 ? 0 : got);
+  memset(list, 0, sizeof(list)); // as unknown
   save_records(id, ARRAY_LEN(list), list, SETFIELDS, 0);
 }
 
@@ -627,16 +596,18 @@ static void parse_whois(atndx_t id, uint len, char txt[len]) {
 }
 
 static void close_ipitseq(int seq) {
-  int sock = ipitseq[seq].sock;
-  if (sock >= 0) {
-    if (ipitseq[seq].slot >= 0)
-      poll_dereg_fd(ipitseq[seq].slot);
-    else {
-      LOGMSG("close sock=%d", sock);
-      close(sock);
-      /*summ*/ sum_sock[1]++;
+  if (ipitseq) {
+    int sock = ipitseq[seq].sock;
+    if (ipitseq[seq].sock >= 0) {
+      if (ipitseq[seq].slot >= 0)
+        poll_dereg_fd(ipitseq[seq].slot);
+      else {
+        LOGMSG("close sock=%d", sock);
+        close(sock);
+        /*summ*/ sum_sock[1]++;
+      }
+      memset(&ipitseq[seq], -1, sizeof(ipitseq[0]));
     }
-    memset(&ipitseq[seq], -1, sizeof(ipitseq[0]));
   }
 }
 
@@ -909,62 +880,59 @@ void ipinfo_data_div(size_t size, char buff[size], int at, int ndx, char div) { 
 inline void ipinfo_data_fix(size_t size, char buff[size], int at, int ndx) { // NONNULL(2)
   ipinfo_data_div(size, buff, at, ndx, 0); }
 
-bool ipinfo_ready(void) { return (run_opts.lookup && ii_ready); }
-
 static bool alloc_ipitseq(void) {
-  size_t size = sizeof(ipitseq_t) * MAXHOST * MAXPATH;
-  ipitseq = malloc(size);
   if (!ipitseq) {
-    WARN("tcpseq malloc(%zd)", size);
-    return false;
+    size_t size = sizeof(ipitseq_t) * MAXHOST * MAXPATH;
+    ipitseq = malloc(size);
+    if (ipitseq) {
+      memset(ipitseq, -1, size);
+      LOGMSG("allocated %zd bytes for tcp-sockets", size);
+    } else
+      WARN("tcpseq malloc(%zd)", size);
   }
-  memset(ipitseq, -1, size);
-  LOGMSG("allocated %zd bytes for tcp-sockets", size);
-  return true;
+  return ipitseq != NULL;
 }
 
-static void ipinfo_open(void) {
-  if (ii_ready)
-    return;
-  ii_ready = true;
-  if (ORIG_TYPE != OT_DNS) { // i.e. tcp (http or whois)
-    if (!ipitseq && !alloc_ipitseq())
-      ii_ready = false;
-  } else
 #ifdef ENABLE_DNS
-    if (!dns_open())
+#define DNS_OPEN dns_open()
+#else
+#define DNS_OPEN false
 #endif
-    ii_ready = false;
+
+static bool ipinfo_open(void) {
+  ipinfo_ready = (ORIG_TYPE == OT_DNS) ? DNS_OPEN :
+    (ipitseq ? true : alloc_ipitseq()); // http or whois
 #ifdef ENABLE_DNS
-  dns_txt_handler = save_txt_answer; // handler is used in ipinfo only
+  if (!dns_txt_handler) // use-note: only in ipinfo so far
+    dns_txt_handler = save_txt_answer;
 #endif
-  LOGMSG("%s", ii_ready ? "ok" : "failed");
+  LOGMSG("%s", ipinfo_ready ? "ok" : "failed");
+  return ipinfo_ready;
 }
 
 void ipinfo_close(void) {
-  if (ii_ready) {
-    if (ipitseq) {
-      for (int i = 0; i < MAXHOST * MAXPATH; i++)
-        close_ipitseq(i);
-      free(ipitseq);
-      LOGMSG("%s", "free tcp-sockets memory");
-    }
-    ii_ready = false;
-    LOGMSG("%s", "ok");
+  if (ipitseq) {
+    for (int i = 0; i < MAXHOST * MAXPATH; i++)
+      close_ipitseq(i);
+    free(ipitseq);
+    ipitseq = NULL;
+    LOGMSG("%s", "free tcp-sockets memory");
   }
+  if (ipinfo_ready)
+    ipinfo_ready = false;
 #ifdef ENABLE_DNS
   if (ORIG_TYPE == OT_DNS)
     dns_close();
 #endif
+  LOGMSG("%s", "ok");
 }
 
 #define LIM_CHARS 20
 
 bool ipinfo_init(const char *arg) {
   if (!arg)
-    return false;
-  char* args[II_REC_ARR_LEN + 1] = {0};
-  args[0] = strdup(arg);
+    arg = ASLOOKUP_DEFAULT;
+  char* args[II_REC_ARR_LEN + 1] = {strdup(arg)};
   if (!args[0]) {
     WARN("strdup(%s)", arg);
     return false;
@@ -1043,11 +1011,9 @@ bool ipinfo_init(const char *arg) {
 
 bool ipinfo_action(int action) {
   if ((ipinfo_no[0] < 0) // not at start, set default
-    && !ipinfo_init(ASLOOKUP_DEFAULT))
+    && !ipinfo_init(NULL))
       return false;
-  if (!ii_ready)
-    ipinfo_open();
-  if (!ii_ready)
+  if (!ipinfo_ready && !ipinfo_open())
     return false;
   switch (action) {
     case ActionAS: // `l'
@@ -1082,7 +1048,7 @@ static void query_iiaddr(int at, int ndx) {
 }
 
 void query_ipinfo(void) {
-  if (ii_ready) {
+  if (ipinfo_ready) {
     int max = net_max();
     for (int at = net_min(); at < max; at++) {
       if (addr_exist(&CURRENT_IP(at))) {

@@ -764,13 +764,12 @@ static void short_set(char opt, const char *progname) {
 #ifdef WITH_IPINFO
     case OPT_LOOKUP:
     case OPT_IPINFO: {
-      bool extra = (opt == OPT_IPINFO);
-      if (extra) {
-        assert(optarg);
+      const char *arg = (opt == OPT_IPINFO) ? optarg : NULL;
+      if (arg)
         ini_opts.ipinfo = true;
-      } else
+      else
         ini_opts.asn    = true;
-      if (!ipinfo_init(extra ? optarg : ASLOOKUP_DEFAULT))
+      if (!ipinfo_init(arg))
         QEXIT(EXIT_FAILURE);
       if (!ipinfo_action(ActionNone)) // fail to init
         QEXIT(EXIT_FAILURE);

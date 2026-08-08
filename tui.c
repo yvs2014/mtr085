@@ -76,20 +76,23 @@ enum {
   LINEMAXLEN  = 1024,
 };
 
-enum {NDX_TITLE = 0, NDX_MENU, NDX_LABEL, NDX_WORK, NDX_STATUS, MAX_AREA_NDX};
+enum {NDX_TOP = 0, NDX_STATUS, NDX_LABEL, NDX_WORK};
 typedef struct {
   WINDOW *win;
   int height; // not in use yet
 } area_s;
-static area_s area[MAX_AREA_NDX] = {
-  [NDX_TITLE]  = {.height =  1},
-  [NDX_MENU]   = {.height =  1},
-  [NDX_LABEL]  = {.height =  2},
-  [NDX_WORK]   = {.height = -5 /*sum others*/},
+static area_s area[] = {
+  [NDX_TOP]    = {.height =  1},
   [NDX_STATUS] = {.height =  1},
+  [NDX_LABEL]  = {.height =  2},
+  [NDX_WORK]   = {.height = -4 /*sum others*/},
+//  [NDX_STATUS] = {.height =  1},
 };
 
-static bool labels_redrawn; // if 0: column labels need redrawing
+typedef struct {
+  bool top, labels, chart_title;
+} redrawn_s;
+static redrawn_s redrawn; // need redrawing unless true
 
 static char screen_title[NAMELEN]; // progname + arguments + destination
 static uint screen_title_len;
@@ -415,8 +418,8 @@ static tui_key_fn actfn_map[UINT8_MAX] =  {
 };
 
 static inline void require_redraw(void) {
-  labels_redrawn = false;
-  titlelen.screen = -1;
+  memset(&redrawn, 0, sizeof(redrawn));
+  titlelen = (title_len_s){.screen = -1, .stat = -1, .chart = -1};
 }
 
 static inline void reset_actkey_flags(int ch) {
@@ -473,6 +476,7 @@ key_action_t tui_keyaction(void) {
 #ifdef KEY_RESIZE
   // skip resize keys
   if (ch == KEY_RESIZE) { // cleanup by batch
+    require_redraw();
     for (int i = 0; (ch == KEY_RESIZE) && (i < GETCH_BATCH); i++)
       ch = wgetch(win);
     if (ch == KEY_RESIZE) // otherwise flush
@@ -525,7 +529,7 @@ static void printw_addr(WINDOW *win, int at, int ndx) NONNULL(1);
 static void printw_addr(WINDOW *win, int at, int ndx) {
   t_ipaddr *addr = &IP_AT_NDX(at, ndx);
 #ifdef WITH_IPINFO
-  if (ipinfo_ready()) {
+  if (IPINFOED) {
     char info[NAMELEN] = {0};
     ipinfo_data_fix(sizeof(info), info, at, ndx);
     if (info[0])
@@ -776,7 +780,7 @@ static void histoaddr(WINDOW *win, int at, int max, int y, int x, int cols) {
     if (!host[at].up)
       wattron(win, A_BOLD);
 #ifdef WITH_IPINFO
-    if (ipinfo_ready()) {
+    if (IPINFOED) {
       char info[NAMELEN] = {0};
       ipinfo_data_fix(sizeof(info), info, at, host[at].current);
       if (info[0])
@@ -1034,44 +1038,52 @@ static int tui_print_args(char buf[], size_t size) {
 #undef INT_OPT2STR
 #undef BOOL_OPT2STR
 
-static void display_charts(WINDOW *label, WINDOW *work) NONNULL(1, 2);
-static void display_charts(WINDOW *label, WINDOW *work) {
-#define CHART_COLS(mx) (((mx) <= (SAVED_PINGS + dx)) ? ((mx) - dx) : SAVED_PINGS)
-  int dx = HOSTINFOMAX;
-#ifdef WITH_IPINFO
-  if (ipinfo_ready())
-    dx += ipinfo_width();
-#endif
-  //
-  // title part
-  werase(label);
-  static char chart_title[256];
+#define CHART_COLS ((maxx <= (SAVED_PINGS + indent)) ? (maxx - indent) : SAVED_PINGS)
+//
+static void redraw_chart_title(WINDOW *win, int indent) NONNULL(1);
+static void redraw_chart_title(WINDOW *win, int indent) {
+  werase(win);
+  static char chart_title[256]; // long enough?
   if (titlelen.chart < 0) {
     memset(chart_title, 0, sizeof(chart_title));
-    int maxx = getmaxx(label);
+    int maxx = getmaxx(win);
     int len = snprinte(chart_title, sizeof(chart_title),
-      "%s: %d %s", HISTOGRAM_STR, CHART_COLS(maxx), HCOLS_STR);
+      "%s: %d %s", HISTOGRAM_STR, CHART_COLS, HCOLS_STR);
     if (len >= 0)
-      titlelen.chart = ustrnlen(chart_title, getmaxx(label));
+      titlelen.chart = ustrnlen(chart_title, getmaxx(win));
   }
   if (titlelen.chart > 0) {
-    int x = (getmaxx(label) - titlelen.chart) / 2;
-    mvwaddstr(label, 0, (x > 0) ? x : 0, chart_title);
+    int x = (getmaxx(win) - titlelen.chart) / 2;
+    mvwaddstr(win, 0, (x > 0) ? x : 0, chart_title);
   }
-  wrefresh(label);
-  //
-  // chart part
-  werase(work);
-  if (wmove(work, 0, 0) != ERR) {
-    wattroff(work, A_BOLD);
-    dmode_scale_map();
-    int maxx = getmaxx(work);
-    histogram(work, dx - 2 /* right_pad(1) + 1 */, CHART_COLS(maxx));
-    if (wmove(work, getcury(work) + 1, 0) != ERR)
-      print_scale(work);
-  }
-  wrefresh(work);
+  wrefresh(win);
+}
+//
+static void redraw_histogram(WINDOW *win, int indent) NONNULL(1);
+static void redraw_histogram(WINDOW *win, int indent) {
+  werase(win);
+//  wattroff(work, A_BOLD);
+  dmode_scale_map();
+  int maxx = getmaxx(win);
+  histogram(win, indent - 2 /* right_pad(1) + 1 */, CHART_COLS);
+  if (wmove(win, getcury(win) + 1, 0) != ERR)
+    print_scale(win);
+  wrefresh(win);
+}
 #undef CHART_COLS
+
+static void redraw_charts(WINDOW *label, WINDOW *work) NONNULL(1, 2);
+static void redraw_charts(WINDOW *label, WINDOW *work) {
+  int dx = HOSTINFOMAX;
+#ifdef WITH_IPINFO
+  if (IPINFOED)
+    dx += ipinfo_width();
+#endif
+  if (!redrawn.chart_title) {
+    redraw_chart_title(label, dx);
+    redrawn.chart_title = true;
+  }
+  redraw_histogram(work, dx);
 }
 
 static int redraw_labels(WINDOW *win, int indent) NONNULL(1);
@@ -1079,7 +1091,7 @@ static int redraw_labels(WINDOW *win, int indent) {
   werase(win);
   wattron(win, A_BOLD);
 #ifdef WITH_IPINFO
-  if (ipinfo_ready()) {
+  if (IPINFOED) {
     char info[NAMELEN] = {0};
     ipinfo_head_fix(sizeof(info), info);
     if (info[0])
@@ -1099,15 +1111,8 @@ static int redraw_labels(WINDOW *win, int indent) {
   return indent;
 }
 
-static void display_stat_area(WINDOW *win, int stat_indent) NONNULL(1);
-static void display_stat_area(WINDOW *win, int stat_indent) {
-  werase(win);
-  print_hops(win, stat_indent);
-  wrefresh(win);
-}
-
-static void display_title(WINDOW *win) NONNULL(1);
-static void display_title(WINDOW *win) {
+static void redraw_top(WINDOW *win) NONNULL(1);
+static void redraw_top(WINDOW *win) {
   static char title_cache[LINEMAXLEN];
   werase(win);
   if (titlelen.screen < 0) { // generate title and cache it
@@ -1148,8 +1153,8 @@ static void display_title(WINDOW *win) {
   waddstr(win, (txt));               \
 } while (0)
 
-static void display_menuline(WINDOW *win) NONNULL(1);
-static void display_menuline(WINDOW *win) {
+static void redraw_status(WINDOW *win) NONNULL(1);
+static void redraw_status(WINDOW *win) {
   werase(win);
   mvwaddstr(win, 0, 0, MENU_STR);
   waddch(win, ':');
@@ -1171,10 +1176,10 @@ static void display_menuline(WINDOW *win) {
   wrefresh(win);
 }
 
-static inline void display_mainbody(WINDOW *label, WINDOW *work) NONNULL(1, 2);
-static inline void display_mainbody(WINDOW *label, WINDOW *work) {
+static inline void redraw_mainarea(WINDOW *label, WINDOW *work) NONNULL(1, 2);
+static inline void redraw_mainarea(WINDOW *label, WINDOW *work) {
   if (chart_mode)
-    display_charts(label, work);
+    redraw_charts(label, work);
   else {
     static int stat_indent;
 #ifdef WITH_IPINFO
@@ -1183,24 +1188,32 @@ static inline void display_mainbody(WINDOW *label, WINDOW *work) {
       stat_indent = 0; // indicate to redraw labels
     }
 #endif
-    if (!(stat_indent && labels_redrawn)) {
+    if (!(stat_indent && redrawn.labels)) {
       stat_indent = redraw_labels(label, INDENT_NUMB);
-      if (!labels_redrawn)
-        labels_redrawn = true;
+      if (!redrawn.labels)
+        redrawn.labels = true;
     }
-    display_stat_area(work, stat_indent);
+    werase(work);
+    print_hops(work, stat_indent);
+    wrefresh(work);
   }
 }
 
-static WINDOW* create_area(WINDOW *parent, int h, int *y) NONNULL(1, 3);
-static WINDOW* create_area(WINDOW *parent, int h, int *y) {
-  WINDOW *win = subwin(parent, h, 0/*i.e.max*/, *y, 0);
-  *y += h;
-  if (win) {
-    wrefresh(win);
-    keypad(win, TRUE);
-  }
-  return win;
+static void create_area(uint ndx) {
+  static int y;
+  if (ndx < ARRAY_LEN(area)) {
+    int h = area[ndx].height;
+    if (h < 0)
+      h += LINES;
+    WINDOW *win = newwin(h, 0/*max*/, y, 0);
+    if (win) {
+      wrefresh(win);
+      keypad(win, TRUE);
+      area[ndx].win = win;
+      y += h;
+    }
+  } else
+    y = 0; // indicate y-reset with out-of-range index
 }
 
 static void free_areas(void) {
@@ -1210,43 +1223,47 @@ static void free_areas(void) {
   }
 }
 
+static inline bool areas_ready(void) {
+  for (uint i = 0; i < ARRAY_LEN(area); i++)
+    if (!area[i].win)
+      return false;
+ return true;
+}
+
 static bool init_areas(void) {
-  // reset cached titles
-  titlelen = (title_len_s){.screen = -1, .stat = -1, .chart = -1};
+  static int my_cols, my_lines;
+  if (areas_ready() && (my_cols == COLS) && (my_lines == LINES))
+    return true;
+  my_cols  = COLS;
+  my_lines = LINES;
+  require_redraw();
   // create areas
   free_areas();
-  WINDOW *parent = stdscr;
-  int y = 0;
-  if ((area[NDX_TITLE].win = create_area(parent, 1, &y)))
-   if ((area[NDX_MENU].win = create_area(parent, 1, &y)))
-     if ((area[NDX_LABEL].win = create_area(parent, 2, &y))) {
-//        int h = LINES - (y + 1);
-        int h = LINES - y;
-        if ((area[NDX_WORK].win = create_area(parent, h > 0 ? h : 1, &y)))
-//        if ((area[NDX_STATUS].win = create_area(parent, 1, &y)))
-          return true;
-      }
-  return false;
+  create_area(ARRAY_LEN(area)); // reset `y' position
+  create_area(NDX_TOP);
+  create_area(NDX_STATUS);
+  create_area(NDX_LABEL);
+  create_area(NDX_WORK);
+  return areas_ready();
+}
+
+static inline void redraw_areas(void) {
+  if (!redrawn.top) {
+    redraw_top(area[NDX_TOP].win);
+    redrawn.top = true;
+  }
+  redraw_mainarea(area[NDX_LABEL].win, area[NDX_WORK].win);
+  redraw_status(area[NDX_STATUS].win);
 }
 
 void tui_redraw(void) {
-  static int my_cols = -1, my_lines = -1;
-  if ((my_cols != COLS) || (my_lines != LINES)) {
-    if (!init_areas()) { // something wrong
-      erase();
-      addstr("TUI init areas: failed");
-      refresh();
-      return;
-    }
-    my_cols  = COLS;
-    my_lines = LINES;
-    // reset caches, redraw labels
-    titlelen = (title_len_s){.screen = -1, .stat = -1, .chart = -1};
-    labels_redrawn = false;
+  if (init_areas())
+    redraw_areas();
+  else {
+    erase();
+    printw("TUI init areas: failed");
+    refresh();
   }
-  display_title(area[NDX_TITLE].win);
-  display_menuline(area[NDX_MENU].win);
-  display_mainbody(area[NDX_LABEL].win, area[NDX_WORK].win);
 }
 
 bool tui_open(void) {
@@ -1299,7 +1316,7 @@ bool tui_open(void) {
     snprinte(screen_title, sizeof(screen_title), "%s %s %s", PACKAGE_NAME, mtr_args, dsthost);
   else
     snprinte(screen_title, sizeof(screen_title), "%s %s", PACKAGE_NAME, dsthost);
-  screen_title_len = screen_title[0] ? ustrnlen(screen_title, getmaxx(area[NDX_TITLE].win)) : 0;
+  screen_title_len = screen_title[0] ? ustrnlen(screen_title, getmaxx(area[NDX_TOP].win)) : 0;
   //
   mc_init();
   tui_redraw();
