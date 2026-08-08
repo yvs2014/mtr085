@@ -179,14 +179,16 @@
 #define REPLIES_STR  _("replies")
 #define PORTNUM_STR  _("port number")
 
+// at start before locale init
+#define RAWSOCK_ERR  "Unable to get raw sockets"
+#define DROPPERM_ERR "Unable to drop permissions"
+#define DROPCAP_ERR  "Unable to drop capabilities"
+
 // messages
 #define ANYLTTR_STR  _("Press any letter to continue")
 #define ANYCONT_STR  _("Press any key to continue")
 #define ANYQUIT_STR  _("Press any key to quit")
 #define UNKNOWN_ERR  _("Unknown error")
-#define RAWSOCK_ERR  _("Unable to get raw sockets")
-#define DROPPERM_ERR _("Unable to drop permissions")
-#define DROPCAP_ERR  _("Unable to drop capabilities")
 #define RESFAIL_ERR  _("Failed to resolve")
 #define MANYNS_WARN  _("Only one DNS server is used")
 #define PARSE_ERR    _("Failed to parse")

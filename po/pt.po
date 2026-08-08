@@ -534,14 +534,14 @@ msgstr "Pressione qualquer tecla para sair"
 msgid "Unknown error"
 msgstr "Erro desconhecido"
 
-msgid "Unable to get raw sockets"
-msgstr "Raw-soquetes não estão disponíveis"
-
-msgid "Unable to drop permissions"
-msgstr "Não é possível remover permissões"
-
-msgid "Unable to drop capabilities"
-msgstr "Não é possível abandonar capacidades"
+#msgid "Unable to get raw sockets"
+#msgstr "Raw-soquetes não estão disponíveis"
+#
+#msgid "Unable to drop permissions"
+#msgstr "Não é possível remover permissões"
+#
+#msgid "Unable to drop capabilities"
+#msgstr "Não é possível abandonar capacidades"
 
 msgid "Failed to resolve"
 msgstr "Falhou em resolver"

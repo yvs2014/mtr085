@@ -529,14 +529,14 @@ msgstr "Натисніть будь-яку клавішу для виходу"
 msgid "Unknown error"
 msgstr "Невідома помилка"
 
-msgid "Unable to get raw sockets"
-msgstr "Raw-сокети недоступні"
-
-msgid "Unable to drop permissions"
-msgstr "Не вдалося повернутися до рівня користувача (permissions)"
-
-msgid "Unable to drop capabilities"
-msgstr "Не вдалося повернутися до рівня користувача (capabilities)"
+#msgid "Unable to get raw sockets"
+#msgstr "Raw-сокети недоступні"
+#
+#msgid "Unable to drop permissions"
+#msgstr "Не вдалося повернутися до рівня користувача (permissions)"
+#
+#msgid "Unable to drop capabilities"
+#msgstr "Не вдалося повернутися до рівня користувача (capabilities)"
 
 msgid "Failed to resolve"
 msgstr "Не вдалося розпізнати"

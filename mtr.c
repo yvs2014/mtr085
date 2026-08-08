@@ -878,6 +878,21 @@ static bool set_target(const struct addrinfo *res) {
   return true;
 }
 
+#if defined(WITH_UNICODE) && defined(USE_NLS)
+static void bind_nls(void) {
+#ifdef HAVE_LOCALE_H
+  setlocale(LC_ALL, "");
+#endif
+#ifdef LOCALEDIR
+  bindtextdomain(PACKAGE_NAME, LOCALEDIR);
+  textdomain(PACKAGE_NAME);
+#endif
+}
+#define BIND_NLS bind_nls()
+#else
+#define BIND_NLS NOOP
+#endif
+
 #if defined(WITH_UNICODE) && defined(HAVE_LOCALE_H) && defined(HAVE_LANGINFO_H)
 static void init_locale(void) {
   setlocale(LC_CTYPE, "");
@@ -893,10 +908,10 @@ static void init_locale(void) {
   }
   setlocale(LC_CTYPE, NULL);
 }
-#define UNICODE_INIT init_locale()
+#define UNICODE_INIT do { init_locale(); if (utf_compat) BIND_NLS; } while (0)
 #define UNICODE_FREE setlocale(LC_CTYPE, NULL)
 #else
-#define UNICODE_INIT NOOP
+#define UNICODE_INIT BIND_NLS
 #define UNICODE_FREE NOOP
 #endif /* UNICODE stuff */
 
@@ -1014,7 +1029,6 @@ static inline void main_prep(int argc, char **argv) {
 #endif
   for (uint i = 0; i < ARRAY_LEN(stats); i++)
     fld_index[(uint8_t)stats[i].key] = i;
-  UNICODE_INIT;
   set_fld_active(NULL);
   parse_options(argc, argv);
   if (optind >= argc) { usage(argv[0]); QEXIT(EXIT_SUCCESS); }
@@ -1078,36 +1092,22 @@ static inline void main_fin(void) {
   UNICODE_FREE;
 }
 
-#if defined(USE_NLS) && defined(UNICODE)
-static void bind_nls(void) {
-  setlocale(LC_ALL, "");
-  bindtextdomain(PACKAGE_NAME, LOCALEDIR);
-  textdomain(PACKAGE_NAME);
-}
-#define BIND_NLS bind_nls()
-#else
-#define BIND_NLS NOOP
-#endif
-
 
 int main(int argc, char **argv) {
-#define EXIT_WITH_MSG(msg) { BIND_NLS; errx(EXIT_FAILURE, "%s", msg); }
   // get raw sockets
   if (!net_open())
-    EXIT_WITH_MSG(RAWSOCK_ERR);
+    errx(EXIT_FAILURE, "%s", RAWSOCK_ERR);
   // drop permissions if that's set
   if (setgid(getgid()) || setuid(getuid()))
-    EXIT_WITH_MSG(DROPPERM_ERR);
+    errx(EXIT_FAILURE, "%s", DROPPERM_ERR);
   // be sure
   if ((geteuid() != getuid()) || (getegid() != getgid()))
-    EXIT_WITH_MSG(DROPPERM_ERR);
+    errx(EXIT_FAILURE, "%s", DROPPERM_ERR);
 #ifdef LIBCAP
   if (!drop_caps())
-    EXIT_WITH_MSG(DROPCAP_ERR);
+    errx(EXIT_FAILURE, "%s", DROPCAP_ERR);
 #endif
-#undef EXIT_WITH_MSG
-
-  BIND_NLS;
+  UNICODE_INIT;
   for (uint i = 0; i < ARRAY_LEN(stats); i++) {
     if (stats[i].name && stats[i].name[0]) {
       stats[i].name  = _(stats[i].name);
