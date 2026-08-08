@@ -20,8 +20,9 @@
 #define POLLING_H
 
 #include <poll.h>
+#include <stdbool.h>
 
-int  poll_loop(void);
+bool poll_loop(void);
 int  poll_reg_fd(int sock, int seq);
 void poll_dereg_fd(int slot);
 void poll_close_tcpfds(void);

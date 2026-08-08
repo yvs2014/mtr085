@@ -188,8 +188,8 @@ static void tcp_timedout(void) {
   }
 }
 
-static void proceed_tcp(struct timespec *polled_at) NONNULL(1);
-static void proceed_tcp(struct timespec *polled_at) {
+static void proceed_tcp(struct timespec *tm) NONNULL(1);
+static void proceed_tcp(struct timespec *tm) {
   for (int i = FD_MAX; i < maxfd; i++) {
     int sock = allfds[i].fd;
     short ev = allfds[i].revents;
@@ -199,7 +199,7 @@ static void proceed_tcp(struct timespec *polled_at) {
     int seq = tcpseq[i];
     if (seq >= 0) {
       if (seq < MAXSEQ) { // ping tcp-mode
-        net_tcp_parse(sock, seq, ev == POLLOUT, polled_at);
+        net_tcp_parse(sock, seq, ev == POLLOUT, tm);
         CLOSE_FD(i);
       }
 #ifdef WITH_IPINFO
@@ -221,6 +221,7 @@ static void proceed_tcp(struct timespec *polled_at) {
 #define PL_GETTIME(tspec) { if (clock_gettime(CLOCK_MONOTONIC, (tspec)) < 0) { \
   keep_error(errno, __func__); return false; }}
 
+static bool svc(struct timespec *, const struct timespec *, int *) NONNULL(1, 2, 3);
 static bool svc(struct timespec *last, const struct timespec *interval, int *timeout) {
   // set 'last' and 'timeout [msec]', return false if it neeeds to stop
   struct timespec now, tv;
@@ -421,9 +422,9 @@ static inline bool tcpish(void) {
 }
 
 // work out events
-static int conclude(struct timespec *polled_at) NONNULL(1);
-static int conclude(struct timespec *polled_at) {
-  int rc = ActionNone;
+static key_action_t conclude(struct timespec *polled_at) NONNULL(1);
+static key_action_t conclude(struct timespec *polled_at) {
+  key_action_t rc = ActionNone;
   if (IN_ISSET(FD_STDIN)) { // check keyboard events
     LOGMSG("got %s", "stdin event");
     key_action_t act = keyaction_fn ? keyaction_fn() : ActionNone;
@@ -491,11 +492,11 @@ static void seqfd_free(void) {
 }
 
 // main loop
-int poll_loop(void) {
+bool poll_loop(void) {
   LOGMSG("%s", "start");
   if (!seqfd_init())
     return false;
-  int anyset = ActionNone;
+  key_action_t action = ActionNone;
   bool paused = false;
   numpings = 0;
   grace = NO_GRACE;
@@ -511,7 +512,7 @@ int poll_loop(void) {
     waitspec(&interval);
     int timeout = 0, rv = 0;
     do {
-      if ((anyset != ActionNone) || paused) {
+      if ((action != ActionNone) || paused) {
         timeout = paused ? PAUSE_MSEC : 0;
         if (paused && run_opts.interactive) EACHPASS;
       } else {
@@ -543,13 +544,13 @@ int poll_loop(void) {
       break;
     }
     if (rv) {
-      anyset = conclude(&polled_now);
-      if (anyset == ActionQuit)
+      action = conclude(&polled_now);
+      if (action == ActionQuit)
         break;
-      if (anyset == ActionPauseResume) {
+      if (action == ActionPauseResume) {
         paused = !paused;
         if (!paused)
-          anyset = ActionNone;
+          action = ActionNone;
       }
     } else if (tcpish())
       tcp_timedout(); // not waiting for TCP ETIMEDOUT

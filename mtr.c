@@ -855,27 +855,27 @@ static inline const struct addrinfo* find_ai_pref(const struct addrinfo *res) {
 #endif
 
 static bool set_target(const struct addrinfo *res) {
+  bool okay = false;
   const struct addrinfo *ai =
 #ifdef ENABLE_IPV6
     !af_specified ? find_ai_pref(res) :
 #endif
     find_ai_af(res);
-  if (!ai) return false;
-  //
-  t_ipaddr *ipaddr =
+  if (ai) {
+    t_ipaddr *host =
 #ifdef ENABLE_IPV6
-    (af == AF_INET6) ? (t_ipaddr*)&((struct sockaddr_in6 *)ai->ai_addr)->sin6_addr :
+      (af == AF_INET6) ? (t_ipaddr*)&((struct sockaddr_in6 *)ai->ai_addr)->sin6_addr :
 #endif
-    ((af == AF_INET) ? (t_ipaddr*)&((struct sockaddr_in  *)ai->ai_addr)->sin_addr  : NULL);
-  if (!af || !ipaddr || !net_set_host(ipaddr)) {
-    warnx("%s (af=%d)", HOSTENT_ERR, af);
-    return false;
+      ((af == AF_INET) ? (t_ipaddr*)&((struct sockaddr_in  *)ai->ai_addr)->sin_addr  : NULL);
+    if (af && host && net_set_host(host)) {
+      if (iface_addr && !net_set_ifaddr(iface_addr))
+        warnx("%s: %s", USEADDR_ERR, iface_addr);
+      else
+        okay = true;
+    } else
+      warnx("%s (af=%d)", HOSTENT_ERR, af);
   }
-  if (iface_addr && !net_set_ifaddr(iface_addr)) {
-    warnx("%s: %s", USEADDR_ERR, iface_addr);
-    return false;
-  }
-  return true;
+  return okay;
 }
 
 #if defined(WITH_UNICODE) && defined(USE_NLS)
@@ -1031,7 +1031,11 @@ static inline void main_prep(int argc, char **argv) {
     fld_index[(uint8_t)stats[i].key] = i;
   set_fld_active(NULL);
   parse_options(argc, argv);
-  if (optind >= argc) { usage(argv[0]); QEXIT(EXIT_SUCCESS); }
+  if (optind >= argc) {
+    // TODO: set target at runtime
+    usage(argv[0]);
+    QEXIT(EXIT_SUCCESS);
+  }
 #ifdef WITH_SYSLOG
   openlog(PACKAGE_NAME, LOG_PID, LOG_USER);
 #endif

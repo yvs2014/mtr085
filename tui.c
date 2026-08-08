@@ -540,13 +540,15 @@ static void printw_addr(WINDOW *win, int at, int ndx) {
   if (name) {
     waddstr(win, name);
     if (run_opts.both) {
+      char str[MAX_ADDRSTRLEN] = {0};
       waddstr(win, " (");
-      waddstr(win, strlongip(addr));
+      waddstr(win, addr2str(addr, sizeof(str), str));
       waddch(win, ')');
     }
   } else
 #endif
-  { waddstr(win, strlongip(addr)); }
+  { char str[MAX_ADDRSTRLEN] = {0};
+    waddstr(win, addr2str(addr, sizeof(str), str)); }
   if (down)
     wattroff(win, A_BOLD);
 }
@@ -586,22 +588,21 @@ static int print_stat(WINDOW *win, int at, int y, int x, int max) { // statistic
 }
 
 static void print_addr_extra(WINDOW *win, int at) NONNULL(1);
-static void print_addr_extra(WINDOW *win, int at) { // mpls + multipath
-  for (int ndx = 0; ndx < MAXPATH; ndx++) {  // multipath
-    if (ndx == host[at].current)
-      continue; // because already printed
-    t_ipaddr *addr = &IP_AT_NDX(at, ndx);
-    if (!addr_exist(addr))
-      break;
-    wprintw(win, "%*s", INDENT_NUMB, "");
-    printw_addr(win, at, ndx);
-    if (wmove(win, getcury(win) + 1, 0) == ERR)
-      break;
-#ifdef WITH_MPLS
-    if (run_opts.mpls)
-      if (printw_mpls(win, &MPLS_AT_NDX(at, ndx)) == ERR)
+static void print_addr_extra(WINDOW *win, int at) { // multipath + mpls
+  for (int ndx = 0; ndx < MAXPATH; ndx++) { // multipath
+    if (ndx != host[at].current) { // not printed yet
+      if (!addr_exist(&IP_AT_NDX(at, ndx)))
         break;
+      wprintw(win, "%*s", INDENT_NUMB, "");
+      printw_addr(win, at, ndx);
+      if (wmove(win, getcury(win) + 1, 0) == ERR)
+        break;
+#ifdef WITH_MPLS
+      if (run_opts.mpls)
+        if (printw_mpls(win, &MPLS_AT_NDX(at, ndx)) == ERR)
+          break;
 #endif
+    }
   }
 }
 
@@ -614,8 +615,7 @@ static void print_hops(WINDOW *win, int statx) {
       break;
     wprintw(win, AT_FMT, at + 1);
     waddch(win, ' ');
-    t_ipaddr *addr = &CURRENT_IP(at);
-    if (addr_exist(addr)) {
+    if (addr_exist(&CURRENT_IP(at))) {
       printw_addr(win, at, host[at].current);
       if (print_stat(win, at, y, statx, max) == ERR)
         break;
@@ -785,9 +785,15 @@ static void histoaddr(WINDOW *win, int at, int max, int y, int x, int cols) {
 #endif
 #ifdef ENABLE_DNS
     const char *name = dns_ptr_lookup(at, host[at].current);
-    waddstr(win, name ? name : strlongip(addr));
+    if (name)
+      waddstr(win, name);
+    else {
+      char str[MAX_ADDRSTRLEN] = {0};
+      waddstr(win, addr2str(addr, sizeof(str), str));
+    }
 #else
-    waddstr(win, strlongip(addr));
+    { char str[MAX_ADDRSTRLEN] = {0};
+      waddstr(win, addr2str(addr, sizeof(str), str)); }
 #endif
     if (!host[at].up)
       wattroff(win, A_BOLD);

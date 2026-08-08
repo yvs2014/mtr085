@@ -444,11 +444,11 @@ static inline int parse_http_content_len(uint lines_no, char* lines[TCP_RESP_LIN
 	size_t recv_size, uint *cndx) {
   uint ndx = 0, len = 0; // content index in tcp response and its length
   uint min = lines_no < TCP_RESP_LINES ? lines_no : TCP_RESP_LINES;
-  static char CNT_LEN_HEADER[] = "Content-Length:";
+  const char cntx_len_tag[] = "Content-Length:";
   for (uint i = 0; i < min; i++) {
     char* tagvalue[2] = {lines[i], NULL};
     if (split_with_sep(ARRAY_LEN(tagvalue), tagvalue, ' ', 0) == ARRAY_LEN(tagvalue)
-      && STR_EQ(CNT_LEN_HEADER, tagvalue[0], sizeof(CNT_LEN_HEADER))
+      && STR_EQ(cntx_len_tag, tagvalue[0], sizeof(cntx_len_tag))
       && tagvalue[1])
     {
         errno = 0; long n = str2l(tagvalue[1]);
@@ -725,6 +725,18 @@ static int send_tcp_query(int sock, const char *q) {
   return rc;
 }
 
+static const char* make_tcp_qstr(int at, int ndx, size_t size, char query[size]) NONNULL(4);
+static const char* make_tcp_qstr(int at, int ndx, size_t size, char query[size]) {
+  char str[MAX_ADDRSTRLEN] = {0};
+  const char *addr = inet_ntop(af, &IP_AT_NDX(at, ndx), str, sizeof(str));
+  if (addr) {
+    snprinte(query, size, "%s%s", origins[origin_no].prefix, addr);
+    if (query[0])
+      return query;
+  }
+  return NULL;
+}
+
 void ipinfo_seq_ready(int seq) {
   seq %= MAXSEQ;
   int at = seq / MAXPATH, ndx = seq % MAXPATH;
@@ -732,8 +744,9 @@ void ipinfo_seq_ready(int seq) {
   ipitseq[seq].state = TSEQ_READY;
   QTXT_TS_AT_NDX(at, ndx) = time(NULL); // save send-time
   char query[NAMELEN] = {0};
-  if (snprinte(query, sizeof(query), "%s%s", origins[origin_no].prefix, strlongip(&IP_AT_NDX(at, ndx))) > 0)
-    send_tcp_query(ipitseq[seq].sock, query);
+  const char *q = make_tcp_qstr(at, ndx, sizeof(query), query);
+  if (q)
+    send_tcp_query(ipitseq[seq].sock, q);
 }
 
 static int ipinfo_lookup(int at, int ndx, const char *qstr) {
@@ -806,10 +819,11 @@ static char *get_ipinfo(int at, int ndx, int item_no) {
   char query[NAMELEN] = {0};
   switch (ORIG_TYPE) {
     case OT_HTTP:
-    case OT_WHOIS:
-      if (snprinte(query, sizeof(query), "%s%s", origins[origin_no].prefix, strlongip(ipaddr)) > 0)
-        ipinfo_lookup(at, ndx, query);
-    break;
+    case OT_WHOIS: {
+      const char *q = make_tcp_qstr(at, ndx, sizeof(query), query);
+      if (q)
+        ipinfo_lookup(at, ndx, q);
+    } break;
 #ifdef ENABLE_DNS
     default: // dns
       ip2arpa(sizeof(query), query, ipaddr, ORIG_HOST, origins[origin_no].host6);
@@ -1068,19 +1082,16 @@ static void query_iiaddr(int at, int ndx) {
 }
 
 void query_ipinfo(void) {
-  if (!ii_ready)
-      return;
-  int max = net_max();
-  for (int at = net_min(); at < max; at++) {
-    t_ipaddr *ipaddr = &CURRENT_IP(at);
-    if (addr_exist(ipaddr)) {
-      query_iiaddr(at, host[at].current);
-      for (int i = 0; i < MAXPATH; i++) {
-        if (i == host[at].current)
-          continue; // because already queried
-        t_ipaddr *ipaddr_i = &IP_AT_NDX(at, i);
-        if (addr_exist(ipaddr_i))
-          query_iiaddr(at, i);
+  if (ii_ready) {
+    int max = net_max();
+    for (int at = net_min(); at < max; at++) {
+      if (addr_exist(&CURRENT_IP(at))) {
+        query_iiaddr(at, host[at].current);
+        for (int i = 0; i < MAXPATH; i++) {
+          if ((i != host[at].current) // already queried
+              && addr_exist(&IP_AT_NDX(at, i)))
+            query_iiaddr(at, i);
+        }
       }
     }
   }

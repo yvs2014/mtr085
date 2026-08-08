@@ -82,50 +82,53 @@ void report_started_at(void) { started_at = time(NULL); }
 } while(0)
 #endif
 
-static inline void print_str_width(const char str[], int width) NONNULL(1);
-static inline void print_str_width(const char str[], int width) {
-  if (width < 0) printf("%s", str);
-  else printf("%-*s", width, str);
+static inline int print_str_width(const char str[], int width) NONNULL(1);
+static inline int print_str_width(const char str[], int width) {
+  return (width > 0) ? printf("%-*s", width, str) : printf("%s", str);
 }
 
 static void print_nameaddr(int at, int ndx, int width) {
-  if (!width) return;
-  t_ipaddr *ipaddr = &IP_AT_NDX(at, ndx);
-  if (addr_exist(ipaddr)) {
+  if (!width)
+    return;
+  t_ipaddr *addr = &IP_AT_NDX(at, ndx);
+  if (addr_exist(addr)) {
 #ifdef ENABLE_DNS
     const char *name = run_opts.dns ? dns_ptr_cache(at, ndx) : NULL;
     if (name) {
       if (run_opts.both) {
-        if (width > 0) {
-          char buff[MAXNAME] = {0};
-          snprinte(buff, sizeof(buff), "%s (%s)", name, strlongip(ipaddr));
-          print_str_width(buff, width);
-        } else
-          printf("%s (%s)", name, strlongip(ipaddr));
-      } else print_str_width(name, width);
+        char both[MAXNAME] = {0}, str[MAX_ADDRSTRLEN] = {0};
+        snprinte(both, sizeof(both), "%s (%s)", name, addr2str(addr, sizeof(str), str));
+        print_str_width(both, width);
+      } else
+        print_str_width(name, width);
     } else
 #endif
-      print_str_width(strlongip(ipaddr), width);
+    { char str[MAX_ADDRSTRLEN] = {0};
+      print_str_width(addr2str(addr, sizeof(str), str), width); }
   } else
     print_str_width(UNKN_ITEM, width);
 }
 
-static int snprint_addr(char buf[], size_t size, uint at, uint ndx) {
-  if (!buf || !size) return 0;
+static int snprint_addr(char buff[], size_t size, uint at, uint ndx) {
+  if (!buff || !size)
+    return 0;
   int len = 0;
-  t_ipaddr *ipaddr = &IP_AT_NDX(at, ndx);
-  if (addr_exist(ipaddr)) {
+  t_ipaddr *addr = &IP_AT_NDX(at, ndx);
+  if (addr_exist(addr)) {
 #ifdef ENABLE_DNS
     const char *name = run_opts.dns ? dns_ptr_cache(at, ndx) : NULL;
     if (name) {
-      len = run_opts.both ?
-        snprinte(buf, size, "%s (%s)", name, strlongip(ipaddr)) :
-        snprinte(buf, size, "%s",      name);
+      if (run_opts.both) {
+        char str[MAX_ADDRSTRLEN] = {0};
+        len = snprinte(buff, size, "%s (%s)", name, addr2str(addr, sizeof(str), str));
+      } else
+        len = snprinte(buff, size, "%s",      name);
     } else
 #endif
-      len = snprinte(buf, size, "%s", strlongip(ipaddr));
+    { char str[MAX_ADDRSTRLEN] = {0};
+      len = snprinte(buff, size, "%s", addr2str(addr, sizeof(str), str)); }
   } else
-    len = snprinte(buf, size, "%s", UNKN_ITEM);
+    len = snprinte(buff, size, "%s", UNKN_ITEM);
   return (len < 0) ? 0 : len;
 }
 
@@ -153,14 +156,19 @@ static int longest_hopname(int longest) {
 
 #ifdef ENABLE_DNS
 void backresolv_lookups(void) {
-  if (!run_opts.dns) return;
-  int max = net_max();
-  for (int at = net_min(); at < max; at++) if (addr_exist(&CURRENT_IP(at))) {
-    dns_ptr_lookup(at, host[at].current);
-    for (int ndx = 0; ndx < MAXPATH; ndx++) { // multipath
-      if (ndx == host[at].current) continue;
-      if (!addr_exist(&IP_AT_NDX(at, ndx))) break;
-      dns_ptr_lookup(at, ndx);
+  if (run_opts.dns) {
+    int max = net_max();
+    for (int at = net_min(); at < max; at++) {
+      if (addr_exist(&CURRENT_IP(at))) {
+        dns_ptr_lookup(at, host[at].current);
+        for (int ndx = 0; ndx < MAXPATH; ndx++) { // multipath
+          if (ndx != host[at].current) { // not looked up yet
+            if (!addr_exist(&IP_AT_NDX(at, ndx)))
+              break;
+            dns_ptr_lookup(at, ndx);
+          }
+        }
+      }
     }
   }
 }
@@ -539,8 +547,9 @@ void raw_rawping(int at, int usec) {
   fflush(stdout);
 }
 
-void raw_rawhost(int at, t_ipaddr *ipaddr) { // NONNULL(2)
-  printf("h %d %s\n", at, strlongip(ipaddr));
+void raw_rawhost(int at, int ndx) {
+  char str[MAX_ADDRSTRLEN] = {0};
+  printf("h %d %s\n", at, addr2str(&IP_AT_NDX(at, ndx), sizeof(str), str));
   fflush(stdout);
 }
 #endif
