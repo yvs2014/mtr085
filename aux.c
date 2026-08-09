@@ -127,7 +127,7 @@ int ustrnlen(const char *str, int max) {
   return len;
 }
 
-char *datetime(time_t at, size_t size, char buff[size]) { // NONNULL(3)
+char* fmt_datetime(time_t at, const char *fmt, size_t size, char buff[size]) { // NONNULL(2, 4)
   if (!size)
     return NULL;
   buff[0] = 0;
@@ -137,9 +137,17 @@ char *datetime(time_t at, size_t size, char buff[size]) { // NONNULL(3)
 #else
   struct tm *tm = (at > 0) ? localtime(&at) : NULL;
 #endif
-  if (tm && !strftime(buff, size, "%c", tm))
+  if (tm && !strftime(buff, size, fmt, tm))
     buff[0] = 0;
   return buff;
+}
+
+inline char* datetime_c(time_t at, size_t size, char buff[size]) { // NONNULL(3)
+  return fmt_datetime(at, "%c", size, buff);
+}
+
+inline char* datetime_FT(time_t at, size_t size, char buff[size]) { // NONNULL(3)
+  return fmt_datetime(at, "%F %T", size, buff);
 }
 
 int snprinte(char str[], size_t size, const char *format, ...) {

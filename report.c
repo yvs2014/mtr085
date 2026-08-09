@@ -71,13 +71,13 @@ void report_started_at(void) { started_at = time(NULL); }
 #if (__GNUC__ >= 8) || (__clang_major__ >= 6) || (__STDC_VERSION__ >= 202311L)
 #define PRINT_DATETIME(fmt, ...) do {                           \
   char str[64] = {0};                                           \
-  const char *date = datetime(started_at, sizeof(str), str);    \
+  const char *date = datetime_c(started_at, sizeof(str), str);  \
   if (date && date[0]) printf((fmt) __VA_OPT__(,) __VA_ARGS__); \
 } while(0)
 #else
 #define PRINT_DATETIME(fmt, ...) do {                           \
   char str[64] = {0};                                           \
-  const char *date = datetime(started_at, sizeof(str), str);    \
+  const char *date = datetime_c(started_at, sizeof(str), str);  \
   if (date && date[0]) printf((fmt), ##__VA_ARGS__);            \
 } while(0)
 #endif

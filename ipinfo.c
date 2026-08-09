@@ -35,7 +35,7 @@
 #if defined(LOG_IPINFO) && !defined(LOGMOD)
   #define LOGMOD
 #endif
-  #if !defined(LOG_IPINFO) && defined(LOGMOD)
+#if !defined(LOG_IPINFO) && defined(LOGMOD)
   #undef LOGMOD
 #endif
 

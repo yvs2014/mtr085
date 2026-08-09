@@ -26,7 +26,9 @@ long str2l(const char *arg);
 int arg2int(int8_t opt, const char *arg, int min, int max,
   const char *what, char *buff, size_t size) NONNULL(2);
 int ustrnlen(const char *str, int max);
-char *datetime(time_t at, size_t size, char buff[size]) NONNULL(3);
 int snprinte(char str[], size_t size, const char *format, ...);
+char* fmt_datetime(time_t at, const char *fmt, size_t size, char buff[size]) NONNULL(2, 4);
+char* datetime_c (time_t at, size_t size, char buff[size]) NONNULL(3);
+char* datetime_FT(time_t at, size_t size, char buff[size]) NONNULL(3);
 
 #endif

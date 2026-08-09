@@ -41,6 +41,7 @@ outjson    = get_option('OUTJSON')
 outtoon    = get_option('OUTTOON')
 outxml     = get_option('OUTXML')
 deblog = []
+debtui    = get_option('DEBTUI')
 debpoll   = get_option('DEBPOLL')
 debnet    = get_option('DEBNET')
 debdns    = get_option('DEBDNS')
@@ -330,6 +331,10 @@ else
 endif
 
 # syslog debug options
+if debtui
+  deblog += 'tui'
+  config.set('LOG_TUI', 1)
+endif
 if debpoll
   deblog += 'poll'
   config.set('LOG_POLL', 1)

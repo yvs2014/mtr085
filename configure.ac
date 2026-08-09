@@ -200,6 +200,11 @@ AC_ARG_ENABLE([analyzer],
 	AS_HELP_STRING([--enable-analyzer], [enable static analyzer]),
 	[analyzer="${withval}"], [analyzer=no])
 
+AC_ARG_WITH([syslog_tui],
+	AS_HELP_STRING([--with-syslog-tui], [Enable debug: tui syslog]),
+	[syslog_tui="${withval}"], [syslog_tui=no])
+AS_IF([test "x$syslog_tui" != "xno"], [AC_DEFINE([LOG_TUI], 1, [Enable debug: tui syslog])])
+
 AC_ARG_WITH([syslog_poll],
 	AS_HELP_STRING([--with-syslog-poll], [Enable debug: poll syslog]),
 	[syslog_poll="${withval}"], [syslog_poll=no])
@@ -308,32 +313,55 @@ m4_ifdef([AX_CHECK_COMPILE_FLAG], [
 ])
 
 _option_list=""
-AS_IF([test "x$libcap" = "xyes"],      [_option_list="$_option_list +CAP"],     [_option_list="$_option_list -CAP"])
-AS_IF([test "x$tui"    = "xyes"],      [_option_list="$_option_list +TUI"],     [_option_list="$_option_list -TUI"])
-AS_IF([test "x$_unicode" = "xyes"],    [_option_list="$_option_list +UNICODE"], [_option_list="$_option_list -UNICODE"])
-AS_IF([test "x$nls"    = "xyes"],      [_option_list="$_option_list +NLS"],     [_option_list="$_option_list -NLS"])
-AS_IF([test "x$dns"    = "xyes"],      [_option_list="$_option_list +DNS"],     [_option_list="$_option_list -DNS"])
-AS_IF([test "x$aiidn"  = "xyes" -o "x$need_libidn" = "yes"],
-	[_option_list="$_option_list +IDN"], [_option_list="$_option_list -IDN"])
-AS_IF([test "x$ipinfo" = "xyes"],      [_option_list="$_option_list +IPINFO"],  [_option_list="$_option_list -IPINFO"])
-AS_IF([test "x$splitmode" = "xyes"],   [_option_list="$_option_list +SPLIT"],   [_option_list="$_option_list -SPLIT"])
-AS_IF([test "x$ipv6"   = "xyes"],      [_option_list="$_option_list +IPV6"],    [_option_list="$_option_list -IPV6"])
-AS_IF([test "x$mpls"   = "xyes"],      [_option_list="$_option_list +MPLS"],    [_option_list="$_option_list -MPLS"])
+AS_IF([test "x$libcap"    = "xyes"],
+	[_option_list="$_option_list +CAP"],
+	[_option_list="$_option_list -CAP"])
+AS_IF([test "x$tui"       = "xyes"],
+	[_option_list="$_option_list +TUI"],
+	[_option_list="$_option_list -TUI"])
+AS_IF([test "x$_unicode"  = "xyes"],
+	[_option_list="$_option_list +UNICODE"],
+	[_option_list="$_option_list -UNICODE"])
+AS_IF([test "x$nls"       = "xyes"],
+	[_option_list="$_option_list +NLS"],
+	[_option_list="$_option_list -NLS"])
+AS_IF([test "x$dns"       = "xyes"],
+	[_option_list="$_option_list +DNS"],
+	[_option_list="$_option_list -DNS"])
+AS_IF([test "x$aiidn"     = "xyes" -o "x$need_libidn" = "yes"],
+	[_option_list="$_option_list +IDN"],
+	[_option_list="$_option_list -IDN"])
+AS_IF([test "x$ipinfo"    = "xyes"],
+	[_option_list="$_option_list +IPINFO"],
+	[_option_list="$_option_list -IPINFO"])
+AS_IF([test "x$splitmode" = "xyes"],
+	[_option_list="$_option_list +SPLIT"],
+	[_option_list="$_option_list -SPLIT"])
+AS_IF([test "x$ipv6"      = "xyes"],
+	[_option_list="$_option_list +IPV6"],
+	[_option_list="$_option_list -IPV6"])
+AS_IF([test "x$mpls"      = "xyes"],
+	[_option_list="$_option_list +MPLS"],
+	[_option_list="$_option_list -MPLS"])
+
 _option_output=""
-AS_IF([test "x$output_raw" = "xyes"],  [_option_output="${_option_output},raw"])
-AS_IF([test "x$output_txt" = "xyes"],  [_option_output="${_option_output},text"])
-AS_IF([test "x$output_csv" = "xyes"],  [_option_output="${_option_output},csv"])
+AS_IF([test "x$output_raw"  = "xyes"], [_option_output="${_option_output},raw"])
+AS_IF([test "x$output_txt"  = "xyes"], [_option_output="${_option_output},text"])
+AS_IF([test "x$output_csv"  = "xyes"], [_option_output="${_option_output},csv"])
 AS_IF([test "x$output_json" = "xyes"], [_option_output="${_option_output},json"])
 AS_IF([test "x$output_toon" = "xyes"], [_option_output="${_option_output},toon"])
-AS_IF([test "x$output_xml" = "xyes"],  [_option_output="${_option_output},xml"])
+AS_IF([test "x$output_xml"  = "xyes"], [_option_output="${_option_output},xml"])
 AS_IF([test "x$_option_output" = "x"], [_option_list="$_option_list -OUTFMT"],
 	[_option_list="$_option_list +OUTFMT=${_option_output#?}"])
+
 _option_syslog=""
-AS_IF([test "x$syslog_poll" = "xyes"],   [_option_syslog="${_option_syslog}P"])
-AS_IF([test "x$syslog_net" = "xyes"],    [_option_syslog="${_option_syslog}N"])
-AS_IF([test "x$syslog_dns" = "xyes"],    [_option_syslog="${_option_syslog}D"])
+AS_IF([test "x$syslog_tui"    = "xyes"], [_option_syslog="${_option_syslog}T"])
+AS_IF([test "x$syslog_poll"   = "xyes"], [_option_syslog="${_option_syslog}P"])
+AS_IF([test "x$syslog_net"    = "xyes"], [_option_syslog="${_option_syslog}N"])
+AS_IF([test "x$syslog_dns"    = "xyes"], [_option_syslog="${_option_syslog}D"])
 AS_IF([test "x$syslog_ipinfo" = "xyes"], [_option_syslog="${_option_syslog}I"])
 AS_IF([test "x$_option_syslog" = "x"], [_option_list="$_option_list -DEBLOG"], [_option_list="$_option_list DEBLOG=$_option_syslog"])
+
 AC_DEFINE_UNQUOTED([BUILD_OPTIONS], ["$(echo $_option_list)"], [Build options])
 
 AC_CONFIG_HEADERS([config.h])

@@ -64,6 +64,7 @@
 #cmakedefine OUTPUT_FORMAT_XML
 
 /* debug via syslog */
+#cmakedefine LOG_TUI
 #cmakedefine LOG_POLL
 #cmakedefine LOG_NET
 #cmakedefine LOG_DNS

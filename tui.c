@@ -56,6 +56,13 @@
 #  error No *curses header file given
 #endif
 
+#if defined(LOG_TUI) && !defined(LOGMOD)
+#define LOGMOD
+#endif
+#if !defined(LOG_TUI) && defined(LOGMOD)
+#undef LOGMOD
+#endif
+
 #include "tui.h"
 #include "nls.h"
 #include "aux.h"
@@ -81,13 +88,16 @@ typedef struct {
   WINDOW *win;
   int height; // not in use yet
 } area_s;
+
 static area_s area[] = {
   [NDX_TOP]    = {.height =  1},
   [NDX_STATUS] = {.height =  1},
   [NDX_LABEL]  = {.height =  2},
   [NDX_WORK]   = {.height = -4 /*sum others*/},
-//  [NDX_STATUS] = {.height =  1},
 };
+static int area_old_order[ARRAY_LEN(area)] = {NDX_TOP, NDX_STATUS, NDX_LABEL, NDX_WORK};
+static int area_new_order[ARRAY_LEN(area)] = {NDX_TOP, NDX_LABEL, NDX_WORK, NDX_STATUS};
+char* (*tui_datetime)(time_t at, size_t size, char buff[size]) NONNULL(3) = datetime_c;
 
 typedef struct {
   bool top, labels, chart_title;
@@ -477,7 +487,7 @@ key_action_t tui_keyaction(void) {
   // skip resize keys
   if (ch == KEY_RESIZE) { // cleanup by batch
     require_redraw();
-    for (int i = 0; (ch == KEY_RESIZE) && (i < GETCH_BATCH); i++)
+    for (uint i = 0; (ch == KEY_RESIZE) && (i < GETCH_BATCH); i++)
       ch = wgetch(win);
     if (ch == KEY_RESIZE) // otherwise flush
       flushinp();
@@ -689,52 +699,53 @@ static inline void dmode_init(double *factors, int num) {
   }
 }
 
-static void mc_init(void) {
+static void mapmode2_init(void) {
+  map2[0] = map1[0];
+  const int decimals = 9;
+  int block_split = (NUM_FACTORS2 - 2) / 2;
+  if (block_split > decimals)
+    block_split = decimals;
+  for (int i = 1; i <= block_split; i++)
+    map2[i] = '0' + i;
+  for (int i = block_split + 1, j = 0; i < NUM_FACTORS2 - 1; i++, j++)
+    map2[i] = 'a' + j;
+  for (int i = 1; i < NUM_FACTORS2 - 1; i++)
+    map2[i] |= COLOR_PAIR(dm2_color_base + i - 1);
+  map2[NUM_FACTORS2 - 1] = map1[1] & A_CHARTEXT;
+  map2[NUM_FACTORS2 - 1] |= (map2[NUM_FACTORS2 - 2] & A_ATTRIBUTES) | A_BOLD;
+  map_na2[1] |= run_opts.color ? (map2[NUM_FACTORS2 - 1] & A_ATTRIBUTES) : A_BOLD;
+}
+
+#ifdef WITH_UNICODE
+static void mapmode3_init(void) {
+  for (int i = 0; i < NUM_FACTORS3_MONO; i++)
+    map3[i].CCHAR_chars[0] = L'▁' + i;
+  if (run_opts.color) {
+    for (int i = 0; i < NUM_FACTORS3 - 1; i++) {
+      int base = i / NUM_FACTORS3_MONO;
+      map3[i].CCHAR_attr = COLOR_PAIR(dm3_color_base + base);
+      if (i >= NUM_FACTORS3_MONO)
+        map3[i].CCHAR_chars[0] = map3[i % NUM_FACTORS3_MONO].CCHAR_chars[0];
+    }
+    map3[NUM_FACTORS3 - 1].CCHAR_chars[0] = map1[1] & A_CHARTEXT;
+    map3[NUM_FACTORS3 - 1].CCHAR_attr = map3[NUM_FACTORS3 - 2].CCHAR_attr | A_BOLD;
+  } else
+    map3[NUM_FACTORS3_MONO].CCHAR_chars[0] = map1[1] & A_CHARTEXT;
+  for (uint i = 0; i < ARRAY_LEN(map_na2); i++)
+    map_na3[i].CCHAR_chars[0] = map_na2[i] & A_CHARTEXT;
+  map_na3[1].CCHAR_attr = run_opts.color ? map3[NUM_FACTORS3 - 1].CCHAR_attr : A_BOLD;
+  map_na3[2].CCHAR_attr = A_BOLD;
+}
+#endif
+
+static void display_mode_init(void) {
   // display mode 2
   dmode_init(factors2, NUM_FACTORS2);
+  mapmode2_init();
 #ifdef WITH_UNICODE
   // display mode 3
   dmode_init(factors3, run_opts.color ? NUM_FACTORS3 : (NUM_FACTORS3_MONO + 1));
-#endif
-
-  { // map2 init
-    map2[0] = map1[0];
-    const int decimals = 9;
-    int block_split = (NUM_FACTORS2 - 2) / 2;
-    if (block_split > decimals)
-      block_split = decimals;
-    for (int i = 1; i <= block_split; i++)
-      map2[i] = '0' + i;
-    for (int i = block_split + 1, j = 0; i < NUM_FACTORS2 - 1; i++, j++)
-      map2[i] = 'a' + j;
-    for (int i = 1; i < NUM_FACTORS2 - 1; i++)
-      map2[i] |= COLOR_PAIR(dm2_color_base + i - 1);
-    map2[NUM_FACTORS2 - 1] = map1[1] & A_CHARTEXT;
-    map2[NUM_FACTORS2 - 1] |= (map2[NUM_FACTORS2 - 2] & A_ATTRIBUTES) | A_BOLD;
-    map_na2[1] |= run_opts.color ? (map2[NUM_FACTORS2 - 1] & A_ATTRIBUTES) : A_BOLD;
-  }
-
-#ifdef WITH_UNICODE
-  { // map3 init
-    for (int i = 0; i < NUM_FACTORS3_MONO; i++)
-      map3[i].CCHAR_chars[0] = L'▁' + i;
-    if (run_opts.color) {
-      for (int i = 0; i < NUM_FACTORS3 - 1; i++) {
-        int base = i / NUM_FACTORS3_MONO;
-        map3[i].CCHAR_attr = COLOR_PAIR(dm3_color_base + base);
-        if (i >= NUM_FACTORS3_MONO)
-          map3[i].CCHAR_chars[0] = map3[i % NUM_FACTORS3_MONO].CCHAR_chars[0];
-      }
-      map3[NUM_FACTORS3 - 1].CCHAR_chars[0] = map1[1] & A_CHARTEXT;
-      map3[NUM_FACTORS3 - 1].CCHAR_attr = map3[NUM_FACTORS3 - 2].CCHAR_attr | A_BOLD;
-    } else
-      map3[NUM_FACTORS3_MONO].CCHAR_chars[0] = map1[1] & A_CHARTEXT;
-
-    for (uint i = 0; i < ARRAY_LEN(map_na2); i++)
-      map_na3[i].CCHAR_chars[0] = map_na2[i] & A_CHARTEXT;
-    map_na3[1].CCHAR_attr = run_opts.color ? map3[NUM_FACTORS3 - 1].CCHAR_attr : A_BOLD;
-    map_na3[2].CCHAR_attr = A_BOLD;
-  }
+  mapmode3_init();
 #endif
 }
 
@@ -757,7 +768,7 @@ static chtype get_saved_ch(int saved_int) {
 }
 
 #ifdef WITH_UNICODE
-static cchar_t* mc_saved_cc(int saved_int) {
+static cchar_t* map3_saved_cc(int saved_int) {
   NA_MAP(&map_na3);
   int num = run_opts.color ? NUM_FACTORS3 : (NUM_FACTORS3_MONO + 1);
   for (int i = 0; i < num; i++)
@@ -799,7 +810,7 @@ static void histoaddr(WINDOW *win, int at, int max, int y, int x, int cols) {
 #ifdef WITH_UNICODE
     if (chart_mode == 3)
       for (int i = SAVED_PINGS - cols; i < SAVED_PINGS; i++)
-        wadd_wch(win, mc_saved_cc(host[at].saved[i]));
+        wadd_wch(win, map3_saved_cc(host[at].saved[i]));
     else
 #endif
       for (int i = SAVED_PINGS - cols; i < SAVED_PINGS; i++)
@@ -1150,23 +1161,31 @@ static void redraw_top(WINDOW *win) {
 static void redraw_status(WINDOW *win) NONNULL(1);
 static void redraw_status(WINDOW *win) {
   werase(win);
-  mvwaddstr(win, 0, 0, MENU_STR);
-  waddch(win, ':');
-  PRINT_MENUITEM('h', _HINTS_STR);
-  PRINT_MENUITEM('q', _QUIT_STR);
-  char buff[LINEMAXLEN] = {0};
-  // source host
-  int len = snprinte(buff, sizeof(buff), "%.*s", (int)strnlen(srchost, getmaxx(win) / 2), srchost);
-  if (len < 0)
-    return;
-  // timestamp (note: not mandatory)
-  char str[64] = {0};
-  const char *date = datetime(time(NULL), sizeof(str), str);
-  if (date && date[0])
-    snprinte(buff + len, sizeof(buff) - len, ": %s", date);
+  // add menu hints
+  if (tuilook == OLDLOOK) {
+    mvwaddstr(win, 0, 0, MENU_STR);
+    waddch(win, ':');
+    PRINT_MENUITEM('h', _HINTS_STR);
+    PRINT_MENUITEM('q', _QUIT_STR);
+  }
   //
-  if ((len > 0) && buff[0]) // rigth aligned
+  char buff[LINEMAXLEN] = {0};
+  int len = 0;
+  // add source host
+  if (tuilook == OLDLOOK) {
+    len = snprinte(buff, sizeof(buff), "%.*s", (int)strnlen(srchost, getmaxx(win) / 2), srchost);
+    if (len < 0)
+      len = 0;
+  }
+  // add datetime
+  char str[64] = {0};
+  const char *date = tui_datetime ? tui_datetime(time(NULL), sizeof(str), str) : NULL;
+  if (date && date[0])
+    len += snprinte(buff + len, sizeof(buff) - len, len ? ": %s" : "%s", date);
+  // print it rigth aligned
+  if ((len > 0) && buff[0])
     mvwaddstr(win, 0, getmaxx(win) - ustrnlen(buff, sizeof(buff)) - 1, buff);
+  //
   wrefresh(win);
 }
 
@@ -1205,40 +1224,48 @@ static void create_area(uint ndx) {
       keypad(win, TRUE);
       area[ndx].win = win;
       y += h;
+      LOGMSG("#%u: x0=%d y0=%d x1=%d y1=%d (width=%d height=%d)", ndx,
+        getbegx(win), getbegy(win), getmaxx(win), getmaxy(win),
+        getmaxx(win) - getbegx(win), getmaxy(win) - getbegy(win));
     }
-  } else
+  } else {
     y = 0; // indicate y-reset with out-of-range index
-}
-
-static void free_areas(void) {
-  for (uint i = 0; i < ARRAY_LEN(area); i++) if (area[i].win) {
-    delwin(area[i].win);
-    area[i].win = NULL;
+    LOGMSG("%s", "area y-reset");
   }
 }
 
-static inline bool areas_ready(void) {
+static void free_areas(void) {
+  for (uint i = 0; i < ARRAY_LEN(area); i++)
+    if (area[i].win) {
+      delwin(area[i].win);
+      area[i].win = NULL;
+      LOGMSG("#%u: done", i);
+    }
+}
+
+static inline bool areas_okay(void) {
   for (uint i = 0; i < ARRAY_LEN(area); i++)
     if (!area[i].win)
       return false;
  return true;
 }
 
-static bool init_areas(void) {
+static bool areas_ready(void) {
   static int my_cols, my_lines;
-  if (areas_ready() && (my_cols == COLS) && (my_lines == LINES))
-    return true;
-  my_cols  = COLS;
-  my_lines = LINES;
-  require_redraw();
-  // create areas
-  free_areas();
-  create_area(ARRAY_LEN(area)); // reset `y' position
-  create_area(NDX_TOP);
-  create_area(NDX_STATUS);
-  create_area(NDX_LABEL);
-  create_area(NDX_WORK);
-  return areas_ready();
+  bool okay = areas_okay() && (my_cols == COLS) && (my_lines == LINES);
+  if (!okay) {
+    my_cols  = COLS;
+    my_lines = LINES;
+    require_redraw();
+    // create areas
+    free_areas();
+    create_area(ARRAY_LEN(area)); // reset `y' position
+    int *order = (tuilook == OLDLOOK) ? area_old_order : area_new_order;
+    for (uint i = 0; i < ARRAY_LEN(area); i++)
+      create_area(order[i]);
+    okay = areas_okay();
+  }
+  return okay;
 }
 
 static inline void redraw_areas(void) {
@@ -1251,7 +1278,7 @@ static inline void redraw_areas(void) {
 }
 
 void tui_redraw(void) {
-  if (init_areas())
+  if (areas_ready())
     redraw_areas();
   else {
     erase();
@@ -1261,7 +1288,14 @@ void tui_redraw(void) {
 }
 
 bool tui_open(void) {
+  tui_datetime = (tuilook == NEWLOOK) ? datetime_FT : datetime_c;
+#ifdef LOGMOD
+  { char str[64] = {0};
+    const char *date = tui_datetime(time(NULL), sizeof(str), str);
+    LOGMSG("%s", date); }
+#endif
   screen_ready = initscr();
+  LOGMSG("screen ready: %d", screen_ready);
   if (!screen_ready) {
     warnx("TUI initscr() failed");
     return false;
@@ -1269,9 +1303,6 @@ bool tui_open(void) {
   raw();
   noecho();
   keypad(stdscr, TRUE);
-  if (!init_areas())
-    return false;
-  refresh();
   //
   titlelen = (title_len_s){.screen = -1, .stat = -1, .chart = -1};
   if (run_opts.color && !has_colors())
@@ -1312,14 +1343,18 @@ bool tui_open(void) {
     snprinte(screen_title, sizeof(screen_title), "%s %s", PACKAGE_NAME, dsthost);
   screen_title_len = screen_title[0] ? ustrnlen(screen_title, getmaxx(area[NDX_TOP].win)) : 0;
   //
-  mc_init();
-  tui_redraw();
+  display_mode_init();
   curs_set(0);
-  return true;
+  //
+  bool okay = areas_ready();
+  if (okay)
+    tui_redraw();
+  return okay;
 }
 
 void tui_confirm(void) {
   WINDOW *win = area[NDX_WORK].win;
+  LOGMSG("at_quit=%d screen_ready=%d area=%p", at_quit, screen_ready, (void*)win);
   if (at_quit || !win || !screen_ready)
     return;
   at_quit = true;
@@ -1336,11 +1371,16 @@ void tui_confirm(void) {
 }
 
 void tui_close(void) {
+#ifdef LOGMOD
+  { char str[64] = {0};
+    const char *date = tui_datetime ? tui_datetime(time(NULL), sizeof(str), str) : NULL;
+    LOGMSG("%s", date ? date : datetime_c(time(NULL), sizeof(str), str)); }
+#endif
   if (stdscr && screen_ready) {
-    free_areas();
     endwin();
     screen_ready = false;
   }
+  free_areas();
 }
 
 inline void tui_clear(void) {

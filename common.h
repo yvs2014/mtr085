@@ -50,7 +50,7 @@
 #endif
 
 #ifndef GITREV
-#define GITREV "294"
+#define GITREV "295"
 #endif
 
 #ifndef HAVE_UINT
@@ -347,6 +347,11 @@ extern uint mtr_optc;          // number of 'optv'
 extern opts_t run_opts;    // runtime options
 extern opts_t ini_opts;    // initial options
 extern opt_sum_t opt_sum;  // checksum changes
+
+#ifdef TUIMODE
+enum {OLDLOOK = 0, NEWLOOK/*, REVLOOK*/};
+extern int tuilook;
+#endif
 
 #if defined(TUIMODE) || defined(SPLITMODE)
 extern int display_offset;

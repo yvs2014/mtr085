@@ -42,7 +42,7 @@
 #include <sys/capability.h>
 #endif
 
-#if defined(LOG_DNS) || defined(LOG_IPINFO) || defined(LOG_NET) || defined(LOG_POLL)
+#if defined(LOG_TUI) || defined(LOG_POLL) || defined(LOG_NET) || defined(LOG_DNS) || defined(LOG_IPINFO)
 #define WITH_SYSLOG 1
 #include <syslog.h>
 #endif
@@ -90,6 +90,11 @@
 #endif
 
 enum OPTIONS {
+#ifdef TUIMODE
+  OPT_OLDLOOK  = '0',
+  OPT_NEWLOOK  = '1',
+//OPT_REVLOOK  = '2',
+#endif
 #ifdef ENABLE_IPV6
   OPT_IPV4     = '4',
   OPT_IPV6     = '6',
@@ -197,6 +202,9 @@ char mtr_args[128];           // args to display in curses title
 const char* mtr_optv[32];     // option string array
 uint mtr_optc;
 #endif
+#ifdef TUIMODE
+int tuilook = OLDLOOK;
+#endif
 
 opt_sum_t opt_sum;  // checksum options' changes
 
@@ -224,6 +232,7 @@ int chart_mode;               // 1st and 2nd bits, 3rd is reserved
 #ifdef TUIMODE
 int chart_mode_max = 3;
 #endif
+//
 #ifdef WITH_UNICODE
 bool utf_compat;
 #endif
@@ -250,6 +259,11 @@ const int stat_max = ARRAY_LEN(stats);
 
 static struct option long_options[] = {
   // Long, HasArgs, Flag, Short
+#ifdef TUIMODE
+  {"old-look",   0, 0, OPT_OLDLOOK},
+  {"new-look",   0, 0, OPT_NEWLOOK},
+//{"rev-look",   0, 0, OPT_REVLOOK}, // TODO: newlook with reversed title-status colors
+#endif
 #ifdef ENABLE_IPV6
   {"inet",       0, 0, OPT_IPV4},     // use IPv4
   {"inet6",      0, 0, OPT_IPV6},     // use IPv6
@@ -471,10 +485,11 @@ static const char* two_colons(const char *s) {
 }
 #endif
 
+static bool split_hostport(char *buff, char* hostport[2]) NONNULL(1, 2);
 static bool split_hostport(char *buff, char* hostport[2]) {
-   if (!buff) return false;
    char *host = trim(buff), *port = NULL;
-   if (!host) return false;
+   if (!host)
+     return false;
 #ifdef ENABLE_IPV6
    if (host[0] == '[') {
      port = strrchr(host, ']');
@@ -486,7 +501,7 @@ static bool split_hostport(char *buff, char* hostport[2]) {
    } else if (!two_colons(host))
 #endif
    { port = strrchr(host, ':');
-     if (port) { *port++ = 0; port = trim(port); host = trim(host); } }
+     if (port) { *port++ = 0; port = trim(port); host = trim(host); }}
    hostport[0] = (host && host[0]) ? host : NULL;
    hostport[1] = (port && port[0]) ? port : NULL;
    return true;
@@ -545,7 +560,8 @@ static inline void option_ns(char opt) {
   char* hostport[2] = {0};
   if (!split_hostport(buff, hostport))
     errx(EINVAL, "-%c: %s: %s", opt, PARSE_ERR, buff);
-  if (!hostport[1]) hostport[1] = "53";
+  if (!hostport[1])
+    hostport[1] = "53";
   struct addrinfo *ns = NULL, hints = {
     .ai_family   = AF_UNSPEC,
     .ai_socktype = SOCK_DGRAM,
@@ -640,7 +656,13 @@ static void set_optv(int argc, char **argv) {
 #endif
 
 static void short_set(char opt, const char *progname) {
+#ifdef TUIMODE
   switch (opt) {
+    case OPT_OLDLOOK:
+    case OPT_NEWLOOK:
+      tuilook = (opt == OPT_OLDLOOK) ? OLDLOOK : NEWLOOK;
+      break;
+#endif
 #ifdef ENABLE_IPV6
     case OPT_IPV4:
     case OPT_IPV6:
