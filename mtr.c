@@ -847,8 +847,9 @@ static inline const struct addrinfo* find_ai_pref(const struct addrinfo *res) {
 }
 #endif
 
-static bool set_target(const struct addrinfo *res) {
-  bool okay = false;
+// return: failed or not
+static int set_target(const struct addrinfo *res) {
+  int rc = -1;
   const struct addrinfo *ai =
 #ifdef ENABLE_IPV6
     !af_specified ? find_ai_pref(res) :
@@ -864,11 +865,11 @@ static bool set_target(const struct addrinfo *res) {
       if (iface_addr && !net_set_ifaddr(iface_addr))
         warnx("%s: %s", USEADDR_ERR, iface_addr);
       else
-        okay = true;
+        rc = 0; // success
     } else
       warnx("%s (af=%d)", HOSTENT_ERR, af);
   }
-  return okay;
+  return rc;
 }
 
 #if defined(WITH_UNICODE) && defined(USE_NLS)
@@ -963,20 +964,23 @@ static void idn_resolv(t_res_rc *rr, int (*idn2ascii)(const char*, char**, int))
 }
 #endif
 
+static void try_to_resolv(t_res_rc *rr) NONNULL(1);
 static void try_to_resolv(t_res_rc *rr) {
-  if (!rr || !rr->target) return;
-  getaddrinfo_e(rr, rr->target);
+  if (rr->target) {
+    getaddrinfo_e(rr, rr->target);
 #if !defined(AI_IDN) && (defined(LIBIDN2) || defined(LIBIDN))
-  if (rr->rc) {
-    idn_resolv(rr, IDN_TO_ASCII_LZ);
-    if (rr->rc) idn_resolv(rr, IDN_TO_ASCII_8Z);
-  }
+    if (rr->rc) {
+      idn_resolv(rr, IDN_TO_ASCII_LZ);
+      if (rr->rc)
+        idn_resolv(rr, IDN_TO_ASCII_8Z);
+    }
 #endif
+  }
 }
 
-static inline void resolv_with_port(t_res_rc *rr, t_res_rc *rr_init) {
-  if (!rr)
-    return;
+static void resolv_with_port(t_res_rc *rr) NONNULL(1);
+static void resolv_with_port(t_res_rc *rr) {
+  const t_res_rc copy = *rr;
   char buff[MAX_ADDRSTRLEN + 6/*:port*/] = {0};
   if (snprinte(buff, sizeof(buff), "%s", dsthost) < 0)
     return;
@@ -988,11 +992,13 @@ static inline void resolv_with_port(t_res_rc *rr, t_res_rc *rr_init) {
       if (!errno)
         ini_opts.port = num;
     }
-    if (!errno && hostport[0] && rr_init) {
-      *rr = *rr_init; rr->target = hostport[0];
+    if (!errno && hostport[0]) {
+      *rr = copy;
+      rr->target = hostport[0];
       try_to_resolv(rr);
     }
-    if (errno) errno = 0;
+    if (errno)
+      errno = 0;
   } else
     warnx("%s: %s", PARSE_ERR, buff);
 }
@@ -1044,12 +1050,13 @@ static inline void main_prep(int argc, char **argv) {
   display_start((argc > optind) ? (argc - optind) : 0);
 }
 
-static inline bool main_loop(struct addrinfo *ai, uint nth, uint n_targets) {
+// return: failed or not
+static inline int main_loop(struct addrinfo *ai, bool fin) {
   static bool next_target;
-  bool success = false;
+  int rc = -1;
   if (ai) {
-    success = set_target(ai);
-    if (success) {
+    rc = set_target(ai);
+    if (!rc) {
       TOS4TOS(dsthost, run_opts.qos);
       locker(stdout, F_WRLCK);
       if (display_open())
@@ -1057,7 +1064,7 @@ static inline bool main_loop(struct addrinfo *ai, uint nth, uint n_targets) {
       else
         warnx("%s", OPENDISP_ERR);
       net_end_transit();
-      if ((nth + 1) >= n_targets)
+      if (fin)
         display_confirm_fin();
       display_close(next_target);
       locker(stdout, F_UNLCK);
@@ -1067,7 +1074,7 @@ static inline bool main_loop(struct addrinfo *ai, uint nth, uint n_targets) {
     freeaddrinfo(ai);
   } else
     warnx("%s: %s", RESFAIL_ERR, dsthost);
-  return success;
+  return rc;
 }
 
 static inline void main_fin(void) {
@@ -1089,6 +1096,33 @@ static inline void main_fin(void) {
   UNICODE_FREE;
 }
 
+// return: failed or not
+static int resolv_n_ping(int port, bool fin) {
+  tgterr_txt[0] = 0;    // clear per target error message
+  ini_opts.port = port; // set initial port
+  t_res_rc rr = {       // default resolv data
+    .target = dsthost,
+    .hints = {
+#ifdef ENABLE_IPV6
+      .ai_family = af_specified ? af : AF_UNSPEC,
+#else
+      .ai_family = AF_INET,
+#endif
+      .ai_socktype = SOCK_DGRAM,
+#ifdef AI_IDN
+      .ai_flags = AI_IDN,
+#endif
+    }
+  };
+  try_to_resolv(&rr);
+  if (rr.rc && ((mtrtype == IPPROTO_TCP) || (mtrtype == IPPROTO_UDP)))
+    resolv_with_port(&rr);
+  if (rr.res && !rr.rc)
+    rr.rc = main_loop(rr.res, fin);
+  else
+    warnx("%s: %s: %s", RESFAIL_ERR, dsthost, rr.error ? rr.error : UNKNOWN_ERR);
+  return rr.rc;
+}
 
 int main(int argc, char **argv) {
   // get raw sockets
@@ -1115,40 +1149,19 @@ int main(int argc, char **argv) {
     if (stats[i].hint && stats[i].hint[0])
       stats[i].hint  = _(stats[i].hint);
   }
-
+  //
   main_prep(argc, argv);
-
-  t_res_rc rr_init = { .hints = {
-#ifdef ENABLE_IPV6
-    .ai_family = af_specified ? af : AF_UNSPEC,
-#else
-    .ai_family = AF_INET,
-#endif
-    .ai_socktype = SOCK_DGRAM,
-#ifdef AI_IDN
-    .ai_flags = AI_IDN,
-#endif
-  }};
-  int defport = ini_opts.port;
-  bool success = false;
-  uint n_targets = (argc > optind) ? (argc - optind) : 0;
-  int ndx = optind;
-  for (uint i = 0; (ndx < argc) && argv[ndx]; ndx++, i++) {
-    tgterr_txt[0] = 0;
-    dsthost = argv[ndx];
-    ini_opts.port = defport;
-    t_res_rc rr = rr_init;
-    rr.target = dsthost;
-    try_to_resolv(&rr);
-    if (rr.rc && ((mtrtype == IPPROTO_TCP) || (mtrtype == IPPROTO_UDP)))
-      resolv_with_port(&rr, &rr_init);
-    if (rr.rc)
-      warnx("%s: %s: %s", RESFAIL_ERR, dsthost, rr.error ? rr.error : UNKNOWN_ERR);
-    else
-      success = main_loop(rr.res, i, n_targets);
+  //
+  int port = ini_opts.port;
+  int ec = 0;
+  for (int ndx = optind; (ndx < argc) && argv[ndx];) {
+    dsthost = argv[ndx++]; // there's ++
+    int rc = resolv_n_ping(port, ndx == argc);
+    if (rc && !ec)
+      ec = rc;
   }
-
+  //
   main_fin();
-  return strerr_txt[0] ? EXIT_FAILURE : !success;
+  return strerr_txt[0] ? EXIT_FAILURE : ec;
 }
 
