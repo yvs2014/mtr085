@@ -184,12 +184,6 @@ enum OUTPUT_OPTS {
 #include "report.h"
 #endif
 
-#ifdef HAVE_QUICK_EXIT
-#  define QEXIT quick_exit
-#else
-#  define QEXIT exit
-#endif
-
 enum { REPORT_PINGS = 100, CACHE_TIMEOUT = 60, TCPSYN_TOUT_MAX = 60 };
 
 //// global vars
@@ -591,7 +585,7 @@ static inline void option_output(const char *progname) {
 #ifdef OUTPUT_FORMAT_XML
     case OXML:  display_mode = DisplayXML;  break;
 #endif
-    default: usage(progname); QEXIT(EXIT_FAILURE);
+    default: usage(progname); exit(EXIT_FAILURE);
   }
 }
 #endif
@@ -606,7 +600,7 @@ static inline void option_version(uint count UNUSED) {
   if (count > 1)
     printf("TUI: %s\n", tui_version());
 #endif
-  QEXIT(EXIT_SUCCESS);
+  exit(EXIT_SUCCESS);
 }
 
 static inline void ineractive_modes(display_mode_t mode) {
@@ -770,9 +764,9 @@ static void short_set(char opt, const char *progname) {
       else
         ini_opts.asn    = true;
       if (!ipinfo_init(arg))
-        QEXIT(EXIT_FAILURE);
+        exit(EXIT_FAILURE);
       if (!ipinfo_action(ActionNone)) // fail to init
-        QEXIT(EXIT_FAILURE);
+        exit(EXIT_FAILURE);
     } break;
     case OPT_MULTI_II:
       ini_opts.multi = true;
@@ -780,7 +774,7 @@ static void short_set(char opt, const char *progname) {
 #endif
     default:
       usage(progname);
-      QEXIT((opt == OPT_HELP) ? EXIT_SUCCESS : EXIT_FAILURE);
+      exit((opt == OPT_HELP) ? EXIT_SUCCESS : EXIT_FAILURE);
   }
 }
 
@@ -1033,7 +1027,7 @@ static inline void main_prep(int argc, char **argv) {
   if (optind >= argc) {
     // TODO: set target at runtime
     usage(argv[0]);
-    QEXIT(EXIT_SUCCESS);
+    exit(EXIT_SUCCESS);
   }
 #ifdef WITH_SYSLOG
   openlog(PACKAGE_NAME, LOG_PID, LOG_USER);

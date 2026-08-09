@@ -184,10 +184,10 @@ void net_tcp_parse(int sock, int seq, int noerr, struct timespec *recv_at) NONNU
 bool net_timedout(int seq);
 int net_min(void);
 int net_max(void);
-const char *net_elem(int at, char ch);
+const char *net_elem(int at, char key);
+const char* net_settled_elem(int at, char key);
 int net_send_batch(void);
 void net_end_transit(void);
-int net_duplicate(int at, int seq);
 
 extern bool reset_pattern;
 extern bool reset_pldsize;

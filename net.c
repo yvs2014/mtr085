@@ -825,22 +825,50 @@ static mpls_data_t *decodempls(const uint8_t *data, int size) {
 }
 #endif
 
+static int got_icmp_udp(const struct udphdr *uh) { // NONNULL(1)
+  int seq = -1;
+  if (run_opts.port < 0) {
+    if (ntohs(uh->uh_sport) == portpid)
+      seq = ntohs(uh->uh_dport);
+  } else {
+    if (ntohs(uh->uh_dport) == run_opts.port)
+      seq = ntohs(uh->uh_sport);
+  }
+  if (seq >= 0) {
+    seq -= LO_UDPPORT;
+    /*summ*/ net_replies[QR_UDP]++;
+  }
+  return seq;
+}
+
+#ifdef WITH_MPLS
+#define LOGMSG_ICMP LOGMSG("icmp seq=%d type=%d mpls=%d", seq, icmp->type, mplson)
+#define LOGMSG_UDP  LOGMSG("udp seq=%d id=%d mpls=%d", seq, portpid, mplson)
+#define LOGMSG_TCP  LOGMSG("tcp seq=%d mpls=%d", seq, mplson);
+#define MPLS_LIKE_TEST do { mplson = mplslike(size, data - packet); } while (0)
+#else
+#define LOGMSG_ICMP LOGMSG("icmp seq=%d type=%d", seq, icmp->type)
+#define LOGMSG_UDP  LOGMSG("udp seq=%d id=%d", seq, portpid)
+#define LOGMSG_TCP  LOGMSG("tcp seq=%d", seq);
+#define MPLS_LIKE_TEST NOOP
+#endif
 
 void net_icmp_parse(struct timespec *recv_at) { // NONNULL(1)
-#define ICMPSEQID { seq = icmp->seq; if (icmp->id != (uint16_t)mypid) \
-  LOGRET("icmp(myid=%u): got unknown id=%u (type=%u seq=%u)", mypid, icmp->id, icmp->type, seq); }
-
+#define LOGRET_UNKN_ID do { if (icmp->id != (uint16_t)mypid)  \
+  LOGRET("icmp(myid=%u): got unknown id=%u (type=%u seq=%u)", \
+         mypid, icmp->id, icmp->type, seq);                   \
+} while (0)
   uint8_t packet[MAXPACKET];
   struct sockaddr_storage sa_in;
-
+  //
   ssize_t size = recvfrom(recvsock, packet, MAXPACKET, 0, (struct sockaddr *)&sa_in, &sa_len);
   LOGMSG("got %zd bytes", size);
   if (size < (ssize_t)hdr_minsz)
     LOGRET("incorrect packet size %zd [af=%d proto=%d minsize=%zd]", size, af, mtrtype, hdr_minsz);
-
+  //
   struct _icmphdr *icmp = (struct _icmphdr *)(packet + iphdr_sz);
   uint8_t *data = ((uint8_t*)icmp) + ipicmphdr_sz;
-
+  //
 #ifdef WITH_MPLS
   bool mplson = false;
 #endif
@@ -849,68 +877,41 @@ void net_icmp_parse(struct timespec *recv_at) { // NONNULL(1)
     case IPPROTO_ICMP: {
       if (icmp->type == echo_reply) {
         reason = RE_PONG;
-        ICMPSEQID;
+        seq = icmp->seq;
+        LOGRET_UNKN_ID;
       } else if ((icmp->type == time_exceed) || (icmp->type == dst_unreach)) {
         if (size < (ssize_t)minfailsz)
           LOGRET("incorrect packet size %zd [af=%d proto=%d expect>=%zd]", size, af, mtrtype, minfailsz);
         reason = (icmp->type == time_exceed) ? RE_EXCEED : RE_UNREACH;
         icmp = (struct _icmphdr *)data;
-        ICMPSEQID;
-#ifdef WITH_MPLS
-        mplson = mplslike(size, data - packet);
-#endif
+        seq = icmp->seq;
+        LOGRET_UNKN_ID;
+        MPLS_LIKE_TEST;
       }
-#ifdef WITH_MPLS
-      LOGMSG("icmp seq=%d type=%d mpls=%d", seq, icmp->type, mplson);
-#else
-      LOGMSG("icmp seq=%d type=%d", seq, icmp->type);
-#endif
+      LOGMSG_ICMP;
       if (seq >= 0) /*summ*/ net_replies[QR_ICMP]++;
     } break;
-
     case IPPROTO_UDP: {
-      struct udphdr *uh = (struct udphdr *)data;
-      if (run_opts.port < 0) {
-        if (ntohs(uh->uh_sport) != portpid)
-          return;
-        seq = ntohs(uh->uh_dport);
-      } else {
-        if (ntohs(uh->uh_dport) != run_opts.port)
-          return;
-        seq = ntohs(uh->uh_sport);
-      }
-      seq -= LO_UDPPORT;
-#ifdef WITH_MPLS
-      mplson = mplslike(size, data - packet);
-      LOGMSG("udp seq=%d id=%d mpls=%d", seq, portpid, mplson);
-#else
-      LOGMSG("udp seq=%d id=%d", seq, portpid);
-#endif
-      if (seq >= 0) /*summ*/ net_replies[QR_UDP]++;
+      seq = got_icmp_udp((struct udphdr *)data);
+      if (seq < 0)
+        return;
+      MPLS_LIKE_TEST;
+      LOGMSG_UDP;
     } break;
-
     case IPPROTO_TCP: {
       struct tcphdr *th = (struct tcphdr *)data;
       seq = ntohs(th->th_sport);
-#ifdef WITH_MPLS
-      mplson = mplslike(size, data - packet);
-      LOGMSG("tcp seq=%d mpls=%d", seq, mplson);
-#else
-      LOGMSG("tcp seq=%d", seq);
-#endif
+      MPLS_LIKE_TEST;
+      LOGMSG_TCP;
       if (seq >= 0) /*summ*/ net_replies[QR_TCP]++;
     } break;
     default: LOGRET("Unsupported proto %d", mtrtype);
-  } /*end of switch(mtrtype)*/
-
+  }
   /*summ*/ net_replies[QR_SUM]++;
-
   if (seq >= 0)
     NET_STAT(seq, ((uint8_t*)&sa_in) + sa_addr_offset, recv_at, reason,
              mplson ? decodempls(data, size - (data - packet)) : NULL);
-#undef ICMPSEQID
 }
-
 
 const char *net_elem(int at, char ch) {
   static char elemstr[NETELEM_MAXLEN];
@@ -962,6 +963,11 @@ const char *net_elem(int at, char ch) {
   }
   snprinte(elemstr, sizeof(elemstr), "%.*f%s", val2len(val), val, suffix ? suffix : "");
   return elemstr;
+}
+
+const char* net_settled_elem(int at, char key) {
+  // if there's no replies, show only packet counters (Lost-Drop-Recv-Sent)
+  return (host[at].recv || strchr(SETTLED_ELEMS, key)) ? net_elem(at, key) : NULL;
 }
 
 int net_max(void) {

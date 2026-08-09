@@ -70,7 +70,6 @@ fndesc = {
   'warnx':  {'hdr': 'err.h',        'libs': ['bsd']},
   'socket': {'hdr': 'sys/socket.h', 'libs': ['socket', 'network']},
   'arc4random_uniform': {'hdr': 'stdlib.h', 'req': false, 'libhdr': true},
-  'quick_exit':         {'hdr': 'stdlib.h', 'req': false},
   'localtime_r':        {'hdr': 'time.h',   'req': false},
   'uselocale':          {'hdr': 'locale.h', 'req': false},
   'memmem':             {'hdr': 'string.h', 'req': false},

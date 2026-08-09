@@ -36,7 +36,6 @@ AC_SEARCH_LIBS([pow], [m],, AC_MSG_ERROR(No math library found))
 AC_SEARCH_LIBS([warnx],,, AC_MSG_ERROR(No err/warn library found))
 AC_SEARCH_LIBS([socket], [socket network],, AC_MSG_ERROR(No socket library found))
 AC_CHECK_FUNC([arc4random_uniform], AC_DEFINE(HAVE_ARC4RANDOM_UNIFORM, 1, [Define if arc4random_uniform exists]))
-AC_CHECK_FUNC([quick_exit],  AC_DEFINE(HAVE_QUICK_EXIT,  1, [Define if quick_exit() exists]))
 AC_CHECK_FUNC([ctime_r],     AC_DEFINE(HAVE_CTIME_R,     1, [Define if ctime_r() exists]))
 AC_CHECK_FUNC([localtime_r], AC_DEFINE(HAVE_LOCALTIME_R, 1, [Define if localtime_r() exists]))
 

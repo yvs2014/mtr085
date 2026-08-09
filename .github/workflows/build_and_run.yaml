@@ -37,8 +37,8 @@ jobs:
         run: sudo dpkg -i debs/mtr085_*.deb
       - name: Run on ${{matrix.os}}
         run: |
-          mtr -vv
           mtr -r localhost
+          mtr -vv
 
   build_exec_on_macos_and_run:
     name: Run on ${{matrix.os}} (built with ${{matrix.compiler}})
@@ -63,8 +63,8 @@ jobs:
           meson compile -C _build
       - name: Run on ${{matrix.os}}
         run: |
-          sudo ./_build/mtr -vv
           sudo ./_build/mtr -r localhost
+          sudo ./_build/mtr -vv
 
   build_debs_on_debian_and_run:
     name: Run on ${{matrix.image}} (built with ${{matrix.compiler}})
@@ -93,8 +93,8 @@ jobs:
           meson compile -C _build
       - name: Run on ${{matrix.image}}
         run: |
-          ./_build/mtr -vv
           ./_build/mtr -r localhost
+          ./_build/mtr -vv
 
   build_exec_on_alpine_and_run:
     name: Run on ${{matrix.image}} (built with ${{matrix.compiler}})
@@ -124,8 +124,8 @@ jobs:
           meson compile -C _build
       - name: Run on ${{matrix.image}}
         run: |
+          ./_build/mtr -r 127.0.0.1
           ./_build/mtr -vv
-          ./_build/mtr -r localhost
 
   build_debs_on_archlinux_and_run:
     name: Run on ${{matrix.image}} (built with ${{matrix.compiler}})
@@ -151,6 +151,6 @@ jobs:
           meson compile -C _build
       - name: Run on ${{matrix.image}}
         run: |
-          ./_build/mtr -vv
           ./_build/mtr -r localhost
+          ./_build/mtr -vv
 

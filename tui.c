@@ -570,13 +570,6 @@ static void seal_n_bell(int at, int max) {
   }
 }
 
-static inline void print_statline(WINDOW *win, int at, const t_stat *stat) NONNULL(1);
-static inline void print_statline(WINDOW *win, int at, const t_stat *stat) {
-  // if there's no replies, show only packet counters
-  const char *str = (host[at].recv || strchr("LDRS", stat->key)) ? net_elem(at, stat->key) : "";
-  wprintw(win, "%*s", stat->min, str ? str : "");
-}
-
 static int print_stat(WINDOW *win, int at, int y, int x, int max) NONNULL(1);
 static int print_stat(WINDOW *win, int at, int y, int x, int max) { // statistics
   if (wmove(win, y, x) == ERR) return ERR;
@@ -584,7 +577,8 @@ static int print_stat(WINDOW *win, int at, int y, int x, int max) { // statistic
     const t_stat *stat = active_stats(i);
     if (!stat)
       break;
-    print_statline(win, at, stat);
+    const char *str = net_settled_elem(at, stat->key);
+    wprintw(win, "%*s", stat->min, str ? str : "");
   }
   if (run_opts.audible || run_opts.visible)
     seal_n_bell(at, max);

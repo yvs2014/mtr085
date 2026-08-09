@@ -105,13 +105,9 @@ static void spl_print_stat(int at) {
     const t_stat *stat = active_stats(i);
     if (!stat)
       break;
-    // if there's no replies, show either packet counters or '?'
-    const char *elem = (host[at].recv || strchr("LDRS", stat->key)) ?
-      net_elem(at, stat->key) : "?";
-    if (elem) {
-      putchar(DIV_SPLIT);
-      fputs(elem, stdout);
-    }
+    putchar(DIV_SPLIT);
+    const char *elem = net_settled_elem(at, stat->key);
+    fputs(elem ? elem : UNKN_ITEM, stdout);
   }
 }
 

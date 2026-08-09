@@ -50,7 +50,7 @@
 #endif
 
 #ifndef GITREV
-#define GITREV "291"
+#define GITREV "292"
 #endif
 
 #ifndef HAVE_UINT
@@ -153,6 +153,7 @@ typedef enum {
 #define NANO  1000000000
 #define UNKN_ITEM "???"
 #define AT_FMT "%2d."
+#define SETTLED_ELEMS "LDRS" // Lost-Drop-Recv-Sent
 
 // options
 typedef struct opts_s {
