@@ -137,7 +137,7 @@ static void print_mpls(const mpls_data_t *mpls) NONNULL(1);
 static void print_mpls(const mpls_data_t *mpls) {
   char buff[64] = {0};
   for (int i = 0; i < mpls->n; i++)
-    printf("%s\n", mpls2str(&mpls->label[i], sizeof(buff), buff));
+    puts(mpls2str(&mpls->label[i], sizeof(buff), buff, INDENT_NUMB));
 }
 #endif
 

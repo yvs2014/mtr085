@@ -1406,8 +1406,8 @@ const char* addr2str(const t_ipaddr *addr, size_t size, char buff[size]) { // NO
 }
 
 #ifdef WITH_MPLS
-const char *mpls2str(const mpls_label_t *label, size_t size, char buff[size]) { // NONNULL(1, 3)
-  snprinte(buff, size, "%*s[Lbl:%u Exp:%u S:%u TTL:%u]", INDENT_NUMB, "",
+const char *mpls2str(const mpls_label_t *label, size_t size, char buff[size], uint indent) { // NONNULL(1, 3)
+  snprinte(buff, size, "%*s[Lbl:%u Exp:%u S:%u TTL:%u]", indent, "",
     label->u.lab, label->u.exp, label->u.bos, label->u.ttl);
   return buff;
 }

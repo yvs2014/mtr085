@@ -2,9 +2,9 @@ name: build_and_run
 
 on:
   push:
-    branches: [ master ]
+    branches: [master]
   pull_request:
-    branches: [ master ]
+    branches: [master]
   workflow_dispatch:
 
 defaults:
@@ -13,7 +13,7 @@ defaults:
 
 jobs:
   build_debs_on_ubuntu_and_run:
-    name: Build-n-Run on ${{matrix.os}} with ${{matrix.compiler}}
+    name: Run on ${{matrix.os}} (built with ${{matrix.compiler}})
     runs-on: ${{matrix.os}}
     strategy:
       matrix:
@@ -36,10 +36,12 @@ jobs:
       - name: Install deb package built with ${{matrix.compiler}}
         run: sudo dpkg -i debs/mtr085_*.deb
       - name: Run on ${{matrix.os}}
-        run: mtr -r localhost
+        run: |
+          mtr -vv
+          mtr -r localhost
 
   build_exec_on_macos_and_run:
-    name: Build-n-Run on ${{matrix.os}} with ${{matrix.compiler}}
+    name: Run on ${{matrix.os}} (built with ${{matrix.compiler}})
     runs-on: ${{matrix.os}}
     strategy:
       matrix:
@@ -60,10 +62,12 @@ jobs:
           meson setup _build -DCAP=false -DNLS=false
           meson compile -C _build
       - name: Run on ${{matrix.os}}
-        run: sudo ./_build/mtr -r localhost
+        run: |
+          sudo ./_build/mtr -vv
+          sudo ./_build/mtr -r localhost
 
   build_debs_on_debian_and_run:
-    name: Build-n-Run on ${{matrix.image}} container with ${{matrix.compiler}}
+    name: Run on ${{matrix.image}} (built with ${{matrix.compiler}})
     runs-on: ubuntu-latest
     container:
       image: ${{matrix.image}}
@@ -88,10 +92,12 @@ jobs:
           meson setup _build
           meson compile -C _build
       - name: Run on ${{matrix.image}}
-        run: ./_build/mtr -r localhost
+        run: |
+          ./_build/mtr -vv
+          ./_build/mtr -r localhost
 
   build_exec_on_alpine_and_run:
-    name: Build-n-Run on ${{matrix.image}} container with ${{matrix.compiler}}
+    name: Run on ${{matrix.image}} (built with ${{matrix.compiler}})
     runs-on: ubuntu-latest
     container:
       image: ${{matrix.image}}
@@ -117,10 +123,12 @@ jobs:
           meson setup _build
           meson compile -C _build
       - name: Run on ${{matrix.image}}
-        run: ./_build/mtr -r localhost
+        run: |
+          ./_build/mtr -vv
+          ./_build/mtr -r localhost
 
   build_debs_on_archlinux_and_run:
-    name: Build-n-Run on ${{matrix.image}} container with ${{matrix.compiler}}
+    name: Run on ${{matrix.image}} (built with ${{matrix.compiler}})
     runs-on: ubuntu-latest
     container:
       image: ${{matrix.image}}
@@ -142,5 +150,7 @@ jobs:
           meson setup _build
           meson compile -C _build
       - name: Run on ${{matrix.image}}
-        run: ./_build/mtr -r localhost
+        run: |
+          ./_build/mtr -vv
+          ./_build/mtr -r localhost
 

@@ -204,7 +204,8 @@ void* addr6copy(void *dst, const void *src) NONNULL(1, 2);
 void  net_setsock6(void);
 #endif
 #ifdef WITH_MPLS
-const char *mpls2str(const mpls_label_t *label, size_t size, char buff[size]) NONNULL(1, 3);
+const char *mpls2str(const mpls_label_t *label,
+  size_t size, char buff[size], uint indent) NONNULL(1, 3);
 #endif
 uint16_t str2hint(const char* str, uint16_t at, uint16_t ndx);
 void waitspec(struct timespec *tv);

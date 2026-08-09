@@ -36,39 +36,81 @@
 #endif
 #include "split.h"
 
-enum {
-  DIV_SPLIT = '\t',
-};
+#define DIV_SPLIT '\t'
+
+static void puts_addr(const t_ipaddr *addr) NONNULL(1);
+static void puts_addr(const t_ipaddr *addr) {
+  char buff[MAX_ADDRSTRLEN] = {0};
+  fputs(addr2str(addr, sizeof(buff), buff), stdout);
+}
+
+#ifdef WITH_MPLS
+static void spl_print_mpls(mpls_data_t *data) {
+  if (data && (data->n > 0)) {
+    char buff[64] = {0};
+    for (int i = 0; i < data->n; i++) {
+      putchar(DIV_SPLIT);
+      fputs(mpls2str(&data->label[i], sizeof(buff), buff, 0), stdout);
+    }
+  }
+}
+#endif
+
+static void spl_print_row(const t_ipaddr *addr, int at, int ndx, void (*print_stat)(int)) NONNULL(1);
+static void spl_print_row(const t_ipaddr *addr, int at, int ndx, void (*print_stat)(int)) {
+#ifdef ENABLE_DNS
+  putchar(DIV_SPLIT);
+  const char *name = dns_ptr_lookup(at, ndx);
+  if (name)
+    fputs(name, stdout);
+  else
+    puts_addr(addr);
+  if (run_opts.both)
+#endif
+  { putchar(DIV_SPLIT); puts_addr(addr); }
+  //
+  if (print_stat)
+    print_stat(at);
+#ifdef WITH_IPINFO
+  if (IPINFOED) {
+    char info[NAMELEN] = {0};
+    ipinfo_data_div(sizeof(info), info, at, (ndx), DIV_SPLIT);
+    if (info[0]) {
+      putchar(DIV_SPLIT);
+      fputs(info, stdout);
+    }
+  }
+#endif
+#ifdef WITH_MPLS
+  if (run_opts.mpls)
+    spl_print_mpls(&MPLS_AT_NDX(at, ndx));
+#endif
+  putchar('\n');
+}
 
 static inline void split_multipath(int at) {
-  for (int i = 0; i < MAXPATH; i++) { // multipath
-    if (i != host[at].current) { // not printed yet
-      t_ipaddr *addr = &IP_AT_NDX(at, i);
+  for (int ndx = 0; ndx < MAXPATH; ndx++) { // multipath
+    if (ndx != host[at].current) { // .current is already printed
+      t_ipaddr *addr = &IP_AT_NDX(at, ndx);
       if (!addr_exist(addr))
         break;
-      //
-      printf("%2d:%d", at + 1, i);
-#ifdef ENABLE_DNS
-      const char *name = dns_ptr_lookup(at, i);
-      if (name)
-        printf("%c%s", DIV_SPLIT, name);
-      else {
-        char str[MAX_ADDRSTRLEN] = {0};
-        printf("%c%s", DIV_SPLIT, addr2str(addr, sizeof(str), str));
-      }
-      if (run_opts.both)
-#endif
-      { char str[MAX_ADDRSTRLEN] = {0};
-        printf("%c%s", DIV_SPLIT, addr2str(addr, sizeof(str), str)); }
-#ifdef WITH_IPINFO
-      if (IPINFOED) {
-        char info[NAMELEN] = {0};
-        ipinfo_data_div(sizeof(info), info, at, i, DIV_SPLIT);
-        if (info[0])
-          printf("%c%s", DIV_SPLIT, info);
-      }
-#endif
-      printf("\n");
+      printf("%2d:%d", at + 1, ndx);
+      spl_print_row(addr, at, ndx, NULL);
+    }
+  }
+}
+
+static void spl_print_stat(int at) {
+  for (uint i = 0; i < MAXFLD; i++) {
+    const t_stat *stat = active_stats(i);
+    if (!stat)
+      break;
+    // if there's no replies, show either packet counters or '?'
+    const char *elem = (host[at].recv || strchr("LDRS", stat->key)) ?
+      net_elem(at, stat->key) : "?";
+    if (elem) {
+      putchar(DIV_SPLIT);
+      fputs(elem, stdout);
     }
   }
 }
@@ -76,41 +118,17 @@ static inline void split_multipath(int at) {
 void split_redraw(void) {
   if (run_opts.pause)
     return;
-  const char fields[] = "LRSBAW"; // Loss, Recv, Sent, Best, Avg, Worst
   int max = net_max();
   for (int at = net_min() + display_offset; at < max; at++) {
     printf("%2d", at + 1);
     t_ipaddr *addr = &CURRENT_IP(at);
     if (addr_exist(addr)) {
-#ifdef ENABLE_DNS
-      const char *name = dns_ptr_lookup(at, host[at].current);
-      if (name)
-        printf("%c%s", DIV_SPLIT, name);
-      else {
-        char str[MAX_ADDRSTRLEN] = {0};
-        printf("%c%s", DIV_SPLIT, addr2str(addr, sizeof(str), str));
-      }
-      if (run_opts.both)
-#endif
-      { char str[MAX_ADDRSTRLEN] = {0};
-        printf("%c%s", DIV_SPLIT, addr2str(addr, sizeof(str), str)); }
-      for (uint i = 0; i < sizeof(fields); i++) {
-        const char *elem = net_elem(at, fields[i]);
-        if (elem)
-          printf("%c%s", DIV_SPLIT, elem);
-      }
-#ifdef WITH_IPINFO
-      if (IPINFOED) {
-        char info[NAMELEN] = {0};
-        ipinfo_data_div(sizeof(info), info, at, host[at].current, DIV_SPLIT);
-        if (info[0])
-          printf("%c%s", DIV_SPLIT, info);
-      }
-#endif
-      printf("\n");
+      spl_print_row(addr, at, host[at].current, spl_print_stat);
       split_multipath(at);
-    } else
-      printf("%c%s\n", DIV_SPLIT, UNKN_ITEM);
+    } else {
+      putchar(DIV_SPLIT);
+      fputs(UNKN_ITEM, stdout);
+    }
   }
 }
 
@@ -171,8 +189,8 @@ static void split_help(void) {
 #define INDENT 10
   printf("%s:\n", COMMANDS_STR);
   for (uint i = 0; i < ARRAY_LEN(cmd); i++) {
-    int pad = INDENT - ustrnlen(cmd[i].key, INDENT);
-    printf("%s%*s %s\n", cmd[i].key, (pad < 0) ? 0 : pad, "", cmd[i].hint);
+    int space = INDENT - ustrnlen(cmd[i].key, INDENT) + 1;
+    printf("%s%*s%s\n", cmd[i].key, (space < 1) ? 1 : space, "", cmd[i].hint);
   }
 #undef INDENT
   printf("\n%s ... ", ANYLTTR_STR);

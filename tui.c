@@ -517,7 +517,7 @@ static int printw_mpls(WINDOW *win, const mpls_data_t *m) NONNULL(1, 2);
 static int printw_mpls(WINDOW *win, const mpls_data_t *m) {
   char buff[64] = {0};
   for (int i = 0; i < m->n; i++) {
-    waddstr(win, mpls2str(&m->label[i], sizeof(buff), buff));
+    waddstr(win, mpls2str(&m->label[i], sizeof(buff), buff, INDENT_NUMB));
     if (wmove(win, getcury(win) + 1, 0) == ERR)
       return ERR;
   }
