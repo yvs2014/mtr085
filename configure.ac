@@ -55,7 +55,11 @@ AC_ARG_WITH(tui,
 	AS_HELP_STRING([--without-tui], [without Curses TUI]),
 	[tui=${withval}], [tui=yes])
 AM_CONDITIONAL([TUI], [test "x$tui" = "xyes"])
-_unicode="no"
+AC_ARG_WITH(mouse,
+	AS_HELP_STRING([--without-mouse], [without mouse support in TUI mode]),
+	[mouse=${withval}], [mouse=yes])
+mousemask="no"
+unicode="no"
 AS_IF([test "x$tui" = "xyes"], [
 	AC_DEFINE(TUIMODE, 1, [Build with TUI (curses library)])
 	AC_CHECK_HEADERS([ncursesw/ncurses.h ncursesw/curses.h ncurses/ncurses.h ncurses/curses.h ncurses.h curses.h], break)
@@ -64,6 +68,12 @@ AS_IF([test "x$tui" = "xyes"], [
 		AC_DEFINE([HAVE_CURSES_VERSION], [1], [Define this if curses library has curses_version()]))
 	AC_SEARCH_LIBS([use_default_colors], [$_curses_libs],
 		AC_DEFINE([HAVE_USE_DEFAULT_COLORS], [1], [Define this if curses library has colors support]))
+	AS_IF([test "x$mouse" = "xyes"], [
+		AC_SEARCH_LIBS([mousemask], [$_curses_libs], [
+			AC_DEFINE([HAVE_MOUSEMASK], [1], [Define this if curses library has mouse support])
+			mousemask="yes"
+		])
+	])
 	AC_ARG_WITH(unicode,
 		AS_HELP_STRING([--without-unicode], [without Unicode histogram]),
 		[unicode=${withval}], [unicode=yes])
@@ -71,7 +81,7 @@ AS_IF([test "x$tui" = "xyes"], [
 		AC_CHECK_HEADERS([wchar.h wctype.h locale.h langinfo.h])
 		AC_SEARCH_LIBS([add_wch], [$_curses_libs], [
 			AC_DEFINE([WITH_UNICODE], [1], [Define to enable unicode])
-			_unicode="yes"],
+			unicode="yes"],
 		AC_MSG_ERROR([Wide-character curses library not found]))
 	])
 	AC_CHECK_LIB([ncursesw], [initscr], AC_DEFINE([TUIKIND], ["ncursesw"], [Kind of TUI lib]), [
@@ -81,6 +91,7 @@ AS_IF([test "x$tui" = "xyes"], [
 	])
 	])
 ])
+AM_CONDITIONAL([MOUSE], [test "x$mousemask" = "xyes"])
 
 AC_ARG_ENABLE([nls],
 	AS_HELP_STRING([--disable-nls], [Do not enable NLS]),
@@ -319,7 +330,9 @@ AS_IF([test "x$libcap"    = "xyes"],
 AS_IF([test "x$tui"       = "xyes"],
 	[_option_list="$_option_list +TUI"],
 	[_option_list="$_option_list -TUI"])
-AS_IF([test "x$_unicode"  = "xyes"],
+AS_IF([test "x$mousemask" = "yes"],
+	[_option_list="$_option_list +MOUSE"])
+AS_IF([test "x$unicode"   = "xyes"],
 	[_option_list="$_option_list +UNICODE"],
 	[_option_list="$_option_list -UNICODE"])
 AS_IF([test "x$nls"       = "xyes"],

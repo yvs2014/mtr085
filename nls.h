@@ -149,6 +149,7 @@
 #define NCYCLES_STR    _("Number of cycles")
 #define MINTTL_STR     _("First TTL")
 #define MAXTTL_STR     _("Max TTL")
+#define MOUSE_OUT_STR  _("Mouse is only supported with option '-1'")
 #define INTERVAL_STR   _("Interval")
 #define QOSTOS_STR     _("QoS/ToS")
 #define PSIZE_STR      _("Payload size")

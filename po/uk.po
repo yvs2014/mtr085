@@ -433,6 +433,9 @@ msgstr "Таймаут TCP"
 msgid "Cache timeout"
 msgstr "Таймаут кешування"
 
+msgid "Mouse is only supported with option '-1'"
+msgstr "Миша підтримується тільки з опцією '-1'"
+
 
 ## misc
 

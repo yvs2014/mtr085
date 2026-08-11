@@ -1,0 +1,24 @@
+[
+{
+  type: install
+  message: <<EOM
+The main project's location is https://github.com/traviscross/mtr
+
+This build is based on work-in-progress https://github.com/yvs2014/mtr085
+used only for testing extra features.
+
+Please read about potential security issues in %%DOCSDIR%%/SECURITY
+EOM
+}
+{
+  type: upgrade
+  message: <<EOM
+The main project's location is https://github.com/traviscross/mtr
+
+This build is based on work-in-progress https://github.com/yvs2014/mtr085
+used only for testing extra features.
+
+Please read about potential security issues in %%DOCSDIR%%/SECURITY
+EOM
+}
+]

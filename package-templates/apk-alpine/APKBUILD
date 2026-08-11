@@ -1,17 +1,16 @@
-# Maintainer: yvs <VSYakovetsky@gmail.com>
 
-# sample (replace 'commit' and 'number' with their values)
+# sample: replace <COMMIT> and <NUMBER> with their actual values
 
 _bin='mtr'
-_git='commit'
-_rev='number'
+_git='<COMMIT>'
+_rev='<NUMBER>'
 _build='_build'
 
 pkgname=mtr085
 pkgver="$_rev"
 pkgrel=1
-pkgdesc='Full screen ncurses traceroute tool, mtr v0.85 fork'
-url="https://github.com/yvs2014/$pkgname"
+pkgdesc='Work-in-progress: mtr v0.85 fork for testing extra features'
+url="https://github.com/yvs2014/mtr085 https://github.com/traviscross/mtr"
 giturl="$url"
 arch='all'
 license='GPL'

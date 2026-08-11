@@ -433,6 +433,9 @@ msgstr "Timeout TCP"
 msgid "Cache timeout"
 msgstr "Timeout cache"
 
+msgid "Mouse is only supported with option '-1'"
+msgstr "Mouse è supportato solo con opzione '-1'"
+
 
 ## misc
 

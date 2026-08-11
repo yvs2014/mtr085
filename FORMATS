@@ -6,7 +6,7 @@ gui-library with a setuid program.
 
 The split format is:
 
-<pos> <host> <loss%> <rcvd pckts> <sent pckts> <best> <avg> <worst> 
+<pos> <host> <loss%> <rcvd pckts> <sent pckts> <best> <avg> <worst>
 
 
 The "raw" format is:
@@ -19,7 +19,7 @@ h <pos> <host IP>
 pingline:
 p <pos> <pingtime (ms)>
 
-dnsline: 
+dnsline:
 d <pos> <hostname>
 
 timestampline:
@@ -32,7 +32,7 @@ ICMP timestamping first. :-)
 
 Someone suggested to put the following text here. As to context: Some
 people are wondering why mtr sometimes reports hosts beyond the
-destination host. 
+destination host.
 
 
 The FINAL host will occasionally be mentioned at position n, n+1, n+2

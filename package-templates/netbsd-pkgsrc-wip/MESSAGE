@@ -1,9 +1,11 @@
-===========================================================================
-$NetBSD: MESSAGE,v 1.1 2014/09/25 14:05:46 yvs4sf Exp $
+===============================================================================
+$NetBSD$
 
-	${PREFIX}/sbin/mtr is setuid "root".
+The main project's location is https://github.com/traviscross/mtr
 
-        Please read about potential security issues in
-		${PREFIX}/share/doc/mtr/SECURITY
+This build is based on work-in-progress https://github.com/yvs2014/mtr085
+used only for testing extra features.
 
-===========================================================================
+Please read about potential security issues in ${PREFIX}/share/doc/mtr/SECURITY
+
+===============================================================================

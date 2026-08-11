@@ -82,6 +82,9 @@ endif
 if !IPINFO
 EXCLOPTS += l
 endif
+if !MOUSE
+EXCLOPTS += M
+endif
 if !DNS
 EXCLOPTS += n
 EXCLOPTS += N

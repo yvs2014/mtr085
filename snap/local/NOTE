@@ -1,2 +1,0 @@
-# like 'ping' with raw-sockets
-snap connect mtr085:network-observe :network-observe

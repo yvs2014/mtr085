@@ -1,29 +1,24 @@
 # $NetBSD$
 
-# sample: set GIT_COMMIT_NUMBER and GIT_HASH
+# sample: replace <GIT_COMMIT_NUMBER> and <GIT_COMMIT_HASH> with their actual values
 
 CATEGORIES=	net
 PKGBASE=	mtr085
-PKGVERSION=	GIT_COMMIT_NUMBER
+PKGVERSION=	<GIT_COMMIT_NUMBER>
 PKGREVISION=	1
-PKGNAME=	${PKGBASE}-${PKGVERSION}
-DISTNAME=	${PKGBASE}-${GITHUB_HASH}
-MASTER_SITES=	${MASTER_SITE_GITHUB:=${GITHUB_USER}/}/${PKGBASE}/tarball/${GITHUB_HASH}/
-WRKSRC=		${WRKDIR}/${GITHUB_USER}-${PKGBASE}-${GITHUB_HASH}
+DISTNAME=	${PKGBASE}-${PKGVERSION}
 
-GITHUB_HASH=	GIT_HASH
-GITHUB_USER=	yvs2014
+MASTER_SITES=	${MASTER_SITE_GITHUB:=yvs2014/}
+GITHUB_TAG=	<GIT_COMMIT_HASH>
 
 MAINTAINER=	pkgsrc-users@NetBSD.org
-HOMEPAGE=	https://www.bitwizard.nl/mtr/
-COMMENT=	MTR v0.85 fork with whois info, IDN, unicode
+COMMENT=	Work-in-progress: mtr v0.85 fork for testing extra features
 LICENSE=	gnu-gpl-v2
 USE_LANGUAGES=	c
 
 CONFLICTS=	mtr-[0-9]*
 
-GNU_CONFIGURE=		YES
-USE_TOOLS+=		meson pkg-config
+USE_TOOLS+=		pkg-config
 INSTALLATION_DIRS=	${PKGMANDIR}/man8 sbin share/doc/mtr
 
 MESON_ARGS+=	-DCAP=false
@@ -31,7 +26,9 @@ MESON_ARGS+=	-DSBIN=true
 
 .include "options.mk"
 
-SPECIAL_PERMS=	sbin/mtr ${SETUID_ROOT_PERMS}
+## mtr085 is used for testing extra features only, see mtr SECURITY notes
+#
+#SPECIAL_PERMS=	sbin/mtr ${SETUID_ROOT_PERMS}
 
 post-install:
 	${INSTALL_DATA} ${WRKSRC}/SECURITY ${DESTDIR}${PREFIX}/share/doc/mtr

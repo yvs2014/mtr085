@@ -1,6 +1,6 @@
-mtr combines functionality of traceroute and ping in a single network tool
+The main project's location is https://github.com/traviscross/mtr
 
-forked from version 0.85 with whois info, IDN, NLS, unicode, etc.
+This build is based on work-in-progress https://github.com/yvs2014/mtr085
+used only for testing extra features.
 
-Built from https://github.com/yvs2014/mtr085
-Main project location: https://github.com/traviscross/mtr
+Please read about potential security issues in ${PREFIX}/share/doc/mtr/SECURITY

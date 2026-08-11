@@ -10,6 +10,14 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 
+#ifdef HAVE_SYS_PARAM_H
+#include <sys/param.h>
+#endif
+
+#if defined(TUIMODE) && defined(HAVE_MOUSEMASK)
+#define WITH_MOUSE
+#endif
+
 #ifndef INET_ADDRSTRLEN
 #define INET_ADDRSTRLEN  16
 #endif
@@ -21,10 +29,6 @@
 // wrapper: __has_attribute
 #ifndef __has_attribute
 #define __has_attribute(attr) 0
-#endif
-
-#ifdef HAVE_SYS_PARAM_H
-#include <sys/param.h>
 #endif
 
 //
@@ -50,7 +54,7 @@
 #endif
 
 #ifndef GITREV
-#define GITREV "295"
+#define GITREV "296"
 #endif
 
 #ifndef HAVE_UINT
@@ -359,6 +363,9 @@ extern int display_offset;
 extern int chart_mode;
 #ifdef TUIMODE
 extern int chart_mode_max;
+#endif
+#ifdef WITH_MOUSE
+extern bool mouse_enabled;
 #endif
 #ifdef WITH_UNICODE
 extern bool utf_compat;

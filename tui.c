@@ -76,6 +76,32 @@
 #include "ipinfo.h"
 #endif
 
+#ifdef WITH_MOUSE
+#define MENU_ICON_UTF8  " ≡ "
+#define MENU_ICON_ASCII " = "
+#define QUIT_ICON_UTF8  " ✕ " // ✕ ✖ x 🗙 ╳
+#define QUIT_ICON_ASCII " x "
+//
+static const char *menu_icon = MENU_ICON_ASCII;
+static const char *quit_icon = QUIT_ICON_ASCII;
+static int menu_icon_len, quit_icon_len;
+//
+static bool mouse_on;
+#define MOUSE_ON  do { if (mouse_enabled) mouse_on = true;  } while (0)
+#define MOUSE_OFF do { if (mouse_enabled) mouse_on = false; } while (0)
+//
+typedef struct {
+  int x0, y0, x1, y1;
+} crd_s;
+typedef struct {
+  crd_s menu, quit;
+} item_crd_s;
+static item_crd_s crd;
+#else
+#define MOUSE_ON  NOOP
+#define MOUSE_OFF NOOP
+#endif
+
 enum {
   INDENT_HINT =   12,
   HOSTINFOMAX =   30,
@@ -167,6 +193,7 @@ static void tui_get_int(WINDOW *win, int *val, int min, int max,
 static void tui_get_int(WINDOW *win, int *val, int min, int max,
   const char *what, const char *hint)
 {
+  MOUSE_OFF;
   wclear(win);
   mvwaddstr(win, 0, 0, what);
   wprintw(win, ": %d", *val);
@@ -184,10 +211,12 @@ static void tui_get_int(WINDOW *win, int *val, int min, int max,
     else
       *val = num;
   }
+  MOUSE_ON;
 }
 
 static void tui_key_h(WINDOW *win) NONNULL(1);
 static void tui_key_h(WINDOW *win) { // help
+  MOUSE_OFF;
   t_cmd_hint cmd[] = {
     {.key = "b", .hint = CMD_B_STR,  .type = CH_INT},
     {.key = "c", .hint = CMD_C_STR,  .type = CH_INT},
@@ -248,6 +277,7 @@ static void tui_key_h(WINDOW *win) { // help
   waddstr(win, " ...");
   wrefresh(win);
   wgetch(win);
+  MOUSE_ON;
 }
 
 static void tui_key_b(WINDOW *win) NONNULL(1);
@@ -259,6 +289,7 @@ static void tui_key_b(WINDOW *win) { // bit pattern
 
 static void tui_key_c(WINDOW *win) NONNULL(1);
 static void tui_key_c(WINDOW *win) { // set number of cycles
+  MOUSE_OFF;
   mvwaddstr(win, 0, 0, NCYCLES_STR);
   waddstr(win, " (");
   waddstr(win, UNLIM0_STR);
@@ -280,6 +311,7 @@ static void tui_key_c(WINDOW *win) { // set number of cycles
       OPT_SUM(cycles);
     }
   }
+  MOUSE_ON;
 }
 
 static void tui_key_f(WINDOW *win) NONNULL(1);
@@ -325,6 +357,7 @@ static inline void tui_key_o_hints(int x0, int y0) {
 
 static void tui_key_o(WINDOW *win) NONNULL(1);
 static void tui_key_o(WINDOW *win) { // set fields to display and their order
+  MOUSE_OFF;
   tui_key_o_hints(getbegx(win), getbegy(win) + getmaxy(win));
   wclear(win);
   mvwaddstr(win, 0, 0, FIELDS_STR);
@@ -334,11 +367,13 @@ static void tui_key_o(WINDOW *win) { // set fields to display and their order
   wmove(win, 0, (maxc > 0) ? (ustrnlen(FIELDS_STR, maxc) + 2) : 0);
   wrefresh(win);
   enter_stat_fields(win);
+  MOUSE_ON;
 }
 
 #ifdef IP_TOS
 static void tui_key_Q(WINDOW *win) NONNULL(1);
 static void tui_key_Q(WINDOW *win) { // set QoS
+  MOUSE_OFF;
 #if defined(ENABLE_IPV6) && !defined(IPV6_TCLASS)
   if (af == AF_INET6)
     tui_msgcont(win, TCLASS6_ERR);
@@ -349,11 +384,13 @@ static void tui_key_Q(WINDOW *win) { // set QoS
     run_opts.qos = qos;
     OPT_SUM(qos);
   }
+  MOUSE_ON;
 }
 #endif
 
 static void tui_key_s(WINDOW *win) NONNULL(1);
 static void tui_key_s(WINDOW *win) { // set payload size
+  MOUSE_OFF;
   wclear(win);
   int x = 0, y = 0;
   mvwaddstr(win, y, x, PSIZE_CHNG_STR);
@@ -377,6 +414,7 @@ static void tui_key_s(WINDOW *win) { // set payload size
       reset_pldsize = true;
     }
   }
+  MOUSE_ON;
 }
 
 // map: char to action
@@ -480,6 +518,14 @@ static inline void reset_actkey_flags(int ch) {
   }
 }
 
+#ifdef WITH_MOUSE
+#define CRD_ENCLOSE(crd) (                       \
+  ((crd).x0 <= event.x) && (event.x <= (crd).x1) \
+  &&                                             \
+  ((crd).y0 <= event.y) && (event.y <= (crd).y1) \
+)
+#endif
+
 key_action_t tui_keyaction(void) {
   WINDOW *win = area[NDX_LABEL].win; if (!win)  return ActionNone;
   int ch = wgetch(win); if (!ch || (ch == ERR)) return ActionNone;
@@ -491,6 +537,20 @@ key_action_t tui_keyaction(void) {
       ch = wgetch(win);
     if (ch == KEY_RESIZE) // otherwise flush
       flushinp();
+  }
+#endif
+#ifdef WITH_MOUSE
+  // map mouse events to keys
+  if (mouse_on && ch == KEY_MOUSE) {
+    MEVENT event = {0};
+    if (getmouse(&event) == OK
+      // && (event.bstate & BUTTON1_CLICKED) /*already filtered*/
+    ) {
+      ch =
+         CRD_ENCLOSE(crd.menu) ? 'h' /*temporarily 'help', TODO: menu*/ :
+         CRD_ENCLOSE(crd.quit) ? 'q' : 0;
+      LOGMSG("mouse event: x=%d, y=%d, key='%c'", event.x, event.y, ch);
+    }
   }
 #endif
   reset_actkey_flags(ch);
@@ -1116,10 +1176,26 @@ static int redraw_labels(WINDOW *win, int indent) {
   return indent;
 }
 
+#ifdef WITH_MOUSE
+#define PRINT_MENUKEEP(icon, name, crd, y, x) do {          \
+  mvwaddstr(win, (y), (x), (icon));                         \
+  (crd).x0 = dx + (x);                                      \
+  (crd).y0 = dy + (y);                                      \
+  (crd).x1 = dx + getcurx(win);                             \
+  (crd).y1 = dy + getcury(win);                             \
+  if (getcurx(win) < (getmaxx(win) - 1))                    \
+    (crd).x1--; /*successful addstr()*/                     \
+  LOGMSG("%s(%s): x0=%d y0=%d x1=%d y1=%d (w=%d h=%d)",     \
+    (name), (icon), (crd).x0, (crd).y0, (crd).x1, (crd).y1, \
+    (crd).x1 - (crd).x0 + 1, (crd).y1 - (crd).y0 + 1);      \
+} while (0)
+#endif
+
 static void redraw_top(WINDOW *win) NONNULL(1);
 static void redraw_top(WINDOW *win) {
   static char title_cache[LINEMAXLEN];
   werase(win);
+  //
   if (titlelen.screen < 0) { // generate title and cache it
     char buff[LINEMAXLEN] = {0};
     const char *pretitle = screen_title;
@@ -1149,6 +1225,14 @@ static void redraw_top(WINDOW *win) {
     int x = (getmaxx(win) - titlelen.screen) / 2;
     mvwaddstr(win, 0, (x > 0) ? x : 0, title);
   }
+#ifdef WITH_MOUSE
+  if (mouse_enabled && (tuilook != OLDLOOK)) {
+    int dx = getbegx(win), dy = getbegy(win);
+    PRINT_MENUKEEP(menu_icon, "menu", crd.menu, 0, 0);
+    PRINT_MENUKEEP(quit_icon, "quit", crd.quit, 0,
+      getmaxx(win) - (quit_icon_len ? quit_icon_len : 3));
+  }
+#endif
   wrefresh(win);
 }
 
@@ -1300,6 +1384,19 @@ bool tui_open(void) {
     warnx("TUI initscr() failed");
     return false;
   }
+#ifdef WITH_MOUSE
+  LOGMSG("mouse: %s", mouse_enabled ? "enabled" : "disabled");
+  mouse_on = mouse_enabled;
+  if (mouse_enabled) {
+    menu_icon = utf_compat ? MENU_ICON_UTF8 : MENU_ICON_ASCII;
+    quit_icon = utf_compat ? QUIT_ICON_UTF8 : QUIT_ICON_ASCII;
+    menu_icon_len = ustrnlen(menu_icon, NAMELEN);
+    quit_icon_len = ustrnlen(quit_icon, NAMELEN);
+    mousemask(BUTTON1_CLICKED | REPORT_MOUSE_POSITION, NULL);
+    LOGMSG("unicode compat: %s", utf_compat ? "true" : "false");
+  }
+#endif
+  //
   raw();
   noecho();
   keypad(stdscr, TRUE);
@@ -1376,6 +1473,7 @@ void tui_close(void) {
     const char *date = tui_datetime ? tui_datetime(time(NULL), sizeof(str), str) : NULL;
     LOGMSG("%s", date ? date : datetime_c(time(NULL), sizeof(str), str)); }
 #endif
+  MOUSE_OFF;
   if (stdscr && screen_ready) {
     endwin();
     screen_ready = false;

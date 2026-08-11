@@ -19,25 +19,21 @@
 #include <stdio.h>
 #include <string.h>
 #include <strings.h>
+#include <resolv.h>
+#ifdef HAVE_NETDB_H
+  #include <netdb.h>
+#endif
+#ifdef HAVE_ARPA_NAMESER_H
+  #include <arpa/nameser.h>
+#endif
 
 #if defined(LOG_DNS) && !defined(LOGMOD)
   #include <errno.h>
   #define LOGMOD
 #endif
-
 #if !defined(LOG_DNS) && defined(LOGMOD)
   #undef LOGMOD
 #endif
-
-#ifdef HAVE_ARPA_NAMESER_H
-  #include <arpa/nameser.h>
-#endif
-
-#ifdef HAVE_NETDB_H
-  #include <netdb.h>
-#endif
-
-#include <resolv.h>
 
 #include "dns.h"
 #include "net.h"

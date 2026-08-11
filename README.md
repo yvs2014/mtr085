@@ -6,7 +6,7 @@ mtr - a network diagnostic tool
 SYNOPSIS
 --------
 
-**mtr \[-46abBcdefFhilLmnNopqrsStTuvxy\] TARGET[:PORT] ...**
+**mtr \[-0146abBcdefFhilLMmnNopqrsStTuvxy\] TARGET[:PORT] ...**
 
 DESCRIPTION
 -----------
