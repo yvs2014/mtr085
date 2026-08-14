@@ -139,6 +139,7 @@ if tui
   endif
   #
   srcn += 'tui'
+  srcn += 'chart'
   optlist += '+TUI'
   config.set('TUIMODE', 1)
   if mouse and not config.has('HAVE_MOUSEMASK')

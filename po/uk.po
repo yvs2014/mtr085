@@ -98,7 +98,10 @@ msgid "jitter"
 msgstr "джиттер"
 
 msgid "chart"
-msgstr "діагр"
+msgstr "діаграма"
+
+msgid "color"
+msgstr "колір"
 
 msgid "pattern"
 msgstr "шаблон"

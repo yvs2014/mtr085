@@ -63,21 +63,51 @@ Set number of ping cycles.  Duration of one cycle is set with interval option
 .Sy -i ,
 one second by default.
 .It Fl d, Fl -display Ar MODE
-Choose the initial display mode
+Choose the initial display mode to chart delay values
 .Bl -tag -offset Ds
 .It Cm 1st and 2nd bits
+.It Cm 0
+no charts by default
 .br
-.Sy 0
-default
 .br
-.Sy 1
-without latency information
+.It Cm 1
+Display values across 2 intervals:
 .br
-.Sy 2
-with latency information
+less-than-value (.), more-than-value (>), and noresponse (?)
+.sp 2
+Note: either in monocolor, or colored like (.)white (>)yellow (?)red
 .br
-.Sy 3
-unicode histogram
+.br
+.It Cm 2
+Display values across 8 intervals:
+.br
+less-tnan-value0 (.), less-tnan-value1 (1), less-tnan-value2 (2), less-tnan-value3 (3),
+.br
+less-tnan-value4 (a), less-tnan-value5 (b), less-tnan-value6 (c), more-tnan-value6 (>),
+.br
+and noresponse (?)
+.sp 2
+Note: either in monocolor, or colored in (.)white (1)green (2)cyan (3)blue a(yellow) b(magenta) c(red) (<)red
+.br
+.It Cm 3
+In monocolor it displays values across 8 intervals using unicode characters:
+.br
+less-tnan-value0 (▁), less-tnan-value1 (▂), less-tnan-value2 (▃), less-tnan-value3 (▄),
+.br
+less-tnan-value4 (▅), less-tnan-value5 (▆), less-tnan-value6 (▇), more-tnan-value6 (>),
+.br
+and noresponse (?)
+.sp 2
+Multicolored it displays values across 10 intervals using unicode characters:
+.br
+green:  less-tnan-value0 (▂), less-tnan-value1 (▄), less-tnan-value2 (▆),
+.br
+yellow: less-tnan-value3 (▂), less-tnan-value4 (▄), less-tnan-value5 (▆),
+.br
+red:    less-tnan-value6 (▂), less-tnan-value7 (▄), less-tnan-value8 (▆),
+.br
+red:    more-tnan-value8 (>), and noresponse (?)
+.br
 .El
 .Bl -tag -offset Ds
 .It Cm 3rd bit

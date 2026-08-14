@@ -19,43 +19,6 @@
 #include <stdio.h>
 #include <string.h>
 
-#ifdef WITH_UNICODE
-#  ifndef _XOPEN_SOURCE_EXTENDED
-#    define _XOPEN_SOURCE_EXTENDED
-#  endif
-#  ifdef HAVE_WCHAR_H
-#    include <wchar.h>
-#  endif
-#  ifdef __NetBSD__
-#    define CCHAR_attr attributes
-#    define CCHAR_chars vals
-/*
-#  elif defined(OPENSOLARIS_CURSES)
-#    define CCHAR_attr _at
-#    define CCHAR_chars _wc
-*/
-#  else
-#    define CCHAR_attr attr
-#    define CCHAR_chars chars
-#  endif
-#endif // WITH_UNICODE
-
-#if   defined(HAVE_NCURSESW_NCURSES_H)
-#  include <ncursesw/ncurses.h>
-#elif defined(HAVE_NCURSESW_CURSES_H)
-#  include <ncursesw/curses.h>
-#elif defined(HAVE_NCURSES_NCURSES_H)
-#  include <ncurses/ncurses.h>
-#elif defined(HAVE_NCURSES_CURSES_H)
-#  include <ncurses/curses.h>
-#elif defined(HAVE_NCURSES_H)
-#  include <ncurses.h>
-#elif defined(HAVE_CURSES_H)
-#  include <curses.h>
-#else
-#  error No *curses header file given
-#endif
-
 #if defined(LOG_TUI) && !defined(LOGMOD)
 #define LOGMOD
 #endif
@@ -64,6 +27,7 @@
 #endif
 
 #include "tui.h"
+#include "chart.h"
 #include "nls.h"
 #include "aux.h"
 #include "net.h"
@@ -703,145 +667,11 @@ static void print_hops(WINDOW *win, int statx) {
   wmove(win, 0, 0);
 }
 
-static chtype map1[] = {'.' | A_NORMAL, '>' | COLOR_PAIR(1)};
-enum { NUM_FACTORS2 = 8 };
-static chtype map2[NUM_FACTORS2];
-static double factors2[NUM_FACTORS2];
-static int scale2[NUM_FACTORS2];
-static int dm2_color_base;
-static chtype map_na2[] = { ' ', '?', '>' | A_BOLD};
-#ifdef WITH_UNICODE
-enum { NUM_FACTORS3_MONO =  7 }; // without trailing char
-enum { NUM_FACTORS3      = 22 };
-static cchar_t map3[NUM_FACTORS3];
-static double factors3[NUM_FACTORS3];
-static int scale3[NUM_FACTORS3];
-static int dm3_color_base;
-static cchar_t map_na3[3];
-#endif
-
-static void scale_map(int *scale, const double *factors, int num) {
-  int minval = INT_MAX;
-  int maxval = -1;
-  int max = net_max();
-  for (int at = display_offset; at < max; at++) {
-    for (int i = 0; i < SAVED_PINGS; i++) {
-      int saved = host[at].saved[i];
-      if (saved >= 0) {
-        if (saved > maxval)
-          maxval = saved;
-        else if (saved < minval)
-          minval = saved;
-      }
-    }
-  }
-  if ((maxval < 0) || (minval > maxval))
-    return;
-  int range = maxval - minval;
-  for (int i = 0; i < num; i++)
-    scale[i] = minval + range * factors[i];
-}
-
-static void dmode_scale_map(void) {
-#ifdef WITH_UNICODE
-  if (chart_mode == 3)
-    scale_map(scale3, factors3, run_opts.color ? NUM_FACTORS3 : (NUM_FACTORS3_MONO + 1));
-  else
-#endif
-    scale_map(scale2, factors2, NUM_FACTORS2);
-}
-
-static inline void dmode_init(double *factors, int num) {
-  double inv = 1 / (double)num;
-  for (int i = 0; i < num; i++) {
-    double f = (i + 1) * inv;
-    factors[i] = f * f;
-  }
-}
-
-static void mapmode2_init(void) {
-  map2[0] = map1[0];
-  const int decimals = 9;
-  int block_split = (NUM_FACTORS2 - 2) / 2;
-  if (block_split > decimals)
-    block_split = decimals;
-  for (int i = 1; i <= block_split; i++)
-    map2[i] = '0' + i;
-  for (int i = block_split + 1, j = 0; i < NUM_FACTORS2 - 1; i++, j++)
-    map2[i] = 'a' + j;
-  for (int i = 1; i < NUM_FACTORS2 - 1; i++)
-    map2[i] |= COLOR_PAIR(dm2_color_base + i - 1);
-  map2[NUM_FACTORS2 - 1] = map1[1] & A_CHARTEXT;
-  map2[NUM_FACTORS2 - 1] |= (map2[NUM_FACTORS2 - 2] & A_ATTRIBUTES) | A_BOLD;
-  map_na2[1] |= run_opts.color ? (map2[NUM_FACTORS2 - 1] & A_ATTRIBUTES) : A_BOLD;
-}
-
-#ifdef WITH_UNICODE
-static void mapmode3_init(void) {
-  for (int i = 0; i < NUM_FACTORS3_MONO; i++)
-    map3[i].CCHAR_chars[0] = L'▁' + i;
-  if (run_opts.color) {
-    for (int i = 0; i < NUM_FACTORS3 - 1; i++) {
-      int base = i / NUM_FACTORS3_MONO;
-      map3[i].CCHAR_attr = COLOR_PAIR(dm3_color_base + base);
-      if (i >= NUM_FACTORS3_MONO)
-        map3[i].CCHAR_chars[0] = map3[i % NUM_FACTORS3_MONO].CCHAR_chars[0];
-    }
-    map3[NUM_FACTORS3 - 1].CCHAR_chars[0] = map1[1] & A_CHARTEXT;
-    map3[NUM_FACTORS3 - 1].CCHAR_attr = map3[NUM_FACTORS3 - 2].CCHAR_attr | A_BOLD;
-  } else
-    map3[NUM_FACTORS3_MONO].CCHAR_chars[0] = map1[1] & A_CHARTEXT;
-  for (uint i = 0; i < ARRAY_LEN(map_na2); i++)
-    map_na3[i].CCHAR_chars[0] = map_na2[i] & A_CHARTEXT;
-  map_na3[1].CCHAR_attr = run_opts.color ? map3[NUM_FACTORS3 - 1].CCHAR_attr : A_BOLD;
-  map_na3[2].CCHAR_attr = A_BOLD;
-}
-#endif
-
-static void display_mode_init(void) {
-  // display mode 2
-  dmode_init(factors2, NUM_FACTORS2);
-  mapmode2_init();
-#ifdef WITH_UNICODE
-  // display mode 3
-  dmode_init(factors3, run_opts.color ? NUM_FACTORS3 : (NUM_FACTORS3_MONO + 1));
-  mapmode3_init();
-#endif
-}
-
-#define NA_MAP(map) { \
-  if (saved_int == CT_UNSENT) \
-    return map[0]; /* unsent ' ' */ \
-  if ((saved_int == CT_UNKN) || (saved_int == CT_SEAL)) \
-    return map[1]; /* no response '?' */ \
-}
-
-static chtype get_saved_ch(int saved_int) {
-  NA_MAP(map_na2);
-  if (chart_mode == 1)
-    return map1[(saved_int <= scale2[NUM_FACTORS2 - 2]) ? 0 : 1];
-  if (chart_mode == 2)
-    for (int i = 0; i < NUM_FACTORS2; i++)
-      if (saved_int <= scale2[i])
-        return map2[i];
-  return map_na2[2]; // UNKN
-}
-
-#ifdef WITH_UNICODE
-static cchar_t* map3_saved_cc(int saved_int) {
-  NA_MAP(&map_na3);
-  int num = run_opts.color ? NUM_FACTORS3 : (NUM_FACTORS3_MONO + 1);
-  for (int i = 0; i < num; i++)
-    if (saved_int <= scale3[i])
-      return &map3[i];
-  return &map_na3[2]; // UNKN
-}
-#endif
-
-static void histoaddr(WINDOW *win, int at, int max, int y, int x, int cols) NONNULL(1);
-static void histoaddr(WINDOW *win, int at, int max, int y, int x, int cols) {
+static bool histoaddr(WINDOW *win, int at) NONNULL(1);
+static bool histoaddr(WINDOW *win, int at) {
   t_ipaddr *addr = &CURRENT_IP(at);
-  if (addr_exist(addr)) {
+  bool exist = addr_exist(addr);
+  if (exist) {
     if (!host[at].up)
       wattron(win, A_BOLD);
 #ifdef WITH_IPINFO
@@ -866,23 +696,23 @@ static void histoaddr(WINDOW *win, int at, int max, int y, int x, int cols) {
 #endif
     if (!host[at].up)
       wattroff(win, A_BOLD);
-    mvwaddch(win, y, x, ' ');
-#ifdef WITH_UNICODE
-    if (chart_mode == 3)
-      for (int i = SAVED_PINGS - cols; i < SAVED_PINGS; i++)
-        wadd_wch(win, map3_saved_cc(host[at].saved[i]));
-    else
-#endif
-      for (int i = SAVED_PINGS - cols; i < SAVED_PINGS; i++)
-        waddch(win, get_saved_ch(host[at].saved[i]));
-    if (run_opts.audible || run_opts.visible)
-      seal_n_bell(at, max);
   } else
     waddstr(win, UNKN_ITEM);
+  return exist;
 }
 
-static void histogram(WINDOW *win, int x, int cols) NONNULL(1);
-static void histogram(WINDOW *win, int x, int cols) {
+static void histochar(WINDOW *win, int at, int indent) NONNULL(1);
+static void histochar(WINDOW *win, int at, int indent) {
+  int width = getmaxx(win) - indent;
+  if (width > 0) {
+    if (width > SAVED_PINGS)
+      width = SAVED_PINGS;
+    chart_area(win, width, &host[at].saved[SAVED_PINGS - width]);
+  }
+}
+
+static void histogram(WINDOW *win, int indent) NONNULL(1);
+static void histogram(WINDOW *win, int indent) {
   int max = net_max();
   for (int at = net_min() + display_offset; at < max; at++) {
     int y = getcury(win);
@@ -890,7 +720,14 @@ static void histogram(WINDOW *win, int x, int cols) {
       break;
     wprintw(win, AT_FMT, at + 1);
     waddch(win, ' ');
-    histoaddr(win, at, max, y, x, cols);
+    if (histoaddr(win, at) &&
+        (wmove(win, y, indent - 2/*lpad(1) + rpad(1)*/) == OK))
+    {
+      waddch(win, ' ');
+      histochar(win, at, indent);
+      if (run_opts.audible || run_opts.visible)
+        seal_n_bell(at, max);
+    }
     if (wmove(win, y + 1, 0) == ERR)
       break;
   }
@@ -951,88 +788,6 @@ static void display_main_labels(WINDOW *win, int indent) {
   }
 }
 
-static inline void tui_print_msec(WINDOW *win, int len, double val) NONNULL(1);
-static inline void tui_print_msec(WINDOW *win, int len, double val) {
-  wprintw(win, "%.*f ", len, val);
-  waddstr(win, MSEC_STR);
-}
-
-#ifdef WITH_UNICODE
-static void tui_print_scale3(WINDOW *win, int min, int max, int step) NONNULL(1);
-static void tui_print_scale3(WINDOW *win, int min, int max, int step) {
-  for (int i = min; i < max; i += step) {
-    waddstr(win, "  ");
-    wadd_wch(win, &map3[i]);
-    if (scale3[i] > 0) {
-      LENVALMIL(scale3[i]);
-      waddch(win, ':');
-      tui_print_msec(win, _l, _v);
-    }
-  }
-  waddstr(win, "  ");
-  wadd_wch(win, &map3[max]);
-}
-#endif
-
-static inline int map2ch(int ndx) { return map2[ndx] & A_CHARTEXT; }
-
-static void print_scale(WINDOW *win) NONNULL(1);
-static void print_scale(WINDOW *win) {
-  wattron(win, A_BOLD);
-  waddstr(win, SCALE_STR);
-  waddch(win, ':');
-  wattroff(win, A_BOLD);
-  if (chart_mode == 1) {
-    waddstr(win, "  ");
-    waddch(win, map1[0] | A_BOLD);
-    LENVALMIL(scale2[NUM_FACTORS2 - 2]);
-    waddch(win, ' '); waddstr(win, LESSTHAN_STR); waddch(win, ' ');
-    tui_print_msec(win, _l, _v);
-    waddstr(win, "   ");
-    waddch(win, map1[1] | (run_opts.color ? 0 : A_BOLD));
-    waddch(win, ' '); waddstr(win, MORETHAN_STR); waddch(win, ' ');
-    tui_print_msec(win, _l, _v);
-    waddstr(win, "   ");
-    waddch(win, '?' | (run_opts.color ? (map2[NUM_FACTORS2 - 1] & A_ATTRIBUTES) : A_BOLD));
-    waddch(win, ' ');
-    waddstr(win, UNKNOWN_STR);
-  } else if (chart_mode == 2) {
-    if (run_opts.color) {
-      for (int i = 0; i < NUM_FACTORS2 - 1; i++) {
-        waddstr(win, "  ");
-        waddch(win, map2[i]);
-        if (scale2[i] > 0) {
-          waddch(win, ':');
-          LENVALMIL(scale2[i]);
-          tui_print_msec(win, _l, _v);
-        }
-      }
-      waddstr(win, "  ");
-      waddch(win, map2[NUM_FACTORS2 - 1]);
-    } else {
-      for (int i = 0; i < NUM_FACTORS2 - 1; i++) {
-        if (scale2[i] > 0) {
-          waddstr(win, "  ");
-          waddch(win, map2ch(i));
-          waddch(win, ':');
-          LENVALMIL(scale2[i]);
-          tui_print_msec(win, _l, _v);
-        }
-      }
-      waddstr(win, "  ");
-      waddch(win, map2ch(NUM_FACTORS2 - 1));
-    }
-  }
-#ifdef WITH_UNICODE
-  else if (chart_mode == 3) {
-    if (run_opts.color)
-      tui_print_scale3(win, 1, NUM_FACTORS3 - 1,  2);
-    else
-      tui_print_scale3(win, 0, NUM_FACTORS3_MONO, 1);
-  }
-#endif
-}
-
 #define IASP ((len > iasp) ? " " : "")
 
 #define ADD_FMT_ARG(fmt, ...) do {   \
@@ -1061,23 +816,24 @@ static int tui_print_args(char buf[], size_t size) {
   if (len < 0)
     return len;
   int iasp = len;
-  BOOL_OPT2STR(udp,    PAR_UDP_STR);
-  BOOL_OPT2STR(tcp,    PAR_TCP_STR);
+  BOOL_OPT2STR(udp,     PAR_UDP_STR);
+  BOOL_OPT2STR(tcp,     PAR_TCP_STR);
 #ifdef WITH_MPLS
-  BOOL_OPT2STR(mpls,   PAR_MPLS_STR);
+  BOOL_OPT2STR(mpls,    PAR_MPLS_STR);
 #endif
 #ifdef WITH_IPINFO
-  BOOL_OPT2STR(asn,    PAR_ASN_STR);
-  BOOL_OPT2STR(ipinfo, IPINFO_STR);
+  BOOL_OPT2STR(asn,     PAR_ASN_STR);
+  BOOL_OPT2STR(ipinfo,  IPINFO_STR);
   if (run_opts.lookup)
-    BOOL_OPT2STR(multi,  PAR_MII_STR);
+    BOOL_OPT2STR(multi, PAR_MII_STR);
 #endif
 #ifdef ENABLE_DNS
-  BOOL_OPT2STR(dns,    PAR_DNS_STR);
+  BOOL_OPT2STR(dns,     PAR_DNS_STR);
 #endif
-  BOOL_OPT2STR(jitter, PAR_JITTER_STR);
+  BOOL_OPT2STR(jitter,  PAR_JITTER_STR);
   //
   INT_OPT2STR(chart,    PAR_CHART_STR, "%u");
+  BOOL_OPT2STR(color,   PAR_COLOR_STR);
   //
   INT_OPT2STR(pattern,  PAR_PATT_STR, "=%d");
   INT_OPT2STR(interval, PAR_DT_STR, "=%d");
@@ -1103,17 +859,17 @@ static int tui_print_args(char buf[], size_t size) {
 #undef INT_OPT2STR
 #undef BOOL_OPT2STR
 
-#define CHART_COLS ((maxx <= (SAVED_PINGS + indent)) ? (maxx - indent) : SAVED_PINGS)
-//
 static void redraw_chart_title(WINDOW *win, int indent) NONNULL(1);
 static void redraw_chart_title(WINDOW *win, int indent) {
   werase(win);
   static char chart_title[256]; // long enough?
   if (titlelen.chart < 0) {
     memset(chart_title, 0, sizeof(chart_title));
-    int maxx = getmaxx(win);
-    int len = snprinte(chart_title, sizeof(chart_title),
-      "%s: %d %s", HISTOGRAM_STR, CHART_COLS, HCOLS_STR);
+    int width = getmaxx(win) - indent;
+    int len = snprinte(chart_title, sizeof(chart_title), "%s: %d %s",
+      HISTOGRAM_STR,
+      (width > SAVED_PINGS) ? SAVED_PINGS : width,
+      HCOLS_STR);
     if (len >= 0)
       titlelen.chart = ustrnlen(chart_title, getmaxx(win));
   }
@@ -1123,32 +879,25 @@ static void redraw_chart_title(WINDOW *win, int indent) {
   }
   wrefresh(win);
 }
-//
-static void redraw_histogram(WINDOW *win, int indent) NONNULL(1);
-static void redraw_histogram(WINDOW *win, int indent) {
-  werase(win);
-//  wattroff(work, A_BOLD);
-  dmode_scale_map();
-  int maxx = getmaxx(win);
-  histogram(win, indent - 2 /* right_pad(1) + 1 */, CHART_COLS);
-  if (wmove(win, getcury(win) + 1, 0) != ERR)
-    print_scale(win);
-  wrefresh(win);
-}
-#undef CHART_COLS
 
 static void redraw_charts(WINDOW *label, WINDOW *work) NONNULL(1, 2);
 static void redraw_charts(WINDOW *label, WINDOW *work) {
-  int dx = HOSTINFOMAX;
+  int indent = HOSTINFOMAX;
 #ifdef WITH_IPINFO
   if (IPINFOED)
-    dx += ipinfo_width();
+    indent += ipinfo_width();
 #endif
   if (!redrawn.chart_title) {
-    redraw_chart_title(label, dx);
+    redraw_chart_title(label, indent);
     redrawn.chart_title = true;
   }
-  redraw_histogram(work, dx);
+  //
+  werase(work);
+  chart_scale();
+  histogram(work, indent);
+  if (wmove(work, getcury(work) + 1, 0) != ERR)
+    print_scale(work);
+  wrefresh(work);
 }
 
 static int redraw_labels(WINDOW *win, int indent) NONNULL(1);
@@ -1352,6 +1101,11 @@ static bool areas_ready(void) {
   return okay;
 }
 
+static void areas_bg(short bg) {
+  wbkgd(area[NDX_TOP   ].win, COLOR_PAIR(bg));
+  wbkgd(area[NDX_STATUS].win, COLOR_PAIR(bg));
+}
+
 static inline void redraw_areas(void) {
   if (!redrawn.top) {
     redraw_top(area[NDX_TOP].win);
@@ -1400,52 +1154,20 @@ bool tui_open(void) {
   raw();
   noecho();
   keypad(stdscr, TRUE);
-  //
-  titlelen = (title_len_s){.screen = -1, .stat = -1, .chart = -1};
-  if (run_opts.color && !has_colors())
-    run_opts.color = false;
-  //
-  if (run_opts.color) {
-    start_color();
-    short bg_col = 0;
-#ifdef HAVE_USE_DEFAULT_COLORS
-    use_default_colors();
-    if (use_default_colors() == OK)
-      bg_col = -1;
-#endif
-    short pair = 1;
-    // display mode 1
-    init_pair(pair++, COLOR_YELLOW,  bg_col);
-    // display mode 2
-    dm2_color_base = pair;
-    init_pair(pair++, COLOR_GREEN,   bg_col);
-    init_pair(pair++, COLOR_CYAN,    bg_col);
-    init_pair(pair++, COLOR_BLUE,    bg_col);
-    init_pair(pair++, COLOR_YELLOW,  bg_col);
-    init_pair(pair++, COLOR_MAGENTA, bg_col);
-    init_pair(pair++, COLOR_RED,     bg_col);
-#ifdef WITH_UNICODE
-    // display mode 3
-    dm3_color_base = pair;
-    init_pair(pair++, COLOR_GREEN,   bg_col);
-    init_pair(pair++, COLOR_YELLOW,  bg_col);
-    init_pair(pair++, COLOR_RED,     bg_col);
-    init_pair(pair++, COLOR_RED,     bg_col);
-#endif
-  }
+  short bg_pair = (start_color() == OK) ? color_charts() : -1;
+  prepare_charts();
+  bool okay = areas_ready();
+  if (okay && (bg_pair >= 0))
+    areas_bg(bg_pair);
   // init title
+  titlelen = (title_len_s){.screen = -1, .stat = -1, .chart = -1};
   if (mtr_args[0])
     snprinte(screen_title, sizeof(screen_title), "%s %s %s", PACKAGE_NAME, mtr_args, dsthost);
   else
     snprinte(screen_title, sizeof(screen_title), "%s %s", PACKAGE_NAME, dsthost);
   screen_title_len = screen_title[0] ? ustrnlen(screen_title, getmaxx(area[NDX_TOP].win)) : 0;
   //
-  display_mode_init();
   curs_set(0);
-  //
-  bool okay = areas_ready();
-  if (okay)
-    tui_redraw();
   return okay;
 }
 

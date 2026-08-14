@@ -39,6 +39,7 @@
 #define PAR_DNS_STR    _("dns")
 #define PAR_JITTER_STR _("jitter")
 #define PAR_CHART_STR  _("chart")
+#define PAR_COLOR_STR  _("color")
 #define PAR_PATT_STR   _("pattern")
 #define PAR_DT_STR     _("dt")
 #define PAR_CYCLES_STR _("cycles")
