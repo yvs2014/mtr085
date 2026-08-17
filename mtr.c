@@ -87,6 +87,7 @@
 
 #ifdef TUIMODE
 #  include "tui.h"
+#  include "chart.h"
 #endif
 
 enum OPTIONS {
@@ -229,17 +230,6 @@ opts_t ini_opts = { // initial bool options
 static bool af_specified;     // set with -4/-6 options
 #endif
 int sum_sock[2];              // socket summary: open()/close() calls
-// chart related
-int display_offset;
-int chart_mode;               // 1st and 2nd bits, 3rd is reserved
-#ifdef TUIMODE
-int chart_mode_max = 3;
-#endif
-#ifdef WITH_MOUSE
-bool mouse_enabled;           // -0 option: disabled
-			      // -1 option: enabled
-bool disable_mouse;           // disable mouse with -M option in -1 mode
-#endif
 
 //
 #ifdef WITH_UNICODE
@@ -731,7 +721,7 @@ static void short_set(char opt, const char *progname) {
       break;
 #ifdef WITH_MOUSE
     case OPT_MOUSE:
-      disable_mouse = true;
+      mouse_enabled = false;
       break;
 #endif
 #ifdef ENABLE_DNS
@@ -846,8 +836,6 @@ static void parse_options(int argc, char **argv) {
   if (countv > 0)
     option_version(countv);
 #ifdef WITH_MOUSE
-  if (mouse_enabled && disable_mouse)
-    mouse_enabled = false;
   if (mouse_enabled && !((display_mode == DisplayTUI) || (display_mode == DisplayAuto))) {
     warnx("%s", MOUSE_OUT_STR);
     mouse_enabled = false;

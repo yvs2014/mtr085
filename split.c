@@ -36,7 +36,7 @@
 #endif
 #include "split.h"
 
-#define DIV_SPLIT '\t'
+enum {DIV_SPLIT = '\t'};
 
 static void puts_addr(const t_ipaddr *addr) NONNULL(1);
 static void puts_addr(const t_ipaddr *addr) {
@@ -74,7 +74,7 @@ static void spl_print_row(const t_ipaddr *addr, int at, int ndx, void (*print_st
 #ifdef WITH_IPINFO
   if (IPINFOED) {
     char info[NAMELEN] = {0};
-    ipinfo_data_div(sizeof(info), info, at, (ndx), DIV_SPLIT);
+    ipinfo_data_div(sizeof(info), info, at, ndx, DIV_SPLIT);
     if (info[0]) {
       putchar(DIV_SPLIT);
       fputs(info, stdout);
@@ -115,7 +115,7 @@ void split_redraw(void) {
   if (run_opts.pause)
     return;
   int max = net_max();
-  for (int at = net_min() + display_offset; at < max; at++) {
+  for (int at = net_min(); at < max; at++) {
     printf("%2d", at + 1);
     t_ipaddr *addr = &CURRENT_IP(at);
     if (addr_exist(addr)) {

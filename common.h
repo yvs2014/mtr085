@@ -54,7 +54,7 @@
 #endif
 
 #ifndef GITREV
-#define GITREV "297"
+#define GITREV "298"
 #endif
 
 #ifndef HAVE_UINT
@@ -133,10 +133,7 @@ typedef enum {
 } display_mode_t;
 
 typedef enum {
-  ActionNone = 0, ActionQuit, ActionReset, ActionDisplay, ActionClear, ActionPauseResume,
-#ifdef TUIMODE
-  ActionLineUp, ActionLineDown, ActionPageUp, ActionPageDown,
-#endif
+  ActionNone = 0, ActionQuit, ActionReset, ActionPauseResume,
   ActionUDP, ActionTCP, ActionCache, ActionJitter,
 #ifdef WITH_MPLS
   ActionMPLS,
@@ -357,16 +354,6 @@ enum {OLDLOOK = 0, NEWLOOK/*, REVLOOK*/};
 extern int tuilook;
 #endif
 
-#if defined(TUIMODE) || defined(SPLITMODE)
-extern int display_offset;
-#endif
-extern int chart_mode;
-#ifdef TUIMODE
-extern int chart_mode_max;
-#endif
-#ifdef WITH_MOUSE
-extern bool mouse_enabled;
-#endif
 #ifdef WITH_UNICODE
 extern bool utf_compat;
 #endif

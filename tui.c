@@ -41,6 +41,9 @@
 #endif
 
 #ifdef WITH_MOUSE
+bool mouse_enabled;  // -0 option: disabled
+                     // -1 option: enabled (can be disabled with -M option)
+
 #define MENU_ICON_UTF8  " ≡ "
 #define MENU_ICON_ASCII " = "
 #define QUIT_ICON_UTF8  " ✕ " // ✕ ✖ x 🗙 ╳
@@ -48,7 +51,7 @@
 //
 static const char *menu_icon = MENU_ICON_ASCII;
 static const char *quit_icon = QUIT_ICON_ASCII;
-static int menu_icon_len, quit_icon_len;
+static int /*menu_icon_len,*/ quit_icon_len;
 //
 static bool mouse_on;
 #define MOUSE_ON  do { if (mouse_enabled) mouse_on = true;  } while (0)
@@ -66,7 +69,10 @@ static item_crd_s crd;
 #define MOUSE_OFF NOOP
 #endif
 
+static uint display_offset; // used with: PageUp, PageDown, LineUp, LinedDown
+
 enum {
+  LINES_PER_PAGE = 5,
   INDENT_HINT =   12,
   HOSTINFOMAX =   30,
   GETCH_BATCH =  100,
@@ -87,7 +93,8 @@ static area_s area[] = {
 };
 static int area_old_order[ARRAY_LEN(area)] = {NDX_TOP, NDX_STATUS, NDX_LABEL, NDX_WORK};
 static int area_new_order[ARRAY_LEN(area)] = {NDX_TOP, NDX_LABEL, NDX_WORK, NDX_STATUS};
-char* (*tui_datetime)(time_t at, size_t size, char buff[size]) NONNULL(3) = datetime_c;
+static char* (*tui_datetime)(time_t at, size_t size, char buff[size]) NONNULL(3)
+ = datetime_c;
 
 typedef struct {
   bool top, labels, chart_title;
@@ -278,6 +285,11 @@ static void tui_key_c(WINDOW *win) { // set number of cycles
   MOUSE_ON;
 }
 
+static void tui_key_d(WINDOW *win UNUSED) { // display modes (charts)
+  chart_range_loop();
+  tui_redraw();
+}
+
 static void tui_key_f(WINDOW *win) NONNULL(1);
 static void tui_key_f(WINDOW *win) { // first ttl
   int minttl = run_opts.minttl;
@@ -381,11 +393,31 @@ static void tui_key_s(WINDOW *win) { // set payload size
   MOUSE_ON;
 }
 
+static void linedown(uint lines) {
+  display_offset += lines;
+  int hops = net_max() - net_min();
+  if ((hops > 0) && (display_offset >= (uint)hops))
+    display_offset = hops - 1;
+}
+static void lineup(uint lines) {
+  if (display_offset > lines)
+    display_offset -= lines;
+  else
+    display_offset = 0;
+}
+
+static void tui_key_plus(WINDOW *win UNUSED) {
+  linedown(1);
+  LOGMSG("line %s", "down");
+}
+
+static void tui_key_minus(WINDOW *win UNUSED) {
+ lineup(1);
+ LOGMSG("line %s", "up");
+}
+
 // map: char to action
 static key_action_t action_map[UINT8_MAX] =  {
-  ['+'] = ActionLineDown,
-  ['-'] = ActionLineUp,
-  ['d'] = ActionDisplay,
 #ifdef WITH_MPLS
   ['e'] = ActionMPLS,
 #endif
@@ -419,6 +451,7 @@ static tui_key_fn actfn_map[UINT8_MAX] =  {
   ['h'] = tui_key_h, // help
   ['b'] = tui_key_b, // bit pattern
   ['c'] = tui_key_c, // number of cycles
+  ['d'] = tui_key_d, // display modes (charts)
   ['f'] = tui_key_f, // first ttl
   ['i'] = tui_key_i, // interval
   ['m'] = tui_key_m, // max ttl
@@ -427,6 +460,8 @@ static tui_key_fn actfn_map[UINT8_MAX] =  {
   ['Q'] = tui_key_Q, // qos
 #endif
   ['s'] = tui_key_s, // payload size
+  ['+'] = tui_key_plus,  // line down
+  ['-'] = tui_key_minus, // line up
 };
 
 static inline void require_redraw(void) {
@@ -445,7 +480,7 @@ static inline void reset_actkey_flags(int ch) {
     case 'h':
     case 'b': // bit pattern
     case 'c': // number of cycles
-    case 'd': // [ActionDisplay]
+    case 'd': // display modes
 #ifdef WITH_MPLS
     case 'e': // [ActionMPLS]
 #endif
@@ -529,17 +564,19 @@ key_action_t tui_keyaction(void) {
     } else    // or somewhere else
       action = action_map[ch];
   } else switch (ch) {  // more than 8 bits
-    case KEY_UP:
-      action = ActionLineDown;
+    case KEY_UP:   // decrease by one line
+      tui_key_plus(NULL);
       break;
-    case KEY_DOWN:
-      action = ActionLineUp;
+    case KEY_DOWN: // increase by one line
+      tui_key_minus(NULL);
       break;
-    case KEY_PPAGE: // PageUp
-      action = ActionPageDown;
+    case KEY_PPAGE: // PageUp:   decrease by 'page'-lines
+      LOGMSG("page down (%d lines)", LINES_PER_PAGE);
+      linedown(LINES_PER_PAGE);
       break;
-    case KEY_NPAGE: // PageDown
-      action = ActionPageUp;
+    case KEY_NPAGE: // PageDown: increase by 'page'-lines
+      LOGMSG("page up (%d lines)", LINES_PER_PAGE);
+      lineup(LINES_PER_PAGE);
       break;
     default: break;
   }
@@ -893,7 +930,7 @@ static void redraw_charts(WINDOW *label, WINDOW *work) {
   }
   //
   werase(work);
-  chart_scale();
+  chart_scale(display_offset);
   histogram(work, indent);
   if (wmove(work, getcury(work) + 1, 0) != ERR)
     print_scale(work);
@@ -1144,7 +1181,7 @@ bool tui_open(void) {
   if (mouse_enabled) {
     menu_icon = utf_compat ? MENU_ICON_UTF8 : MENU_ICON_ASCII;
     quit_icon = utf_compat ? QUIT_ICON_UTF8 : QUIT_ICON_ASCII;
-    menu_icon_len = ustrnlen(menu_icon, NAMELEN);
+//    menu_icon_len = ustrnlen(menu_icon, NAMELEN);
     quit_icon_len = ustrnlen(quit_icon, NAMELEN);
     mousemask(BUTTON1_CLICKED | REPORT_MOUSE_POSITION, NULL);
     LOGMSG("unicode compat: %s", utf_compat ? "true" : "false");

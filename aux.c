@@ -122,7 +122,9 @@ int ustrnlen(const char *str, int max) {
   if (str)
     for (; *str; str++)
       if ((*str & 0xc0) != 0x80) {
-        if (len < max) len++; else break;
+        if (len >= max)
+          break;
+        len++;
       }
   return len;
 }

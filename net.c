@@ -151,18 +151,18 @@ struct PACKIT icmpext_object { // RFC4884
 
 // NOTE: don't forget to include sys/param.h
 #if   defined(__FreeBSD_version)
-#if __FreeBSD_version >= 1100000
-#define IPLEN_RAW(sz) htons(sz)
-#endif
+  #if __FreeBSD_version >= 1100000
+    #define IPLEN_RAW(sz) htons(sz)
+  #endif
 #elif defined(__OpenBSD__)
-#define IPLEN_RAW(sz) htons(sz)
+  #define IPLEN_RAW(sz) htons(sz)
 #elif defined(__HAIKU__)
-#define IPLEN_RAW(sz) htons(sz)
-#ifndef IPV6_CHECKSUM
-#define IPV6_CHECKSUM 7
-#endif
+  #define IPLEN_RAW(sz) htons(sz)
+  #ifndef IPV6_CHECKSUM
+    #define IPV6_CHECKSUM 7
+  #endif
 #else
-#define IPLEN_RAW(sz) sz
+  #define IPLEN_RAW(sz) sz
 #endif
 
 #define CLOSE(fd) if ((fd) >= 0) { close(fd); (fd) = -1; /*summ*/ sum_sock[1]++; }
@@ -181,7 +181,7 @@ struct PACKIT icmpext_object { // RFC4884
 
 #define FAIL_AND_CLOSE(rcode, fd, fmt, ...) do { \
   rstrerror(rcode);                              \
-  DISPCLEAR;                                     \
+  if (dispclear_fn) dispclear_fn();              \
   CLOSE(fd);                                     \
   NET_FAIL_WARN(fmt, __VA_ARGS__);               \
 } while (0)
@@ -913,10 +913,10 @@ void net_icmp_parse(struct timespec *recv_at) { // NONNULL(1)
              mplson ? decodempls(data, size - (data - packet)) : NULL);
 }
 
-const char *net_elem(int at, char ch) {
+const char *net_elem(int at, char key) {
   static char elemstr[NETELEM_MAXLEN];
   int ival = -1;
-  switch (ch) {
+  switch (key) {
     case 'D':  // Dropped Packets
       ival = host[at].sent - host[at].recv - (int)host[at].transit; break;
     case 'R':  // Received Packets
@@ -931,7 +931,7 @@ const char *net_elem(int at, char ch) {
   }
   double val = NAN;
   char *suffix = NULL;
-  switch (ch) {
+  switch (key) {
     case 'N':   // Newest RTT(msec)
       val = msec2float(host[at].last); break;
     case 'B':   // Min/Best RTT(msec)
@@ -975,13 +975,13 @@ int net_max(void) {
   for (int at = 0; at < run_opts.maxttl; at++) {
     if (addr_equal(&CURRENT_IP(at), remote_ipaddr)) {
       max = at + 1;
-      if (run_opts.endpoint)
+      if (run_opts.endpoint && (run_opts.minttl != max))
         run_opts.minttl = max;
       break;
     }
     if (addr_exist(&CURRENT_IP(at))) {
       max = at + 2;
-      if (run_opts.endpoint)
+      if (run_opts.endpoint && (run_opts.minttl != (at + 1)))
         run_opts.minttl = at + 1; // max-1: show previous known hop
     }
   }
@@ -1108,11 +1108,13 @@ bool net_open(void) {
   sendsock4 = socket(AF_INET, SOCK_RAW, IPPROTO_RAW);
   RAWCAP_OFF;
   if (sendsock4 < 0) { // backup
-    if ((sendsock4 = net_socket(AF_INET, SOCK_RAW, IPPROTO_ICMP, "icmp-raw-sendsock")) < 0)
+    sendsock4 = net_socket(AF_INET, SOCK_RAW, IPPROTO_ICMP, "icmp-raw-sendsock");
+    if (sendsock4 < 0)
       return false;
   } else
     /*summ*/ sum_sock[0]++;
-  if ((recvsock4 = net_socket(AF_INET, SOCK_RAW, IPPROTO_ICMP, "icmp-raw-recvsock")) < 0)
+  recvsock4 = net_socket(AF_INET, SOCK_RAW, IPPROTO_ICMP, "icmp-raw-recvsock");
+  if (recvsock4 < 0)
     return false;
 #ifdef ENABLE_IPV6
   // optional ipv6: to not fail
@@ -1423,7 +1425,7 @@ const char *mpls2str(const mpls_label_t *label, size_t size, char buff[size], ui
 // it's used as a hint for fast search, 16bits as [hash:7 at:6 ndx:3]
 uint16_t str2hint(const char* str, uint16_t at, uint16_t ndx) {
   uint16_t hint = 0;
-  uint8_t ch;
+  uint8_t ch = 0;
   while ((ch = *str++))
     hint = ((hint << 5) + hint) ^ ch; // h * 33 ^ ch
   hint &= IDMASK;

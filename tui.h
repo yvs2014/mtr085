@@ -29,4 +29,8 @@ void tui_clear(void);
 void tui_confirm(void);
 const char* tui_version(void);
 
+#ifdef WITH_MOUSE
+extern bool mouse_enabled;
+#endif
+
 #endif

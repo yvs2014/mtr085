@@ -39,10 +39,6 @@
 #include "ipinfo.h"
 #endif
 
-#if defined(TUIMODE) || defined(SPLITMODE)
-#define LINES_PER_PAGE 5
-#endif
-
 enum { FD_BATCHMAX = 30 };
 // between poll() calls
 enum { MINSLEEP_USEC = 10 }; // in microseconds
@@ -221,7 +217,7 @@ static void proceed_tcp(struct timespec *tm) {
 #define PL_GETTIME(tspec) { if (clock_gettime(CLOCK_MONOTONIC, (tspec)) < 0) { \
   keep_error(errno, __func__); return false; }}
 
-static bool svc(struct timespec *, const struct timespec *, int *) NONNULL(1, 2, 3);
+static bool svc(struct timespec *last, const struct timespec *interval, int *timeout) NONNULL(1, 2, 3);
 static bool svc(struct timespec *last, const struct timespec *interval, int *timeout) {
   // set 'last' and 'timeout [msec]', return false if it neeeds to stop
   struct timespec now, tv;
@@ -259,20 +255,6 @@ static bool svc(struct timespec *last, const struct timespec *interval, int *tim
   return true;
 }
 
-#ifdef TUIMODE
-static void linedown(uint lines) {
-  display_offset += lines;
-  int hops = net_max() - net_min();
-  if (display_offset >= hops)
-    display_offset = hops - 1;
-}
-static void lineup(uint lines) {
-  display_offset -= lines ? lines : LINES_PER_PAGE;
-  if (display_offset < 0)
-    display_offset = 0;
-}
-#endif
-
 // proceed keyboard events and return action
 static key_action_t keyboard_events(key_action_t action) {
   LOGMSG("action=%d", action);
@@ -283,26 +265,6 @@ static key_action_t keyboard_events(key_action_t action) {
     case ActionReset:
       LOGMSG("%s", "reset network counters");
       net_reset();
-      break;
-#ifdef TUIMODE
-    case ActionDisplay: {
-      int mode = (chart_mode + 1) % chart_mode_max;
-      if (!mode) {
-        LOGMSG("toggle color bit: %d -> %d", run_opts.color, !run_opts.color);
-        run_opts.color = !run_opts.color;
-        if (run_opts.color)
-          mode++;
-      }
-      LOGMSG("switch display mode [opt.color=%d]: %d -> %d", run_opts.color, chart_mode, mode);
-      chart_mode = mode;
-      run_opts.chart = mode & 3; // chart bits
-      OPT_SUM(chart);
-      DISPCLEAR;
-    } break;
-#endif
-    case ActionClear:
-      LOGMSG("%s", "clear display");
-      DISPCLEAR;
       break;
     case ActionPauseResume:
       LOGMSG("%s", "'pause/resume' pressed");
@@ -321,7 +283,6 @@ static key_action_t keyboard_events(key_action_t action) {
       LOGMSG("toggle %s: %d -> %d", "MPLS", run_opts.mpls, !run_opts.mpls);
       run_opts.mpls = !run_opts.mpls;
       OPT_SUM(mpls);
-      DISPCLEAR;
       break;
 #endif
 #ifdef ENABLE_DNS
@@ -347,24 +308,6 @@ static key_action_t keyboard_events(key_action_t action) {
       OPT_SUM(ipinfo);
       OPT_SUM(lookup);
       OPT_SUM(multi);
-      break;
-#endif
-#ifdef TUIMODE
-    case ActionPageDown:
-      LOGMSG("page down (%d lines)", LINES_PER_PAGE);
-      linedown(LINES_PER_PAGE);
-      break;
-    case ActionPageUp:
-      LOGMSG("page up (%d lines)", LINES_PER_PAGE);
-      lineup(display_offset % LINES_PER_PAGE);
-      break;
-    case ActionLineDown:
-      LOGMSG("line %s", "down");
-      linedown(1);
-      break;
-    case ActionLineUp:
-      LOGMSG("line %s", "up");
-      lineup(1);
       break;
 #endif
     case ActionUDP:
@@ -520,9 +463,11 @@ bool poll_loop(void) {
     do {
       if ((action != ActionNone) || paused) {
         timeout = paused ? PAUSE_MSEC : 0;
-        if (paused && run_opts.interactive) EACHPASS;
+        if (paused && run_opts.interactive && eachpass_fn)
+          eachpass_fn();
       } else {
-        EACHPASS;
+        if (eachpass_fn)
+          eachpass_fn();
 #ifdef WITH_IPINFO
         if (IPINFOED)
           proceed_ipinfo();

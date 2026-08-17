@@ -63,6 +63,9 @@ typedef struct symb_item {
   int scale;
 } symb_item_s;
 
+uint chart_mode;         // 1st and 2nd bits are in use, 3rd is reserved
+uint chart_mode_max = 3;
+
 //
 
 static bool color_ready;
@@ -125,12 +128,14 @@ static struct {symb_color_s unsent, unkn;} ccmap_na = {
 // local
 //
 
-static void scale_map(uint len, symb_item_s map[len]) NONNULL(2);
-static void scale_map(uint len, symb_item_s map[len]) {
+static inline bool monocolor(void) { return !color_ready || !run_opts.color; }
+
+static void scale_map(uint len, symb_item_s map[len], uint at) NONNULL(2);
+static void scale_map(uint len, symb_item_s map[len], uint at) {
   int minval = INT_MAX;
   int maxval = -1;
-  int max = net_max();
-  for (int at = display_offset; at < max; at++) {
+  uint max = net_max();
+  for (; at < max; at++) {
     for (int i = 0; i < SAVED_PINGS; i++) {
       int saved = host[at].saved[i];
       if (saved >= 0) {
@@ -286,6 +291,36 @@ static short pair_mapitems(short pair, short bg, uint len, symb_item_s map[len])
   return pair;
 }
 
+static chtype mapped_ch(int value) {
+  if (value == CT_UNSENT)
+    return chmap_na.unsent.c.a;
+  if ((value == CT_UNKN) || (value == CT_SEAL))
+    return chmap_na.unkn.c.a;
+  //
+  if (chart_mode == 1)
+    return map1[(value <= map2[ARRAY_LEN(map2) - 2].scale) ? 0 : 1].c.a;
+  if (chart_mode == 2)
+    for (uint i = 0; i < ARRAY_LEN(map2); i++)
+      if (value <= map2[i].scale)
+        return map2[i].sc.c.a;
+  return chmap_na.unkn.c.a;
+}
+
+#ifdef WITH_UNICODE
+static cchar_t* mapped_cc(int value) {
+  bool mono = monocolor();
+  if (value == CT_UNSENT)
+    return &ccmap_na.unsent.c.u;
+  if ((value == CT_UNKN) || (value == CT_SEAL))
+    return &ccmap_na.unkn.c.u;
+  uint len         = mono ? ARRAY_LEN(map3m) : ARRAY_LEN(map3c);
+  symb_item_s *map = mono ?            map3m : map3c;
+  for (uint i = 0; i < len; i++)
+    if (value <= map[i].scale)
+      return &map[i].sc.c.u;
+  return &ccmap_na.unkn.c.u;
+}
+#endif
 
 // global
 //
@@ -339,8 +374,6 @@ short color_charts(void) {
   return rc;
 }
 
-static inline bool monocolor(void) { return !color_ready || !run_opts.color; }
-
 void prepare_charts(void) {
   // display mode: 1, 2
   if (!map2[0].factor)
@@ -356,16 +389,16 @@ void prepare_charts(void) {
 #endif
 }
 
-void chart_scale(void) {
+void chart_scale(uint at) {
 #ifdef WITH_UNICODE
   if (chart_mode == 3) { // display mode: 3
     if (monocolor())
-      scale_map(ARRAY_LEN(map3m), map3m);
+      scale_map(ARRAY_LEN(map3m), map3m, at);
     else
-      scale_map(ARRAY_LEN(map3c), map3c);
+      scale_map(ARRAY_LEN(map3c), map3c, at);
   } else                 // display modes: 1, 2
 #endif
-    scale_map(ARRAY_LEN(map2), map2);
+    scale_map(ARRAY_LEN(map2), map2, at);
 }
 
 void print_scale(WINDOW *win) { // NONNULL(1);
@@ -388,37 +421,6 @@ void print_scale(WINDOW *win) { // NONNULL(1);
 #endif
 }
 
-chtype mapped_ch(int value) {
-  if (value == CT_UNSENT)
-    return chmap_na.unsent.c.a;
-  if ((value == CT_UNKN) || (value == CT_SEAL))
-    return chmap_na.unkn.c.a;
-  //
-  if (chart_mode == 1)
-    return map1[(value <= map2[ARRAY_LEN(map2) - 2].scale) ? 0 : 1].c.a;
-  if (chart_mode == 2)
-    for (uint i = 0; i < ARRAY_LEN(map2); i++)
-      if (value <= map2[i].scale)
-        return map2[i].sc.c.a;
-  return chmap_na.unkn.c.a;
-}
-
-#ifdef WITH_UNICODE
-cchar_t* mapped_cc(int value) {
-  bool mono = monocolor();
-  if (value == CT_UNSENT)
-    return &ccmap_na.unsent.c.u;
-  if ((value == CT_UNKN) || (value == CT_SEAL))
-    return &ccmap_na.unkn.c.u;
-  uint len         = mono ? ARRAY_LEN(map3m) : ARRAY_LEN(map3c);
-  symb_item_s *map = mono ?            map3m : map3c;
-  for (uint i = 0; i < len; i++)
-    if (value <= map[i].scale)
-      return &map[i].sc.c.u;
-  return &ccmap_na.unkn.c.u;
-}
-#endif
-
 void chart_area(WINDOW *win, uint len, int saved[len]) { // NONNULL(1, 3)
   bool mono = monocolor();
 #ifdef WITH_UNICODE
@@ -429,5 +431,19 @@ void chart_area(WINDOW *win, uint len, int saved[len]) { // NONNULL(1, 3)
 #endif
     for (uint i = 0; i < len; i++)
       addch_un(win, mapped_ch(saved[i]), mono);
+}
+
+void chart_range_loop(void) {
+  uint mode = (chart_mode + 1) % chart_mode_max;
+  if (!mode) {
+    LOGMSG("toggle color bit: %d -> %d", run_opts.color, !run_opts.color);
+    run_opts.color = !run_opts.color;
+    if (run_opts.color)
+      mode++;
+  }
+  LOGMSG("switch display mode [opt.color=%d]: %d -> %d", run_opts.color, chart_mode, mode);
+  chart_mode = mode;
+  run_opts.chart = mode & 3; // chart bits
+  OPT_SUM(chart);
 }
 
