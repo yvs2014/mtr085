@@ -74,6 +74,12 @@ msgstr "Escala"
 msgid "ms"
 msgstr "ms"
 
+msgid "On "
+msgstr "ON "
+
+msgid "Off"
+msgstr "OFF"
+
 #
 
 msgid "udp"

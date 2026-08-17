@@ -60,14 +60,35 @@ static bool mouse_on;
 typedef struct {
   int x0, y0, x1, y1;
 } crd_s;
+//
 typedef struct {
   crd_s menu, quit;
-} item_crd_s;
-static item_crd_s crd;
+} crd_topbar_s;
+static crd_topbar_s crd_topbar;
+//
+typedef struct {
+#ifdef ENABLE_DNS
+  crd_s dns;
+#endif
+#ifdef WITH_IPINFO
+  crd_s asn;
+#endif
+#ifdef WITH_MPLS
+  crd_s mpls;
+#endif
+} crd_status_s;
+static crd_status_s crd_status;
 #else
 #define MOUSE_ON  NOOP
 #define MOUSE_OFF NOOP
 #endif
+
+//#define VUSLASH "│"
+//#define VASLASH '|'
+//#define HOLLOW_CIRCLE "⭘"
+//#define  SOLID_CIRCLE "⬤"
+//#define POWER_OFF "⭘"
+//#define POWER_ON  "⏽"
 
 static uint display_offset; // used with: PageUp, PageDown, LineUp, LinedDown
 
@@ -94,7 +115,7 @@ static area_s area[] = {
 static int area_old_order[ARRAY_LEN(area)] = {NDX_TOP, NDX_STATUS, NDX_LABEL, NDX_WORK};
 static int area_new_order[ARRAY_LEN(area)] = {NDX_TOP, NDX_LABEL, NDX_WORK, NDX_STATUS};
 static char* (*tui_datetime)(time_t at, size_t size, char buff[size]) NONNULL(3)
- = datetime_c;
+  = datetime_c;
 
 typedef struct {
   bool top, labels, chart_title;
@@ -546,8 +567,18 @@ key_action_t tui_keyaction(void) {
       // && (event.bstate & BUTTON1_CLICKED) /*already filtered*/
     ) {
       ch =
-         CRD_ENCLOSE(crd.menu) ? 'h' /*temporarily 'help', TODO: menu*/ :
-         CRD_ENCLOSE(crd.quit) ? 'q' : 0;
+         CRD_ENCLOSE(crd_topbar.menu) ? 'h' /*temporarily 'help', TODO: menu*/ :
+         CRD_ENCLOSE(crd_topbar.quit) ? 'q' :
+#ifdef ENABLE_DNS
+         CRD_ENCLOSE(crd_status.dns)  ? 'n' :
+#endif
+#ifdef WITH_IPINFO
+         CRD_ENCLOSE(crd_status.asn)  ? 'l' :
+#endif
+#ifdef WITH_MPLS
+         CRD_ENCLOSE(crd_status.mpls) ? 'e' :
+#endif
+         0;
       LOGMSG("mouse event: x=%d, y=%d, key='%c'", event.x, event.y, ch);
     }
   }
@@ -1014,8 +1045,8 @@ static void redraw_top(WINDOW *win) {
 #ifdef WITH_MOUSE
   if (mouse_enabled && (tuilook != OLDLOOK)) {
     int dx = getbegx(win), dy = getbegy(win);
-    PRINT_MENUKEEP(menu_icon, "menu", crd.menu, 0, 0);
-    PRINT_MENUKEEP(quit_icon, "quit", crd.quit, 0,
+    PRINT_MENUKEEP(menu_icon, "menu", crd_topbar.menu, 0, 0);
+    PRINT_MENUKEEP(quit_icon, "quit", crd_topbar.quit, 0,
       getmaxx(win) - (quit_icon_len ? quit_icon_len : 3));
   }
 #endif
@@ -1028,6 +1059,30 @@ static void redraw_top(WINDOW *win) {
   waddstr(win, (txt));               \
 } while (0)
 
+static inline const char* onoff_str(bool on) {return on ? ONN_STR : OFF_STR;}
+
+#define PRINT_STATUSITEM(on, txt) do {    \
+  waddstr(win, (txt));                    \
+  waddch(win, '=');                       \
+  waddstr(win, onoff_str(on));            \
+} while (0)
+
+#define PRINT_STATUSKEEP(on, txt, crd) do { \
+  waddch(win, ' ');                         \
+  (crd).x0 = dx + getcurx(win);             \
+  (crd).y0 = dy + getcury(win);             \
+  waddstr(win, (txt));                      \
+  waddch(win, '=');                         \
+  waddstr(win, onoff_str(on));              \
+  (crd).x1 = dx + getcurx(win);             \
+  (crd).y1 = dy + getcury(win);             \
+  if (getcurx(win) < (getmaxx(win) - 1))    \
+    (crd).x1--; /*successful addstr()*/     \
+  LOGMSG("status(%s): x0=%d y0=%d x1=%d y1=%d (w=%d h=%d)", \
+    (txt), (crd).x0, (crd).y0, (crd).x1, (crd).y1,          \
+    (crd).x1 - (crd).x0 + 1, (crd).y1 - (crd).y0 + 1);      \
+} while (0)
+
 static void redraw_status(WINDOW *win) NONNULL(1);
 static void redraw_status(WINDOW *win) {
   werase(win);
@@ -1037,6 +1092,32 @@ static void redraw_status(WINDOW *win) {
     waddch(win, ':');
     PRINT_MENUITEM('h', _HINTS_STR);
     PRINT_MENUITEM('q', _QUIT_STR);
+  } else {
+#ifdef WITH_MOUSE
+    if (mouse_enabled && (tuilook != OLDLOOK)) {
+      int dx = getbegx(win), dy = getbegy(win);
+#ifdef ENABLE_DNS
+      PRINT_STATUSKEEP(run_opts.dns,  DNS_STR,  crd_status.dns);
+#endif
+#ifdef WITH_IPINFO
+      PRINT_STATUSKEEP(run_opts.asn,  ASN_STR,  crd_status.asn);
+#endif
+#ifdef WITH_MPLS
+      PRINT_STATUSKEEP(run_opts.mpls, MPLS_STR, crd_status.mpls);
+#endif
+    } else
+#endif
+    {
+#ifdef ENABLE_DNS
+      PRINT_STATUSITEM(run_opts.dns,  DNS_STR);
+#endif
+#ifdef WITH_IPINFO
+      PRINT_STATUSITEM(run_opts.asn,  ASN_STR);
+#endif
+#ifdef WITH_MPLS
+      PRINT_STATUSITEM(run_opts.mpls, MPLS_STR);
+#endif
+    }
   }
   //
   char buff[LINEMAXLEN] = {0};

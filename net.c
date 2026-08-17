@@ -1287,8 +1287,7 @@ static int err_slippage(int sock) {
 // Check connection state with error-slippage
 void net_tcp_parse(int sock, int seq, int noerr, struct timespec *recv_at) { // NONNULL(4)
   int reason = -1, e = err_slippage(sock);
-  LOGMSG("recv <e=%d> sock=%d ts=%lld.%09ld", e, sock,
-    recv_at ? (long long)(recv_at->tv_sec) : 0, recv_at ? recv_at->tv_nsec : 0);
+  LOGMSG("recv <e=%d> sock=%d ts=%lld.%09ld", e, sock, (long long)recv_at->tv_sec, recv_at->tv_nsec);
   // if no errors, or connection refused, or host down, the target is probably reached
   switch (e) {
     case EHOSTUNREACH:

@@ -30,6 +30,11 @@
 #define HCOLS_STR      _("columns")
 #define SCALE_STR      _("Scale")
 #define MSEC_STR       _("ms")
+#define ONN_STR        _("On ")
+#define OFF_STR        _("Off")
+#define DNS_STR        _("DNS")
+#define ASN_STR        _("ASN")
+#define MPLS_STR       _("MPLS")
 //
 #define PAR_UDP_STR    _("udp")
 #define PAR_TCP_STR    _("tcp")

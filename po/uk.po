@@ -74,6 +74,12 @@ msgstr "Шкала"
 msgid "ms"
 msgstr "мс"
 
+msgid "On "
+msgstr "Увімк"
+
+msgid "Off"
+msgstr "Вимк "
+
 #
 
 msgid "udp"
@@ -296,7 +302,7 @@ msgid "switch display mode"
 msgstr "перемикання режиму відображення"
 
 msgid "toggle MPLS info"
-msgstr "вкл/викл MPLS відображення"
+msgstr "увімкнути/вимкнути MPLS відображення"
 
 msgid "set first TTL (default 1)"
 msgstr "встановити початковий TTL (стандартно 1)"
@@ -308,7 +314,7 @@ msgid "toggle latency/jitter stats (default: latency)"
 msgstr "перемикання відображення типу статистики, затримка чи джиттер (стандартно: затримка)"
 
 msgid "toggle ASN lookup"
-msgstr "вкл/викл відображення АС"
+msgstr "увімкнути/вимкнути відображення АС"
 
 msgid "switch IP info"
 msgstr "перемикання режимів IP-інфо"
@@ -317,7 +323,7 @@ msgid "set max TTL (default 30)"
 msgstr "встановити максимум для TTL (стандартно 30)"
 
 msgid "toggle DNS"
-msgstr "вкл/викл DNS"
+msgstr "увімкнути/вимкнути DNS"
 
 msgid "set stat fields to display (default: LS_NABWV)"
 msgstr "встановити поля статистики у відображенні (стандартно: LS_NABWV)"
@@ -335,16 +341,16 @@ msgid "set payload size (default 56), randomly within size range if it's negativ
 msgstr "встановити розмір данних (стандартно 56), випадково у діапазоні розміру якщо розмір від’ємний"
 
 msgid "toggle TCP pings"
-msgstr "вкл/викл TCP пінги"
+msgstr "увімкнути/вимкнути TCP пінги"
 
 msgid "toggle UDP pings"
-msgstr "вкл/викл UDP пінги"
+msgstr "увімкнути/вимкнути UDP пінги"
 
 msgid "toggle cache mode"
-msgstr "вкл/викл режим кешування"
+msgstr "увімкнути/вимкнути режим кешування"
 
 msgid "toggle IP-info multi-source mode"
-msgstr "вкл/викл режим показу IP-інфо з кількох джерел"
+msgstr "увімкнути/вимкнути режим показу IP-інфо з кількох джерел"
 
 msgid "up/down by one line"
 msgstr "на один рядок вгору/донизу"

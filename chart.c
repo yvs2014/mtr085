@@ -322,15 +322,15 @@ static cchar_t* mapped_cc(int value) {
 }
 #endif
 
+
 // global
 //
 
 short color_charts(void) {
-  short bg = 0, pair = 1, rc = -1;
+  short pair = 1, rc = -1, fg = COLOR_WHITE, bg = COLOR_BLACK;
 #ifdef HAVE_USE_DEFAULT_COLORS
-  use_default_colors();
   if (use_default_colors() == OK)
-    bg = -1;
+    fg = bg = -1;
 #endif
   color_ready = has_colors();
   //
@@ -361,11 +361,13 @@ short color_charts(void) {
             g += shift; if (g > 1000) g = 1000;
             b += shift; if (b > 1000) b = 1000;
           }
-          if ((init_color(MIN_BG_COLORS, r, g, b) == OK) &&
-              (init_pair(pair, bg, MIN_BG_COLORS) == OK))
+          short bgcol = MIN_BG_COLORS;
+          if ((init_color(bgcol, r, g, b) == OK) &&
+              (init_pair(pair, fg, bgcol) == OK)) {
             rc = pair++;
+            LOGMSG("contrast background RGB: %d, %d, %d", r, g, b);
+          }
         }
-        LOGMSG("contrast background RGB: %d, %d, %d", r, g, b);
       } else
         LOGMSG("%s", "neither changes background color nor has enough colors");
     }
