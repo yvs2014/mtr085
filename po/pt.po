@@ -80,6 +80,9 @@ msgstr "ON "
 msgid "Off"
 msgstr "OFF"
 
+msgid "Chart"
+msgstr "Diagrama"
+
 msgid "DNS"
 msgstr "DNS"
 

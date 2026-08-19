@@ -21,7 +21,7 @@
 
 short color_charts(void);
 void prepare_charts(void);
-void chart_scale(uint at);
+void chart_scale(uint offset);
 void print_scale(WINDOW *win) NONNULL(1);
 void chart_area(WINDOW *win, uint len, int saved[len]) NONNULL(1, 3);
 void chart_range_loop(void);

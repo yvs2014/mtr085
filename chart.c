@@ -332,7 +332,7 @@ short color_charts(void) {
   if (use_default_colors() == OK)
     fg = bg = -1;
 #endif
-  color_ready = has_colors();
+  color_ready = has_colors() && can_change_color();
   //
   if (color_ready) {
     pair = pair_colors  (pair, bg, ARRAY_LEN(map1), map1); // display mode 1
@@ -347,7 +347,7 @@ short color_charts(void) {
 #define MIN_BG_COLORS 16
 #define BG_LUM 150
 #define DEF_BGCOL COLOR_BLACK
-      if (can_change_color() && (COLORS > MIN_BG_COLORS)) {
+      if (COLORS > MIN_BG_COLORS) {
         const short shift = BG_LUM;
         short r = -1, g = -1, b = -1;
         if (color_content(DEF_BGCOL, &r, &g, &b) == OK) {
@@ -369,10 +369,10 @@ short color_charts(void) {
           }
         }
       } else
-        LOGMSG("%s", "neither changes background color nor has enough colors");
+        LOGMSG("%s", "not enough colors for contrast menu/status");
     }
   } else
-    LOGMSG("%s", "there's no colors for display-mode");
+    LOGMSG("%s", "no colors");
   return rc;
 }
 
@@ -383,24 +383,24 @@ void prepare_charts(void) {
   mode12_colors();
 #ifdef WITH_UNICODE
   // display mode: 3
-  bool mono = monocolor();
-  symb_item_s *map = mono ? map3m : map3c;
-  if (!map[0].factor)
-    factor_init(mono ? ARRAY_LEN(map3m) : ARRAY_LEN(map3c), map);
+  if (!map3m[0].factor)
+    factor_init(ARRAY_LEN(map3m), map3m);
+  if (!map3c[0].factor)
+    factor_init(ARRAY_LEN(map3c), map3c);
   mode3_colors();
 #endif
 }
 
-void chart_scale(uint at) {
+void chart_scale(uint offset) {
 #ifdef WITH_UNICODE
   if (chart_mode == 3) { // display mode: 3
     if (monocolor())
-      scale_map(ARRAY_LEN(map3m), map3m, at);
+      scale_map(ARRAY_LEN(map3m), map3m, offset);
     else
-      scale_map(ARRAY_LEN(map3c), map3c, at);
+      scale_map(ARRAY_LEN(map3c), map3c, offset);
   } else                 // display modes: 1, 2
 #endif
-    scale_map(ARRAY_LEN(map2), map2, at);
+    scale_map(ARRAY_LEN(map2), map2, offset);
 }
 
 void print_scale(WINDOW *win) { // NONNULL(1);

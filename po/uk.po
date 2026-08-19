@@ -80,6 +80,9 @@ msgstr "Увімк"
 msgid "Off"
 msgstr "Вимк "
 
+msgid "Chart"
+msgstr "Діаграма"
+
 msgid "DNS"
 msgstr "DNS"
 

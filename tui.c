@@ -67,6 +67,7 @@ typedef struct {
 static crd_topbar_s crd_topbar;
 //
 typedef struct {
+  crd_s chart;
 #ifdef ENABLE_DNS
   crd_s dns;
 #endif
@@ -119,7 +120,7 @@ static char* (*tui_datetime)(time_t at, size_t size, char buff[size]) NONNULL(3)
   = datetime_c;
 
 typedef struct {
-  bool top, labels, chart_title;
+  bool top, labels, chart_title, field_status;
 } redrawn_s;
 static redrawn_s redrawn; // need redrawing unless true
 
@@ -568,17 +569,19 @@ key_action_t tui_keyaction(void) {
       // && (event.bstate & BUTTON1_CLICKED) /*already filtered*/
     ) {
       ch =
-         CRD_ENCLOSE(crd_topbar.menu) ? 'h' /*temporarily 'help', TODO: menu*/ :
-         CRD_ENCLOSE(crd_topbar.quit) ? 'q' :
+         CRD_ENCLOSE(crd_topbar.menu)  ? 'h' /*temporarily 'help', TODO: menu*/ :
+         CRD_ENCLOSE(crd_topbar.quit)  ? 'q' :
+         //
+         CRD_ENCLOSE(crd_status.chart) ? 'd' :
 #ifdef ENABLE_DNS
-         CRD_ENCLOSE(crd_status.dns)  ? 'n' :
+         CRD_ENCLOSE(crd_status.dns)   ? 'n' :
 #endif
 #ifdef WITH_IPINFO
-         CRD_ENCLOSE(crd_status.asn)  ? 'l' :
-         CRD_ENCLOSE(crd_status.info) ? 'L' :
+         CRD_ENCLOSE(crd_status.asn)   ? 'l' :
+         CRD_ENCLOSE(crd_status.info)  ? 'L' :
 #endif
 #ifdef WITH_MPLS
-         CRD_ENCLOSE(crd_status.mpls) ? 'e' :
+         CRD_ENCLOSE(crd_status.mpls)  ? 'e' :
 #endif
          0;
       LOGMSG("mouse event: x=%d, y=%d, key='%c'", event.x, event.y, ch);
@@ -1099,48 +1102,66 @@ static void redraw_top(WINDOW *win) {
   wrefresh(win);
 }
 
+#ifdef WITH_MOUSE
+static inline void status_n_keep_crd(WINDOW *win, uint len, char buff[len]) NONNULL(1, 3);
+static inline void status_n_keep_crd(WINDOW *win, uint len, char buff[len]) {
+  int dx = getbegx(win), dy = getbegy(win);
+  buff[0] = 0;
+  if (run_opts.chart)
+    snprinte(buff, len, "%d", run_opts.chart | (run_opts.color ? (1 << 3) : 0));
+  print_statuskeep(win, CHART_STR, buff, NULL, dx, dy, &crd_status.chart);
+#ifdef ENABLE_DNS
+  print_statuskeep(win, DNS_STR, NULL, &run_opts.dns, dx, dy, &crd_status.dns);
+#endif
+#ifdef WITH_IPINFO
+  print_statuskeep(win, ASN_STR, NULL, &run_opts.asn, dx, dy, &crd_status.asn);
+  buff[0] = 0;
+  if (run_opts.ipinfo)
+    ipinfo_head_div(len, buff, COMMA, 0);
+  print_statuskeep(win, INFO_STR, buff, NULL, dx, dy, &crd_status.info);
+#endif
+#ifdef WITH_MPLS
+  print_statuskeep(win, MPLS_STR, NULL, &run_opts.mpls, dx, dy, &crd_status.mpls);
+#endif
+}
+#endif
+
+static inline void status_no_crd(WINDOW *win, uint len, char buff[len]) NONNULL(1, 3);
+static inline void status_no_crd(WINDOW *win, uint len, char buff[len]) {
+#ifdef ENABLE_DNS
+  print_statusitem(win, DNS_STR,  NULL, &run_opts.dns);
+#endif
+#ifdef WITH_IPINFO
+  print_statusitem(win, ASN_STR,  NULL, &run_opts.asn);
+  buff[0] = 0;
+  if (run_opts.ipinfo)
+    ipinfo_head_div(len, buff, COMMA, 0);
+  print_statusitem(win, INFO_STR, buff, NULL);
+#endif
+#ifdef WITH_MPLS
+  print_statusitem(win, MPLS_STR, NULL, &run_opts.mpls);
+#endif
+}
+
 static void redraw_status(WINDOW *win) NONNULL(1);
 static void redraw_status(WINDOW *win) {
-  werase(win);
   char buff[LINEMAXLEN] = {0};
-  // add menu hints
-  if (tuilook == OLDLOOK) {
-    mvwaddstr(win, 0, 0, MENU_STR);
-    waddch(win, ':');
-    print_menuitem(win, 'h', _HINTS_STR);
-    print_menuitem(win, 'q', _QUIT_STR);
-  } else {
+  if (!redrawn.field_status) {
+    werase(win);
+    redrawn.field_status = true;
+    // add menu hints
+    if (tuilook == OLDLOOK) {
+      mvwaddstr(win, 0, 0, MENU_STR);
+      waddch(win, ':');
+      print_menuitem(win, 'h', _HINTS_STR);
+      print_menuitem(win, 'q', _QUIT_STR);
+    } else {
 #ifdef WITH_MOUSE
-    if (mouse_enabled && (tuilook != OLDLOOK)) {
-      int dx = getbegx(win), dy = getbegy(win);
-#ifdef ENABLE_DNS
-      print_statuskeep(win, DNS_STR, NULL, &run_opts.dns, dx, dy, &crd_status.dns);
+      if (mouse_enabled && (tuilook != OLDLOOK))
+        status_n_keep_crd(win, sizeof(buff), buff);
+      else
 #endif
-#ifdef WITH_IPINFO
-      print_statuskeep(win, ASN_STR, NULL, &run_opts.asn, dx, dy, &crd_status.asn);
-      buff[0] = 0;
-      if (run_opts.ipinfo)
-        ipinfo_head_div(sizeof(buff), buff, COMMA, 0);
-      print_statuskeep(win, INFO_STR, buff, NULL, dx, dy, &crd_status.info);
-#endif
-#ifdef WITH_MPLS
-      print_statuskeep(win, MPLS_STR, NULL, &run_opts.mpls, dx, dy, &crd_status.mpls);
-#endif
-    } else
-#endif
-    {
-#ifdef ENABLE_DNS
-      print_statusitem(win, DNS_STR,  NULL, &run_opts.dns);
-#endif
-#ifdef WITH_IPINFO
-      print_statusitem(win, ASN_STR,  NULL, &run_opts.asn);
-      buff[0] = 0;
-      ipinfo_head_div(sizeof(buff), buff, COMMA, 0);
-      print_statusitem(win, INFO_STR, buff, NULL);
-#endif
-#ifdef WITH_MPLS
-      print_statusitem(win, MPLS_STR, NULL, &run_opts.mpls);
-#endif
+      { status_no_crd(win, sizeof(buff), buff); }
     }
   }
   //
@@ -1157,9 +1178,14 @@ static void redraw_status(WINDOW *win) {
   const char *date = tui_datetime ? tui_datetime(time(NULL), sizeof(str), str) : NULL;
   if (date && date[0])
     len += snprinte(buff + len, sizeof(buff) - len, len ? ": %s" : "%s", date);
+  static int dt_last_xpos;
   // print it rigth aligned
-  if ((len > 0) && buff[0])
-    mvwaddstr(win, 0, getmaxx(win) - ustrnlen(buff, sizeof(buff)) - 1, buff);
+  if ((len > 0) && buff[0]) {
+    dt_last_xpos = getmaxx(win) - ustrnlen(buff, sizeof(buff)) - 1;
+    mvwaddstr(win, 0, dt_last_xpos, buff);
+  }
+  else if ((dt_last_xpos > 0) && (wmove(win, 0, dt_last_xpos) == OK))
+    wclrtoeol(win);
   //
   wrefresh(win);
 }
