@@ -36,8 +36,9 @@
 #define CHART_STR      _("Chart")
 #define DNS_STR        _("DNS")
 #define ASN_STR        _("ASN")
-#define INFO_STR       _("Info") // ipinfo
+#define INFO_STR       _("Info")  // ipinfo
 #define MPLS_STR       _("MPLS")
+#define PROTO_STR      _("Proto") // icmp-udp-tcp
 //
 #define PAR_UDP_STR    _("udp")
 #define PAR_TCP_STR    _("tcp")
@@ -126,6 +127,7 @@
 #define CMD_M_STR    _("set max TTL (default 30)")
 #define CMD_N_STR    _("toggle DNS")
 #define CMD_O_STR    _("set stat fields to display (default: LS_NABWV)")
+#define CMD_P_STR    _("switch protocol (ICMP/UDP/TCP)")
 #define CMD_Q_STR    _("quit")
 #define CMD_QQ_STR   _("set ToS/QoS (quality of service)")
 #define CMD_R_STR    _("reset statistics")

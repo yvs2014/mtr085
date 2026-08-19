@@ -79,6 +79,7 @@ typedef struct {
 #ifdef WITH_MPLS
   crd_s mpls;
 #endif
+  crd_s proto;
 } crd_status_s;
 static crd_status_s crd_status;
 #else
@@ -229,6 +230,7 @@ static void tui_key_h(WINDOW *win) { // help
     {.key = "m", .hint = CMD_M_STR,  .type = CH_INT},
     {.key = "n", .hint = CMD_N_STR},
     {.key = "o", .hint = CMD_O_STR,  .type = CH_STR},
+    {.key = "P", .hint = CMD_P_STR},
     {.key = "q", .hint = CMD_Q_STR},
 #ifdef IP_TOS
     {.key = "Q", .hint = CMD_QQ_STR, .type = CH_INT},
@@ -455,6 +457,7 @@ static key_action_t action_map[UINT8_MAX] =  {
 #endif
   [' '] = ActionPauseResume,
   ['p'] = ActionPauseResume,
+  ['P'] = ActionProto,
   [3/*^C*/]   = ActionQuit,
 //[27/*Esc*/] = ActionQuit,
   ['q'] = ActionQuit,
@@ -522,6 +525,7 @@ static inline void reset_actkey_flags(int key) {
     case 'o': // fields to display and their order
     case ' ':
     case 'p': // [ActionPauseResume]
+    case 'P': // [ActionProto]
 #ifdef IP_TOS
     case 'Q': // qos
 #endif
@@ -585,6 +589,7 @@ key_action_t tui_keyaction(void) {
 #ifdef WITH_MPLS
          CRD_ENCLOSE(crd_status.mpls)  ? 'e' :
 #endif
+         CRD_ENCLOSE(crd_status.proto) ? 'P' :
          0;
       LOGMSG("mouse event: x=%d, y=%d, key='%c'", event.x, event.y, ch);
     }
@@ -1111,7 +1116,7 @@ static inline void status_n_keep_crd(WINDOW *win, uint len, char buff[len]) {
   print_statuskeep(win, JTTR_STR, NULL, &run_opts.jitter, dx, dy, &crd_status.jttr);
   buff[0] = 0;
   if (run_opts.chart)
-    snprinte(buff, len, "%d", run_opts.chart | (run_opts.color ? (1 << 3) : 0));
+    snprinte(buff, len, "%d", CHART_MODE);
   print_statuskeep(win, CHART_STR, buff, NULL, dx, dy, &crd_status.chart);
 #ifdef ENABLE_DNS
   print_statuskeep(win, DNS_STR, NULL, &run_opts.dns, dx, dy, &crd_status.dns);
@@ -1126,11 +1131,19 @@ static inline void status_n_keep_crd(WINDOW *win, uint len, char buff[len]) {
 #ifdef WITH_MPLS
   print_statuskeep(win, MPLS_STR, NULL, &run_opts.mpls, dx, dy, &crd_status.mpls);
 #endif
+  buff[0] = 0;
+  snprinte(buff, len, "%s", USED_PROTO);
+  print_statuskeep(win, PROTO_STR, buff, NULL, dx, dy, &crd_status.proto);
 }
 #endif
 
 static inline void status_no_crd(WINDOW *win, uint len, char buff[len]) NONNULL(1, 3);
 static inline void status_no_crd(WINDOW *win, uint len, char buff[len]) {
+  print_statusitem(win, JTTR_STR, NULL, &run_opts.jitter);
+  buff[0] = 0;
+  if (run_opts.chart)
+    snprinte(buff, len, "%d", CHART_MODE);
+  print_statusitem(win, CHART_STR, buff, NULL);
 #ifdef ENABLE_DNS
   print_statusitem(win, DNS_STR,  NULL, &run_opts.dns);
 #endif
@@ -1144,6 +1157,9 @@ static inline void status_no_crd(WINDOW *win, uint len, char buff[len]) {
 #ifdef WITH_MPLS
   print_statusitem(win, MPLS_STR, NULL, &run_opts.mpls);
 #endif
+  buff[0] = 0;
+  snprinte(buff, len, "%s", USED_PROTO);
+  print_statusitem(win, PROTO_STR, buff, NULL);
 }
 
 static void redraw_status(WINDOW *win) NONNULL(1);

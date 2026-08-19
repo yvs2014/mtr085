@@ -54,7 +54,7 @@
 #endif
 
 #ifndef GITREV
-#define GITREV "302"
+#define GITREV "303"
 #endif
 
 #ifndef HAVE_UINT
@@ -134,7 +134,7 @@ typedef enum {
 
 typedef enum {
   ActionNone = 0, ActionQuit, ActionReset, ActionPauseResume,
-  ActionUDP, ActionTCP, ActionCache, ActionJitter,
+  ActionProto, ActionUDP, ActionTCP, ActionCache, ActionJitter,
 #ifdef WITH_MPLS
   ActionMPLS,
 #endif
@@ -239,6 +239,8 @@ typedef union opt_sum_u {
 } opt_sum_t;
 
 #define OPT_SUM(tag) do {opt_sum.s.tag = (run_opts.tag != ini_opts.tag);} while(0)
+#define USED_PROTO (run_opts.udp ? "UDP" : (run_opts.tcp ? "TCP" : "ICMP"))
+#define CHART_MODE (run_opts.chart | (run_opts.color ? (1 << 3) : 0))
 
 // logging, warnings, errors
 #if defined(__NetBSD__) || defined(__FreeBSD__) || defined(__OpenBSD__)

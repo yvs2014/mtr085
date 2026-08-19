@@ -92,6 +92,9 @@ msgstr "Info"
 msgid "MPLS"
 msgstr "MPLS"
 
+msgid "Proto"
+msgstr "Proto"
+
 #
 
 msgid "udp"
@@ -315,6 +318,9 @@ msgstr "imposta il numero di cicli da eseguire (illimitato: 0)"
 
 msgid "switch display mode"
 msgstr "cambia modo di visualizzazione"
+
+msgid "switch protocol (ICMP/UDP/TCP)"
+msgstr "cambia protocollo (ICMP/UDP/TCP)"
 
 msgid "toggle MPLS info"
 msgstr "(dis)attiva info MPLS"

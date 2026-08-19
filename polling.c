@@ -255,6 +255,35 @@ static bool svc(struct timespec *last, const struct timespec *interval, int *tim
   return true;
 }
 
+static void toggle_proto(void) {
+  // icmp->udp->tcp->icmp->...
+  if        (mtrtype == IPPROTO_ICMP) {
+    net_set_type(IPPROTO_UDP);
+    run_opts.udp = true;
+    run_opts.tcp = false;
+  } else if (mtrtype == IPPROTO_UDP) {
+    net_set_type(IPPROTO_TCP);
+    run_opts.udp = false;
+    run_opts.tcp = true;
+  } else if (mtrtype == IPPROTO_TCP) {
+    net_set_type(IPPROTO_ICMP);
+    run_opts.udp = false;
+    run_opts.tcp = false;
+  }
+}
+static void toggle_udptcp(key_action_t action) {
+  // udp=on/off, tcp=on/off
+  run_opts.udp = run_opts.tcp = false;
+  if (mtrtype != IPPROTO_ICMP)
+    net_set_type(IPPROTO_ICMP);
+  else {
+    bool udp = (action == ActionUDP);
+    net_set_type(udp ? IPPROTO_UDP : IPPROTO_TCP);
+    if (udp) run_opts.udp = true;
+    else     run_opts.tcp = true;
+  }
+}
+
 // proceed keyboard events and return action
 static key_action_t keyboard_events(key_action_t action) {
   LOGMSG("action=%d", action);
@@ -311,21 +340,19 @@ static key_action_t keyboard_events(key_action_t action) {
 #endif
     case ActionUDP:
     case ActionTCP:
-      run_opts.udp = run_opts.tcp = false;
-      if (mtrtype != IPPROTO_ICMP)
-        net_set_type(IPPROTO_ICMP);
-      else {
-        bool udp = (action == ActionUDP);
-        net_set_type(udp ? IPPROTO_UDP : IPPROTO_TCP);
-        if (udp) run_opts.udp = true;
-        else     run_opts.tcp = true;
-      }
+    case ActionProto:
+      LOGMSG("< switch proto: %s", USED_PROTO);
+      if (action == ActionProto)
+        toggle_proto();        // icmp->udp->tcp->icmp->...
+      else
+        toggle_udptcp(action); // udp=on/off, tcp=on/off
       OPT_SUM(udp);
       OPT_SUM(tcp);
 #ifdef ENABLE_IPV6
       if (af == AF_INET6)
         net_setsock6();
 #endif
+      LOGMSG("> switch proto: %s", USED_PROTO);
       break;
     default:
       action = ActionNone;
