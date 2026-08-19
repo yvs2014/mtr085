@@ -63,7 +63,7 @@ enum INDENTS_N_DIVIDERS {
 #endif
 };
 
-#define QUOTE(str, delim) strchr((str), (delim)) ? "\"" : "";
+#define ESCQUOTE(str, delim) strchr((str), (delim)) ? "\"" : "";
 
 static time_t started_at;
 void report_started_at(void) { started_at = time(NULL); }
@@ -318,7 +318,7 @@ void xml_close(void) {
 #ifdef WITH_IPINFO
     if (IPINFOED) {
       char info[NAMELEN] = {0};
-      ipinfo_data_div(sizeof(info), info, at, host[at].current, DIV_XML);
+      ipinfo_data_div(sizeof(info), info, at, host[at].current, DIV_XML, 0);
       if (info[0])
         printf("%*s<%s>[%s]</%s>\n", IND_XML * 3, "", IPINFO_STR, info, IPINFO_STR);
     }
@@ -354,7 +354,7 @@ static void json_statline(int at, const t_stat *stat) {
   if (!elem) return;
   int len = strnlen(elem, NETELEM_MAXLEN);
   if (len > 0) {
-    const char *q = QUOTE(elem, DIV_JSON);
+    const char *q = ESCQUOTE(elem, DIV_JSON);
     if (elem[len - 1] == PERCENT) // print '%' with name
       printf("%c\"%s%%\":%s%.*s%s", DIV_JSON, stat->name, q, len - 1, elem, q);
     else
@@ -377,7 +377,7 @@ void json_close(bool next) {
 #ifdef WITH_IPINFO
     if (IPINFOED) {
       char info[NAMELEN] = {0};
-      ipinfo_data_div(sizeof(info), info, at, host[at].current, DIV_JSON);
+      ipinfo_data_div(sizeof(info), info, at, host[at].current, DIV_JSON, QUOTED);
       if (info[0])
         printf("%c\"%s\":[%s]", DIV_JSON, _(IPINFO_STR), info);
     }
@@ -418,7 +418,7 @@ static void toon_statline(int at, const t_stat *stat) {
   if (!elem) return;
   int len = strnlen(elem, NETELEM_MAXLEN);
   if (len > 0) {
-    const char *q = QUOTE(elem, DIV_TOON);
+    const char *q = ESCQUOTE(elem, DIV_TOON);
     if (elem[len - 1] == PERCENT) // print '%' with name
       printf("%c%s%.*s%s", DIV_TOON, q, len - 1, elem, q);
     else
@@ -435,7 +435,7 @@ void toon_close(void) {
 #ifdef WITH_IPINFO
   if (IPINFOED) {
     char info[NAMELEN] = {0};
-    ipinfo_head_div(sizeof(info), info, DIV_TOON);
+    ipinfo_head_div(sizeof(info), info, DIV_TOON, QUOTED);
     if (info[0])
       printf("%c%s", DIV_TOON, info);
   }
@@ -450,7 +450,7 @@ void toon_close(void) {
 #ifdef WITH_IPINFO
     if (IPINFOED) {
       char info[NAMELEN] = {0};
-      ipinfo_data_div(sizeof(info), info, at, host[at].current, DIV_TOON);
+      ipinfo_data_div(sizeof(info), info, at, host[at].current, DIV_TOON, QUOTED);
       if (info[0])
         printf("%c%s", DIV_TOON, info);
     }
@@ -470,7 +470,7 @@ void csv_head(void) {
   PRINT_DATETIME("%s%c\"%s\"\n", _(DATETIME_STR), DIV_CSV, date);
   printf("%s%c%s\n", SOURCE_STR, DIV_CSV, srchost);
   if (mtr_args[0]) {
-    const char *q = QUOTE(mtr_args, DIV_CSV);
+    const char *q = ESCQUOTE(mtr_args, DIV_CSV);
     printf("%s%c%s%s%s\n", ARGS_STR, DIV_CSV, q, mtr_args, q);
   }
   putchar('\n');
@@ -496,7 +496,7 @@ static inline void csv_body(int at) {
 #ifdef WITH_IPINFO
   if (IPINFOED) {
     char info[NAMELEN] = {0};
-    ipinfo_data_div(sizeof(info), info, at, host[at].current, DIV_CSV);
+    ipinfo_data_div(sizeof(info), info, at, host[at].current, DIV_CSV, QUOTED);
     if (info[0])
       printf("%s", info);
   }
@@ -512,7 +512,7 @@ void csv_close(bool next) {
 #ifdef WITH_IPINFO
   if (IPINFOED) {
     char info[NAMELEN] = {0};
-    ipinfo_head_div(sizeof(info), info, DIV_CSV);
+    ipinfo_head_div(sizeof(info), info, DIV_CSV, QUOTED);
     if (info[0])
       printf("%c%s", DIV_CSV, info);
   }

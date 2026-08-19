@@ -54,7 +54,7 @@
 #endif
 
 #ifndef GITREV
-#define GITREV "299"
+#define GITREV "300"
 #endif
 
 #ifndef HAVE_UINT
@@ -168,7 +168,6 @@ typedef struct opts_s {
 #ifdef WITH_IPINFO
     asn,      // -l
     ipinfo,   // -L
-    lookup,   // either -l or -L
 #endif
     dns,      // -n
     pause,    // -p
@@ -211,7 +210,6 @@ typedef union opt_sum_u {
     jitter   :1, // -j
     asn      :1, // -l
     ipinfo   :1, // -L
-    lookup   :1, // -l or -L
     multi    :1, // -y (multi ipinfo sources)
     dns      :1, // -n
     pause    :1, // -p
@@ -366,6 +364,6 @@ extern const int stat_max;
 extern char srchost[];
 extern const char *dsthost;
 
-enum { COMMA = ',', SEMICOLON = ';', VSLASH = '|', PERCENT = '%', UNDERSCORE = '_' };
+enum { COMMA = ',', SEMICOLON = ';', VSLASH = '|', PERCENT = '%', UNDERSCORE = '_', QUOTED = '"' };
 
 #endif

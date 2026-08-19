@@ -80,6 +80,15 @@ msgstr "ON "
 msgid "Off"
 msgstr "OFF"
 
+msgid "DNS"
+msgstr "DNS"
+
+msgid "Info"
+msgstr "Info"
+
+msgid "MPLS"
+msgstr "MPLS"
+
 #
 
 msgid "udp"
@@ -93,6 +102,9 @@ msgstr "mpls"
 
 msgid "asn"
 msgstr "asn"
+
+msgid "ipinfo"
+msgstr "IP-info"
 
 msgid "multi-sources"
 msgstr "múlti-fuentes"
@@ -160,7 +172,7 @@ msgstr "SA"
 msgid "Descr"
 msgstr "Descr"
 
-msgid "AS Path"
+msgid "AS-Path"
 msgstr "SA-camino"
 
 msgid "Org"
@@ -193,8 +205,8 @@ msgstr "TZ"
 msgid "ISP"
 msgstr "PSI"
 
-msgid "AS Name"
-msgstr "Nombre de SA"
+msgid "AS-Name"
+msgstr "Nombre-de-SA"
 
 
 ## stats

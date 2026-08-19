@@ -80,7 +80,7 @@ static void set_fds(void) {
 #ifdef ENABLE_DNS
   need_dns = run_opts.dns
 #ifdef WITH_IPINFO
-          || run_opts.lookup
+          || run_opts.asn || run_opts.ipinfo
 #endif
   ;
   SET_POLLFD(FD_DNS, need_dns ? dns_wait(AF_INET) : -1);
@@ -306,7 +306,6 @@ static key_action_t keyboard_events(key_action_t action) {
       ipinfo_action(action);
       OPT_SUM(asn);
       OPT_SUM(ipinfo);
-      OPT_SUM(lookup);
       OPT_SUM(multi);
       break;
 #endif
@@ -379,8 +378,10 @@ static key_action_t conclude(struct timespec *polled_at) {
     key_action_t act = keyaction_fn ? keyaction_fn() : ActionNone;
     if (act != ActionNone) {
       act = keyboard_events(act);
-      if (act == ActionQuit) return act;
-      if (act == ActionPauseResume) rc = act;
+      if (act == ActionQuit)
+        return act;
+      if (act == ActionPauseResume)
+        rc = act;
     }
   }
   if (IN_ISSET(FD_NET)) { // net packet
@@ -450,13 +451,13 @@ bool poll_loop(void) {
   numpings = 0;
   grace = NO_GRACE;
   memset(&grace_started, 0, sizeof(grace_started));
-
+  //
   struct timespec lasttime;
   PL_GETTIME(&lasttime);
-
+  //
   while (1) {
     set_fds();
-
+    //
     struct timespec interval;
     waitspec(&interval);
     int timeout = 0, rv = 0;
@@ -482,10 +483,10 @@ bool poll_loop(void) {
         usleep(MINSLEEP_USEC);
       rv = poll(allfds, maxfd, timeout);
     } while ((rv < 0) && (errno == EINTR));
-
+    //
     static struct timespec polled_now = {0};
     PL_GETTIME(&polled_now);
-
+    //
     if (rv < 0) {
       int e = errno;
       display_close(true);
@@ -506,7 +507,7 @@ bool poll_loop(void) {
     } else if (tcpish())
       tcp_timedout(); // not waiting for TCP ETIMEDOUT
   }
-
+  //
   seqfd_free();
   LOGMSG("%s", "finish");
   return true;

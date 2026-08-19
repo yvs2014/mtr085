@@ -185,11 +185,11 @@ ASN, Route, CC, Registry, Allocated
 .It Cm 2 - riswhois.ripe.net (both IPv4 and IPv6)
 Route, Origin, Descr, CC
 .It Cm 3 - peer.asn.shadowserver.org
-Peers, ASN, Route, AS Name, CC, Org
+AS-Path, ASN, Route, CC, Org
 .It Cm 4 - origin.asn.spameatingmonkey.net
 Route, ASN, Org, Allocated, CC
 .It Cm 5 - ip-api.com
-Country, CC, RC, Region, City, Zip, Lat, Long, TZ, ISP, Org, AS Name
+Country, CC, RC, Region, City, Zip, Lat, Long, TZ, ISP, Org, AS-Name
 .It Cm 6 - asn.routeviews.org
 ASN
 .El

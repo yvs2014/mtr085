@@ -72,6 +72,7 @@ typedef struct {
 #endif
 #ifdef WITH_IPINFO
   crd_s asn;
+  crd_s info;
 #endif
 #ifdef WITH_MPLS
   crd_s mpls;
@@ -490,8 +491,8 @@ static inline void require_redraw(void) {
   titlelen = (title_len_s){.screen = -1, .stat = -1, .chart = -1};
 }
 
-static inline void reset_actkey_flags(int ch) {
-  switch (ch) {
+static inline void reset_actkey_flags(int key) {
+  switch (key) {
     case  3 : // ^C
 //  case  27: // Esc
     case 'q':
@@ -530,7 +531,7 @@ static inline void reset_actkey_flags(int ch) {
       break;
 #ifdef WITH_IPINFO
     case 'y': // [ActionMultiII]
-      if (run_opts.lookup)
+      if (IPINFOED)
         require_redraw();
       break;
 #endif
@@ -574,6 +575,7 @@ key_action_t tui_keyaction(void) {
 #endif
 #ifdef WITH_IPINFO
          CRD_ENCLOSE(crd_status.asn)  ? 'l' :
+         CRD_ENCLOSE(crd_status.info) ? 'L' :
 #endif
 #ifdef WITH_MPLS
          CRD_ENCLOSE(crd_status.mpls) ? 'e' :
@@ -891,8 +893,8 @@ static int tui_print_args(char buf[], size_t size) {
 #endif
 #ifdef WITH_IPINFO
   BOOL_OPT2STR(asn,     PAR_ASN_STR);
-  BOOL_OPT2STR(ipinfo,  IPINFO_STR);
-  if (run_opts.lookup)
+  BOOL_OPT2STR(ipinfo,  PAR_II_STR);
+  if (IPINFOED)
     BOOL_OPT2STR(multi, PAR_MII_STR);
 #endif
 #ifdef ENABLE_DNS
@@ -993,20 +995,64 @@ static int redraw_labels(WINDOW *win, int indent) {
   return indent;
 }
 
+// menu-n-status: print items and keep coordinates for mouse hadlers
+//
+static void print_menuitem(WINDOW *win, char ch, const char *name) NONNULL(1, 3);
+static void print_menuitem(WINDOW *win, char ch, const char *name) {
+  waddch(win, ' ');
+  waddch(win, ch | A_BOLD);
+  waddstr(win, name);
+}
+//
+static inline const char* onoff_str(bool on) {return on ? ONN_STR : OFF_STR;}
+//
+static void print_statusitem(WINDOW *win, const char *name, const char *value, const bool *onoff) NONNULL(1, 2);
+static void print_statusitem(WINDOW *win, const char *name, const char *value, const bool *onoff) {
+  waddch(win, ' ');
+  waddstr(win, name);
+  waddch(win, '=');
+  const char *valstr = onoff ? onoff_str(*onoff) : ((value && value[0]) ? value : NULL);
+  waddstr(win, valstr ? valstr : onoff_str(false));
+}
+//
 #ifdef WITH_MOUSE
-#define PRINT_MENUKEEP(icon, name, crd, y, x) do {          \
-  mvwaddstr(win, (y), (x), (icon));                         \
-  (crd).x0 = dx + (x);                                      \
-  (crd).y0 = dy + (y);                                      \
-  (crd).x1 = dx + getcurx(win);                             \
-  (crd).y1 = dy + getcury(win);                             \
-  if (getcurx(win) < (getmaxx(win) - 1))                    \
-    (crd).x1--; /*successful addstr()*/                     \
-  LOGMSG("%s(%s): x0=%d y0=%d x1=%d y1=%d (w=%d h=%d)",     \
-    (name), (icon), (crd).x0, (crd).y0, (crd).x1, (crd).y1, \
-    (crd).x1 - (crd).x0 + 1, (crd).y1 - (crd).y0 + 1);      \
-} while (0)
+static void print_menukeep(WINDOW *win, const char *name,
+  int dx, int dy, crd_s *crd, int x, int y) NONNULL(1, 2, 5);
+static void print_menukeep(WINDOW *win, const char *name, int dx, int dy, crd_s *crd, int x, int y) {
+  mvwaddstr(win, y, x, name);
+  crd->x0 = dx + x;
+  crd->y0 = dy + y;
+  crd->x1 = dx + getcurx(win);
+  crd->y1 = dy + getcury(win);
+  if (getcurx(win) < (getmaxx(win) - 1))
+    crd->x1--; /// uccessful addstr()
+  LOGMSG("menu(%s): x0=%d y0=%d x1=%d y1=%d (w=%d h=%d)",
+    name, crd->x0, crd->y0, crd->x1, crd->y1,
+    crd->x1 - crd->x0 + 1, crd->y1 - crd->y0 + 1);
+}
+//
+static void print_statuskeep(WINDOW *win, const char *name, const char *value,
+  const bool *onoff, int dx, int dy, crd_s *crd) NONNULL(1, 2, 7);
+static void print_statuskeep(WINDOW *win, const char *name, const char *value,
+  const bool *onoff, int dx, int dy, crd_s *crd)
+{
+  waddch(win, ' ');
+  crd->x0 = dx + getcurx(win);
+  crd->y0 = dy + getcury(win);
+  waddstr(win, name);
+  waddch(win, '=');
+  const char *valstr = onoff ? onoff_str(*onoff) : ((value && value[0]) ? value : NULL);
+  waddstr(win, valstr ? valstr : onoff_str(false));
+  crd->x1 = dx + getcurx(win);
+  crd->y1 = dy + getcury(win);
+  if (getcurx(win) < (getmaxx(win) - 1))
+    crd->x1--; // successful addstr()
+  LOGMSG("status(%s): x0=%d y0=%d x1=%d y1=%d (w=%d h=%d)",
+    name, crd->x0, crd->y0, crd->x1, crd->y1,
+    crd->x1 - crd->x0 + 1, crd->y1 - crd->y0 + 1);
+}
 #endif
+//
 
 static void redraw_top(WINDOW *win) NONNULL(1);
 static void redraw_top(WINDOW *win) {
@@ -1045,82 +1091,60 @@ static void redraw_top(WINDOW *win) {
 #ifdef WITH_MOUSE
   if (mouse_enabled && (tuilook != OLDLOOK)) {
     int dx = getbegx(win), dy = getbegy(win);
-    PRINT_MENUKEEP(menu_icon, "menu", crd_topbar.menu, 0, 0);
-    PRINT_MENUKEEP(quit_icon, "quit", crd_topbar.quit, 0,
+    print_menukeep(win, menu_icon, dx, dy, &crd_topbar.menu, 0, 0);
+    print_menukeep(win, quit_icon, dx, dy, &crd_topbar.quit, 0,
       getmaxx(win) - (quit_icon_len ? quit_icon_len : 3));
   }
 #endif
   wrefresh(win);
 }
 
-#define PRINT_MENUITEM(ch, txt) do { \
-  waddch(win, ' ');                  \
-  waddch(win, (ch) | A_BOLD);        \
-  waddstr(win, (txt));               \
-} while (0)
-
-static inline const char* onoff_str(bool on) {return on ? ONN_STR : OFF_STR;}
-
-#define PRINT_STATUSITEM(on, txt) do {    \
-  waddstr(win, (txt));                    \
-  waddch(win, '=');                       \
-  waddstr(win, onoff_str(on));            \
-} while (0)
-
-#define PRINT_STATUSKEEP(on, txt, crd) do { \
-  waddch(win, ' ');                         \
-  (crd).x0 = dx + getcurx(win);             \
-  (crd).y0 = dy + getcury(win);             \
-  waddstr(win, (txt));                      \
-  waddch(win, '=');                         \
-  waddstr(win, onoff_str(on));              \
-  (crd).x1 = dx + getcurx(win);             \
-  (crd).y1 = dy + getcury(win);             \
-  if (getcurx(win) < (getmaxx(win) - 1))    \
-    (crd).x1--; /*successful addstr()*/     \
-  LOGMSG("status(%s): x0=%d y0=%d x1=%d y1=%d (w=%d h=%d)", \
-    (txt), (crd).x0, (crd).y0, (crd).x1, (crd).y1,          \
-    (crd).x1 - (crd).x0 + 1, (crd).y1 - (crd).y0 + 1);      \
-} while (0)
-
 static void redraw_status(WINDOW *win) NONNULL(1);
 static void redraw_status(WINDOW *win) {
   werase(win);
+  char buff[LINEMAXLEN] = {0};
   // add menu hints
   if (tuilook == OLDLOOK) {
     mvwaddstr(win, 0, 0, MENU_STR);
     waddch(win, ':');
-    PRINT_MENUITEM('h', _HINTS_STR);
-    PRINT_MENUITEM('q', _QUIT_STR);
+    print_menuitem(win, 'h', _HINTS_STR);
+    print_menuitem(win, 'q', _QUIT_STR);
   } else {
 #ifdef WITH_MOUSE
     if (mouse_enabled && (tuilook != OLDLOOK)) {
       int dx = getbegx(win), dy = getbegy(win);
 #ifdef ENABLE_DNS
-      PRINT_STATUSKEEP(run_opts.dns,  DNS_STR,  crd_status.dns);
+      print_statuskeep(win, DNS_STR, NULL, &run_opts.dns, dx, dy, &crd_status.dns);
 #endif
 #ifdef WITH_IPINFO
-      PRINT_STATUSKEEP(run_opts.asn,  ASN_STR,  crd_status.asn);
+      print_statuskeep(win, ASN_STR, NULL, &run_opts.asn, dx, dy, &crd_status.asn);
+      buff[0] = 0;
+      if (run_opts.ipinfo)
+        ipinfo_head_div(sizeof(buff), buff, COMMA, 0);
+      print_statuskeep(win, INFO_STR, buff, NULL, dx, dy, &crd_status.info);
 #endif
 #ifdef WITH_MPLS
-      PRINT_STATUSKEEP(run_opts.mpls, MPLS_STR, crd_status.mpls);
+      print_statuskeep(win, MPLS_STR, NULL, &run_opts.mpls, dx, dy, &crd_status.mpls);
 #endif
     } else
 #endif
     {
 #ifdef ENABLE_DNS
-      PRINT_STATUSITEM(run_opts.dns,  DNS_STR);
+      print_statusitem(win, DNS_STR,  NULL, &run_opts.dns);
 #endif
 #ifdef WITH_IPINFO
-      PRINT_STATUSITEM(run_opts.asn,  ASN_STR);
+      print_statusitem(win, ASN_STR,  NULL, &run_opts.asn);
+      buff[0] = 0;
+      ipinfo_head_div(sizeof(buff), buff, COMMA, 0);
+      print_statusitem(win, INFO_STR, buff, NULL);
 #endif
 #ifdef WITH_MPLS
-      PRINT_STATUSITEM(run_opts.mpls, MPLS_STR);
+      print_statusitem(win, MPLS_STR, NULL, &run_opts.mpls);
 #endif
     }
   }
   //
-  char buff[LINEMAXLEN] = {0};
+  buff[0] = 0;
   int len = 0;
   // add source host
   if (tuilook == OLDLOOK) {

@@ -34,12 +34,14 @@
 #define OFF_STR        _("Off")
 #define DNS_STR        _("DNS")
 #define ASN_STR        _("ASN")
+#define INFO_STR       _("Info") // IpInfo
 #define MPLS_STR       _("MPLS")
 //
 #define PAR_UDP_STR    _("udp")
 #define PAR_TCP_STR    _("tcp")
 #define PAR_MPLS_STR   _("mpls")
 #define PAR_ASN_STR    _("asn")
+#define PAR_II_STR     _("ipinfo")
 #define PAR_MII_STR    _("multi-sources")
 #define PAR_DNS_STR    _("dns")
 #define PAR_JITTER_STR _("jitter")
@@ -64,7 +66,7 @@
 #define _II_ALLOC_STR  "Allocated"
 #define _II_ORIGIN_STR "Origin"
 #define _II_DESC_STR   "Descr"
-#define _II_ASPATH_STR "AS Path"
+#define _II_ASPATH_STR "AS-Path"
 #define _II_ORG_STR    "Org"
 #define _II_CNAME_STR  "Country"
 #define _II_RC_STR     "RC"
@@ -75,7 +77,7 @@
 #define _II_LNG_STR    "Long"
 #define _II_TZ_STR     "TZ"
 #define _II_ISP_STR    "ISP"
-#define _II_ASNAME_STR "AS Name"
+#define _II_ASNAME_STR "AS-Name"
 
 // stat init fields
 #define _GAP_HINT   "Space between fields"

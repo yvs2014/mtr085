@@ -74,7 +74,7 @@ static void spl_print_row(const t_ipaddr *addr, int at, int ndx, void (*print_st
 #ifdef WITH_IPINFO
   if (IPINFOED) {
     char info[NAMELEN] = {0};
-    ipinfo_data_div(sizeof(info), info, at, ndx, DIV_SPLIT);
+    ipinfo_data_div(sizeof(info), info, at, ndx, DIV_SPLIT, 0);
     if (info[0]) {
       putchar(DIV_SPLIT);
       fputs(info, stdout);

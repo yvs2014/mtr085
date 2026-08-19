@@ -22,20 +22,22 @@
 #include "common.h"
 
 #define ASLOOKUP_DEFAULT   "2,2" // ripe whois
-#define IPINFOED (run_opts.lookup && ipinfo_ready)
+#define IPINFOED (ipinfo_ready && (run_opts.asn || run_opts.ipinfo))
 
 bool ipinfo_init(const char *arg);
 void ipinfo_close(void);
-bool ipinfo_action(int action); // open() if necessary
+bool ipinfo_action(key_action_t action); // if necessary it calls init() too
 void ipinfo_parse(int sock, int seq);
 int  ipinfo_width(void);
 bool ipinfo_timedout(int seq);
 void ipinfo_seq_ready(int seq);
 
 void ipinfo_head_fix(size_t size, char buff[size]) NONNULL(2);
-void ipinfo_head_div(size_t size, char buff[size], char div) NONNULL(2);
+void ipinfo_head_div(size_t size, char buff[size], char div, char q) NONNULL(2);
 void ipinfo_data_fix(size_t size, char buff[size], int at, int ndx) NONNULL(2);
-void ipinfo_data_div(size_t size, char buff[size], int at, int ndx, char div) NONNULL(2);
+void ipinfo_data_div(size_t size, char buff[size], int at, int ndx, char div, char q) NONNULL(2);
+//
+void ipinfo_head_div_q(size_t size, char buff[size], char div, char q) NONNULL(2);
 
 void query_ipinfo(void);
 
