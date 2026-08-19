@@ -67,6 +67,7 @@ typedef struct {
 static crd_topbar_s crd_topbar;
 //
 typedef struct {
+  crd_s jttr;
   crd_s chart;
 #ifdef ENABLE_DNS
   crd_s dns;
@@ -572,6 +573,7 @@ key_action_t tui_keyaction(void) {
          CRD_ENCLOSE(crd_topbar.menu)  ? 'h' /*temporarily 'help', TODO: menu*/ :
          CRD_ENCLOSE(crd_topbar.quit)  ? 'q' :
          //
+         CRD_ENCLOSE(crd_status.jttr)  ? 'j' :
          CRD_ENCLOSE(crd_status.chart) ? 'd' :
 #ifdef ENABLE_DNS
          CRD_ENCLOSE(crd_status.dns)   ? 'n' :
@@ -1095,8 +1097,8 @@ static void redraw_top(WINDOW *win) {
   if (mouse_enabled && (tuilook != OLDLOOK)) {
     int dx = getbegx(win), dy = getbegy(win);
     print_menukeep(win, menu_icon, dx, dy, &crd_topbar.menu, 0, 0);
-    print_menukeep(win, quit_icon, dx, dy, &crd_topbar.quit, 0,
-      getmaxx(win) - (quit_icon_len ? quit_icon_len : 3));
+    print_menukeep(win, quit_icon, dx, dy, &crd_topbar.quit,
+      getmaxx(win) - (quit_icon_len ? quit_icon_len : 3), 0);
   }
 #endif
   wrefresh(win);
@@ -1106,6 +1108,7 @@ static void redraw_top(WINDOW *win) {
 static inline void status_n_keep_crd(WINDOW *win, uint len, char buff[len]) NONNULL(1, 3);
 static inline void status_n_keep_crd(WINDOW *win, uint len, char buff[len]) {
   int dx = getbegx(win), dy = getbegy(win);
+  print_statuskeep(win, JTTR_STR, NULL, &run_opts.jitter, dx, dy, &crd_status.jttr);
   buff[0] = 0;
   if (run_opts.chart)
     snprinte(buff, len, "%d", run_opts.chart | (run_opts.color ? (1 << 3) : 0));

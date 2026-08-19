@@ -32,10 +32,11 @@
 #define MSEC_STR       _("ms")
 #define ONN_STR        _("On ")
 #define OFF_STR        _("Off")
+#define JTTR_STR       _("Jttr")
 #define CHART_STR      _("Chart")
 #define DNS_STR        _("DNS")
 #define ASN_STR        _("ASN")
-#define INFO_STR       _("Info") // IpInfo
+#define INFO_STR       _("Info") // ipinfo
 #define MPLS_STR       _("MPLS")
 //
 #define PAR_UDP_STR    _("udp")
