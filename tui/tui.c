@@ -333,8 +333,8 @@ static void display_main_labels(WINDOW *win, int indent) {
   }
 }
 
-#define IASP ((len > iasp) ? " " : "")
-
+#define ARGSPACE (len ? " " : "")
+//
 #define ADD_FMT_ARG(fmt, ...) do {   \
   int max = size - len;              \
   if (max <= 0) return size;         \
@@ -343,42 +343,46 @@ static void display_main_labels(WINDOW *win, int indent) {
   if (inc < 0) return len;           \
   if (inc > 0) len += inc;           \
 } while (0)
-
+//
 #define BOOL_OPT2STR(tag, msg) do {   \
   if (run_opts.tag != ini_opts.tag)   \
-    ADD_FMT_ARG("%s%c%s", IASP,       \
+    ADD_FMT_ARG("%s%c%s", ARGSPACE,   \
       run_opts.tag ? '+' : '-', msg); \
 } while (0)
-
-#define INT_OPT2STR(tag, prfx, fmt) do {               \
-  if (run_opts.tag != ini_opts.tag)                    \
-    ADD_FMT_ARG("%s%s" fmt, IASP, prfx, run_opts.tag); \
+//
+#define INT_OPT2STR(tag, prfx, fmt) do { \
+  if (run_opts.tag != ini_opts.tag)      \
+    ADD_FMT_ARG("%s%s" fmt, ARGSPACE,    \
+      prfx, run_opts.tag);               \
 } while (0)
-
-static int tui_print_args(char buf[], size_t size) NONNULL(1);
-static int tui_print_args(char buf[], size_t size) {
-  int len = snprinte(buf, size, " (");
-  if (len < 0)
-    return len;
-  int iasp = len;
-  BOOL_OPT2STR(udp,     PAR_UDP_STR);
-  BOOL_OPT2STR(tcp,     PAR_TCP_STR);
-#ifdef WITH_MPLS
-  BOOL_OPT2STR(mpls,    PAR_MPLS_STR);
+//
+static int tui_print_args(uint size, char buf[size]) NONNULL(2);
+static int tui_print_args(uint size, char buf[size]) {
+  int len = 0;
+  if (tuilook == OLDLOOK) {
+    BOOL_OPT2STR(jitter,  PAR_JITTER_STR);
+    INT_OPT2STR(chart,    PAR_CHART_STR, "%u");
+    BOOL_OPT2STR(color,   PAR_COLOR_STR);
+#ifdef ENABLE_DNS
+    BOOL_OPT2STR(dns,     PAR_DNS_STR);
 #endif
 #ifdef WITH_IPINFO
-  BOOL_OPT2STR(asn,     PAR_ASN_STR);
-  BOOL_OPT2STR(ipinfo,  PAR_II_STR);
+    BOOL_OPT2STR(asn,     PAR_ASN_STR);
+    BOOL_OPT2STR(ipinfo,  PAR_II_STR);
+#endif
+  }
+#ifdef WITH_IPINFO
   if (IPINFOED)
     BOOL_OPT2STR(multi, PAR_MII_STR);
 #endif
-#ifdef ENABLE_DNS
-  BOOL_OPT2STR(dns,     PAR_DNS_STR);
+  if (tuilook == OLDLOOK) {
+#ifdef WITH_MPLS
+    BOOL_OPT2STR(mpls,    PAR_MPLS_STR);
 #endif
-  BOOL_OPT2STR(jitter,  PAR_JITTER_STR);
+    BOOL_OPT2STR(udp,     PAR_UDP_STR);
+    BOOL_OPT2STR(tcp,     PAR_TCP_STR);
+  }
   //
-  INT_OPT2STR(chart,    PAR_CHART_STR, "%u");
-  BOOL_OPT2STR(color,   PAR_COLOR_STR);
   //
   INT_OPT2STR(pattern,  PAR_PATT_STR, "=%d");
   INT_OPT2STR(interval, PAR_DT_STR, "=%d");
@@ -390,11 +394,6 @@ static int tui_print_args(char buf[], size_t size) {
   //
   BOOL_OPT2STR(oncache, PAR_CACHE_STR);
   //
-  ADD_FMT_ARG("%c", ')');
-#define EMPTY_ARGS " ()"
-  if (STR_EQ(buf, EMPTY_ARGS, sizeof(EMPTY_ARGS)))
-    len = 0;
-#undef EMPTY_ARGS
   if (run_opts.pause != ini_opts.pause)
     ADD_FMT_ARG(": %s", PAR_PAUSED_STR);
   return (len > (int)size) ? (int)size : len;
@@ -480,13 +479,10 @@ static void redraw_top(WINDOW *win) {
     char buff[LINEMAXLEN] = {0};
     const char *pretitle = screen_title;
     if (opt_sum.un) {
-      int len = snprinte(buff, sizeof(buff), "%s", screen_title);
-      if (len >= 0) {
+      char argstr[LINEMAXLEN / 2] = {0};
+      if ((tui_print_args(sizeof(argstr), argstr) > 0) &&
+          (snprinte(buff, sizeof(buff), "%s (%s)", screen_title, argstr) > 0))
         pretitle = buff;
-        int inc = tui_print_args(buff + len, sizeof(buff) - len);
-        if (inc < 0)
-          pretitle = screen_title; // else len += inc;
-      }
     }
     memset(title_cache, 0, sizeof(title_cache));
     int len = snprinte(title_cache, sizeof(title_cache), "%s", pretitle);
