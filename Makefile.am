@@ -34,7 +34,11 @@ mtr_SOURCES += dns.c dns.h
 endif
 
 if TUI
-mtr_SOURCES += tui.c tui.h
+tuidir = tui
+mtr_SOURCES += $(tuidir)/tui.c    $(tuidir)/tui.h
+mtr_SOURCES += $(tuidir)/chart.c  $(tuidir)/chart.h
+mtr_SOURCES += $(tuidir)/action.c $(tuidir)/action.h
+AM_CPPFLAGS += -I$(srcdir) -I$(srcdir)/$(tuidir)
 endif
 
 if SPLITMODE

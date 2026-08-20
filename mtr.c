@@ -658,12 +658,14 @@ static void set_optv(int argc, char **argv) {
 #endif
 
 static void short_set(char opt, const char *progname) {
-#ifdef TUIMODE
   switch (opt) {
+#ifdef TUIMODE
     case OPT_OLDLOOK:
     case OPT_NEWLOOK:
       tuilook = (opt == OPT_NEWLOOK) ? NEWLOOK : OLDLOOK;
-      mouse_enabled = (opt == OPT_NEWLOOK);
+#ifdef WITH_MOUSE
+      ini_opts.mouse = (opt == OPT_NEWLOOK);
+#endif
       break;
 #endif
 #ifdef ENABLE_IPV6
@@ -721,7 +723,7 @@ static void short_set(char opt, const char *progname) {
       break;
 #ifdef WITH_MOUSE
     case OPT_MOUSE:
-      mouse_enabled = false;
+      ini_opts.mouse = false;
       break;
 #endif
 #ifdef ENABLE_DNS
@@ -836,9 +838,9 @@ static void parse_options(int argc, char **argv) {
   if (countv > 0)
     option_version(countv);
 #ifdef WITH_MOUSE
-  if (mouse_enabled && !((display_mode == DisplayTUI) || (display_mode == DisplayAuto))) {
+  if (ini_opts.mouse && !((display_mode == DisplayTUI) || (display_mode == DisplayAuto))) {
     warnx("%s", MOUSE_OUT_STR);
-    mouse_enabled = false;
+    ini_opts.mouse = false;
   }
 #endif
   run_opts = ini_opts; // to reflect possible interactive changes

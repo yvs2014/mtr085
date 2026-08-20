@@ -1,5 +1,5 @@
-#ifndef CHART_H
-#define CHART_H
+#ifndef TUI_INC_H
+#define TUI_INC_H
 
 #if   defined(HAVE_NCURSESW_NCURSES_H)
 #  include <ncursesw/ncurses.h>
@@ -16,17 +16,5 @@
 #else
 #  error No *curses header file given
 #endif
-
-#include "common.h"
-
-short color_charts(void);
-void prepare_charts(void);
-void chart_scale(uint offset);
-void print_scale(WINDOW *win) NONNULL(1);
-void chart_area(WINDOW *win, uint len, int saved[len]) NONNULL(1, 3);
-void chart_range_loop(void);
-
-extern uint chart_mode;
-extern uint chart_mode_max;
 
 #endif

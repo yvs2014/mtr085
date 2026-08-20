@@ -54,7 +54,7 @@
 #endif
 
 #ifndef GITREV
-#define GITREV "303"
+#define GITREV "304"
 #endif
 
 #ifndef HAVE_UINT
@@ -168,6 +168,9 @@ typedef struct opts_s {
 #ifdef WITH_IPINFO
     asn,      // -l
     ipinfo,   // -L
+#endif
+#ifdef WITH_MOUSE
+    mouse,    // -M (disable)
 #endif
     dns,      // -n
     pause,    // -p

@@ -1,0 +1,17 @@
+#ifndef CHART_H
+#define CHART_H
+
+#include "common.h"
+#include "inc.h"
+
+short color_charts(void);
+void prepare_charts(void);
+void chart_scale(uint offset);
+void print_scale(WINDOW *win) NONNULL(1);
+void chart_area(WINDOW *win, uint len, int saved[len]) NONNULL(1, 3);
+void chart_range_loop(void);
+
+extern uint chart_mode;
+extern uint chart_mode_max;
+
+#endif
