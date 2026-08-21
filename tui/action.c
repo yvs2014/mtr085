@@ -498,9 +498,21 @@ static void reset_by_key(int key, void (*reset)(void)) {
         reset();
       break;
 #endif
+    default: break;
   }
 }
 
+//
+static inline const char* onoff_str(bool on) {return on ? ONN_STR : OFF_STR;}
+//
+static void print_statusitem(WINDOW *win, const char *name, const char *value, const bool *onoff) NONNULL(1, 2);
+static void print_statusitem(WINDOW *win, const char *name, const char *value, const bool *onoff) {
+  waddch(win, ' ');
+  waddstr(win, name);
+  waddch(win, '=');
+  const char *valstr = onoff ? onoff_str(*onoff) : ((value && value[0]) ? value : NULL);
+  waddstr(win, valstr ? valstr : onoff_str(false));
+}
 #ifdef WITH_MOUSE
 static void print_menukeep(WINDOW *win, const char *name,
   int dx, int dy, crd_s *crd, int x, int y) NONNULL(1, 2, 5);
@@ -515,17 +527,6 @@ static void print_menukeep(WINDOW *win, const char *name, int dx, int dy, crd_s 
   LOGMSG("menu(%s): x0=%d y0=%d x1=%d y1=%d (w=%d h=%d)",
     name, crd->x0, crd->y0, crd->x1, crd->y1,
     crd->x1 - crd->x0 + 1, crd->y1 - crd->y0 + 1);
-}
-//
-static inline const char* onoff_str(bool on) {return on ? ONN_STR : OFF_STR;}
-//
-static void print_statusitem(WINDOW *win, const char *name, const char *value, const bool *onoff) NONNULL(1, 2);
-static void print_statusitem(WINDOW *win, const char *name, const char *value, const bool *onoff) {
-  waddch(win, ' ');
-  waddstr(win, name);
-  waddch(win, '=');
-  const char *valstr = onoff ? onoff_str(*onoff) : ((value && value[0]) ? value : NULL);
-  waddstr(win, valstr ? valstr : onoff_str(false));
 }
 //
 static void print_statuskeep(WINDOW *win, const char *name, const char *value,
@@ -548,9 +549,7 @@ static void print_statuskeep(WINDOW *win, const char *name, const char *value,
     name, crd->x0, crd->y0, crd->x1, crd->y1,
     crd->x1 - crd->x0 + 1, crd->y1 - crd->y0 + 1);
 }
-#endif
-
-#ifdef WITH_MOUSE
+//
 static int mouse2key(void) {
   MEVENT event = {0};
   int ch = 0;
@@ -635,6 +634,7 @@ key_action_t tui_actionw(WINDOW *win, void (*reset)(void)) { // NONNULL(1)
       LOGMSG("page up (%d lines)", LINES_PER_PAGE);
       lineup(LINES_PER_PAGE);
       break;
+    default: break;
   }
   return action;
 }
@@ -651,8 +651,7 @@ void topbar_icons(WINDOW *win) { // NONNULL(1)
 #endif
 
 #ifdef WITH_MOUSE
-void status_n_keep_crd(WINDOW *win, uint len, char buff[len]) NONNULL(1, 3);
-void status_n_keep_crd(WINDOW *win, uint len, char buff[len]) {
+void status_n_keep_crd(WINDOW *win, uint len, char buff[len]) { // NONNULL(1, 3)
   int dx = getbegx(win), dy = getbegy(win);
   print_statuskeep(win, JTTR_STR, NULL, &run_opts.jitter, dx, dy, &crd_status.jttr);
   buff[0] = 0;
@@ -678,8 +677,7 @@ void status_n_keep_crd(WINDOW *win, uint len, char buff[len]) {
 }
 #endif
 
-void status_no_crd(WINDOW *win, uint len, char buff[len]) NONNULL(1, 3);
-void status_no_crd(WINDOW *win, uint len, char buff[len]) {
+void status_no_crd(WINDOW *win, uint len, char buff[len]) { // NONNULL(1, 3)
   print_statusitem(win, JTTR_STR, NULL, &run_opts.jitter);
   buff[0] = 0;
   if (run_opts.chart)

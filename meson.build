@@ -27,6 +27,11 @@ optlist = []
 cap        = get_option('CAP')
 tui        = get_option('TUI')
 mouse      = get_option('MOUSE')
+menu       = get_option('MENU')
+if menu
+  menu = false # not yet
+  warning('menu support is not ready yet')
+endif
 unicode    = get_option('UNICODE')
 nls        = get_option('NLS')
 dns        = get_option('DNS')
@@ -396,7 +401,7 @@ endforeach
 if meson.version().version_compare('>=0.53')
   sum_ops = {'CAP': cap, 'TUI': tui}
   if tui
-    sum_ops += {'MOUSE': mouse}
+    sum_ops += {'MOUSE': mouse, 'MENU': menu}
   endif
   sum_ops += {'UNICODE': unicode, 'NLS': nls, 'DNS': dns, 'IDN': idn,
     'IPINFO': ipinfo, 'SPLIT': split, 'IPV6': ipv6, 'MPLS': mpls}

@@ -56,9 +56,14 @@ AC_ARG_WITH(tui,
 	[tui=${withval}], [tui=yes])
 AM_CONDITIONAL([TUI], [test "x$tui" = "xyes"])
 AC_ARG_WITH(mouse,
-	AS_HELP_STRING([--without-mouse], [without mouse support in TUI mode]),
+	AS_HELP_STRING([--without-mouse], [without mouse support (TUI mode)]),
 	[mouse=${withval}], [mouse=yes])
 mousemask="no"
+AC_ARG_WITH(menu,
+	AS_HELP_STRING([--with-menu], [with menu library (TUI mode)]),
+	[menu=${withval}], [menu=no])
+newmenu="no"
+
 unicode="no"
 AS_IF([test "x$tui" = "xyes"], [
 	AC_DEFINE(TUIMODE, 1, [Build with TUI (curses library)])
@@ -70,9 +75,17 @@ AS_IF([test "x$tui" = "xyes"], [
 		AC_DEFINE([HAVE_USE_DEFAULT_COLORS], [1], [Define this if curses library has colors support]))
 	AS_IF([test "x$mouse" = "xyes"], [
 		AC_SEARCH_LIBS([mousemask], [$_curses_libs], [
-			AC_DEFINE([HAVE_MOUSEMASK], [1], [Define this if curses library has mouse support])
+			AC_DEFINE([WITH_MOUSE], [1], [Define this if curses library has mouse support])
 			mousemask="yes"
 		])
+	])
+	AS_IF([test "x$menu" = "xyes"], [
+		menu="no"
+		AC_MSG_WARN([menu support is not ready yet])
+#		AC_SEARCH_LIBS([new_menu], ["menu"], [
+#			AC_DEFINE([WITH_MENU], [1], [Define this if curses has menu library])
+#			newmenu="yes"
+#		])
 	])
 	AC_ARG_WITH(unicode,
 		AS_HELP_STRING([--without-unicode], [without Unicode histogram]),
@@ -330,8 +343,12 @@ AS_IF([test "x$libcap"    = "xyes"],
 AS_IF([test "x$tui"       = "xyes"],
 	[_option_list="$_option_list +TUI"],
 	[_option_list="$_option_list -TUI"])
-AS_IF([test "x$mousemask" = "yes"],
-	[_option_list="$_option_list +MOUSE"])
+AS_IF([test "x$tui"       = "xyes" -a "x$mousemask" = "xyes"],
+	[_option_list="$_option_list +MOUSE"],
+	[_option_list="$_option_list -MOUSE"])
+AS_IF([test "x$tui"       = "xyes" -a "x$newmenu" = "xyes"],
+	[_option_list="$_option_list +MENU"],
+	[_option_list="$_option_list -MENU"])
 AS_IF([test "x$unicode"   = "xyes"],
 	[_option_list="$_option_list +UNICODE"],
 	[_option_list="$_option_list -UNICODE"])
@@ -341,7 +358,7 @@ AS_IF([test "x$nls"       = "xyes"],
 AS_IF([test "x$dns"       = "xyes"],
 	[_option_list="$_option_list +DNS"],
 	[_option_list="$_option_list -DNS"])
-AS_IF([test "x$aiidn"     = "xyes" -o "x$need_libidn" = "yes"],
+AS_IF([test "x$aiidn"     = "xyes" -o "x$need_libidn" = "xyes"],
 	[_option_list="$_option_list +IDN"],
 	[_option_list="$_option_list -IDN"])
 AS_IF([test "x$ipinfo"    = "xyes"],

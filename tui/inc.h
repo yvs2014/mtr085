@@ -14,7 +14,21 @@
 #elif defined(HAVE_CURSES_H)
 #  include <curses.h>
 #else
-#  error No *curses header file given
+#  error No *curses header
+#endif
+
+#if 0 /*not yet*/
+#ifdef WITH_MENU
+#if   defined(HAVE_NCURSESW_MENU_H)
+#  include <ncursesw/menu.h>
+#elif defined(HAVE_NCURSES_MENU_H)
+#  include <ncurses/menu.h>
+#elif defined(HAVE_MENU_H)
+#  include <menu.h>
+#else
+#  error No menu header
+#endif
+#endif
 #endif
 
 #endif

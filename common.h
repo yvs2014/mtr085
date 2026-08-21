@@ -14,10 +14,6 @@
 #include <sys/param.h>
 #endif
 
-#if defined(TUIMODE) && defined(HAVE_MOUSEMASK)
-#define WITH_MOUSE
-#endif
-
 #ifndef INET_ADDRSTRLEN
 #define INET_ADDRSTRLEN  16
 #endif
@@ -54,7 +50,7 @@
 #endif
 
 #ifndef GITREV
-#define GITREV "305"
+#define GITREV "306"
 #endif
 
 #ifndef HAVE_UINT
