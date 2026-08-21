@@ -41,6 +41,8 @@
 #include "ipinfo.h"
 #endif
 
+#define VUSLASH "│"
+
 enum {
   HOSTINFOMAX =   30,
   GETCH_BATCH =  100,
@@ -538,18 +540,17 @@ static void redraw_status(WINDOW *win) {
   }
   //
   buff[0] = 0;
-  int len = 0;
-  // add source host
-  if (tuilook == OLDLOOK) {
-    len = snprinte(buff, sizeof(buff), "%.*s", (int)strnlen(srchost, getmaxx(win) / 2), srchost);
-    if (len < 0)
-      len = 0;
-  }
   // add datetime
   char str[64] = {0};
   const char *date = tui_datetime ? tui_datetime(time(NULL), sizeof(str), str) : NULL;
-  if (date && date[0])
-    len += snprinte(buff + len, sizeof(buff) - len, len ? ": %s" : "%s", date);
+  int len = (date && date[0]) ? ((tuilook == OLDLOOK) ?
+    snprinte(buff, sizeof(buff), "%.*s: %s",
+      (int)strnlen(srchost, getmaxx(win) / 2), srchost, date) :
+#ifdef WITH_UNICODE
+    (utf_compat ?
+      snprinte(buff, sizeof(buff), " %s %s", VUSLASH, date) :
+#endif
+      snprinte(buff, sizeof(buff), " %c %s", VSLASH, date))) : 0;
   static int dt_last_xpos;
   // print it rigth aligned
   if ((len > 0) && buff[0]) {

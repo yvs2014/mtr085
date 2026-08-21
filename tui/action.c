@@ -93,8 +93,6 @@ static bool mouse_on;
 #define MOUSE_OFF NOOP
 #endif
 
-//#define VUSLASH "│"
-//#define VASLASH '|'
 //#define HOLLOW_CIRCLE "⭘"
 //#define  SOLID_CIRCLE "⬤"
 //#define POWER_OFF "⭘"
