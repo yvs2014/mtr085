@@ -3,7 +3,7 @@ project('mtr085', 'c',
 #    'c_std=gnu99,c99',
 #    'b_sanitize=address,undefined',
     'warning_level=3' ],
-  meson_version: '>= 0.49', # 0.49.2 in deb10
+  meson_version: '>= 0.49.2', # 0.49.2 in deb10
   license: 'GPL-2.0-or-later',
   version: '.'.join(['0', '85', find_program('git', required: false).found() ?
     run_command('git', 'rev-list', '--count', '97af563..HEAD', check: false).stdout().strip() : ''
@@ -27,11 +27,7 @@ optlist = []
 cap        = get_option('CAP')
 tui        = get_option('TUI')
 mouse      = get_option('MOUSE')
-menu       = get_option('MENU')
-if menu
-  menu = false # not yet
-  warning('menu support is not ready yet')
-endif
+menupan    = get_option('MENUPAN') # work-in-progress
 unicode    = get_option('UNICODE')
 nls        = get_option('NLS')
 dns        = get_option('DNS')
@@ -401,7 +397,7 @@ endforeach
 if meson.version().version_compare('>=0.53')
   sum_ops = {'CAP': cap, 'TUI': tui}
   if tui
-    sum_ops += {'MOUSE': mouse, 'MENU': menu}
+    sum_ops += {'MOUSE': mouse, 'MENUPANEL': menupan}
   endif
   sum_ops += {'UNICODE': unicode, 'NLS': nls, 'DNS': dns, 'IDN': idn,
     'IPINFO': ipinfo, 'SPLIT': split, 'IPV6': ipv6, 'MPLS': mpls}

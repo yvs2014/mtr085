@@ -1,65 +1,64 @@
 
 # TUI part of mtr085-meson
 
-lib = 'ncursesw'
-libcurses = dependency(lib, required: false)
-if not libcurses.found()
-  libcurses = cc.find_library(lib, required: false)
-  if not libcurses.found()
-    lib = 'ncurses'
-    libcurses = dependency(lib, required: false)
-    if not libcurses.found()
-      libcurses = cc.find_library(lib, required: false)
-      if not libcurses.found()
-        lib = 'curses'
-        libcurses = dependency(lib, required: false)
-        if not libcurses.found()
-          libcurses = cc.find_library(lib)
-        endif
-      endif
-    endif
+_libs = ['ncursesw', 'ncurses', 'curses']
+libtui = dependency('', required: false)
+foreach _l: _libs
+  libtui = dependency(_l, required: false)
+  if not libtui.found()
+    libtui = cc.find_library(_l, required: false)
   endif
-endif
-
-config.set_quoted('TUIKIND', lib)
-deps += libcurses
-fns = ['curses_version', 'use_default_colors']
-if mouse
-  fns += 'mousemask'
-endif
-foreach fn: fns
-  if cc.has_function(fn, dependencies: libcurses)
-    config.set('HAVE_' + fn.underscorify().to_upper(), 1)
+  if libtui.found()
+    break
   endif
 endforeach
 
-tuidirs = ['ncursesw', 'ncurses', '']
-tuiprfx = ['n', '']
-foreach dir: tuidirs
-  foreach prfx: tuiprfx
-    headers += dir / (prfx + 'curses.h')
-  endforeach
-endforeach
+assert(libtui.found(), 'no TUI library (' + ', '.join(_libs) + ') found')
+config.set_quoted('TUIKIND', _l)
+deps += libtui
 
-if menu
-  lib = 'menu'
-  libmenu = dependency(lib)
-  if not libmenu.found()
-    libmenu = cc.find_library(lib)
-  endif
-  foreach dir: tuidirs
-    headers += dir / 'menu.h'
-  endforeach
-  fn = 'new_menu'
-  if cc.has_function(fn, dependencies: libmenu)
-    config.set('HAVE_' + fn.underscorify().to_upper(), 1)
-    deps += libmenu
-  endif
-endif
-
+# detect wide-character support
+_fn = 'add_wch'
+_wide = cc.has_function(_fn, dependencies: libtui)
 if unicode
-  fn = 'add_wch'
-  assert(cc.has_function(fn, dependencies: libcurses), 'UNICODE is enabled, but no wchar library found')
+  assert(_wide, 'UNICODE is enabled, but no wchar TUI found')
+endif
+if _wide
+  config.set('TUIWIDE', 1)
+endif
+_fns = ['curses_version', 'use_default_colors']
+if mouse
+  _fns += 'mousemask'
+endif
+foreach _f: _fns
+  if cc.has_function(_f, dependencies: libtui)
+    config.set('HAVE_' + _f.underscorify().to_upper(), 1)
+  endif
+endforeach
+
+_dirs  = _wide ? ['ncursesw'] : []
+_dirs += ['ncurses', '']
+_prfx  = ['n', '']
+foreach _d: _dirs
+  foreach _p: _prfx
+    headers += _d / (_p + 'curses.h')
+  endforeach
+endforeach
+
+if menupan
+  _name = ['menu', 'panel']
+  foreach _n: _name
+    _lib = _n  + (_wide ? 'w' : '')
+    _dep = dependency(_lib)
+    if not _dep.found()
+      _dep = cc.find_library(_lib)
+    endif
+    assert(_dep.found(), 'no ' + (_wide ? 'wide ' : '') + _lib + ' library found')
+    deps += _dep
+    foreach _d: _dirs
+      headers += _d / _n + '.h'
+    endforeach
+  endforeach
 endif
 
 srcf += files('tui.c')
@@ -79,13 +78,11 @@ else
   manexcl += 'M'
 endif
 
-if menu and not config.has('HAVE_NEW_MENU')
-  menu = false
-endif
-if menu
-  optlist += '+MENU'
-  config.set('WITH_MENU', 1)
+if menupan
+  optlist += '+MENUPAN'
+  config.set('WITH_MENUPAN', 1)
+  srcf += files('menupan.c')
 else
-  optlist += '-MENU'
+  optlist += '-MENUPAN'
 endif
 

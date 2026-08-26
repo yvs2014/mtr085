@@ -16,7 +16,6 @@
     Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 */
 
-//#include <stdio.h>
 #include <string.h>
 
 #if defined(LOG_TUI) && !defined(LOGMOD)
@@ -28,10 +27,20 @@
 
 #include "action.h"
 #include "chart.h"
+#ifdef WITH_MENUPAN
+#include "menupan.h"
+#endif
 #include "ipinfo.h"
 #include "net.h"
 #include "nls.h"
 #include "aux.h"
+
+#ifdef WITH_MENUPAN
+#define MENUKEY 'M'
+#else
+#define MENUKEY 'h'
+#endif
+
 
 typedef void (*tui_key_fn)(WINDOW *win) NONNULL(1);
 
@@ -408,6 +417,7 @@ static void tui_key_minus(WINDOW *win UNUSED) {
   LOGMSG("line %s", "up");
 }
 
+
 // map: local actions
 static tui_key_fn actfn_map[UINT8_MAX] =  {
   ['?'] = tui_key_h,
@@ -418,6 +428,10 @@ static tui_key_fn actfn_map[UINT8_MAX] =  {
   ['f'] = tui_key_f, // first ttl
   ['i'] = tui_key_i, // interval
   ['m'] = tui_key_m, // max ttl
+#ifdef WITH_MENUPAN
+  [27/*ESC*/] = menu_handler,
+  [MENUKEY]   = menu_handler,
+#endif
   ['o'] = tui_key_o, // fields to display
 #ifdef IP_TOS
   ['Q'] = tui_key_Q, // qos
@@ -432,9 +446,9 @@ static key_action_t action_map[UINT8_MAX] =  {
 #ifdef WITH_MPLS
   ['e'] = ActionMPLS,
 #endif
-  ['j'] = ActionJitter,
+  ['j'] = ActionJttr,
 #ifdef WITH_IPINFO
-  ['l'] = ActionAS,
+  ['l'] = ActionASN,
   ['L'] = ActionII,
 #endif
 #ifdef ENABLE_DNS
@@ -468,9 +482,9 @@ static void reset_by_key(int key, void (*reset)(void)) {
 #endif
     case 'f': // first ttl
     case 'i': // interval
-    case 'j': // [ActionJitter]
+    case 'j': // [ActionJttr]
 #ifdef WITH_IPINFO
-    case 'l': // [ActionAS]
+    case 'l': // [ActionASN]
     case 'L': // [ActionII]
 #endif
     case 'm': // max ttl
@@ -543,8 +557,8 @@ static void print_statuskeep(WINDOW *win, const char *name, const char *value,
   crd->y1 = dy + getcury(win);
   if (getcurx(win) < (getmaxx(win) - 1))
     crd->x1--; // successful addstr()
-  LOGMSG("status(%s): x0=%d y0=%d x1=%d y1=%d (w=%d h=%d)",
-    name, crd->x0, crd->y0, crd->x1, crd->y1,
+  LOGMSG("status(%s=%d): x0=%d y0=%d x1=%d y1=%d (w=%d h=%d)",
+    name, onoff ? *onoff : -1, crd->x0, crd->y0, crd->x1, crd->y1,
     crd->x1 - crd->x0 + 1, crd->y1 - crd->y0 + 1);
 }
 //
@@ -555,24 +569,29 @@ static int mouse2key(void) {
     // && (event.bstate & BUTTON1_CLICKED) /*already filtered*/
   ) {
     ch =
-       CRD_ENCLOSE(crd_topbar.menu)  ? 'h' /*temporarily 'help', TODO: menu*/ :
-       CRD_ENCLOSE(crd_topbar.quit)  ? 'q' :
+       CRD_ENCLOSE(crd_topbar.menu)  ? MENUKEY :
+       CRD_ENCLOSE(crd_topbar.quit)  ? 'q'     :
        //
-       CRD_ENCLOSE(crd_status.jttr)  ? 'j' :
-       CRD_ENCLOSE(crd_status.chart) ? 'd' :
+       CRD_ENCLOSE(crd_status.jttr)  ? 'j'     :
+       CRD_ENCLOSE(crd_status.chart) ? 'd'     :
 #ifdef ENABLE_DNS
-       CRD_ENCLOSE(crd_status.dns)   ? 'n' :
+       CRD_ENCLOSE(crd_status.dns)   ? 'n'     :
 #endif
 #ifdef WITH_IPINFO
-       CRD_ENCLOSE(crd_status.asn)   ? 'l' :
-       CRD_ENCLOSE(crd_status.info)  ? 'L' :
+       CRD_ENCLOSE(crd_status.asn)   ? 'l'     :
+       CRD_ENCLOSE(crd_status.info)  ? 'L'     :
 #endif
 #ifdef WITH_MPLS
-       CRD_ENCLOSE(crd_status.mpls)  ? 'e' :
+       CRD_ENCLOSE(crd_status.mpls)  ? 'e'     :
 #endif
-       CRD_ENCLOSE(crd_status.proto) ? 'P' :
+       CRD_ENCLOSE(crd_status.proto) ? 'P'     :
        0;
-    LOGMSG("mouse event: x=%d, y=%d, key='%c'", event.x, event.y, ch);
+#ifdef WITH_MENUPAN
+    if (!ch && menuactive && !inside_menu(event.x, event.y))
+      ch = ESC;
+#endif
+    if (ch)
+      LOGMSG("mouse event: x=%d, y=%d, key=0x%02x(%c)", event.x, event.y, ch, ch);
   }
   return ch;
 }
@@ -585,6 +604,7 @@ key_action_t tui_actionw(WINDOW *win, void (*reset)(void)) { // NONNULL(1)
   int ch = wgetch(win);
   if (!ch || (ch == ERR))
     return action;
+  doupdate();
 #ifdef KEY_RESIZE
   // skip resize keys
   if (ch == KEY_RESIZE) { // cleanup by batch
@@ -615,13 +635,26 @@ key_action_t tui_actionw(WINDOW *win, void (*reset)(void)) { // NONNULL(1)
       WINDOW *w = (fn == tui_key_h) ? stdscr : win;
       if (w)
         fn(w);
-    } else    // or somewhere else
-      action = action_map[ch];
+    } else {   // or somewhere else
+#ifdef WITH_MENUPAN
+      // handle 'space' in menu context
+      if (menuactive && (ch == ' '))
+        action = menu_action();
+      else
+#endif
+      { action = action_map[ch]; }
+    }
   } else switch (ch) {  // more than 8 bits
     case KEY_UP:   // decrease by one line
+#ifdef WITH_MENUPAN
+      menuactive ? menu_updown(true) :
+#endif
       tui_key_plus(NULL);
       break;
     case KEY_DOWN: // increase by one line
+#ifdef WITH_MENUPAN
+      menuactive ? menu_updown(false) :
+#endif
       tui_key_minus(NULL);
       break;
     case KEY_PPAGE: // PageUp:   decrease by 'page'-lines
@@ -651,16 +684,16 @@ void topbar_icons(WINDOW *win) { // NONNULL(1)
 #ifdef WITH_MOUSE
 void status_n_keep_crd(WINDOW *win, uint len, char buff[len]) { // NONNULL(1, 3)
   int dx = getbegx(win), dy = getbegy(win);
-  print_statuskeep(win, JTTR_STR, NULL, &run_opts.jitter, dx, dy, &crd_status.jttr);
+#ifdef ENABLE_DNS
+  print_statuskeep(win, DNS_STR,  NULL, &run_opts.dns,  dx, dy, &crd_status.dns);
+#endif
+  print_statuskeep(win, JTTR_STR, NULL, &run_opts.jttr, dx, dy, &crd_status.jttr);
   buff[0] = 0;
   if (run_opts.chart)
     snprinte(buff, len, "%d", CHART_MODE);
   print_statuskeep(win, CHART_STR, buff, NULL, dx, dy, &crd_status.chart);
-#ifdef ENABLE_DNS
-  print_statuskeep(win, DNS_STR, NULL, &run_opts.dns, dx, dy, &crd_status.dns);
-#endif
 #ifdef WITH_IPINFO
-  print_statuskeep(win, ASN_STR, NULL, &run_opts.asn, dx, dy, &crd_status.asn);
+  print_statuskeep(win, ASN_STR,  NULL, &run_opts.asn,  dx, dy, &crd_status.asn);
   buff[0] = 0;
   if (run_opts.ipinfo)
     ipinfo_head_div(len, buff, COMMA, 0);
@@ -676,14 +709,14 @@ void status_n_keep_crd(WINDOW *win, uint len, char buff[len]) { // NONNULL(1, 3)
 #endif
 
 void status_no_crd(WINDOW *win, uint len, char buff[len]) { // NONNULL(1, 3)
-  print_statusitem(win, JTTR_STR, NULL, &run_opts.jitter);
+#ifdef ENABLE_DNS
+  print_statusitem(win, DNS_STR,  NULL, &run_opts.dns);
+#endif
+  print_statusitem(win, JTTR_STR, NULL, &run_opts.jttr);
   buff[0] = 0;
   if (run_opts.chart)
     snprinte(buff, len, "%d", CHART_MODE);
   print_statusitem(win, CHART_STR, buff, NULL);
-#ifdef ENABLE_DNS
-  print_statusitem(win, DNS_STR,  NULL, &run_opts.dns);
-#endif
 #ifdef WITH_IPINFO
   print_statusitem(win, ASN_STR,  NULL, &run_opts.asn);
   buff[0] = 0;
@@ -708,15 +741,16 @@ void enable_mouse(void) {
 //    menu_icon_len = ustrnlen(menu_icon, NAMELEN);
     quit_icon_len = ustrnlen(quit_icon, NAMELEN);
     mousemask(BUTTON1_CLICKED | REPORT_MOUSE_POSITION, NULL);
+    LOGMSG("%s", "done");
   }
-  LOGMSG("mouse: %s", run_opts.mouse ? "enabled" : "disabled");
 }
 //
 void disable_mouse(void) {
   MOUSE_OFF;
-  if (run_opts.mouse)
+  if (run_opts.mouse) {
     mousemask(0, NULL);
-  LOGMSG("mouse: %s", run_opts.mouse ? "enabled" : "disabled");
+    LOGMSG("%s", "done");
+  }
 }
 #endif
 

@@ -228,9 +228,9 @@ static key_action_t spl_action_map[UINT8_MAX] =  {
 #ifdef WITH_MPLS
   ['e'] = ActionMPLS,
 #endif
-  ['j'] = ActionJitter,
+  ['j'] = ActionJttr,
 #ifdef WITH_IPINFO
-  ['l'] = ActionAS,
+  ['l'] = ActionASN,
   ['L'] = ActionII,
 #endif
 #ifdef ENABLE_DNS

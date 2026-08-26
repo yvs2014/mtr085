@@ -15,4 +15,12 @@ void disable_mouse(void);
 
 extern uint display_offset;
 
+#ifdef WITH_MENUPAN
+#define WREFRESH(win) menuactive ? update_panels() : (void)wnoutrefresh(win)
+#else
+#define WREFRESH(win) wnoutrefresh(win)
+#endif
+
+#define ESC 27
+
 #endif

@@ -50,7 +50,7 @@
 #endif
 
 #ifndef GITREV
-#define GITREV "307"
+#define GITREV "308"
 #endif
 
 #ifndef HAVE_UINT
@@ -130,7 +130,7 @@ typedef enum {
 
 typedef enum {
   ActionNone = 0, ActionQuit, ActionReset, ActionPauseResume,
-  ActionProto, ActionUDP, ActionTCP, ActionCache, ActionJitter,
+  ActionProto, ActionUDP, ActionTCP, ActionCache, ActionJttr,
 #ifdef WITH_MPLS
   ActionMPLS,
 #endif
@@ -138,7 +138,7 @@ typedef enum {
   ActionDNS,
 #endif
 #ifdef WITH_IPINFO
-  ActionAS, ActionII, ActionMultiII,
+  ActionASN, ActionII, ActionMultiII,
 #endif
 } key_action_t;
 
@@ -160,7 +160,7 @@ typedef struct opts_s {
     both,     // -b
     mpls,     // -e
     endpoint, // -fa
-    jitter,   // -j
+    jttr,     // -j
 #ifdef WITH_IPINFO
     asn,      // -l
     ipinfo,   // -L
@@ -206,7 +206,7 @@ typedef union opt_sum_u {
     both     :1, // -b
     mpls     :1, // -e
     endpoint :1, // -fa
-    jitter   :1, // -j
+    jttr     :1, // -j
     asn      :1, // -l
     ipinfo   :1, // -L
     multi    :1, // -y (multi ipinfo sources)

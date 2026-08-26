@@ -80,11 +80,20 @@ msgstr "ON "
 msgid "Off"
 msgstr "OFF"
 
-msgid "Chart"
-msgstr "Diagrama"
+
+## menu
 
 msgid "DNS"
 msgstr "DNS"
+
+msgid "Jitter"
+msgstr "Jitter"
+
+msgid "Chart"
+msgstr "Diagrama"
+
+msgid "ASN"
+msgstr "SA"
 
 msgid "Info"
 msgstr "Info"
@@ -94,6 +103,10 @@ msgstr "MPLS"
 
 msgid "Proto"
 msgstr "Proto"
+
+msgid "Protocol"
+msgstr "Protocolo"
+
 
 #
 
@@ -156,9 +169,6 @@ msgstr "em pausa"
 
 msgid "Host"
 msgstr "Host"
-
-msgid "ASN"
-msgstr "SA"
 
 msgid "Route"
 msgstr "Rede"

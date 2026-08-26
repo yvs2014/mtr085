@@ -1052,7 +1052,7 @@ bool ipinfo_action(key_action_t action) {
   if (!ipinfo_ready && !ipinfo_open())
     return false;
   switch (action) {
-    case ActionAS:   // `l'
+    case ActionASN:  // `l'
       run_opts.asn = !run_opts.asn;
       if (run_opts.ipinfo)
         run_opts.ipinfo = false;

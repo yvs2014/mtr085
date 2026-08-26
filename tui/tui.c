@@ -29,6 +29,9 @@
 #include "tui.h"
 #include "chart.h"
 #include "action.h"
+#ifdef WITH_MENUPAN
+#include "menupan.h"
+#endif
 #include "nls.h"
 #include "aux.h"
 #include "net.h"
@@ -52,6 +55,9 @@ enum {
 enum {NDX_TOP = 0, NDX_STATUS, NDX_LABEL, NDX_WORK};
 typedef struct {
   WINDOW *win;
+#ifdef WITH_MENUPAN
+  PANEL *pan;
+#endif
   int height; // not in use yet
 } area_s;
 
@@ -83,6 +89,7 @@ static title_len_s titlelen;
 static void require_redraw(void) {
   memset(&redrawn, 0, sizeof(redrawn));
   titlelen = (title_len_s){.screen = -1, .stat = -1, .chart = -1};
+  LOGMSG("%s", "flags are reset");
 }
 
 key_action_t tui_keyaction(void) {
@@ -362,27 +369,27 @@ static int tui_print_args(uint size, char buf[size]) NONNULL(2);
 static int tui_print_args(uint size, char buf[size]) {
   int len = 0;
   if (tuilook == OLDLOOK) {
-    BOOL_OPT2STR(jitter,  PAR_JITTER_STR);
-    INT_OPT2STR(chart,    PAR_CHART_STR, "%u");
-    BOOL_OPT2STR(color,   PAR_COLOR_STR);
 #ifdef ENABLE_DNS
-    BOOL_OPT2STR(dns,     PAR_DNS_STR);
+    BOOL_OPT2STR(dns,    PAR_DNS_STR);
 #endif
+    BOOL_OPT2STR(jttr,   PAR_JITTER_STR);
+    INT_OPT2STR(chart,   PAR_CHART_STR, "%u");
+    BOOL_OPT2STR(color,  PAR_COLOR_STR);
 #ifdef WITH_IPINFO
-    BOOL_OPT2STR(asn,     PAR_ASN_STR);
-    BOOL_OPT2STR(ipinfo,  PAR_II_STR);
+    BOOL_OPT2STR(asn,    PAR_ASN_STR);
+    BOOL_OPT2STR(ipinfo, PAR_II_STR);
 #endif
   }
 #ifdef WITH_IPINFO
   if (IPINFOED)
-    BOOL_OPT2STR(multi, PAR_MII_STR);
+    BOOL_OPT2STR(multi,  PAR_MII_STR);
 #endif
   if (tuilook == OLDLOOK) {
 #ifdef WITH_MPLS
-    BOOL_OPT2STR(mpls,    PAR_MPLS_STR);
+    BOOL_OPT2STR(mpls,   PAR_MPLS_STR);
 #endif
-    BOOL_OPT2STR(udp,     PAR_UDP_STR);
-    BOOL_OPT2STR(tcp,     PAR_TCP_STR);
+    BOOL_OPT2STR(udp,    PAR_UDP_STR);
+    BOOL_OPT2STR(tcp,    PAR_TCP_STR);
   }
   //
   //
@@ -423,7 +430,7 @@ static void redraw_chart_title(WINDOW *win, int indent) {
     int x = (getmaxx(win) - titlelen.chart) / 2;
     mvwaddstr(win, 0, (x > 0) ? x : 0, chart_title);
   }
-  wrefresh(win);
+  WREFRESH(win);
 }
 
 static void redraw_charts(WINDOW *label, WINDOW *work) NONNULL(1, 2);
@@ -443,7 +450,7 @@ static void redraw_charts(WINDOW *label, WINDOW *work) {
   histogram(work, indent);
   if (wmove(work, getcury(work) + 1, 0) != ERR)
     print_scale(work);
-  wrefresh(work);
+  WREFRESH(work);
 }
 
 static int redraw_labels(WINDOW *win, int indent) NONNULL(1);
@@ -467,7 +474,7 @@ static int redraw_labels(WINDOW *win, int indent) {
     indent = 0;
   display_main_labels(win, indent);
   wattroff(win, A_BOLD);
-  wrefresh(win);
+  WREFRESH(win);
   return indent;
 }
 
@@ -507,7 +514,7 @@ static void redraw_top(WINDOW *win) {
   if (tuilook != OLDLOOK)
     topbar_icons(win);
 #endif
-  wrefresh(win);
+  WREFRESH(win);
 }
 
 static void print_hintmenu(WINDOW *win, char ch, const char *name) NONNULL(1, 3);
@@ -560,7 +567,7 @@ static void redraw_status(WINDOW *win) {
   else if ((dt_last_xpos > 0) && (wmove(win, 0, dt_last_xpos) == OK))
     wclrtoeol(win);
   //
-  wrefresh(win);
+  WREFRESH(win);
 }
 
 static inline void redraw_mainarea(WINDOW *label, WINDOW *work) NONNULL(1, 2);
@@ -582,7 +589,7 @@ static inline void redraw_mainarea(WINDOW *label, WINDOW *work) {
     }
     werase(work);
     print_hops(work, stat_indent);
-    wrefresh(work);
+    WREFRESH(work);
   }
 }
 
@@ -597,11 +604,17 @@ static void create_area(uint ndx) {
       wrefresh(win);
       keypad(win, TRUE);
       area[ndx].win = win;
+#ifdef WITH_MENUPAN
+      area[ndx].pan = new_panel(win);
+      if (!area[ndx].pan)
+        LOGMSG("new_panel(#%u): %s", ndx, "failed");
+#endif
       y += h;
       LOGMSG("#%u: x0=%d y0=%d x1=%d y1=%d (width=%d height=%d)", ndx,
         getbegx(win), getbegy(win), getmaxx(win), getmaxy(win),
         getmaxx(win) - getbegx(win), getmaxy(win) - getbegy(win));
-    }
+    } else
+      LOGMSG("newwin(#%u): %s", ndx, "failed");
   } else {
     y = 0; // indicate y-reset with out-of-range index
     LOGMSG("%s", "area y-reset");
@@ -609,12 +622,19 @@ static void create_area(uint ndx) {
 }
 
 static void free_areas(void) {
-  for (uint i = 0; i < ARRAY_LEN(area); i++)
+  for (uint i = 0; i < ARRAY_LEN(area); i++) {
+#ifdef WITH_MENUPAN
+    if (area[i].pan) {
+      del_panel(area[i].pan);
+      area[i].pan = NULL;
+    }
+#endif
     if (area[i].win) {
       delwin(area[i].win);
       area[i].win = NULL;
       LOGMSG("#%u: done", i);
     }
+  }
 }
 
 static inline bool areas_okay(void) {
@@ -645,6 +665,9 @@ static bool areas_ready(void) {
 static void areas_bg(short bg) {
   wbkgd(area[NDX_TOP   ].win, COLOR_PAIR(bg));
   wbkgd(area[NDX_STATUS].win, COLOR_PAIR(bg));
+#ifdef WITH_MENUPAN
+  menu_bg = bg; // postponed wbkgd() set at first menu_handler() call
+#endif
 }
 
 static inline void redraw_areas(void) {
@@ -657,9 +680,10 @@ static inline void redraw_areas(void) {
 }
 
 void tui_redraw(void) {
-  if (areas_ready())
+  if (areas_ready()) {
     redraw_areas();
-  else {
+    doupdate();
+  } else {
     erase();
     printw("TUI init areas: failed");
     refresh();
@@ -730,6 +754,9 @@ void tui_close(void) {
 #endif
 #ifdef WITH_MOUSE
   disable_mouse();
+#endif
+#ifdef WITH_MENUPAN
+  free_menupan();
 #endif
   if (stdscr && screen_ready) {
     endwin();

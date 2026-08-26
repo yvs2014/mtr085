@@ -26,17 +26,22 @@
 #if !defined(LOG_POLL) && defined(LOGMOD)
 #undef LOGMOD
 #endif
+
 #include "common.h"
 #include "aux.h"
 
 #include "polling.h"
 #include "net.h"
-#include "display.h"
 #ifdef ENABLE_DNS
 #include "dns.h"
 #endif
 #ifdef WITH_IPINFO
 #include "ipinfo.h"
+#endif
+
+#include "display.h"
+#ifdef WITH_MENUPAN
+#include "menupan.h"
 #endif
 
 enum { FD_BATCHMAX = 30 };
@@ -301,10 +306,13 @@ static key_action_t keyboard_events(key_action_t action) {
       OPT_SUM(pause);
       break;
 #if defined(TUIMODE) || defined(SPLITMODE)
-    case ActionJitter: // latency OR jitter
-      run_opts.jitter = !run_opts.jitter;
-      OPT_SUM(jitter);
+    case ActionJttr: // latency OR jitter
+      run_opts.jttr = !run_opts.jttr;
+      OPT_SUM(jttr);
       onoff_jitter();
+#ifdef WITH_MENUPAN
+      menu_toggle_look();
+#endif
       break;
 #endif
 #ifdef WITH_MPLS
@@ -312,6 +320,9 @@ static key_action_t keyboard_events(key_action_t action) {
       LOGMSG("toggle %s: %d -> %d", "MPLS", run_opts.mpls, !run_opts.mpls);
       run_opts.mpls = !run_opts.mpls;
       OPT_SUM(mpls);
+#ifdef WITH_MENUPAN
+      menu_toggle_look();
+#endif
       break;
 #endif
 #ifdef ENABLE_DNS
@@ -320,6 +331,9 @@ static key_action_t keyboard_events(key_action_t action) {
       run_opts.dns = !run_opts.dns;
       OPT_SUM(dns);
       dns_open();
+#ifdef WITH_MENUPAN
+      menu_toggle_look();
+#endif
       break;
 #endif
     case ActionCache:
@@ -328,7 +342,7 @@ static key_action_t keyboard_events(key_action_t action) {
       OPT_SUM(oncache);
       break;
 #ifdef WITH_IPINFO
-    case ActionAS:
+    case ActionASN:
     case ActionII:
     case ActionMultiII:
       LOGMSG("toggle %s", "ipinfo-mode");
@@ -336,6 +350,10 @@ static key_action_t keyboard_events(key_action_t action) {
       OPT_SUM(asn);
       OPT_SUM(ipinfo);
       OPT_SUM(multi);
+#ifdef WITH_MENUPAN
+      if (action == ActionASN)
+        menu_toggle_look();
+#endif
       break;
 #endif
     case ActionUDP:

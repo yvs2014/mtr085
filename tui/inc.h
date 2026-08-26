@@ -17,8 +17,7 @@
 #  error No *curses header
 #endif
 
-#if 0 /*not yet*/
-#ifdef WITH_MENU
+#ifdef WITH_MENUPAN
 #if   defined(HAVE_NCURSESW_MENU_H)
 #  include <ncursesw/menu.h>
 #elif defined(HAVE_NCURSES_MENU_H)
@@ -28,6 +27,15 @@
 #else
 #  error No menu header
 #endif
+//
+#if   defined(HAVE_NCURSESW_PANEL_H)
+#  include <ncursesw/panel.h>
+#elif defined(HAVE_NCURSES_PANEL_H)
+#  include <ncurses/panel.h>
+#elif defined(HAVE_PANEL_H)
+#  include <panel.h>
+#else
+#  error No panel header
 #endif
 #endif
 

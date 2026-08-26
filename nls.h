@@ -33,12 +33,12 @@
 #define ONN_STR        _("On ")
 #define OFF_STR        _("Off")
 #define JTTR_STR       _("Jttr")
-#define CHART_STR      _("Chart")
-#define DNS_STR        _("DNS")
-#define ASN_STR        _("ASN")
-#define INFO_STR       _("Info")  // ipinfo
-#define MPLS_STR       _("MPLS")
-#define PROTO_STR      _("Proto") // icmp-udp-tcp
+#define CHART_STR      _(_CHART_STR)
+#define DNS_STR        _(_DNS_STR)
+#define ASN_STR        _(_ASN_STR)
+#define INFO_STR       _(_INFO_STR) // ipinfo
+#define MPLS_STR       _(_MPLS_STR)
+#define PROTO_STR      _("Proto")   // icmp-udp-tcp
 //
 #define PAR_UDP_STR    _("udp")
 #define PAR_TCP_STR    _("tcp")
@@ -62,7 +62,7 @@
 
 // hop info with init fields
 #define HOST_STR      _("Host")
-#define _II_ASN_STR    "ASN"
+#define _II_ASN_STR    _ASN_STR
 #define _II_ROUTE_STR  "Route"
 #define _II_CC_STR     "CC"
 #define _II_REG_STR    "Registry"
@@ -112,6 +112,14 @@
 #define _JMAX_HINT  "Worst Jitter"
 #define _JINT_STR   "Jint"
 #define _JINT_HINT  "Interarrival Jitter"
+//
+#define _DNS_STR    "DNS"
+#define _JITTER_STR "Jitter"
+#define _CHART_STR  "Chart"
+#define _ASN_STR    "ASN"
+#define _INFO_STR   "Info"
+#define _MPLS_STR   "MPLS"
+#define _PROTO_STR  "Protocol"
 
 // cmd help
 #define COMMANDS_STR _("Commands")

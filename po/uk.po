@@ -80,11 +80,20 @@ msgstr "Увімк"
 msgid "Off"
 msgstr "Вимк "
 
-msgid "Chart"
-msgstr "Діаграма"
+
+## menu
 
 msgid "DNS"
 msgstr "DNS"
+
+msgid "Jitter"
+msgstr "Джиттер"
+
+msgid "Chart"
+msgstr "Діаграма"
+
+msgid "ASN"
+msgstr "АС"
 
 msgid "Info"
 msgstr "Інфо"
@@ -94,6 +103,10 @@ msgstr "MPLS"
 
 msgid "Proto"
 msgstr "Прото"
+
+msgid "Protocol"
+msgstr "Протокол"
+
 
 #
 
@@ -156,9 +169,6 @@ msgstr "на паузі"
 
 msgid "Host"
 msgstr "Вузол"
-
-msgid "ASN"
-msgstr "АС"
 
 msgid "Route"
 msgstr "Мережа"
