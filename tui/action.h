@@ -21,6 +21,4 @@ extern uint display_offset;
 #define WREFRESH(win) wnoutrefresh(win)
 #endif
 
-#define ESC 27
-
 #endif

@@ -216,11 +216,10 @@ typedef key_action_t (*spl_key_fn)(void);
 static spl_key_fn spl_actfn_map[UINT8_MAX] =  {
   ['?']     = spl_key_h, // help
   ['h']     = spl_key_h,
-  [' ']     = spl_key_p, // pause/resume
+  [C_SPACE] = spl_key_p, // pause/resume
   ['p']     = spl_key_p,
-  ['q']     = spl_key_q, // quit
-  [3/*^C*/] = spl_key_q,
-//[27/*Esc*/] = spl_key_q,
+  [CTRL_C]  = spl_key_q, // quit
+  ['q']     = spl_key_q,
 };
 
 // map: char to action

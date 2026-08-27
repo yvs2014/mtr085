@@ -429,8 +429,8 @@ static tui_key_fn actfn_map[UINT8_MAX] =  {
   ['i'] = tui_key_i, // interval
   ['m'] = tui_key_m, // max ttl
 #ifdef WITH_MENUPAN
-  [27/*ESC*/] = menu_handler,
-  [MENUKEY]   = menu_handler,
+  [C_ESCAPE] = menu_handler,
+  [MENUKEY]  = menu_handler,
 #endif
   ['o'] = tui_key_o, // fields to display
 #ifdef IP_TOS
@@ -454,12 +454,11 @@ static key_action_t action_map[UINT8_MAX] =  {
 #ifdef ENABLE_DNS
   ['n'] = ActionDNS,
 #endif
-  [' '] = ActionPauseResume,
-  ['p'] = ActionPauseResume,
+  [C_SPACE]   = ActionPauseResume,
+  ['p']       = ActionPauseResume,
   ['P'] = ActionProto,
-  [3/*^C*/]   = ActionQuit,
-//[27/*Esc*/] = ActionQuit,
-  ['q'] = ActionQuit,
+  [CTRL_C]    = ActionQuit,
+  ['q']       = ActionQuit,
   ['r'] = ActionReset,
   ['t'] = ActionTCP,
   ['u'] = ActionUDP,
@@ -492,7 +491,7 @@ static void reset_by_key(int key, void (*reset)(void)) {
     case 'n': // [ActionDNS]
 #endif
     case 'o': // fields to display and their order
-    case ' ':
+    case C_SPACE:
     case 'p': // [ActionPauseResume]
     case 'P': // [ActionProto]
 #ifdef IP_TOS
@@ -535,7 +534,7 @@ static void print_menukeep(WINDOW *win, const char *name, int dx, int dy, crd_s 
   crd->x1 = dx + getcurx(win);
   crd->y1 = dy + getcury(win);
   if (getcurx(win) < (getmaxx(win) - 1))
-    crd->x1--; /// uccessful addstr()
+    crd->x1--; // successful addstr()
   LOGMSG("menu(%s): x0=%d y0=%d x1=%d y1=%d (w=%d h=%d)",
     name, crd->x0, crd->y0, crd->x1, crd->y1,
     crd->x1 - crd->x0 + 1, crd->y1 - crd->y0 + 1);
@@ -566,8 +565,11 @@ static int mouse2key(void) {
   MEVENT event = {0};
   int ch = 0;
   if (getmouse(&event) == OK
-    // && (event.bstate & BUTTON1_CLICKED) /*already filtered*/
+    /* note: mousemask = BUTTON1_CLICKED | BUTTON1_DOUBLE_CLICKED */
+    // && (event.bstate & (BUTTON1_CLICKED | BUTTON1_DOUBLE_CLICKED))
   ) {
+    LOGMSG("mouse event: x=%d, y=%d, button1=%sclicked", event.x, event.y,
+      (event.bstate & BUTTON1_DOUBLE_CLICKED) ? "double_" : "");
     ch =
        CRD_ENCLOSE(crd_topbar.menu)  ? MENUKEY :
        CRD_ENCLOSE(crd_topbar.quit)  ? 'q'     :
@@ -586,12 +588,23 @@ static int mouse2key(void) {
 #endif
        CRD_ENCLOSE(crd_status.proto) ? 'P'     :
        0;
-#ifdef WITH_MENUPAN
-    if (!ch && menuactive && !inside_menu(event.x, event.y))
-      ch = ESC;
-#endif
     if (ch)
-      LOGMSG("mouse event: x=%d, y=%d, key=0x%02x(%c)", event.x, event.y, ch, ch);
+      LOGMSG("key=0x%02x(%c)", ch, ch);
+    else {
+#ifdef WITH_MENUPAN
+      if (menuactive) {
+        if (inside_menu(event.x, event.y)) {
+          // handle mouse click events later calling menu_driver(KEY_MOUSE)
+          ungetmouse(&event);
+          ch = mouse_select_n_toggle();
+          LOGMSG("%s", ch ? "toggle" : "select");
+        } else {
+          ch = C_ESCAPE;
+          LOGMSG("%s", "escape");
+        }
+      }
+#endif
+    }
   }
   return ch;
 }
@@ -638,7 +651,7 @@ key_action_t tui_actionw(WINDOW *win, void (*reset)(void)) { // NONNULL(1)
     } else {   // or somewhere else
 #ifdef WITH_MENUPAN
       // handle 'space' in menu context
-      if (menuactive && (ch == ' '))
+      if (menuactive && (ch == C_SPACE))
         action = menu_action();
       else
 #endif
@@ -740,7 +753,7 @@ void enable_mouse(void) {
     quit_icon = utf_compat ? QUIT_ICON_UTF8 : QUIT_ICON_ASCII;
 //    menu_icon_len = ustrnlen(menu_icon, NAMELEN);
     quit_icon_len = ustrnlen(quit_icon, NAMELEN);
-    mousemask(BUTTON1_CLICKED | REPORT_MOUSE_POSITION, NULL);
+    mousemask(BUTTON1_CLICKED | BUTTON1_DOUBLE_CLICKED | REPORT_MOUSE_POSITION, NULL);
     LOGMSG("%s", "done");
   }
 }

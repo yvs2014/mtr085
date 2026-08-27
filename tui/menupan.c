@@ -30,7 +30,8 @@
 #include "aux.h"
 #include "nls.h"
 
-#define ROUNDED_CORNERS true
+#define ROUNDED_CORNERS    true
+#define ON_MOUSE_DBL_CLICK C_SPACE
 
 bool menuactive;
 short menu_bg = -1;
@@ -335,9 +336,12 @@ void menu_toggle_look(void) {
 }
 
 bool inside_menu(int x, int y) {
-  return menuwin ? (
-    (getbegx(menuwin) <= x) && (x <= (getmaxx(menuwin) - 1)) &&
-    (getbegy(menuwin) <= y) && (y <= getmaxy(menuwin))
-  ) : false;
+  return menuwin ? wenclose(menuwin, y, x) : false;
+}
+
+int mouse_select_n_toggle(void) {
+  int rc = menu_driver(menuset, KEY_MOUSE);
+  LOGMSG("menu_driver(KEY_MOUSE): rc=%d", rc);
+  return (rc == E_UNKNOWN_COMMAND) ? ON_MOUSE_DBL_CLICK : 0;
 }
 

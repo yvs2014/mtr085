@@ -50,7 +50,7 @@
 #endif
 
 #ifndef GITREV
-#define GITREV "308"
+#define GITREV "309"
 #endif
 
 #ifndef HAVE_UINT
@@ -151,6 +151,10 @@ typedef enum {
 #define UNKN_ITEM "???"
 #define AT_FMT "%2d."
 #define SETTLED_ELEMS "LDRS" // Lost-Drop-Recv-Sent
+
+#define CTRL_C    3
+#define C_ESCAPE 27
+#define C_SPACE ' '
 
 // options
 typedef struct opts_s {
