@@ -21,7 +21,7 @@
 #define PSIZE_CHNG_STR _("Change payload size")
 #define NEG4RND_STR    _("negative values are for random")
 #define RANGE_STR      _("range")
-#define RANGENEG_STR   _("range[0-255], random is -1")
+#define RANGENEG_STR   _(_RANGENEG_STR)
 #define GAPINSEC_STR   _("Interval in seconds")
 #define LESSTHAN_STR   _("less than")
 #define MORETHAN_STR   _("more than")
@@ -113,13 +113,15 @@
 #define _JINT_STR   "Jint"
 #define _JINT_HINT  "Interarrival Jitter"
 //
-#define _DNS_STR    "DNS"
-#define _JITTER_STR "Jitter"
-#define _CHART_STR  "Chart"
-#define _ASN_STR    "ASN"
-#define _INFO_STR   "Info"
-#define _MPLS_STR   "MPLS"
-#define _PROTO_STR  "Protocol"
+#define _DNS_STR      "DNS"
+#define _JITTER_STR   "Jitter"
+#define _CHART_STR    "Chart"
+#define _ASN_STR      "ASN"
+#define _INFO_STR     "Info"
+#define _MPLS_STR     "MPLS"
+#define _PROTO_STR    "Protocol"
+#define _BITPATT_STR  "Bit pattern"
+#define _RANGENEG_STR "range[0-255], random is -1"
 
 // cmd help
 #define COMMANDS_STR _("Commands")
@@ -165,7 +167,7 @@
 #define STR_IN_BYTES   _("BYTES")
 
 // option hints
-#define BITPATT_STR    _("Bit pattern")
+#define BITPATT_STR    _(_BITPATT_STR)
 #define NCYCLES_STR    _("Number of cycles")
 #define MINTTL_STR     _("First TTL")
 #define MAXTTL_STR     _("Max TTL")

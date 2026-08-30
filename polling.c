@@ -40,8 +40,8 @@
 #endif
 
 #include "display.h"
-#ifdef WITH_MENUPAN
-#include "menupan.h"
+#ifdef WITH_MENU
+#include "kit.h"
 #endif
 
 enum { FD_BATCHMAX = 30 };
@@ -289,12 +289,36 @@ static void toggle_udptcp(key_action_t action) {
   }
 }
 
+#ifdef LOGMOD
+static const char* actname[MaxActions] = {
+  [ActionNone]  = "none",
+  [ActionQuit]  = "quit",
+  [ActionReset] = "reset network counters",
+  [ActionPauseResume] = "pause/resume",
+  [ActionProto] = "proto",
+  [ActionUDP]   = "udp",
+  [ActionTCP]   = "tcp",
+  [ActionCache] = "cache",
+  [ActionJttr]  = "jitter",
+#ifdef WITH_MPLS
+  [ActionMPLS]  = "mpls",
+#endif
+#ifdef ENABLE_DNS
+  [ActionDNS]   = "dns",
+#endif
+#ifdef WITH_IPINFO
+  [ActionASN]   = "asn",
+  [ActionII]    = "ipinfo",
+  [ActionMultiII] = "multi-source"
+#endif
+};
+#endif
+
 // proceed keyboard events and return action
 static key_action_t keyboard_events(key_action_t action) {
-  LOGMSG("action=%d", action);
+  LOGMSG("action=%d: %s", action, (action < ARRAY_LEN(actname)) ? (actname[action] ? actname[action] : "") : "");
   switch (action) {
     case ActionQuit:
-      LOGMSG("%s", "quit");
       break;
     case ActionReset:
       LOGMSG("%s", "reset network counters");
@@ -307,10 +331,13 @@ static key_action_t keyboard_events(key_action_t action) {
       break;
 #if defined(TUIMODE) || defined(SPLITMODE)
     case ActionJttr: // latency OR jitter
+      LOGMSG("toggle %s: %s -> %s", "table look",
+         run_opts.jttr ? "jitter" : "latency",
+        !run_opts.jttr ? "jitter" : "latency");
       run_opts.jttr = !run_opts.jttr;
       OPT_SUM(jttr);
       onoff_jitter();
-#ifdef WITH_MENUPAN
+#ifdef WITH_MENU
       menu_toggle_look();
 #endif
       break;
@@ -320,7 +347,7 @@ static key_action_t keyboard_events(key_action_t action) {
       LOGMSG("toggle %s: %d -> %d", "MPLS", run_opts.mpls, !run_opts.mpls);
       run_opts.mpls = !run_opts.mpls;
       OPT_SUM(mpls);
-#ifdef WITH_MENUPAN
+#ifdef WITH_MENU
       menu_toggle_look();
 #endif
       break;
@@ -331,7 +358,7 @@ static key_action_t keyboard_events(key_action_t action) {
       run_opts.dns = !run_opts.dns;
       OPT_SUM(dns);
       dns_open();
-#ifdef WITH_MENUPAN
+#ifdef WITH_MENU
       menu_toggle_look();
 #endif
       break;
@@ -350,7 +377,7 @@ static key_action_t keyboard_events(key_action_t action) {
       OPT_SUM(asn);
       OPT_SUM(ipinfo);
       OPT_SUM(multi);
-#ifdef WITH_MENUPAN
+#ifdef WITH_MENU
       if (action == ActionASN)
         menu_toggle_look();
 #endif

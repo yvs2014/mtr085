@@ -29,8 +29,8 @@
 #include "tui.h"
 #include "chart.h"
 #include "action.h"
-#ifdef WITH_MENUPAN
-#include "menupan.h"
+#ifdef WITH_MENU
+#include "kit.h"
 #endif
 #include "nls.h"
 #include "aux.h"
@@ -55,7 +55,7 @@ enum {
 enum {NDX_TOP = 0, NDX_STATUS, NDX_LABEL, NDX_WORK};
 typedef struct {
   WINDOW *win;
-#ifdef WITH_MENUPAN
+#ifdef WITH_MENU
   PANEL *pan;
 #endif
   int height; // not in use yet
@@ -85,6 +85,8 @@ typedef struct {
   int screen, stat, chart;
 } title_len_s;
 static title_len_s titlelen;
+
+//
 
 static void require_redraw(void) {
   memset(&redrawn, 0, sizeof(redrawn));
@@ -604,7 +606,7 @@ static void create_area(uint ndx) {
       wrefresh(win);
       keypad(win, TRUE);
       area[ndx].win = win;
-#ifdef WITH_MENUPAN
+#ifdef WITH_MENU
       area[ndx].pan = new_panel(win);
       if (!area[ndx].pan)
         LOGMSG("new_panel(#%u): %s", ndx, "failed");
@@ -623,7 +625,7 @@ static void create_area(uint ndx) {
 
 static void free_areas(void) {
   for (uint i = 0; i < ARRAY_LEN(area); i++) {
-#ifdef WITH_MENUPAN
+#ifdef WITH_MENU
     if (area[i].pan) {
       del_panel(area[i].pan);
       area[i].pan = NULL;
@@ -658,6 +660,14 @@ static bool areas_ready(void) {
     for (uint i = 0; i < ARRAY_LEN(area); i++)
       create_area(order[i]);
     okay = areas_okay();
+#ifdef WITH_MENU
+    WINDOW *top = area[NDX_TOP].win;
+    if (top) {
+      int x0 = getbegx(top);
+      int y0 = getmaxy(top);
+      set_kit_attr(NULL, &x0, &y0);
+    }
+#endif
   }
   return okay;
 }
@@ -665,8 +675,9 @@ static bool areas_ready(void) {
 static void areas_bg(short bg) {
   wbkgd(area[NDX_TOP   ].win, COLOR_PAIR(bg));
   wbkgd(area[NDX_STATUS].win, COLOR_PAIR(bg));
-#ifdef WITH_MENUPAN
-  menu_bg = bg; // postponed wbkgd() set at first menu_handler() call
+#ifdef WITH_MENU
+  // postponed wbkgd() set at first menu_handler() call
+  set_kit_attr(&bg, NULL, NULL);
 #endif
 }
 
@@ -755,8 +766,8 @@ void tui_close(void) {
 #ifdef WITH_MOUSE
   disable_mouse();
 #endif
-#ifdef WITH_MENUPAN
-  free_menupan();
+#ifdef WITH_MENU
+  free_menukit();
 #endif
   if (stdscr && screen_ready) {
     endwin();

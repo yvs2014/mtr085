@@ -1,8 +1,8 @@
 option('CAP',       type: 'boolean', value: true,  description: 'Linux capabilities')
 option('TUI',       type: 'boolean', value: true,  description: 'TUI: [n]curses')
 option('MOUSE',     type: 'boolean', value: true,  description: 'Mouse (TUI required)')
-# work-in-progress: MENUPAN
-option('MENUPAN',   type: 'boolean', value: false, description: 'Menu-n-Panel (TUI required)')
+# work-in-progress: menu kit
+option('MENU',      type: 'boolean', value: false, description: 'Menu,Panel,Form (TUI required)')
 #
 option('UNICODE',   type: 'boolean', value: true,  description: 'Unicode support')
 option('NLS',       type: 'boolean', value: true,  description: 'I18n support')

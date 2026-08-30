@@ -50,7 +50,7 @@
 #endif
 
 #ifndef GITREV
-#define GITREV "309"
+#define GITREV "310"
 #endif
 
 #ifndef HAVE_UINT
@@ -140,6 +140,7 @@ typedef enum {
 #ifdef WITH_IPINFO
   ActionASN, ActionII, ActionMultiII,
 #endif
+  MaxActions
 } key_action_t;
 
 // misc

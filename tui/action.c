@@ -1,25 +1,10 @@
-/*
-    mtr  --  a network diagnostic tool
-    Copyright (C) 1997,1998  Matt Kimball
-
-    This program is free software; you can redistribute it and/or modify
-    it under the terms of the GNU General Public License version 2 as
-    published by the Free Software Foundation.
-
-    This program is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
-
-    You should have received a copy of the GNU General Public License
-    along with this program; if not, write to the Free Software
-    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
-*/
+// part of mtr085: actions
 
 #include <string.h>
 
 #if defined(LOG_TUI) && !defined(LOGMOD)
 #define LOGMOD
+#include <ctype.h>
 #endif
 #if !defined(LOG_TUI) && defined(LOGMOD)
 #undef LOGMOD
@@ -27,15 +12,15 @@
 
 #include "action.h"
 #include "chart.h"
-#ifdef WITH_MENUPAN
-#include "menupan.h"
+#ifdef WITH_MENU
+#include "kit.h"
 #endif
 #include "ipinfo.h"
 #include "net.h"
 #include "nls.h"
 #include "aux.h"
 
-#ifdef WITH_MENUPAN
+#ifdef WITH_MENU
 #define MENUKEY 'M'
 #else
 #define MENUKEY 'h'
@@ -255,9 +240,14 @@ static void tui_get_int(WINDOW *win, int *val, int min, int max,
 
 static void tui_key_b(WINDOW *win) NONNULL(1);
 static void tui_key_b(WINDOW *win) { // bit pattern
-  tui_get_int(win, &run_opts.pattern, -1, UINT8_MAX, BITPATT_STR, RANGENEG_STR);
-  OPT_SUM(pattern);
-  reset_pattern = true;
+  LOGMSG("action: %s", BITPATT_STR);
+  if (tuilook == NEWLOOK) { // not yet
+    // TODO: window with form
+  } else {
+    tui_get_int(win, &run_opts.pattern, -1, UINT8_MAX, BITPATT_STR, RANGENEG_STR);
+    OPT_SUM(pattern);
+    reset_pattern = true;
+  }
 }
 
 static void tui_key_c(WINDOW *win) NONNULL(1);
@@ -428,7 +418,7 @@ static tui_key_fn actfn_map[UINT8_MAX] =  {
   ['f'] = tui_key_f, // first ttl
   ['i'] = tui_key_i, // interval
   ['m'] = tui_key_m, // max ttl
-#ifdef WITH_MENUPAN
+#ifdef WITH_MENU
   [C_ESCAPE] = menu_handler,
   [MENUKEY]  = menu_handler,
 #endif
@@ -509,9 +499,27 @@ static void reset_by_key(int key, void (*reset)(void)) {
         reset();
       break;
 #endif
+#ifdef WITH_MENU
+    case KEY_ENTER: // [MenuToggle]
+    case '\r':
+    case '\n':
+      if (menuactive)
+        reset();
+#endif
     default: break;
   }
 }
+
+#ifdef LOGMOD
+#define LOGCHAR(pre, c) do {                 \
+  if (isprint((uint8_t)(c)))                 \
+    LOGMSG("%s0x%02x(%c)", (pre), (c), (c)); \
+  else                                       \
+    LOGMSG("%s0x%04x", (pre), (c));          \
+} while (0)
+#else
+#define LOGCHAR(pre, ch) NOOP
+#endif
 
 //
 static inline const char* onoff_str(bool on) {return on ? ONN_STR : OFF_STR;}
@@ -589,9 +597,9 @@ static int mouse2key(void) {
        CRD_ENCLOSE(crd_status.proto) ? 'P'     :
        0;
     if (ch)
-      LOGMSG("key=0x%02x(%c)", ch, ch);
+      LOGCHAR("key=", ch);
     else {
-#ifdef WITH_MENUPAN
+#ifdef WITH_MENU
       if (menuactive) {
         if (inside_menu(event.x, event.y)) {
           // handle mouse click events later calling menu_driver(KEY_MOUSE)
@@ -617,7 +625,7 @@ key_action_t tui_actionw(WINDOW *win, void (*reset)(void)) { // NONNULL(1)
   int ch = wgetch(win);
   if (!ch || (ch == ERR))
     return action;
-  doupdate();
+//  doupdate();
 #ifdef KEY_RESIZE
   // skip resize keys
   if (ch == KEY_RESIZE) { // cleanup by batch
@@ -642,30 +650,50 @@ key_action_t tui_actionw(WINDOW *win, void (*reset)(void)) { // NONNULL(1)
   if (reset)
     reset_by_key(ch, reset);
 //
-  if (ch < UINT8_MAX) { // 8bit char
+#ifdef WITH_MENU
+  if (menuactive && (posted_form >= 0)) {
+    ch = menu_form_key(ch);
+    if (!ch)
+      return action;
+  }
+#endif
+  if ((ch >= 0) && (ch < (int)ARRAY_LEN(actfn_map))) { // 8bit char
     tui_key_fn fn = actfn_map[ch];
     if (fn) { // handle it here
+      LOGCHAR("[handling inplace] fnmap index: ", ch);
       WINDOW *w = (fn == tui_key_h) ? stdscr : win;
       if (w)
         fn(w);
     } else {   // or somewhere else
-#ifdef WITH_MENUPAN
-      // handle 'space' in menu context
-      if (menuactive && (ch == C_SPACE))
-        action = menu_action();
-      else
+#ifdef WITH_MENU
+      if (menuactive) switch (ch) {
+        case C_SPACE:
+        case KEY_ENTER:
+        case '\r':
+        case '\n':
+          action = menu_action();
+          LOGMSG("menu toggle action: %d", action);
+          break;
+        default:
+          action = action_map[ch];
+          LOGMSG("[at active menu] actmap action: %d", action);
+          break;
+      } else
 #endif
-      { action = action_map[ch]; }
+      {
+        action = action_map[ch];
+        LOGMSG("actmap action: %d", action);
+      }
     }
-  } else switch (ch) {  // more than 8 bits
+  } else switch (ch) { // more than 8 bits
     case KEY_UP:   // decrease by one line
-#ifdef WITH_MENUPAN
+#ifdef WITH_MENU
       menuactive ? menu_updown(true) :
 #endif
       tui_key_plus(NULL);
       break;
     case KEY_DOWN: // increase by one line
-#ifdef WITH_MENUPAN
+#ifdef WITH_MENU
       menuactive ? menu_updown(false) :
 #endif
       tui_key_minus(NULL);
@@ -680,6 +708,7 @@ key_action_t tui_actionw(WINDOW *win, void (*reset)(void)) { // NONNULL(1)
       break;
     default: break;
   }
+  LOGMSG("action in result: %d", action);
   return action;
 }
 
