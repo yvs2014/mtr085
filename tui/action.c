@@ -241,17 +241,18 @@ static void tui_get_int(WINDOW *win, int *val, int min, int max,
 static void tui_key_b(WINDOW *win) NONNULL(1);
 static void tui_key_b(WINDOW *win) { // bit pattern
   LOGMSG("action: %s", BITPATT_STR);
-  if (tuilook == NEWLOOK) { // not yet
-    // TODO: window with form
-  } else {
-    tui_get_int(win, &run_opts.pattern, -1, UINT8_MAX, BITPATT_STR, RANGENEG_STR);
-    OPT_SUM(pattern);
-    reset_pattern = true;
-  }
+  if (tuilook == NEWLOOK) // not yet, TODO: window with input form
+    return;
+  tui_get_int(win, &run_opts.pattern, -1, UINT8_MAX, BITPATT_STR, RANGENEG_STR);
+  OPT_SUM(pattern);
+  reset_pattern = true;
 }
 
 static void tui_key_c(WINDOW *win) NONNULL(1);
 static void tui_key_c(WINDOW *win) { // set number of cycles
+  LOGMSG("action: %s", NCYCLES_STR);
+  if (tuilook == NEWLOOK) // not yet, TODO: window with input form
+    return;
   MOUSE_OFF;
   mvwaddstr(win, 0, 0, NCYCLES_STR);
   waddstr(win, " (");
@@ -283,9 +284,10 @@ static void tui_key_d(WINDOW *win UNUSED) { // display modes (charts)
 
 static void tui_key_f(WINDOW *win) NONNULL(1);
 static void tui_key_f(WINDOW *win) { // first ttl
-  int minttl = run_opts.minttl;
-  tui_get_int(win, &minttl, 1, run_opts.maxttl, MINTTL_STR, NULL);
-  run_opts.minttl = minttl;
+  LOGMSG("action: %s", MINTTL_STR);
+  if (tuilook == NEWLOOK) // not yet, TODO: window with input form
+    return;
+  tui_get_int(win, &run_opts.minttl, 1, run_opts.maxttl, MINTTL_STR, NULL);
   OPT_SUM(minttl);
 }
 
@@ -297,9 +299,10 @@ static void tui_key_i(WINDOW *win) { // interval
 
 static void tui_key_m(WINDOW *win) NONNULL(1);
 static void tui_key_m(WINDOW *win) { // max ttl
-  int maxttl = run_opts.maxttl;
-  tui_get_int(win, &maxttl, run_opts.minttl, MAXHOST - 1, MAXTTL_STR, NULL);
-  run_opts.maxttl = maxttl;
+  LOGMSG("action: %s", MINTTL_STR);
+  if (tuilook == NEWLOOK) // not yet, TODO: window with input form
+    return;
+  tui_get_int(win, &run_opts.maxttl, run_opts.minttl, MAXHOST, MAXTTL_STR, NULL);
   OPT_SUM(maxttl);
 }
 
@@ -727,9 +730,9 @@ void topbar_icons(WINDOW *win) { // NONNULL(1)
 void status_n_keep_crd(WINDOW *win, uint len, char buff[len]) { // NONNULL(1, 3)
   int dx = getbegx(win), dy = getbegy(win);
 #ifdef ENABLE_DNS
-  print_statuskeep(win, DNS_STR,  NULL, &run_opts.dns,  dx, dy, &crd_status.dns);
+  print_statuskeep(win, DNS_STR,  NULL, &run_opts.dns,    dx, dy, &crd_status.dns);
 #endif
-  print_statuskeep(win, JTTR_STR, NULL, &run_opts.jttr, dx, dy, &crd_status.jttr);
+  print_statuskeep(win, JTTR_STR, NULL, &run_opts.jitter, dx, dy, &crd_status.jttr);
   buff[0] = 0;
   if (run_opts.chart)
     snprinte(buff, len, "%d", CHART_MODE);
@@ -754,7 +757,7 @@ void status_no_crd(WINDOW *win, uint len, char buff[len]) { // NONNULL(1, 3)
 #ifdef ENABLE_DNS
   print_statusitem(win, DNS_STR,  NULL, &run_opts.dns);
 #endif
-  print_statusitem(win, JTTR_STR, NULL, &run_opts.jttr);
+  print_statusitem(win, JTTR_STR, NULL, &run_opts.jitter);
   buff[0] = 0;
   if (run_opts.chart)
     snprinte(buff, len, "%d", CHART_MODE);

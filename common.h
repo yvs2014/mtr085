@@ -50,7 +50,7 @@
 #endif
 
 #ifndef GITREV
-#define GITREV "310"
+#define GITREV "311"
 #endif
 
 #ifndef HAVE_UINT
@@ -165,7 +165,7 @@ typedef struct opts_s {
     both,     // -b
     mpls,     // -e
     endpoint, // -fa
-    jttr,     // -j
+    jitter,   // -j
 #ifdef WITH_IPINFO
     asn,      // -l
     ipinfo,   // -L
@@ -173,7 +173,9 @@ typedef struct opts_s {
 #ifdef WITH_MOUSE
     mouse,    // -M (disable)
 #endif
+#ifdef ENABLE_DNS
     dns,      // -n
+#endif
     pause,    // -p
     rawrep,   // -r (raw report mode)
     stat,     // -S
@@ -189,12 +191,12 @@ typedef struct opts_s {
     color;    // -d 4th bit (color mode)
   uint8_t
     chart,    // -d 1st and 2nd bits
-    minttl,   // -f first_ttl
-    maxttl,   // -m max_ttl
     qos;      // -q qos
   int
-    cycles,   // -c cycles_to_run
     pattern,  // -b payload_pattern
+    cycles,   // -c cycles_to_run
+    minttl,   // -f first_ttl
+    maxttl,   // -m max_ttl
     interval, // -i interval
     size,     // -s packet_size
     syn,      // -T tcp_timeout
@@ -211,17 +213,23 @@ typedef union opt_sum_u {
     both     :1, // -b
     mpls     :1, // -e
     endpoint :1, // -fa
-    jttr     :1, // -j
+    jitter   :1, // -j
+#ifdef WITH_IPINFO
     asn      :1, // -l
     ipinfo   :1, // -L
-    multi    :1, // -y (multi ipinfo sources)
+#endif
+#ifdef ENABLE_DNS
     dns      :1, // -n
+#endif
     pause    :1, // -p
     rawrep   :1, // -r (raw report mode)
     stat     :1, // -S
     tcp      :1, // -t
     udp      :1, // -u
     oncache  :1, // -x
+#ifdef WITH_IPINFO
+    multi    :1, // -y (multi ipinfo sources)
+#endif
     //
     bell     :1, // -d 7th bit (beep at target)
     visible  :1, // -d 6th bit (visible bell: flash)

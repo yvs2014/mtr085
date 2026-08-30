@@ -332,10 +332,10 @@ static key_action_t keyboard_events(key_action_t action) {
 #if defined(TUIMODE) || defined(SPLITMODE)
     case ActionJttr: // latency OR jitter
       LOGMSG("toggle %s: %s -> %s", "table look",
-         run_opts.jttr ? "jitter" : "latency",
-        !run_opts.jttr ? "jitter" : "latency");
-      run_opts.jttr = !run_opts.jttr;
-      OPT_SUM(jttr);
+         run_opts.jitter ? "jitter" : "latency",
+        !run_opts.jitter ? "jitter" : "latency");
+      run_opts.jitter = !run_opts.jitter;
+      OPT_SUM(jitter);
       onoff_jitter();
 #ifdef WITH_MENU
       menu_toggle_look();

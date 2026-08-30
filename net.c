@@ -972,7 +972,8 @@ const char* net_settled_elem(int at, char key) {
 
 int net_max(void) {
   int max = 0;
-  for (int at = 0; at < run_opts.maxttl; at++) {
+  int maxat = (run_opts.maxttl > MAXHOST) ? MAXHOST : run_opts.maxttl;
+  for (int at = 0; at < maxat; at++) {
     if (addr_equal(&CURRENT_IP(at), remote_ipaddr)) {
       max = at + 1;
       if (run_opts.endpoint && (run_opts.minttl != max))
@@ -985,8 +986,8 @@ int net_max(void) {
         run_opts.minttl = at + 1; // max-1: show previous known hop
     }
   }
-  if (max > run_opts.maxttl)
-    max = run_opts.maxttl;
+  if (max > maxat)
+    max = maxat;
   return max;
 }
 

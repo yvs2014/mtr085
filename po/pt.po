@@ -447,10 +447,10 @@ msgstr "Padrão de bits"
 msgid "Number of cycles"
 msgstr "Número de ciclos"
 
-msgid "First TTL"
+msgid "Minimum TTL"
 msgstr "TTL mínimo"
 
-msgid "Max TTL"
+msgid "Maximum TTL"
 msgstr "TTL máximo"
 
 msgid "Interval"

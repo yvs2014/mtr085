@@ -446,10 +446,10 @@ msgstr "Modello di bit"
 msgid "Number of cycles"
 msgstr "Numero di cicli"
 
-msgid "First TTL"
-msgstr "TTL minimo"
+msgid "Minimum TTL"
+msgstr "TTL minimo "
 
-msgid "Max TTL"
+msgid "Maximum TTL"
 msgstr "TTL massimo"
 
 msgid "Interval"

@@ -32,8 +32,11 @@ enum {
 #ifdef WITH_IPINFO
   MENU_ITEM_ASN,
 #endif
-  MENU_ITEM_JTTR,
-  MENU_ITEM_PTRN,
+  MENU_ITEM_JITTER,
+  MENU_ITEM_COUNT,
+  MENU_ITEM_MINTTL,
+  MENU_ITEM_MAXTTL,
+  MENU_ITEM_PATTERN,
 #ifdef WITH_MPLS
   MENU_ITEM_MPLS,
 #endif
@@ -67,7 +70,7 @@ typedef struct kit_s {
   const int desc_width;
 } kit_s;
 
-static kit_s kit = {.spacing = 1/*default*/, .desc_width = 3};
+static kit_s kit = {.spacing = 1/*default*/, .desc_width = 10/*declen(INT_MAX)*/};
 
 #define LOGFNFAIL(fn)     LOGMSG("%s() failed" ,    (fn))
 #define LOGECFAIL(fn, ec) LOGMSG("%s() failed: %d/%d", (fn), (ec), ((ec) == E_SYSTEM_ERROR) ? errno : 0)
@@ -78,27 +81,31 @@ static kit_s kit = {.spacing = 1/*default*/, .desc_width = 3};
 #define MENUSTRW(str) (str)
 #endif
 
-#define MI_DEF_PATT " %s"
-#define MI_INT_PATT " %s [%d..%d]"
+#define MI_DEF_FMT " %s"
+#define MI_PAD_FMT "%*s"
+#define MI_MINMAX_FMT  MI_DEF_FMT " [%d..%d]"
+#define MI_MININF_FMT  MI_DEF_FMT " [%d...]"
+#define MI_MINMAX_UFMT MI_DEF_FMT " [%d … %d]"
+#define MI_MININF_UFMT MI_DEF_FMT " [%d … ꝏ ]" /*∞*/
 
 typedef enum {MI_TOOGLE, MI_INTFORM} mi_type;
 
 typedef struct menuitem_s {
   char name[NAMELEN];
   char desc[NAMELEN];
-  mi_type type;
-  key_action_t action;
-  union {
+  const mi_type type;
+  const key_action_t action;
+  const union {
     const bool *flag;
     int *num;
   } val;
-  int min, max;
+  const int min, max, *pmin, *pmax;
   void (*postaction)(void);
 } menuitem_s;
 
 typedef struct optname_s {
   int len; // name length in unicode characters
-  const char *name;
+  const char* const name;
 } optname_s;
 
 //
@@ -107,6 +114,16 @@ static void postaction_bitpatt(void) {
   OPT_SUM(pattern);
   reset_pattern = true;
 }
+static void postaction_cycles(void) {
+  OPT_SUM(cycles);
+}
+static void postaction_minttl(void) {
+  OPT_SUM(minttl);
+}
+static void postaction_maxttl(void) {
+  OPT_SUM(maxttl);
+}
+
 
 static int fill_itemname(const menuitem_s *mi, const optname_s *opt,
   uint size, char buff[size], int pad) NONNULL(1, 2, 4);
@@ -115,15 +132,31 @@ static int fill_itemname(const menuitem_s *mi, const optname_s *opt,
 {
   int rc = 0;
   if (mi->type == MI_INTFORM) {
-    int min = mi->min;
-    int max = mi->max;
+    int min = mi->pmin ? *mi->pmin : mi->min;
+    int max = mi->pmax ? *mi->pmax : mi->max;
+    const char *minmax_fmt =
+#if defined(TUIWIDE) && defined(WITH_UNICODE)
+      utf_compat ?
+        ((pad > 0) ? MI_MINMAX_UFMT MI_PAD_FMT : MI_MINMAX_UFMT):
+#endif
+        ((pad > 0) ? MI_MINMAX_FMT  MI_PAD_FMT : MI_MINMAX_FMT );
+    const char *mininf_fmt =
+#if defined(TUIWIDE) && defined(WITH_UNICODE)
+      utf_compat ?
+        ((pad > 0) ? MI_MININF_UFMT MI_PAD_FMT : MI_MININF_UFMT):
+#endif
+        ((pad > 0) ? MI_MININF_FMT  MI_PAD_FMT : MI_MININF_FMT );
     rc = (pad > 0) ?
-      snprinte(buff, size, MI_INT_PATT "%*s", opt->name, min, max, pad, "") :
-      snprinte(buff, size, MI_INT_PATT,       opt->name, min, max);
+      (    (max < INT_MAX) ?
+        snprinte(buff, size, minmax_fmt, opt->name, min, max, pad, "") :
+        snprinte(buff, size, mininf_fmt, opt->name, min,      pad, "")
+      ) : ((max < INT_MAX) ?
+        snprinte(buff, size, minmax_fmt, opt->name, min, max) :
+        snprinte(buff, size, mininf_fmt, opt->name, min));
   } else {
     rc = (pad > 0) ?
-      snprinte(buff, size, MI_DEF_PATT "%*s", opt->name, pad, "") :
-      snprinte(buff, size, MI_DEF_PATT,       opt->name);
+      snprinte(buff, size, MI_DEF_FMT "%*s", opt->name, pad, "") :
+      snprinte(buff, size, MI_DEF_FMT,       opt->name);
   }
   return rc;
 }
@@ -186,40 +219,70 @@ static int calc_maxnamelen(uint len,
 static void init_menuitems(void) {
   static menuitem_s menuitem[MENU_ITEMS] = {
 #ifdef ENABLE_DNS
-    [MENU_ITEM_DNS]  = {.type = MI_TOOGLE,  .action = ActionDNS,
-      .val.flag = &run_opts.dns},
+    [MENU_ITEM_DNS]     =
+      {.type = MI_TOOGLE,  .action = ActionDNS,  .val.flag = &run_opts.dns},
 #endif
 #ifdef WITH_IPINFO
-    [MENU_ITEM_ASN]  = {.type = MI_TOOGLE,  .action = ActionASN,
-      .val.flag = &run_opts.asn},
+    [MENU_ITEM_ASN]     =
+      {.type = MI_TOOGLE,  .action = ActionASN,  .val.flag = &run_opts.asn},
 #endif
-    [MENU_ITEM_JTTR] = {.type = MI_TOOGLE,  .action = ActionJttr,
-      .val.flag = &run_opts.jttr},
-    [MENU_ITEM_PTRN] = {.type = MI_INTFORM, .action = ActionNone,
-      .val.num  = &run_opts.pattern, .min = -1, .max = UINT8_MAX,
-      .postaction = postaction_bitpatt},
+    [MENU_ITEM_JITTER]  =
+      {.type = MI_TOOGLE,  .action = ActionJttr, .val.flag = &run_opts.jitter},
+    [MENU_ITEM_COUNT]   =
+      {.type = MI_INTFORM, .action = ActionNone, .val.num  = &run_opts.cycles,
+       .min =  0, .max = INT_MAX,   .postaction = postaction_cycles},
+    [MENU_ITEM_MINTTL]  =
+      {.type = MI_INTFORM, .action = ActionNone, .val.num  = &run_opts.minttl,
+       .min =  1, .max = MAXHOST,   .postaction = postaction_minttl,
+       .pmax = &run_opts.maxttl},
+    [MENU_ITEM_MAXTTL]  =
+      {.type = MI_INTFORM, .action = ActionNone, .val.num  = &run_opts.maxttl,
+       .min =  1, .max = MAXHOST,   .postaction = postaction_maxttl,
+       .pmin = &run_opts.minttl},
+    [MENU_ITEM_PATTERN] =
+      {.type = MI_INTFORM, .action = ActionNone, .val.num  = &run_opts.pattern,
+       .min = -1, .max = UINT8_MAX, .postaction = postaction_bitpatt},
 #ifdef WITH_MPLS
-    [MENU_ITEM_MPLS] = {.type = MI_TOOGLE,  .action = ActionMPLS,
-      .val.flag = &run_opts.mpls},
+    [MENU_ITEM_MPLS] =
+      {.type = MI_TOOGLE,  .action = ActionMPLS, .val.flag = &run_opts.mpls},
 #endif
   };
   //
   optname_s optname[ARRAY_LEN(menuitem)] = {
 #ifdef ENABLE_DNS
-    [MENU_ITEM_DNS]  = {.name = MENUSTRW(_DNS_STR)},
+    [MENU_ITEM_DNS]     = {.name = MENUSTRW(_DNS_STR)},
 #endif
 #ifdef WITH_IPINFO
-    [MENU_ITEM_ASN]  = {.name = MENUSTRW(_ASN_STR)},
+    [MENU_ITEM_ASN]     = {.name = MENUSTRW(_ASN_STR)},
 #endif
-    [MENU_ITEM_JTTR] = {.name = MENUSTRW(_JITTER_STR)},
-    [MENU_ITEM_PTRN] = {.name = MENUSTRW(_BITPATT_STR)},
+    [MENU_ITEM_JITTER]  = {.name = MENUSTRW(_JITTER_STR)},
+    [MENU_ITEM_COUNT]   = {.name = MENUSTRW(_NCYCLES_STR)},
+    [MENU_ITEM_MINTTL]  = {.name = MENUSTRW(_MINTTL_STR)},
+    [MENU_ITEM_MAXTTL]  = {.name = MENUSTRW(_MAXTTL_STR)},
+    [MENU_ITEM_PATTERN] = {.name = MENUSTRW(_BITPATT_STR)},
 #ifdef WITH_MPLS
-    [MENU_ITEM_MPLS] = {.name = MENUSTRW(_MPLS_STR)},
+    [MENU_ITEM_MPLS]    = {.name = MENUSTRW(_MPLS_STR)},
 #endif
   };
   //
   if (!kit.maxnamelen)
     kit.maxnamelen = calc_maxnamelen(ARRAY_LEN(menuitem), menuitem, optname);
+  //
+  if (kit.item[0]) {
+    // disconnect and free previous menuitems
+    // menu has to be unposted
+    int ec = set_menu_items(kit.menu, NULL);
+    if (ec == E_OK) {
+      for (uint i = 0; i < ARRAY_LEN(kit.item); i++) if (kit.item[i]) {
+        int ec = free_item(kit.item[i]);
+        if (ec != E_OK)
+          LOGECFAIL("free_item", ec);
+        kit.item[i] = NULL;
+      }
+    } else
+      LOGECFAIL("set_menu_items", ec);
+  }
+  //
   menuitem_s *mi = menuitem;
   const optname_s *opt = optname;
   for (uint i = 0; (i < ARRAY_LEN(optname)) && opt->name; i++, opt++, mi++) {
@@ -235,8 +298,6 @@ static void init_menuitems(void) {
     if (item) {
       LOGMSG("menuitem[%u]: \"%s\"=\"%s\"", i, item_name(item), item_description(item));
       set_item_userptr(item, mi);
-      if (kit.item[i])
-        free_item(kit.item[i]);
       kit.item[i] = item;
     } else {
       LOGMSG("new_item(#%u, %s) failed: %d", i, opt->name, errno);
@@ -553,8 +614,8 @@ static void fin_form(miff_s *ff, ITEM *item) {
         char value[NAMELEN] = {0};
         int rc = snprinte(value, sizeof(value), "%s", got);
         char *arg = ((rc > 0) && value[0]) ? trim(value) : NULL;
-        int min = data ? data->min : INT_MIN;
-        int max = data ? data->max : INT_MAX;
+        int min = data ? (data->pmin ? *data->pmin : data->min) : INT_MIN;
+        int max = data ? (data->pmax ? *data->pmax : data->max) : INT_MAX;
         int num = arg2int(0, arg ? arg : got, min, max, item_name(item), error, sizeof(error));
         int *val = data ? data->val.num : NULL;
         if (error[0]) {
@@ -586,6 +647,7 @@ void free_menukit(void) {
       unpost_menu(kit.menu);
       kit.posted = false;
     }
+    set_menu_items(kit.menu, NULL);
     free_menu(kit.menu);
     kit.menu = NULL;
   }
@@ -622,6 +684,8 @@ void free_menukit(void) {
 }
 
 void menu_handler(WINDOW *_win UNUSED) {
+  if (tuilook != NEWLOOK)
+    return;
   if (kit.posted)
     menu_showhide();
   else {
@@ -653,33 +717,26 @@ key_action_t menu_action(void) {
 }
 
 void menu_toggle_look(void) {
-  if (menuactive && kit.posted) {
-    ITEM* copy[ARRAY_LEN(kit.item)];
-    memcpy(copy, kit.item, sizeof(copy));
+  if (kit.posted) {
+    ITEM *curr = current_item(kit.menu);
+    int ndx = curr ? item_index(curr) : -1;
+    unpost_menu(kit.menu);
+    kit.posted = false;
     init_menuitems();
     if (kit.item[0]) {
-      ITEM *curr = current_item(kit.menu);
-      int ndx = curr ? item_index(curr) : -1;
-      int ec = unpost_menu(kit.menu);
+      int ec = set_menu_items(kit.menu, kit.item);
       if (ec == E_OK) {
-        kit.posted = false;
-        int ec = set_menu_items(kit.menu, kit.item);
+        position_inside_menu(ndx);
+        int ec = post_menu(kit.menu);
         if (ec == E_OK) {
-          position_inside_menu(ndx);
-          int ec = post_menu(kit.menu);
-          if (ec == E_OK) {
-            kit.posted = true;
-            LOGMSG("%s", "menu reposted");
-          } else
-            LOGECFAIL("post_menu", ec);
+          kit.posted = true;
+          LOGMSG("%s", "menu reposted");
         } else
-          LOGECFAIL("set_menu_items", ec);
+          LOGECFAIL("post_menu", ec);
       } else
-        LOGECFAIL("unpost_menu", ec);
-    } else {
-      memcpy(kit.item, copy, sizeof(kit.item));
+        LOGECFAIL("set_menu_items", ec);
+    } else
       LOGMSG("%s", "cannot reinit menu items");
-    }
   }
 }
 

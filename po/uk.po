@@ -446,10 +446,10 @@ msgstr "Бітовий шаблон"
 msgid "Number of cycles"
 msgstr "Кількість циклів"
 
-msgid "First TTL"
-msgstr "Мінімальний TTL"
+msgid "Minimum TTL"
+msgstr "Мінімальний  TTL"
 
-msgid "Max TTL"
+msgid "Maximum TTL"
 msgstr "Максимальний TTL"
 
 msgid "Interval"

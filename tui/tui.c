@@ -374,7 +374,7 @@ static int tui_print_args(uint size, char buf[size]) {
 #ifdef ENABLE_DNS
     BOOL_OPT2STR(dns,    PAR_DNS_STR);
 #endif
-    BOOL_OPT2STR(jttr,   PAR_JITTER_STR);
+    BOOL_OPT2STR(jitter, PAR_JITTER_STR);
     INT_OPT2STR(chart,   PAR_CHART_STR, "%u");
     BOOL_OPT2STR(color,  PAR_COLOR_STR);
 #ifdef WITH_IPINFO
@@ -741,7 +741,7 @@ bool tui_open(void) {
 
 void tui_confirm(void) {
   WINDOW *win = area[NDX_WORK].win;
-  LOGMSG("ack=%d ready=%d area=%p", quit_acked, screen_ready, (void*)win);
+  LOGMSG("ack=%d", quit_acked);
   if (!quit_acked && win && screen_ready) {
     quit_acked = true;
     int y = getmaxy(win) - 2;

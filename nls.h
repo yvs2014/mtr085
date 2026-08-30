@@ -21,7 +21,7 @@
 #define PSIZE_CHNG_STR _("Change payload size")
 #define NEG4RND_STR    _("negative values are for random")
 #define RANGE_STR      _("range")
-#define RANGENEG_STR   _(_RANGENEG_STR)
+#define RANGENEG_STR   _("range[0-255], random is -1")
 #define GAPINSEC_STR   _("Interval in seconds")
 #define LESSTHAN_STR   _("less than")
 #define MORETHAN_STR   _("more than")
@@ -121,7 +121,9 @@
 #define _MPLS_STR     "MPLS"
 #define _PROTO_STR    "Protocol"
 #define _BITPATT_STR  "Bit pattern"
-#define _RANGENEG_STR "range[0-255], random is -1"
+#define _NCYCLES_STR  "Number of cycles"
+#define _MINTTL_STR   "Minimum TTL"
+#define _MAXTTL_STR   "Maximum TTL"
 
 // cmd help
 #define COMMANDS_STR _("Commands")
@@ -168,9 +170,9 @@
 
 // option hints
 #define BITPATT_STR    _(_BITPATT_STR)
-#define NCYCLES_STR    _("Number of cycles")
-#define MINTTL_STR     _("First TTL")
-#define MAXTTL_STR     _("Max TTL")
+#define NCYCLES_STR    _(_NCYCLES_STR)
+#define MINTTL_STR     _(_MINTTL_STR)
+#define MAXTTL_STR     _(_MAXTTL_STR)
 #define MOUSE_OUT_STR  _("Mouse is only supported with option '-1'")
 #define INTERVAL_STR   _("Interval")
 #define QOSTOS_STR     _("QoS/ToS")

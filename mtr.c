@@ -215,7 +215,9 @@ opt_sum_t opt_sum;  // checksum options' changes
 opts_t run_opts;    // runtime options
 opts_t ini_opts = { // initial bool options
   .interactive = true,
+#ifdef ENABLE_DNS
   .dns      = true,           // dns is on by default
+#endif
   .minttl   =  1,             // start at first hop
   .maxttl   = 30,             // supposedly enough for today's internet
   .cycles   = REPORT_PINGS,   // note that 0 should be set explicitly
@@ -719,7 +721,7 @@ static void short_set(char opt, const char *progname) {
       break;
     case OPT_TTLMAX:
       if (optarg)
-        ini_opts.maxttl = arg2int(opt, optarg, ini_opts.minttl, MAXHOST - 1, MAXTTL_STR, NULL, 0);
+        ini_opts.maxttl = arg2int(opt, optarg, ini_opts.minttl, MAXHOST, MAXTTL_STR, NULL, 0);
       break;
 #ifdef WITH_MOUSE
     case OPT_MOUSE:

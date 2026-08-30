@@ -793,7 +793,6 @@ static char *get_ipinfo(int at, int ndx, int item_no) {
   } else
 #endif
   { if (!ORIG_HOST) return NULL; }
-  t_ipaddr *ipaddr = &IP_AT_NDX(at, ndx);
   char query[NAMELEN] = {0};
   switch (ORIG_TYPE) {
     case OT_HTTP:
@@ -803,11 +802,12 @@ static char *get_ipinfo(int at, int ndx, int item_no) {
         ipinfo_lookup(at, ndx, q);
     } break;
 #ifdef ENABLE_DNS
-    default: // dns
+    default: { // dns
+      t_ipaddr *ipaddr = &IP_AT_NDX(at, ndx);
       ip2arpa(sizeof(query), query, ipaddr, ORIG_HOST, origins[origin_no].host6);
       if (query[0])
         ipinfo_lookup(at, ndx, query);
-    break;
+    } break;
 #endif
   }
   return NULL;
