@@ -166,3 +166,8 @@ int snprinte(char str[], size_t size, const char *format, ...) {
   return len;
 }
 
+void stat_keys(uint len, char buff[len]) { // NONNULL(2)
+  for (uint i = 0; i < len; i++)
+    buff[i] = ((int)i < stat_max) ? stats[i].key : 0;
+}
+

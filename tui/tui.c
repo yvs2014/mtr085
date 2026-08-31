@@ -325,9 +325,9 @@ static void display_main_labels(WINDOW *win, int indent) {
         // "Custom fields"
         const char div[] = ": ";
         int div_len = sizeof(div) - 1;
-        int ufl = (maxx > div_len) ? ustrnlen(USR_FIELDS_STR, maxx - div_len) : 0;
+        int ufl = (maxx > div_len) ? ustrnlen(CUSTFLD_STR, maxx - div_len) : 0;
         int len = ufl + div_len + strnlen(fld_active, MAXFLD);
-        mvwaddstr(win, 0, tui_fit_posx(pos, len, maxx), USR_FIELDS_STR);
+        mvwaddstr(win, 0, tui_fit_posx(pos, len, maxx), CUSTFLD_STR);
         waddstr(win, div);
         waddstr(win, fld_active);
       } else if (!custom) {
@@ -408,7 +408,7 @@ static int tui_print_args(uint size, char buf[size]) {
   BOOL_OPT2STR(oncache, PAR_CACHE_STR);
   //
   if (run_opts.pause != ini_opts.pause)
-    ADD_FMT_ARG(": %s", PAR_PAUSED_STR);
+    ADD_FMT_ARG("%s%s", len ? ": " : "", PAR_PAUSED_STR);
   return (len > (int)size) ? (int)size : len;
 }
 #undef IASP

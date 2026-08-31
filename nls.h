@@ -12,8 +12,8 @@
 #define MENU_STR       _("Keys")
 #define _HINTS_STR     _("ints") // [h]ints
 #define _QUIT_STR      _("uit")  // [q]uit
-#define FIELDS_STR     _("Fields")
-#define USR_FIELDS_STR _("Custom fields")
+#define FIELDS_STR     _(_FIELDS_STR)
+#define CUSTFLD_STR    _(_CUSTFLD_STR)
 #define PACKETS_STR    _("Packets")
 #define PINGS_STR      _("Pings")
 #define UNLIM0_STR     _("0 for unlimit")
@@ -127,6 +127,8 @@
 #define _GAPINSEC_STR "Interval in seconds"
 #define _QOSTOS_STR   "QoS/ToS"
 #define _PSIZE_STR    "Payload size"
+#define _FIELDS_STR   "Fields"
+#define _CUSTFLD_STR  "Custom fields"
 
 // cmd help
 #define COMMANDS_STR _("Commands")

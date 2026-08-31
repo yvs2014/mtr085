@@ -338,6 +338,9 @@ static void tui_key_o_hints(int x0, int y0) {
 
 static void tui_key_o(WINDOW *win) NONNULL(1);
 static void tui_key_o(WINDOW *win) { // set fields to display and their order
+  LOGMSG("action: %s", FIELDS_STR);
+  if (tuilook == NEWLOOK) // not yet, TODO: window with input form
+    return;
   MOUSE_OFF;
   tui_key_o_hints(getbegx(win), getbegy(win) + getmaxy(win));
   wclear(win);

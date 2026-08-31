@@ -26,6 +26,12 @@ bool menuactive;
 int posted_form = -1;
 
 typedef enum {
+  MI_TOOGLE,
+  MI_INTFORM,
+  MI_STRFORM,
+} mi_type;
+
+typedef enum {
 #ifdef ENABLE_DNS
   MENU_ITEM_DNS,
 #endif
@@ -33,7 +39,7 @@ typedef enum {
   MENU_ITEM_ASN,
 #endif
   MENU_ITEM_JITTER,
-// MENU_ITEM_FIELDS, // like LS_NABWV
+  MENU_ITEM_FIELDS,
 #ifdef WITH_MPLS
   MENU_ITEM_MPLS,
 #endif
@@ -47,7 +53,7 @@ typedef enum {
 #endif
   MENU_ITEM_PSIZE,
   MENU_ITEMS
-} mi_enum;
+} mi_inst;
 
 typedef struct wsp_s {
   WINDOW *win;
@@ -89,24 +95,26 @@ static kit_s kit = {.spacing = 1/*default*/, .desc_width = 10/*looks enough*/};
 
 #define MI_DEF_FMT " %s"
 #define MI_PAD_FMT "%*s"
+#define MI_STR_FMT     MI_DEF_FMT " [%s]"
 #define MI_MINMAX_FMT  MI_DEF_FMT " [%d..%d]"
 #define MI_MININF_FMT  MI_DEF_FMT " [%d...]"
 #define MI_MINMAX_UFMT MI_DEF_FMT " [%d … %d]"
 #define MI_MININF_UFMT MI_DEF_FMT " [%d … ꝏ ]" /*∞*/
 
-typedef enum {MI_TOOGLE, MI_INTFORM} mi_type;
-
 typedef struct menuitem_s {
-  const mi_enum ndx;
+  const mi_type type;
+  const mi_inst ndx;
   char name[NAMELEN];
   char desc[NAMELEN];
-  const mi_type type;
   const key_action_t action;
-  const union {
-    const bool *flag;
+  const struct {
+    const bool  *flag;
+    const char **pstr;
     int *num;
   } val;
   const int min, max, *pmin, *pmax;
+  const char *patt;
+  void (*setter)(const char *str);
 } menuitem_s;
 
 typedef struct optname_s {
@@ -116,8 +124,8 @@ typedef struct optname_s {
 
 //
 
-static void menu_posteditaction(mi_enum en) {
-  switch (en) {
+static void menu_posteditaction(mi_inst inst) {
+  switch (inst) {
     case MENU_ITEM_COUNT:   OPT_SUM(cycles);   break;
     case MENU_ITEM_MINTTL:  OPT_SUM(minttl);   break;
     case MENU_ITEM_MAXTTL:  OPT_SUM(maxttl);   break;
@@ -143,38 +151,51 @@ static void mi_selectabale(int ndx UNUSED, ITEM *item UNUSED) {
 #endif
 }
 
-static int fill_itemname(const menuitem_s *mi, const optname_s *opt,
+static int fill_itemname(const menuitem_s *mi, const char *name,
   uint size, char buff[size], int pad) NONNULL(1, 2, 4);
-static int fill_itemname(const menuitem_s *mi, const optname_s *opt,
+static int fill_itemname(const menuitem_s *mi, const char *name,
   uint size, char buff[size], int pad)
 {
+  buff[0] = 0;
   int rc = 0;
-  if (mi->type == MI_INTFORM) {
-    int min = mi->pmin ? *mi->pmin : mi->min;
-    int max = mi->pmax ? *mi->pmax : mi->max;
-    const char *minmax_fmt =
+  switch (mi->type) {
+    case MI_TOOGLE:
+      rc = (pad > 0) ?
+        snprinte(buff, size, MI_DEF_FMT "%*s", name, pad, "") :
+        snprinte(buff, size, MI_DEF_FMT,       name);
+      break;
+    case MI_INTFORM: {
+      int min = mi->pmin ? *mi->pmin : mi->min;
+      int max = mi->pmax ? *mi->pmax : mi->max;
+      const char *minmax_fmt =
 #if defined(TUIWIDE) && defined(WITH_UNICODE)
-      utf_compat ?
-        ((pad > 0) ? MI_MINMAX_UFMT MI_PAD_FMT : MI_MINMAX_UFMT):
+        utf_compat ?
+          ((pad > 0) ? MI_MINMAX_UFMT MI_PAD_FMT : MI_MINMAX_UFMT):
 #endif
-        ((pad > 0) ? MI_MINMAX_FMT  MI_PAD_FMT : MI_MINMAX_FMT );
-    const char *mininf_fmt =
+          ((pad > 0) ? MI_MINMAX_FMT  MI_PAD_FMT : MI_MINMAX_FMT );
+      const char *mininf_fmt =
 #if defined(TUIWIDE) && defined(WITH_UNICODE)
-      utf_compat ?
-        ((pad > 0) ? MI_MININF_UFMT MI_PAD_FMT : MI_MININF_UFMT):
+        utf_compat ?
+          ((pad > 0) ? MI_MININF_UFMT MI_PAD_FMT : MI_MININF_UFMT):
 #endif
-        ((pad > 0) ? MI_MININF_FMT  MI_PAD_FMT : MI_MININF_FMT );
-    rc = (pad > 0) ?
-      (    (max < INT_MAX) ?
-        snprinte(buff, size, minmax_fmt, opt->name, min, max, pad, "") :
-        snprinte(buff, size, mininf_fmt, opt->name, min,      pad, "")
-      ) : ((max < INT_MAX) ?
-        snprinte(buff, size, minmax_fmt, opt->name, min, max) :
-        snprinte(buff, size, mininf_fmt, opt->name, min));
-  } else {
-    rc = (pad > 0) ?
-      snprinte(buff, size, MI_DEF_FMT "%*s", opt->name, pad, "") :
-      snprinte(buff, size, MI_DEF_FMT,       opt->name);
+          ((pad > 0) ? MI_MININF_FMT  MI_PAD_FMT : MI_MININF_FMT );
+      rc = (pad > 0) ?
+        (    (max < INT_MAX) ?
+          snprinte(buff, size, minmax_fmt, name, min, max, pad, "") :
+          snprinte(buff, size, mininf_fmt, name, min,      pad, "")
+        ) : ((max < INT_MAX) ?
+          snprinte(buff, size, minmax_fmt, name, min, max) :
+          snprinte(buff, size, mininf_fmt, name, min));
+    } break;
+    case MI_STRFORM: {
+      const char *patt = mi->patt ? mi->patt : "";
+      rc = (pad > 0) ?
+        snprinte(buff, size, MI_STR_FMT "%*s", name, patt, pad, "") :
+        snprinte(buff, size, MI_STR_FMT,       name, patt);
+    } break;
+    default:
+      LOGMSG("unknwon menuitem type: %d", mi->type);
+      break;
   }
   return rc;
 }
@@ -205,6 +226,14 @@ static int fill_itemdesc(menuitem_s *mi) {
           snprinte(mi->desc, sizeof(mi->desc), "%d ", *num);
       }
     }  break;
+    case MI_STRFORM: {
+      const char *str = mi->val.pstr ? *mi->val.pstr : NULL;
+      if (str) {
+        rc = (kit.desc_width > 0) ?
+          snprinte(mi->desc, sizeof(mi->desc), "%*s ", kit.desc_width, str) :
+          snprinte(mi->desc, sizeof(mi->desc), "%s ", str);
+      }
+    }  break;
     default:
       LOGMSG("unknwon menuitem type: %d", mi->type);
       break;
@@ -220,7 +249,7 @@ static int calc_maxnamelen(uint len,
   char buff[NAMELEN] = {0};
   int maxlen = 0;
   for (uint i = 0; (i < len) && opt->name; i++, opt++, mi++) {
-    int rc = fill_itemname(mi, opt, sizeof(buff), buff, 0);
+    int rc = fill_itemname(mi, opt->name, sizeof(buff), buff, 0);
     if (rc > 0) {
       int len = ustrnlen(buff, NAMELEN);
       if (len > 0) {
@@ -247,6 +276,8 @@ static void init_menuitems(void) {
 #endif
     [MENU_ITEM_JITTER]   = {.ndx = MENU_ITEM_JITTER,  .type = MI_TOOGLE,
       .action = ActionJttr, .val.flag = &run_opts.jitter},
+    [MENU_ITEM_FIELDS]   = {.ndx = MENU_ITEM_FIELDS,  .type = MI_STRFORM,
+      .action = ActionNone, .val.pstr = &fld_active, .setter = set_fld_active},
 #ifdef WITH_MPLS
     [MENU_ITEM_MPLS]     = {.ndx = MENU_ITEM_MPLS,    .type = MI_TOOGLE,
       .action = ActionMPLS, .val.flag = &run_opts.mpls},
@@ -276,6 +307,12 @@ static void init_menuitems(void) {
       .min = -PSIZEMM, .max = PSIZEMM},
   };
   //
+  static char field_patt[20] = {0}; // enough for stat keys [stat_max]
+  if (!field_patt[0])
+    stat_keys(ARRAY_LEN(field_patt) - 1, field_patt);
+  if (!menuitem[MENU_ITEM_FIELDS].patt)
+    menuitem[MENU_ITEM_FIELDS].patt = field_patt;
+  //
   optname_s optname[ARRAY_LEN(menuitem)] = {
 #ifdef ENABLE_DNS
     [MENU_ITEM_DNS]     = {.name = MENUSTRW(_DNS_STR)},
@@ -284,6 +321,7 @@ static void init_menuitems(void) {
     [MENU_ITEM_ASN]     = {.name = MENUSTRW(_ASN_STR)},
 #endif
     [MENU_ITEM_JITTER]  = {.name = MENUSTRW(_JITTER_STR)},
+    [MENU_ITEM_FIELDS]  = {.name = MENUSTRW(_FIELDS_STR)},
 #ifdef WITH_MPLS
     [MENU_ITEM_MPLS]    = {.name = MENUSTRW(_MPLS_STR)},
 #endif
@@ -322,7 +360,7 @@ static void init_menuitems(void) {
     int pad = // utf8-compat padding
       (opt->len > 0) ? (kit.maxnamelen - opt->len) : 0;
     const char *name =
-      (fill_itemname(mi, opt, sizeof(mi->name), mi->name, pad) > 0) && mi->name[0]
+      (fill_itemname(mi, opt->name, sizeof(mi->name), mi->name, pad) > 0) && mi->name[0]
       ? mi->name : opt->name;
     const char *desc =
       (fill_itemdesc(mi) > 0) && mi->desc[0]
@@ -483,8 +521,21 @@ static void set_field_num(FIELD *field, int num, int width) {
   }
 }
 
+static void set_field_str(FIELD *field, const char *str, int width) NONNULL(1);
+static void set_field_str(FIELD *field, const char *str, int width) {
+  char buff[width + 1];
+  memset(buff, 0, sizeof(buff));
+  int rc = snprinte(buff, sizeof(buff), "%s", str ? str : "");
+  if (rc > 0) {
+    int ec = set_field_buffer(field, 0, buff);
+    if (ec != E_OK)
+      LOGECFAIL("set_field_buffer", ec);
+  }
+}
+
 static void prepare_form(int ndx, menuitem_s *data) NONNULL(2);
 static void prepare_form(int ndx, menuitem_s *data) {
+  // menuitem types: INTFORM, STRFORM
   if ((ndx < 0) || (ndx >= (int)ARRAY_LEN(kit.ff))) {
     LOGMSG("wrong index: %d", ndx);
     return;
@@ -507,8 +558,20 @@ static void prepare_form(int ndx, menuitem_s *data) {
     field_opts_off(field, O_AUTOSKIP);
     kit.ff[ndx].field[0] = field;
   }
-  if (data->val.num)
-    set_field_num(field, *data->val.num, w);
+  switch (data->type) {
+    case MI_INTFORM:
+      if (data->val.num)
+        set_field_num(field, *data->val.num,  w);
+      break;
+    case MI_STRFORM:
+      if (data->val.pstr)
+        set_field_str(field, *data->val.pstr, w);
+      break;
+    default:
+      set_field_str(field, "", w);
+      break;
+  }
+  //
   FORM *form = kit.ff[ndx].form;
   if (!form) {
     form = new_form(kit.ff[ndx].field);
@@ -577,8 +640,9 @@ static void close_form(miff_s *ff) {
   LOGMSG("%s", "done");
 }
 
-static void intform_handle(ITEM *item, menuitem_s *data) NONNULL(1, 2);
-static void intform_handle(ITEM *item, menuitem_s *data) {
+static void activate_form(ITEM *item, menuitem_s *data) NONNULL(1, 2);
+static void activate_form(ITEM *item, menuitem_s *data) {
+  // menuitem types: INTFORM, STRFORM
   int ndx = item_index(item);
   if ((ndx < 0) || (ndx >= (int)ARRAY_LEN(kit.ff))) {
     LOGMSG("%s", "no item/data");
@@ -590,7 +654,7 @@ static void intform_handle(ITEM *item, menuitem_s *data) {
     if (!curr->form || !curr->field[0])
       return;
   }
-  LOGMSG("form[%d] posted  in: %d", ndx, curr->posted);
+  LOGMSG("< form[%d] posted=%d", ndx, curr->posted);
   // unpost all other menuitem forms if there are posted ones
   { miff_s *ff = kit.ff;
     for (int i = 0; i < (int)ARRAY_LEN(kit.ff); i++, ff++)
@@ -618,7 +682,7 @@ static void intform_handle(ITEM *item, menuitem_s *data) {
     if (ec != E_OK)
       LOGECFAIL("unpost_form", ec);
   }
-  LOGMSG("form[%d] posted out: %d", ndx, curr->posted);
+  LOGMSG("> form[%d] posted=%d", ndx, curr->posted);
   update_panels();
   doupdate();
 }
@@ -639,37 +703,86 @@ static void free_wsp(wsp_s *wsp) {
   }
 }
 
-static void fin_form(miff_s *ff, ITEM *item) NONNULL(1);
-static void fin_form(miff_s *ff, ITEM *item) {
-  if (item) {
-    FIELD *field = ff->field[0];
-    if (field) {
-      LOGMSG("%s", item_name(item));
-      menuitem_s *data = item_userptr(item);
-      char *got = field_buffer(field, 0);
-      if (got && got[0]) {
-        LOGMSG("got: \"%s\"", got);
-        char error[NAMELEN] = {0};
-        char value[NAMELEN] = {0};
-        int rc = snprinte(value, sizeof(value), "%s", got);
-        char *arg = ((rc > 0) && value[0]) ? trim(value) : NULL;
-        int min = data ? (data->pmin ? *data->pmin : data->min) : INT_MIN;
-        int max = data ? (data->pmax ? *data->pmax : data->max) : INT_MAX;
-        int num = arg2int(0, arg ? arg : got, min, max, item_name(item), error, sizeof(error));
-        int *val = data ? data->val.num : NULL;
-        if (error[0]) {
-          LOGMSG("%s", trim(error));
-          if (val) { // restore field buff
-            int rc = snprinte(value, sizeof(value), "%d", *val);
-            if (rc > 0)
-              set_field_buffer(field, 0, value);
-          }
-        } else {
-          LOGMSG("num: %d", num);
-          if (val && (*val != num))
-            *val = num;
+static void process_form_input(const char *got, ITEM *item, FIELD *field) NONNULL(1, 2, 3);
+static void process_form_input(const char *got, ITEM *item, FIELD *field) {
+  menuitem_s *data = item_userptr(item);
+  if (!data)
+    return;
+  LOGMSG("got: \"%s\"", got);
+  char value[NAMELEN] = {0};
+  int rc = snprinte(value, sizeof(value), "%s", got);
+  const char *str = ((rc > 0) && value[0]) ? trim(value) : NULL;
+  if (!str)
+    str = got;
+  switch (data->type) {
+    case MI_INTFORM: {
+      char error[NAMELEN] = {0};
+      int min = data->pmin ? *data->pmin : data->min;
+      int max = data->pmax ? *data->pmax : data->max;
+      int num = arg2int(0, str, min, max, item_name(item), error, sizeof(error));
+      int *val = data->val.num;
+      if (error[0]) {
+        LOGMSG("%s", trim(error));
+        if (val) { // restore field buff
+          int rc = snprinte(value, sizeof(value), "%d", *val);
+          if (rc > 0)
+            set_field_buffer(field, 0, value);
+        }
+      } else {
+        LOGMSG("num: %d", num);
+        if (val && (*val != num))
+          *val = num;
+      }
+    } break;
+    case MI_STRFORM: {
+      bool valid = true;
+      const char *patt = data->patt;
+      if (patt) {
+        const char *key = str;
+        valid = key && key[0];
+        if (valid) {
+          for (int i = 0; (i < kit.desc_width) && *key; i++, key++)
+            if (!strchr(patt, *key)) {
+              LOGMSG("invalid key: %c", *key);
+              valid = false;
+              break;
+            }
         }
       }
+      const char *val = data->val.pstr ? *data->val.pstr : NULL;
+      if (valid) {
+        LOGMSG("str: %s", str);
+        if (val && STR_NEQ(val, str, kit.desc_width)) {
+          if (data->setter)
+            data->setter(str);
+          else // ? snprinte(val[len], len, "%s", str)
+            LOGMSG("%s", "no setter for string form");
+        }
+      } else {
+        LOGMSG("invalid input: %s", str);
+        if (val) { // restore field buff
+          int rc = snprinte(value, sizeof(value), "%s", val);
+          if (rc > 0)
+            set_field_buffer(field, 0, value);
+        }
+      }
+    } break;
+    default: break;
+  }
+}
+
+static void fin_form(miff_s *ff, ITEM *item) NONNULL(1, 2);
+static void fin_form(miff_s *ff, ITEM *item) {
+  FIELD *field = ff->field[0];
+  if (field) {
+    LOGMSG("%s", item_name(item));
+    char *got = field_buffer(field, 0);
+    if (got && got[0]) {
+      LOGMSG("got: \"%s\"", got);
+      char value[NAMELEN] = {0};
+      int rc = snprinte(value, sizeof(value), "%s", got);
+      char *arg = ((rc > 0) && value[0]) ? trim(value) : NULL;
+      process_form_input(arg ? arg : got, item, field);
     }
   }
 }
@@ -748,7 +861,8 @@ key_action_t menu_action(void) {
       LOGMSG("%d", data->action);
       break;
     case MI_INTFORM:
-      intform_handle(item, data);
+    case MI_STRFORM:
+      activate_form(item, data);
       break;
     default: break;
   }
@@ -824,12 +938,13 @@ int menu_form_key(int key) {
     case KEY_ENTER:
     case '\r':
     case '\n': {
-      miff_s *ff = &kit.ff[ndx];
-      ITEM *item = kit.item[ndx];
-      menuitem_s *data = item ? item_userptr(item) : NULL;
       form_driver(form, REQ_VALIDATION);
-      fin_form(ff, item);
+      ITEM *item = kit.item[ndx];
+      miff_s *ff = &kit.ff[ndx];
+      if (item)
+        fin_form(ff, item);
       close_form(ff);
+      menuitem_s *data = item ? item_userptr(item) : NULL;
       if (data && (data->action == ActionNone))
         menu_posteditaction(data->ndx);
       menu_toggle_look();
