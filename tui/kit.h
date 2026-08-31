@@ -6,10 +6,10 @@
 
 void free_menukit(void);
 void menu_handler(WINDOW *_win UNUSED);
-void menu_updown(bool up);
 void menu_toggle_look(void);
 int  menu_form_key(int key);
-//void menu_form_fin(void);
+void menuline_updown(bool up);
+void menupage_updown(int lines);
 //
 key_action_t menu_action(void);
 bool inside_menu(int x, int y);

@@ -406,13 +406,15 @@ static void tui_key_s(WINDOW *win) { // set payload size
   MOUSE_ON;
 }
 
-static void linedown(uint lines) {
+static void dec_lines(uint lines) {
+  LOGMSG("%d", lines);
   display_offset += lines;
   int hops = net_max() - net_min();
   if ((hops > 0) && (display_offset >= (uint)hops))
     display_offset = hops - 1;
 }
-static void lineup(uint lines) {
+static void inc_lines(uint lines) {
+  LOGMSG("%d", lines);
   if (display_offset > lines)
     display_offset -= lines;
   else
@@ -420,13 +422,11 @@ static void lineup(uint lines) {
 }
 
 static void tui_key_plus(WINDOW *win UNUSED) {
-  linedown(1);
-  LOGMSG("line %s", "down");
+  dec_lines(1);
 }
 
 static void tui_key_minus(WINDOW *win UNUSED) {
-  lineup(1);
-  LOGMSG("line %s", "up");
+  inc_lines(1);
 }
 
 
@@ -708,25 +708,37 @@ key_action_t tui_actionw(WINDOW *win, void (*reset)(void)) { // NONNULL(1)
       }
     }
   } else switch (ch) { // more than 8 bits
-    case KEY_UP:   // decrease by one line
+    case KEY_UP:
 #ifdef WITH_MENU
-      menuactive ? menu_updown(true) :
+      // navigate up menuline
+      menuactive ? menuline_updown(true)  :
 #endif
-      tui_key_plus(NULL);
+      // decrease number of visible hops by one line
+      dec_lines(1);
       break;
-    case KEY_DOWN: // increase by one line
+    case KEY_DOWN:
 #ifdef WITH_MENU
-      menuactive ? menu_updown(false) :
+      // navigate down menuline
+      menuactive ? menuline_updown(false) :
 #endif
-      tui_key_minus(NULL);
+      // increase number of visible hops by one line
+      inc_lines(1);
       break;
-    case KEY_PPAGE: // PageUp:   decrease by 'page'-lines
-      LOGMSG("page down (%d lines)", LINES_PER_PAGE);
-      linedown(LINES_PER_PAGE);
+    case KEY_PPAGE: // PageUp
+#ifdef WITH_MENU
+      // navigate up N menulines
+      menuactive ? menupage_updown(+LINES_PER_PAGE) :
+#endif
+      // decrease number of visible hops by 'page'-lines
+      dec_lines(LINES_PER_PAGE);
       break;
-    case KEY_NPAGE: // PageDown: increase by 'page'-lines
-      LOGMSG("page up (%d lines)", LINES_PER_PAGE);
-      lineup(LINES_PER_PAGE);
+    case KEY_NPAGE: // PageDown
+#ifdef WITH_MENU
+      // navigate down N menulines
+      menuactive ? menupage_updown(-LINES_PER_PAGE) :
+#endif
+      // increase number of visible hops by 'page'-lines
+      inc_lines(LINES_PER_PAGE);
       break;
     default: break;
   }

@@ -847,8 +847,16 @@ void menu_handler(WINDOW *_win UNUSED) {
   }
 }
 
-void menu_updown(bool up) {
+void menuline_updown(bool up) {
   menu_driver(kit.menu, up ? REQ_UP_ITEM : REQ_DOWN_ITEM);
+}
+
+void menupage_updown(int lines) {
+  bool up = (lines > 0);
+  if (lines < 0)
+    lines = -lines;
+  for (int i = 0; i < lines; i++)
+    menuline_updown(up);
 }
 
 key_action_t menu_action(void) {
