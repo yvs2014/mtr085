@@ -20,6 +20,10 @@
 #include "nls.h"
 #include "aux.h"
 
+#if defined(ENABLE_QOS) && (!defined(ENABLE_QOS4) || !defined(ENABLE_QOS6))
+#include <errno.h>
+#endif
+
 #ifdef WITH_MENU
 #define MENUKEY 'M'
 #else
@@ -118,7 +122,7 @@ static void tui_key_h(WINDOW *win) { // help
     {.key = "o", .hint = CMD_O_STR,  .type = CH_STR},
     {.key = "P", .hint = CMD_P_STR},
     {.key = "q", .hint = CMD_Q_STR},
-#ifdef IP_TOS
+#ifdef ENABLE_QOS
     {.key = "Q", .hint = CMD_QQ_STR, .type = CH_INT},
 #endif
     {.key = "r", .hint = CMD_R_STR},
@@ -202,8 +206,12 @@ static void enter_stat_fields(WINDOW *win) {
     curs_set(curs);
 }
 
-static void tui_msgcont(WINDOW *win, const char *msg) NONNULL(1, 2);
-static void tui_msgcont(WINDOW *win, const char *msg) {
+static void tui_msgcont(WINDOW *win, const char *msg, const char *pre) NONNULL(1, 2);
+static void tui_msgcont(WINDOW *win, const char *msg, const char *pre) {
+  if (pre) {
+    waddstr(win, pre);
+    waddstr(win, ": ");
+  }
   waddstr(win, msg);
   waddstr(win, ". ");
   waddstr(win, ANYCONT_STR);
@@ -231,7 +239,7 @@ static void tui_get_int(WINDOW *win, int *val, int min, int max,
     char error[NAMELEN] = {0};
     int num = arg2int(0, entered, min, max, what, error, sizeof(error));
     if (error[0])
-      tui_msgcont(win, error);
+      tui_msgcont(win, error, NULL);
     else
       *val = num;
   }
@@ -269,7 +277,7 @@ static void tui_key_c(WINDOW *win) { // set number of cycles
     char error[NAMELEN] = {0};
     int num = arg2int(0, entered, 0, INT_MAX, NCYCLES_STR, error, sizeof(error));
     if (error[0])
-      tui_msgcont(win, error);
+      tui_msgcont(win, error, NULL);
     else {
       run_opts.cycles = num;
       OPT_SUM(cycles);
@@ -293,13 +301,16 @@ static void tui_key_f(WINDOW *win) { // first ttl
 
 static void tui_key_i(WINDOW *win) NONNULL(1);
 static void tui_key_i(WINDOW *win) { // interval
+  LOGMSG("action: %s", GAPINSEC_STR);
+  if (tuilook == NEWLOOK) // not yet, TODO: window with input form
+    return;
   tui_get_int(win, &run_opts.interval, 1, INT_MAX, GAPINSEC_STR, NULL);
   OPT_SUM(interval);
 }
 
 static void tui_key_m(WINDOW *win) NONNULL(1);
 static void tui_key_m(WINDOW *win) { // max ttl
-  LOGMSG("action: %s", MINTTL_STR);
+  LOGMSG("action: %s", MAXTTL_STR);
   if (tuilook == NEWLOOK) // not yet, TODO: window with input form
     return;
   tui_get_int(win, &run_opts.maxttl, run_opts.minttl, MAXHOST, MAXTTL_STR, NULL);
@@ -340,26 +351,31 @@ static void tui_key_o(WINDOW *win) { // set fields to display and their order
   MOUSE_ON;
 }
 
-#ifdef IP_TOS
+#ifdef ENABLE_QOS
 static void tui_key_Q(WINDOW *win) NONNULL(1);
 static void tui_key_Q(WINDOW *win) { // set QoS
-  MOUSE_OFF;
-#if defined(ENABLE_IPV6) && !defined(IPV6_TCLASS)
+  LOGMSG("action: %s", QOSTOS_STR);
+  if (tuilook == NEWLOOK) // not yet, TODO: window with input form
+    return;
+#if   !defined(ENABLE_QOS4)
+  if (af == AF_INET)
+    tui_msgcont(win, strerror(EOPNOTSUPP), "IPv4 QOS");
+  else
+#elif !defined(ENABLE_QOS6)
   if (af == AF_INET6)
-    tui_msgcont(win, TCLASS6_ERR);
+    tui_msgcont(win, strerror(EOPNOTSUPP), "IPv6 QOS");
   else
 #endif
-  { int qos = run_opts.qos;
-    tui_get_int(win, &qos, 0, UINT8_MAX, QOSTOS_STR, TOS_HINT_STR);
-    run_opts.qos = qos;
-    OPT_SUM(qos);
-  }
-  MOUSE_ON;
+  { tui_get_int(win, &run_opts.qos, 0, UINT8_MAX, QOSTOS_STR, TOS_HINT_STR);
+    OPT_SUM(qos); }
 }
 #endif
 
 static void tui_key_s(WINDOW *win) NONNULL(1);
 static void tui_key_s(WINDOW *win) { // set payload size
+  LOGMSG("action: %s", PSIZE_STR);
+  if (tuilook == NEWLOOK) // not yet, TODO: window with input form
+    return;
   MOUSE_OFF;
   wclear(win);
   int x = 0, y = 0;
@@ -377,7 +393,7 @@ static void tui_key_s(WINDOW *win) { // set payload size
     char error[NAMELEN] = {0};
     int num = arg2int(0, entered, -max, max, PSIZE_STR, error, sizeof(error));
     if (error[0])
-      tui_msgcont(win, error);
+      tui_msgcont(win, error, NULL);
     else {
       run_opts.size = num;
       OPT_SUM(size);
@@ -426,7 +442,7 @@ static tui_key_fn actfn_map[UINT8_MAX] =  {
   [MENUKEY]  = menu_handler,
 #endif
   ['o'] = tui_key_o, // fields to display
-#ifdef IP_TOS
+#ifdef ENABLE_QOS
   ['Q'] = tui_key_Q, // qos
 #endif
   ['s'] = tui_key_s, // payload size
@@ -487,7 +503,7 @@ static void reset_by_key(int key, void (*reset)(void)) {
     case C_SPACE:
     case 'p': // [ActionPauseResume]
     case 'P': // [ActionProto]
-#ifdef IP_TOS
+#ifdef ENABLE_QOS
     case 'Q': // qos
 #endif
     case 's': // payload size

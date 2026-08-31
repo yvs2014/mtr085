@@ -90,6 +90,28 @@
 #  include "chart.h"
 #endif
 
+#ifdef ENABLE_QOS
+#if   !defined(ENABLE_QOS4)
+#define VALID_QOS_AF(what, qos) do { \
+  if ((af == AF_INET) && qos) {      \
+    qos = 0;                         \
+    errno = EOPNOTSUPP;              \
+    warn("%s: IPv4 QOS", what);      \
+  }                                  \
+} while (0)
+#elif !defined(ENABLE_QOS6)
+#define VALID_QOS_AF(what, qos) do { \
+  if ((af == AF_INET6) && qos) {     \
+    qos = 0;                         \
+    errno = EOPNOTSUPP;              \
+    warn("%s: IPv6 QOS", what);      \
+  }                                  \
+} while (0)
+#else
+#define VALID_QOS_AF(what, qos) NOOP
+#endif
+#endif
+
 enum OPTIONS {
 #ifdef TUIMODE
   OPT_OLDLOOK  = '0',
@@ -134,7 +156,7 @@ enum OPTIONS {
 #ifdef SPLITMODE
   OPT_SPLIT    = 'p',
 #endif
-#ifdef IP_TOS
+#ifdef ENABLE_QOS
   OPT_QOS      = 'q',
 #endif
   OPT_REPORT   = 'r',
@@ -303,7 +325,7 @@ static struct option long_options[] = {
 #ifdef SPLITMODE
   {"split",      0, 0, OPT_SPLIT},
 #endif
-#ifdef IP_TOS
+#ifdef ENABLE_QOS
   {"tos",        1, 0, OPT_QOS},      // type-of-service (0..255)
                                       // quality-of-service
 #endif
@@ -385,7 +407,7 @@ static const char *get_opt_desc(char opt) {
   switch (opt) {
     case OPT_TTLFIRST:
     case OPT_TTLMAX:
-#ifdef IP_TOS
+#ifdef ENABLE_QOS
     case OPT_QOS:
 #endif
     case OPT_BITS:    return STR_NUMBER;
@@ -510,20 +532,6 @@ static bool split_hostport(char *buff, char* hostport[2]) {
    hostport[1] = (port && port[0]) ? port : NULL;
    return true;
 }
-
-#ifdef IP_TOS
-#if defined(ENABLE_IPV6) && !defined(IPV6_TCLASS)
-#define TOS4TOS(what, tos) do { \
-  if ((af == AF_INET6) && tos) { \
-    warnx("%s: tos=%d: %s", what, tos, TCLASS6_ERR); \
-    tos = 0; \
-  } \
-} while (0)
-#endif
-#endif
-#ifndef TOS4TOS
-#define TOS4TOS(what, tos) NOOP
-#endif
 
 #ifdef TUIMODE
 #define VAL_TRU(nth) ((val & (1u << ((nth) - 1))) ? true : false)
@@ -748,11 +756,11 @@ static void short_set(char opt, const char *progname) {
       display_mode = DisplaySplit;
       break;
 #endif
-#ifdef IP_TOS
+#ifdef ENABLE_QOS
     case OPT_QOS:
       if (optarg)
         ini_opts.qos = arg2int(opt, optarg, 0, UINT8_MAX, QOSTOS_STR, NULL, 0);
-      TOS4TOS(QOSTOS_STR, ini_opts.qos);
+      VALID_QOS_AF(QOSTOS_STR, ini_opts.qos);
       break;
 #endif
     case OPT_REPORT:
@@ -1097,7 +1105,9 @@ static inline int main_loop(struct addrinfo *ai, bool fin) {
   if (ai) {
     rc = set_target(ai);
     if (!rc) {
-      TOS4TOS(dsthost, run_opts.qos);
+#ifdef ENABLE_QOS
+      VALID_QOS_AF(dsthost, run_opts.qos);
+#endif
       locker(stdout, F_WRLCK);
       if (display_open())
         display_loop();

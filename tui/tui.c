@@ -400,7 +400,9 @@ static int tui_print_args(uint size, char buf[size]) {
   INT_OPT2STR(cycles,   PAR_CYCLES_STR, "=%d");
   INT_OPT2STR(minttl,   PAR_TTL_STR, ">=%u");
   INT_OPT2STR(maxttl,   PAR_TTL_STR, "<=%u");
+#ifdef ENABLE_QOS
   INT_OPT2STR(qos,      PAR_QOS_STR, "=%u");
+#endif
   INT_OPT2STR(size,     PAR_SIZE_STR, "=%d");
   //
   BOOL_OPT2STR(oncache, PAR_CACHE_STR);

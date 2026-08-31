@@ -22,7 +22,7 @@
 #define NEG4RND_STR    _("negative values are for random")
 #define RANGE_STR      _("range")
 #define RANGENEG_STR   _("range[0-255], random is -1")
-#define GAPINSEC_STR   _("Interval in seconds")
+#define GAPINSEC_STR   _(_GAPINSEC_STR)
 #define LESSTHAN_STR   _("less than")
 #define MORETHAN_STR   _("more than")
 #define UNKNOWN_STR    _("Unknown")
@@ -124,6 +124,9 @@
 #define _NCYCLES_STR  "Number of cycles"
 #define _MINTTL_STR   "Minimum TTL"
 #define _MAXTTL_STR   "Maximum TTL"
+#define _GAPINSEC_STR "Interval in seconds"
+#define _QOSTOS_STR   "QoS/ToS"
+#define _PSIZE_STR    "Payload size"
 
 // cmd help
 #define COMMANDS_STR _("Commands")
@@ -175,8 +178,8 @@
 #define MAXTTL_STR     _(_MAXTTL_STR)
 #define MOUSE_OUT_STR  _("Mouse is only supported with option '-1'")
 #define INTERVAL_STR   _("Interval")
-#define QOSTOS_STR     _("QoS/ToS")
-#define PSIZE_STR      _("Payload size")
+#define QOSTOS_STR     _(_QOSTOS_STR)
+#define PSIZE_STR      _(_PSIZE_STR)
 #define MUTEXCL_ERR    _("Mutually exclusive options")
 #define TCP_TOUT_STR   _("TCP timeout")
 #define CACHE_TOUT_STR _("Cache timeout")
@@ -219,7 +222,6 @@
 #define PARSE_ERR    _("Failed to parse")
 #define SETNS_ERR    _("Failed to set nameserver")
 #define OPENDISP_ERR _("Unable to open display")
-#define TCLASS6_ERR  _("IPv6 traffic class is not supported")
 #define DISPMODE_ERR _("Display mode")
 #define OVERFLD_ERR  _("Too many stat fields")
 #define UNKNFLD_ERR  _("Unknown stat field")
@@ -231,6 +233,5 @@
 #define NOPOOLMEM_ERR _("No place in pool for sockets")
 #define NOSOCK6_ERR   _("No IPv6 sockets")
 #define NODNS_ERR     _("No nameservers")
-
 
 #endif

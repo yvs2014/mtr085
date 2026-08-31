@@ -593,9 +593,6 @@ msgstr "No se pudo analizar"
 msgid "Failed to set nameserver"
 msgstr "No se pudo establecer servidor DNS"
 
-msgid "IPv6 traffic class is not supported"
-msgstr "Clase de tráfico IPv6 no se soporta"
-
 msgid "Unable to open display"
 msgstr "No se puede inicializar la pantalla"
 

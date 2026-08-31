@@ -593,9 +593,6 @@ msgstr "Не вдалося розпарсити"
 msgid "Failed to set nameserver"
 msgstr "Не вдалося встановити DNS сервер"
 
-msgid "IPv6 traffic class is not supported"
-msgstr "Клас трафіку IPv6 не підтримується"
-
 msgid "Unable to open display"
 msgstr "Неможливо ініціалізувати екран"
 

@@ -25,7 +25,7 @@
 bool menuactive;
 int posted_form = -1;
 
-enum {
+typedef enum {
 #ifdef ENABLE_DNS
   MENU_ITEM_DNS,
 #endif
@@ -33,15 +33,21 @@ enum {
   MENU_ITEM_ASN,
 #endif
   MENU_ITEM_JITTER,
+// MENU_ITEM_FIELDS, // like LS_NABWV
+#ifdef WITH_MPLS
+  MENU_ITEM_MPLS,
+#endif
   MENU_ITEM_COUNT,
   MENU_ITEM_MINTTL,
   MENU_ITEM_MAXTTL,
   MENU_ITEM_PATTERN,
-#ifdef WITH_MPLS
-  MENU_ITEM_MPLS,
+  MENU_ITEM_TIMEI,
+#ifdef ENABLE_QOS
+  MENU_ITEM_QOS,
 #endif
+  MENU_ITEM_PSIZE,
   MENU_ITEMS
-};
+} mi_enum;
 
 typedef struct wsp_s {
   WINDOW *win;
@@ -70,7 +76,7 @@ typedef struct kit_s {
   const int desc_width;
 } kit_s;
 
-static kit_s kit = {.spacing = 1/*default*/, .desc_width = 10/*declen(INT_MAX)*/};
+static kit_s kit = {.spacing = 1/*default*/, .desc_width = 10/*looks enough*/};
 
 #define LOGFNFAIL(fn)     LOGMSG("%s() failed" ,    (fn))
 #define LOGECFAIL(fn, ec) LOGMSG("%s() failed: %d/%d", (fn), (ec), ((ec) == E_SYSTEM_ERROR) ? errno : 0)
@@ -91,6 +97,7 @@ static kit_s kit = {.spacing = 1/*default*/, .desc_width = 10/*declen(INT_MAX)*/
 typedef enum {MI_TOOGLE, MI_INTFORM} mi_type;
 
 typedef struct menuitem_s {
+  const mi_enum ndx;
   char name[NAMELEN];
   char desc[NAMELEN];
   const mi_type type;
@@ -100,7 +107,6 @@ typedef struct menuitem_s {
     int *num;
   } val;
   const int min, max, *pmin, *pmax;
-  void (*postaction)(void);
 } menuitem_s;
 
 typedef struct optname_s {
@@ -110,20 +116,32 @@ typedef struct optname_s {
 
 //
 
-static void postaction_bitpatt(void) {
-  OPT_SUM(pattern);
-  reset_pattern = true;
-}
-static void postaction_cycles(void) {
-  OPT_SUM(cycles);
-}
-static void postaction_minttl(void) {
-  OPT_SUM(minttl);
-}
-static void postaction_maxttl(void) {
-  OPT_SUM(maxttl);
+static void menu_posteditaction(mi_enum en) {
+  switch (en) {
+    case MENU_ITEM_COUNT:   OPT_SUM(cycles);   break;
+    case MENU_ITEM_MINTTL:  OPT_SUM(minttl);   break;
+    case MENU_ITEM_MAXTTL:  OPT_SUM(maxttl);   break;
+    case MENU_ITEM_PATTERN: OPT_SUM(pattern); reset_pattern = true; break;
+    case MENU_ITEM_TIMEI:   OPT_SUM(interval); break;
+#ifdef ENABLE_QOS
+    case MENU_ITEM_QOS:     OPT_SUM(qos);      break;
+#endif
+    case MENU_ITEM_PSIZE:   OPT_SUM(size);     break;
+    default: break;
+  }
 }
 
+static void mi_selectabale(int ndx UNUSED, ITEM *item UNUSED) {
+#if defined(ENABLE_QOS) && (!defined(ENABLE_QOS4) || !defined(ENABLE_QOS6))
+#if   !defined(ENABLE_QOS4)
+  if ((ndx == MENU_ITEM_QOS) && (af == AF_INET))
+    item_opts_off(item, O_SELECTABLE);
+#elif !defined(ENABLE_QOS6)
+  if ((ndx == MENU_ITEM_QOS) && (af == AF_INET6))
+    item_opts_off(item, O_SELECTABLE);
+#endif
+#endif
+}
 
 static int fill_itemname(const menuitem_s *mi, const optname_s *opt,
   uint size, char buff[size], int pad) NONNULL(1, 2, 4);
@@ -217,35 +235,45 @@ static int calc_maxnamelen(uint len,
 }
 
 static void init_menuitems(void) {
+#define PSIZEMM (MAXPACKET - MINPACKET)
   static menuitem_s menuitem[MENU_ITEMS] = {
 #ifdef ENABLE_DNS
-    [MENU_ITEM_DNS]     =
-      {.type = MI_TOOGLE,  .action = ActionDNS,  .val.flag = &run_opts.dns},
+    [MENU_ITEM_DNS]      = {.ndx = MENU_ITEM_DNS,     .type = MI_TOOGLE,
+      .action = ActionDNS,  .val.flag = &run_opts.dns},
 #endif
 #ifdef WITH_IPINFO
-    [MENU_ITEM_ASN]     =
-      {.type = MI_TOOGLE,  .action = ActionASN,  .val.flag = &run_opts.asn},
+    [MENU_ITEM_ASN]      = {.ndx = MENU_ITEM_ASN,     .type = MI_TOOGLE,
+      .action = ActionASN,  .val.flag = &run_opts.asn},
 #endif
-    [MENU_ITEM_JITTER]  =
-      {.type = MI_TOOGLE,  .action = ActionJttr, .val.flag = &run_opts.jitter},
-    [MENU_ITEM_COUNT]   =
-      {.type = MI_INTFORM, .action = ActionNone, .val.num  = &run_opts.cycles,
-       .min =  0, .max = INT_MAX,   .postaction = postaction_cycles},
-    [MENU_ITEM_MINTTL]  =
-      {.type = MI_INTFORM, .action = ActionNone, .val.num  = &run_opts.minttl,
-       .min =  1, .max = MAXHOST,   .postaction = postaction_minttl,
-       .pmax = &run_opts.maxttl},
-    [MENU_ITEM_MAXTTL]  =
-      {.type = MI_INTFORM, .action = ActionNone, .val.num  = &run_opts.maxttl,
-       .min =  1, .max = MAXHOST,   .postaction = postaction_maxttl,
-       .pmin = &run_opts.minttl},
-    [MENU_ITEM_PATTERN] =
-      {.type = MI_INTFORM, .action = ActionNone, .val.num  = &run_opts.pattern,
-       .min = -1, .max = UINT8_MAX, .postaction = postaction_bitpatt},
+    [MENU_ITEM_JITTER]   = {.ndx = MENU_ITEM_JITTER,  .type = MI_TOOGLE,
+      .action = ActionJttr, .val.flag = &run_opts.jitter},
 #ifdef WITH_MPLS
-    [MENU_ITEM_MPLS] =
-      {.type = MI_TOOGLE,  .action = ActionMPLS, .val.flag = &run_opts.mpls},
+    [MENU_ITEM_MPLS]     = {.ndx = MENU_ITEM_MPLS,    .type = MI_TOOGLE,
+      .action = ActionMPLS, .val.flag = &run_opts.mpls},
 #endif
+    [MENU_ITEM_COUNT]    = {.ndx = MENU_ITEM_COUNT,   .type = MI_INTFORM,
+      .action = ActionNone, .val.num  = &run_opts.cycles,
+      .min =  0, .max = INT_MAX},
+    [MENU_ITEM_MINTTL]   = {.ndx = MENU_ITEM_MINTTL,  .type = MI_INTFORM,
+      .action = ActionNone, .val.num  = &run_opts.minttl,
+      .min =  1, .max = MAXHOST, .pmax = &run_opts.maxttl},
+    [MENU_ITEM_MAXTTL]   = {.ndx = MENU_ITEM_MAXTTL,  .type = MI_INTFORM,
+      .action = ActionNone, .val.num  = &run_opts.maxttl,
+      .min =  1, .max = MAXHOST, .pmin = &run_opts.minttl},
+    [MENU_ITEM_PATTERN]  = {.ndx = MENU_ITEM_PATTERN, .type = MI_INTFORM,
+      .action = ActionNone, .val.num  = &run_opts.pattern,
+      .min = -1, .max = UINT8_MAX},
+    [MENU_ITEM_TIMEI]    = {.ndx = MENU_ITEM_TIMEI,   .type = MI_INTFORM,
+      .action = ActionNone, .val.num  = &run_opts.interval,
+      .min =  1, .max = INT_MAX},
+#ifdef ENABLE_QOS
+    [MENU_ITEM_QOS]      = {.ndx = MENU_ITEM_QOS,     .type = MI_INTFORM,
+      .action = ActionNone, .val.num  = &run_opts.qos,
+      .min =  0, .max = UINT8_MAX},
+#endif
+    [MENU_ITEM_PSIZE]    = {.ndx = MENU_ITEM_PSIZE,   .type = MI_INTFORM,
+      .action = ActionNone, .val.num  = &run_opts.size,
+      .min = -PSIZEMM, .max = PSIZEMM},
   };
   //
   optname_s optname[ARRAY_LEN(menuitem)] = {
@@ -256,13 +284,18 @@ static void init_menuitems(void) {
     [MENU_ITEM_ASN]     = {.name = MENUSTRW(_ASN_STR)},
 #endif
     [MENU_ITEM_JITTER]  = {.name = MENUSTRW(_JITTER_STR)},
+#ifdef WITH_MPLS
+    [MENU_ITEM_MPLS]    = {.name = MENUSTRW(_MPLS_STR)},
+#endif
     [MENU_ITEM_COUNT]   = {.name = MENUSTRW(_NCYCLES_STR)},
     [MENU_ITEM_MINTTL]  = {.name = MENUSTRW(_MINTTL_STR)},
     [MENU_ITEM_MAXTTL]  = {.name = MENUSTRW(_MAXTTL_STR)},
     [MENU_ITEM_PATTERN] = {.name = MENUSTRW(_BITPATT_STR)},
-#ifdef WITH_MPLS
-    [MENU_ITEM_MPLS]    = {.name = MENUSTRW(_MPLS_STR)},
+    [MENU_ITEM_TIMEI]   = {.name = MENUSTRW(_GAPINSEC_STR)},
+#ifdef ENABLE_QOS
+    [MENU_ITEM_QOS]     = {.name = MENUSTRW(_QOSTOS_STR)},
 #endif
+    [MENU_ITEM_PSIZE]   = {.name = MENUSTRW(_PSIZE_STR)},
   };
   //
   if (!kit.maxnamelen)
@@ -299,6 +332,7 @@ static void init_menuitems(void) {
       LOGMSG("menuitem[%u]: \"%s\"=\"%s\"", i, item_name(item), item_description(item));
       set_item_userptr(item, mi);
       kit.item[i] = item;
+      mi_selectabale(i, item);
     } else {
       LOGMSG("new_item(#%u, %s) failed: %d", i, opt->name, errno);
       break;
@@ -320,12 +354,17 @@ static void prepare_menu(void) {
       LOGECFAIL("new_menu", errno);
       return;
     }
-    set_menu_mark(kit.menu, NULL);
+    { int ec = set_menu_mark(kit.menu, NULL);
+      if (ec != E_OK)
+        LOGFNFAIL("set_menu_mark"); }
     if (kit.bg > 0) {
       int ec = set_menu_back(kit.menu, COLOR_PAIR(kit.bg));
       if (ec != E_OK)
         LOGECFAIL("set_menu_back", ec);
     }
+    { int ec = set_menu_grey(kit.menu, COLOR_PAIR(kit.bg > 0 ? kit.bg : 0) | A_DIM);
+      if (ec != E_OK)
+        LOGECFAIL("set_menu_grey", ec); }
   }
   menu_spacing(kit.menu, &kit.spacing, NULL, NULL);
   kit.frame =
@@ -791,8 +830,8 @@ int menu_form_key(int key) {
       form_driver(form, REQ_VALIDATION);
       fin_form(ff, item);
       close_form(ff);
-      if (data && data->postaction)
-        data->postaction();
+      if (data && (data->action == ActionNone))
+        menu_posteditaction(data->ndx);
       menu_toggle_look();
     } break;
     default:

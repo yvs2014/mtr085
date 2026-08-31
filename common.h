@@ -50,7 +50,7 @@
 #endif
 
 #ifndef GITREV
-#define GITREV "311"
+#define GITREV "312"
 #endif
 
 #ifndef HAVE_UINT
@@ -62,6 +62,22 @@ typedef unsigned long int ulong;
 
 #define STR_EQ(a, b, n) (!strncmp((a), (b), n))
 #define STR_NEQ(a, b, n) (strncmp((a), (b), n))
+
+#ifdef IP_TOS
+  #ifndef ENABLE_QOS4
+    #define ENABLE_QOS4
+  #endif
+#endif
+#if defined(ENABLE_IPV6) && defined(IPV6_TCLASS)
+  #ifndef ENABLE_QOS6
+    #define ENABLE_QOS6
+  #endif
+#endif
+#if defined(ENABLE_QOS4) || defined(ENABLE_QOS6)
+  #ifndef ENABLE_QOS
+    #define ENABLE_QOS
+  #endif
+#endif
 
 typedef union inaddr_union {
   struct in_addr in;
@@ -190,14 +206,16 @@ typedef struct opts_s {
     audible,  // -d 5th bit (beep)
     color;    // -d 4th bit (color mode)
   uint8_t
-    chart,    // -d 1st and 2nd bits
-    qos;      // -q qos
+    chart;    // -d 1st and 2nd bits
   int
     pattern,  // -b payload_pattern
     cycles,   // -c cycles_to_run
     minttl,   // -f first_ttl
     maxttl,   // -m max_ttl
     interval, // -i interval
+#ifdef ENABLE_QOS
+    qos,      // -q qos
+#endif
     size,     // -s packet_size
     syn,      // -T tcp_timeout
     cache,    // -x
@@ -239,7 +257,9 @@ typedef union opt_sum_u {
     //
     minttl   :1, // -f first_ttl
     maxttl   :1, // -m max_ttl
+#ifdef ENABLE_QOS
     qos      :1, // -q qos
+#endif
     //
     pattern  :1, // -b payload_pattern
     cycles   :1, // -c cycles_to_run

@@ -363,20 +363,23 @@ static int new_sequence(int at) {
   return seq;
 }
 
-#define NET_SETTOS(PROTO_VERSION, TOS_TYPE) do { \
-  int qos = run_opts.qos; \
-  if (qos)                \
-    if (setsockopt(sock, PROTO_VERSION, TOS_TYPE, &qos, sizeof(qos)) < 0) \
-      FAIL_WITH_WARN(sock, "%s(sock=%d, tos=%d)", __func__, sock, qos);   \
-} while (0)
-#define NET_SETTTL(PROTO_VERSION, TTL_TYPE) do { \
+#define NET_SETTTL(PROTO_VERSION, TTL_TYPE) do {                        \
   if (setsockopt(sock, PROTO_VERSION, TTL_TYPE, &ttl, sizeof(ttl)) < 0) \
     FAIL_WITH_WARN(sock, "%s(sock=%d, ttl=%d)", __func__, sock, ttl);   \
 } while (0)
 
-static bool settosttl(int sock, int ttl) {
+#ifdef ENABLE_QOS
+#define NET_SETTOS(PROTO_VERSION, TOS_TYPE) do {                          \
+  int qos = run_opts.qos & 0xff;                                          \
+  if (qos)                                                                \
+    if (setsockopt(sock, PROTO_VERSION, TOS_TYPE, &qos, sizeof(qos)) < 0) \
+      FAIL_WITH_WARN(sock, "%s(sock=%d, tos=%d)", __func__, sock, qos);   \
+} while (0)
+#endif
+
+static bool settosttl4(int sock, int ttl) {
   NET_SETTTL(IPPROTO_IP, IP_TTL);
-#ifdef IP_TOS
+#ifdef ENABLE_QOS4
   NET_SETTOS(IPPROTO_IP, IP_TOS);
 #endif
   return true;
@@ -385,7 +388,7 @@ static bool settosttl(int sock, int ttl) {
 #ifdef ENABLE_IPV6
 static bool settosttl6(int sock, int ttl) {
   NET_SETTTL(IPPROTO_IPV6, IPV6_UNICAST_HOPS);
-#ifdef IPV6_TCLASS
+#ifdef ENABLE_QOS6
   NET_SETTOS(IPPROTO_IPV6, IPV6_TCLASS);
 #endif
   return true;
@@ -435,12 +438,14 @@ static bool net_send_tcp(int at) {
   int ttl = at + 1, port = 0;
   switch (af) {
     case AF_INET:
-      if (!settosttl(sock, ttl)) return false;
+      if (!settosttl4(sock, ttl))
+        return false;
       port = ntohs(local.S_PORT);
     break;
 #ifdef ENABLE_IPV6
     case AF_INET6:
-      if (!settosttl6(sock, ttl)) return false;
+      if (!settosttl6(sock, ttl))
+        return false;
       port = ntohs(local.S6PORT);
     break;
 #endif
@@ -542,7 +547,8 @@ static bool net_send_icmp_udp(int at) {
       addr_copy(&ip->saddr, &lsa.S_ADDR);
       addr_copy(&ip->daddr, &rsa.S_ADDR);
 #else
-      if (!settosttl(sendsock, ttl)) return false;
+      if (!settosttl4(sendsock, ttl))
+        return false;
 #endif
       echotype = ICMP_ECHO;
       salen = sizeof(struct sockaddr_in);
