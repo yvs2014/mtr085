@@ -7,13 +7,11 @@
 .ds on "n
 .ds oN "N
 .ds oo "o
-.ds oor "r
 .ds oot "t
 .ds ooc "c
 .ds ooj "j
 .ds oon "n
 .ds oox "x
-.ds op "p
 .ds oq "q
 .ds oy "y
 .Dd $Mdocdate$
@@ -24,7 +22,7 @@
 .Nd a network diagnostic tool
 .Sh SYNOPSIS
 .Nm
-.Op Fl a\*[ob]Bc\*[oC]d\*[oe]fFi\*[ol]m\*[oM]\*[on]\*[oN]\*[oo]\*[op]\*[oq]rsStTuvx\*[oy]01\*[o6]
+.Op Fl a\*[ob]Bc\*[oC]d\*[oe]fFi\*[ol]m\*[oM]\*[on]\*[oN]\*[oo]\*[oq]rsStTuvx\*[oy]01\*[o6]
 TARGET[:PORT] ...
 .Sh DESCRIPTION
 .Nm
@@ -55,7 +53,7 @@ Bind outgoing packets' socket to specific interface, so that any packet will be 
 that this option doesn't apply to DNS requests (which could be and could not be what you want).
 .ie "b"\*[ob]" \{\
 .It Fl b, Fl -show-both
-Display both (hop's IP address and hostname).  In split mode it adds an extra field to the output.
+Display both (hop's IP address and hostname)
 .\}
 .It Fl B, Fl -bitpattern Ar NUM
 Specify bit pattern to use in payload.  Should be either within range 0-255, or -1 for random sampling.
@@ -238,19 +236,14 @@ Specify nameserver instead of ones defined in
 .\}
 .\}
 .ie "o"\*[oo]" \{\
-.It Fl o, Fl -output Ar \*[oor] \*[oot] \*[ooc] \*[ooj] \*[oon] \*[oox]
+.It Fl o, Fl -output Ar \*[oot] \*[ooc] \*[ooj] \*[oon] \*[oox]
 Use one of these suboptions to get
-.ie "r"\*[oor]" \{RAW\}
 .ie "t"\*[oot]" \{TXT\}
 .ie "c"\*[ooc]" \{CSV\}
 .ie "j"\*[ooj]" \{JSON\}
 .ie "n"\*[oon]" \{TOON\}
 .ie "x"\*[oox]" \{XML\}
 formatted output respectively
-.\}
-.ie "p"\*[op]" \{\
-.It Fl p, Fl -split
-Split out a format that is suitable for a split-user interface
 .\}
 .ie "q"\*[oq]" \{\
 .It Fl q, Fl -tos Ar NUM

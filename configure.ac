@@ -47,12 +47,6 @@ AC_ARG_ENABLE([ipv6],
 AM_CONDITIONAL([IPV6], [test "x$ipv6" = "xyes"])
 AS_IF([test "x$ipv6" = "xyes"], [AC_DEFINE([ENABLE_IPV6], [], [Define to enable IPv6])])
 
-AC_ARG_WITH(splitmode,
-	AS_HELP_STRING([--without-splitmode], [without split-mode]),
-	splitmode=${withval}, [splitmode=yes])
-AM_CONDITIONAL([SPLITMODE], [test "x$splitmode" = "xyes"])
-AS_IF([test "x$splitmode" = "xyes"], [AC_DEFINE([SPLITMODE], [1], [Define to enable split-mode])])
-
 AC_ARG_WITH(tui,
 	AS_HELP_STRING([--without-tui], [without Curses TUI]),
 	[tui=${withval}], [tui=yes])
@@ -179,49 +173,40 @@ AC_ARG_WITH([ipinfo],
 AM_CONDITIONAL([IPINFO], [test "x$ipinfo" = "xyes"])
 AS_IF([test "x$ipinfo" = "xyes"], [AC_DEFINE([WITH_IPINFO], [1], [Define to enable ipinfo lookup])])
 
-# Extra output formats: raw, txt, csv, json, toon, xml
-# 	"raw" is not enabled by default
-
-AC_ARG_WITH([output_raw],
-	AS_HELP_STRING([--with-output-raw], [RAW output format]),
-	[output_raw="${withval}"], [output_raw=no])
-AM_CONDITIONAL([OUTPUT_RAW], [test "x$output_raw" = "xyes"])
-AS_IF([test "x$output_raw" != "xno"], [AC_DEFINE([OUTPUT_FORMAT_RAW], 1, [Support RAW output format])])
-
+# Extra output formats: txt, csv, json, toon, xml
 AC_ARG_WITH([output_txt],
 	AS_HELP_STRING([--with-output-txt], [TXT output format]),
 	[output_txt="${withval}"], [output_txt=yes])
 AM_CONDITIONAL([OUTPUT_TXT], [test "x$output_txt" = "xyes"])
 AS_IF([test "x$output_txt" != "xno"], [AC_DEFINE([OUTPUT_FORMAT_TXT], 1, [Support TXT output format])])
-
+#
 AC_ARG_WITH([output_csv],
 	AS_HELP_STRING([--with-output-csv], [CSV output format]),
 	[output_csv="${withval}"], [output_csv=yes])
 AM_CONDITIONAL([OUTPUT_CSV], [test "x$output_csv" = "xyes"])
 AS_IF([test "x$output_csv" != "xno"], [AC_DEFINE([OUTPUT_FORMAT_CSV], 1, [Support CSV output format])])
-
+#
 AC_ARG_WITH([output_json],
 	AS_HELP_STRING([--with-output-json], [JSON output format]),
 	[output_json="${withval}"], [output_json=yes])
 AM_CONDITIONAL([OUTPUT_JSON], [test "x$output_json" = "xyes"])
 AS_IF([test "x$output_json" != "xno"], [AC_DEFINE([OUTPUT_FORMAT_JSON], 1, [Support JSON output format])])
-
+#
 AC_ARG_WITH([output_toon],
 	AS_HELP_STRING([--with-output-toon], [TOON output format]),
 	[output_toon="${withval}"], [output_toon=yes])
 AM_CONDITIONAL([OUTPUT_TOON], [test "x$output_toon" = "xyes"])
 AS_IF([test "x$output_toon" != "xno"], [AC_DEFINE([OUTPUT_FORMAT_TOON], 1, [Support TOON output format])])
-
+#
 AC_ARG_WITH([output_xml],
 	AS_HELP_STRING([--with-output-xml], [XML output format]),
 	[output_xml="${withval}"], [output_xml=yes])
 AM_CONDITIONAL([OUTPUT_XML], [test "x$output_xml" = "xyes"])
 AS_IF([test "x$output_xml" != "xno"], [AC_DEFINE([OUTPUT_FORMAT_XML], 1, [Support XML output format])])
-
-AM_CONDITIONAL([OUTPUTFMT], [test "x$output_raw" = "xyes" \
-	-o "x$output_txt"  = "xyes" -o "x$output_csv"  = "xyes" \
-	-o "x$output_json" = "xyes" -o "x$output_toon" = "xyes" \
-	-o "x$output_xml"  = "xyes"])
+#
+AM_CONDITIONAL([OUTPUTFMT], [ "x$output_txt" = "xyes" \
+	-o "x$output_csv"  = "xyes" -o "x$output_json" = "xyes" \
+	-o "x$output_toon" = "xyes" -o "x$output_xml"  = "xyes"])
 
 # Add some development options:
 #   syslog debug: poll, net, dns, ipinfo
@@ -371,9 +356,6 @@ AS_IF([test "x$aiidn"     = "xyes" -o "x$need_libidn" = "xyes"],
 AS_IF([test "x$ipinfo"    = "xyes"],
 	[_option_list="$_option_list +IPINFO"],
 	[_option_list="$_option_list -IPINFO"])
-AS_IF([test "x$splitmode" = "xyes"],
-	[_option_list="$_option_list +SPLIT"],
-	[_option_list="$_option_list -SPLIT"])
 AS_IF([test "x$ipv6"      = "xyes"],
 	[_option_list="$_option_list +IPV6"],
 	[_option_list="$_option_list -IPV6"])
@@ -385,7 +367,6 @@ AS_IF([test "x$color"  = "xyes"],
 	[_option_list="$_option_list -COLOR"])
 
 _option_output=""
-AS_IF([test "x$output_raw"  = "xyes"], [_option_output="${_option_output},raw"])
 AS_IF([test "x$output_txt"  = "xyes"], [_option_output="${_option_output},text"])
 AS_IF([test "x$output_csv"  = "xyes"], [_option_output="${_option_output},csv"])
 AS_IF([test "x$output_json" = "xyes"], [_option_output="${_option_output},json"])

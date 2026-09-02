@@ -329,7 +329,7 @@ static key_action_t keyboard_events(key_action_t action) {
       run_opts.pause = !run_opts.pause;
       OPT_SUM(pause);
       break;
-#if defined(TUIMODE) || defined(SPLITMODE)
+#ifdef TUIMODE
     case ActionJttr: // latency OR jitter
       LOGMSG("toggle %s: %s -> %s", "table look",
          run_opts.jitter ? "jitter" : "latency",

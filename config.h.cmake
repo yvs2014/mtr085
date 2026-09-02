@@ -51,9 +51,6 @@
 /* IP-info lookup */
 #cmakedefine WITH_IPINFO
 
-/* split-mode */
-#cmakedefine SPLITMODE
-
 /* IPv6 */
 #cmakedefine ENABLE_IPV6
 
@@ -64,7 +61,6 @@
 #cmakedefine USE_COLOR
 
 /* output formats */
-#cmakedefine OUTPUT_FORMAT_RAW
 #cmakedefine OUTPUT_FORMAT_TXT
 #cmakedefine OUTPUT_FORMAT_CSV
 #cmakedefine OUTPUT_FORMAT_JSON

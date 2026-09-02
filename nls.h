@@ -211,7 +211,6 @@
 #define PORTNUM_STR  _("port number")
 
 // messages
-#define ANYLTTR_STR  _("Press any letter to continue")
 #define ANYCONT_STR  _("Press any key to continue")
 #define ANYQUIT_STR  _("Press any key to quit")
 #define UNKNOWN_ERR  _("Unknown error")

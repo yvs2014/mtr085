@@ -31,8 +31,6 @@
 #include <getopt.h>
 #include <errno.h>
 #include <assert.h>
-#include <fcntl.h>
-#include <sys/stat.h>
 
 #ifdef HAVE_NETDB_H
 #include <netdb.h>
@@ -94,7 +92,7 @@
   if ((af == AF_INET) && qos) {      \
     qos = 0;                         \
     errno = EOPNOTSUPP;              \
-    WARNC("%s: IPv4 QOS", what);     \
+    WARNT("%s: IPv4 QOS", what);     \
   }                                  \
 } while (0)
 #elif !defined(ENABLE_QOS6)
@@ -102,7 +100,7 @@
   if ((af == AF_INET6) && qos) {     \
     qos = 0;                         \
     errno = EOPNOTSUPP;              \
-    WARNC("%s: IPv6 QOS", what);     \
+    WARNT("%s: IPv6 QOS", what);     \
   }                                  \
 } while (0)
 #else
@@ -154,9 +152,6 @@ enum OPTIONS {
 #ifdef OUTPUT_FORMAT
   OPT_OUTPUT   = 'o',
 #endif
-#ifdef SPLITMODE
-  OPT_SPLIT    = 'p',
-#endif
 #ifdef ENABLE_QOS
   OPT_QOS      = 'q',
 #endif
@@ -179,9 +174,6 @@ enum TTL_OPTS {
 
 #ifdef OUTPUT_FORMAT
 enum OUTPUT_OPTS {
-#ifdef OUTPUT_FORMAT_RAW
-  ORAW  = 'r',
-#endif
 #ifdef OUTPUT_FORMAT_TXT
   OTXT  = 't',
 #endif
@@ -210,10 +202,6 @@ enum OUTPUT_OPTS {
 
 #ifdef WITH_IPINFO
 #include "ipinfo.h"
-#endif
-
-#ifdef OUTPUT_FORMAT_RAW
-#include "report.h"
 #endif
 
 enum { REPORT_PINGS = 100, CACHE_TIMEOUT = 60, TCPSYN_TOUT_MAX = 60 };
@@ -329,9 +317,6 @@ static struct option long_options[] = {
 #ifdef OUTPUT_FORMAT
   {"output",     1, 0, OPT_OUTPUT},   // raw, txt, csv, json, toon, xml
 #endif
-#ifdef SPLITMODE
-  {"split",      0, 0, OPT_SPLIT},
-#endif
 #ifdef ENABLE_QOS
   {"tos",        1, 0, OPT_QOS},      // type-of-service (0..255)
                                       // quality-of-service
@@ -360,30 +345,6 @@ display_mode_t display_mode = DisplayAuto;
 
 static const char *iface_addr;
 //
-
-// If the file stream is associated with a regular file, lock/unlock the file
-// in order coordinate writes to a common file from multiple mtr instances
-static void locker(FILE *file, short type) {
-  if (!file)
-    return;
-  int fd = fileno(file);
-  if (fd < 0) {
-    WARNC("%s", "fileno()");
-    return;
-  }
-  struct stat stat;
-  if (fstat(fd, &stat) < 0) {
-    WARNC("fstat(%d)", fd);
-    return;
-  }
-  if (!S_ISREG(stat.st_mode))
-    return;
-  struct flock lock = { .l_whence = SEEK_END, .l_type = type, .l_pid = mypid };
-  if (fcntl(fd, F_SETLKW, &lock) < 0) {
-    WARNC("fcntl(fd=%d, type=%d)", fd, type);
-    return;
-  }
-}
 
 static void setbasename(const char *argv0) {
 #if   defined(HAVE_GETPROGNAME) /*BSD*/
@@ -457,9 +418,6 @@ static void set_opt_desc(char opt, uint len, const char* desc[len]) {
     case OPT_OUTPUT: {
       static char oopt[16];
       uint len = 0;
-#ifdef OUTPUT_FORMAT_RAW
-      ADD_OCHAR(ORAW);
-#endif
 #ifdef OUTPUT_FORMAT_TXT
       ADD_OCHAR(OTXT);
 #endif
@@ -526,7 +484,7 @@ static bool set_custom_res(struct addrinfo *ns) {
       ((ns->ai_family == AF_INET)  ? addr4exist(&((struct sockaddr_in *)ns->ai_addr)->sin_addr) : false))) {
     if (custom_res) {
       free(custom_res);
-      WARNXC("%s", MANYNS_WARN);
+      WARNXT("%s", MANYNS_WARN);
     }
     custom_res = malloc(sizeof(*custom_res));
     if (custom_res) {
@@ -591,14 +549,14 @@ static inline void option_display(char opt, const char *optstr) {
 
 static inline void option_fields(char opt) {
   if (strnlen(optarg, MAXFLD + 1) > MAXFLD)
-    ERRXC(EINVAL, "-%c: %s (%s=%d): %s", opt, OVERFLD_ERR, MAX_STR, MAXFLD, optarg);
+    ERRXT(EINVAL, "-%c: %s (%s=%d): %s", opt, OVERFLD_ERR, MAX_STR, MAXFLD, optarg);
   for (char *c = optarg; c && *c; c++) {
     uint cnt = 0;
     for (; cnt < ARRAY_LEN(stats); cnt++)
       if (*c == stats[cnt].key)
         break;
     if (cnt >= ARRAY_LEN(stats))
-      ERRXC(EINVAL, "-%c: %s: %c", opt, UNKNFLD_ERR, *c);
+      ERRXT(EINVAL, "-%c: %s: %c", opt, UNKNFLD_ERR, *c);
   }
   set_fld_active(optarg);
 }
@@ -608,10 +566,10 @@ static inline void option_ns(char opt) {
   char buff[MAX_ADDRSTRLEN + 6/*:port*/] = {0};
   snprinte(buff, sizeof(buff), "%s", optarg);
   if (!buff[0])
-    ERRC(EINVAL, "-%c", opt);
+    ERRT(EINVAL, "-%c", opt);
   char* hostport[2] = {0};
   if (!split_hostport(buff, hostport))
-    ERRXC(EINVAL, "-%c: %s: %s", opt, PARSE_ERR, buff);
+    ERRXT(EINVAL, "-%c: %s: %s", opt, PARSE_ERR, buff);
   if (!hostport[1])
     hostport[1] = "53";
   struct addrinfo *ns = NULL, hints = {
@@ -621,11 +579,11 @@ static inline void option_ns(char opt) {
   int rc = getaddrinfo(hostport[0], hostport[1], &hints, &ns);
   if (rc || !ns) {
     if (rc == EAI_SYSTEM)
-      ERRC(errno, "%s", "getaddrinfo()");
-    ERRXC(EINVAL, "-%c: %s: %s", opt, optarg, gai_strerror(rc));
+      ERRT(errno, "%s", "getaddrinfo()");
+    ERRXT(EINVAL, "-%c: %s: %s", opt, optarg, gai_strerror(rc));
   }
   if (!set_custom_res(ns))
-    ERRXC(EXIT_FAILURE, "-%c: %s: %s", opt, SETNS_ERR, optarg);
+    ERRXT(EXIT_FAILURE, "-%c: %s: %s", opt, SETNS_ERR, optarg);
   freeaddrinfo(ns);
 }
 #endif
@@ -635,9 +593,6 @@ static inline void option_output(void) {
   if (ini_opts.cycles <= 0)
     ini_opts.cycles = REPORT_PINGS;
   switch (tolower((int)optarg[0])) {
-#ifdef OUTPUT_FORMAT_RAW
-    case ORAW:  display_mode = DisplayRaw; ini_opts.rawrep = true; break;
-#endif
 #ifdef OUTPUT_FORMAT_TXT
     case OTXT:  display_mode = DisplayTXT;  break;
 #endif
@@ -674,9 +629,6 @@ static inline void option_version(uint count UNUSED) {
 static inline void ineractive_modes(display_mode_t mode) {
   switch (mode) {
     case DisplayReport:
-#ifdef OUTPUT_FORMAT_RAW
-    case DisplayRaw:
-#endif
 #ifdef OUTPUT_FORMAT_TXT
     case DisplayTXT:
 #endif
@@ -796,11 +748,6 @@ static void short_set(char opt) {
       option_output();
       break;
 #endif
-#ifdef SPLITMODE
-    case OPT_SPLIT:
-      display_mode = DisplaySplit;
-      break;
-#endif
 #ifdef ENABLE_QOS
     case OPT_QOS:
       if (optarg)
@@ -822,7 +769,7 @@ static void short_set(char opt) {
       break;
     case OPT_TCP:
       if (mtrtype == IPPROTO_UDP)
-        ERRXC(EINVAL, "%s: -%c -%c", MUTEXCL_ERR, OPT_TCP, OPT_UDP);
+        ERRXT(EINVAL, "%s: -%c -%c", MUTEXCL_ERR, OPT_TCP, OPT_UDP);
       net_set_type(IPPROTO_TCP);
       ini_opts.tcp = true;
       break;
@@ -832,7 +779,7 @@ static void short_set(char opt) {
       break;
     case OPT_UDP:
       if (mtrtype == IPPROTO_TCP)
-        ERRXC(EINVAL, "%s: -%c -%c", MUTEXCL_ERR, OPT_UDP, OPT_TCP);
+        ERRXT(EINVAL, "%s: -%c -%c", MUTEXCL_ERR, OPT_UDP, OPT_TCP);
       net_set_type(IPPROTO_UDP);
       ini_opts.udp = true;
       break;
@@ -882,13 +829,13 @@ static void parse_options(int argc, char **argv) {
     option_version(countv);
 #ifdef WITH_MOUSE
   if (ini_opts.mouse && !((display_mode == DisplayTUI) || (display_mode == DisplayAuto))) {
-    WARNXC("%s", MOUSE_OUT_STR);
+    WARNXT("%s", MOUSE_OUT_STR);
     ini_opts.mouse = false;
   }
 #endif
 #ifdef USE_COLOR
   if (ini_opts.color && nocolor) {
-    WARNXC("-%c: %s", OPT_NOCOLOR, DISCOLOR_ERR);
+    WARNXT("-%c: %s", OPT_NOCOLOR, DISCOLOR_ERR);
     ini_opts.color = false;
   }
 #endif
@@ -910,10 +857,10 @@ static inline const struct addrinfo* find_ai_af(const struct addrinfo *res) {
   if (ai && (ai->ai_family != af)) ai = NULL; // unsuitable AF
   if (!ai) // not found
 #ifdef ENABLE_IPV6
-    WARNXC("%s: %s: IPv%c: %s", TARGET_STR, dsthost,
+    WARNXT("%s: %s: IPv%c: %s", TARGET_STR, dsthost,
       af == AF_INET ? OPT_IPV4 : OPT_IPV6, NOADDR_ERR);
 #else
-    WARNXC("%s: %s: %s", TARGET_STR, dsthost, NOADDR_ERR);
+    WARNXT("%s: %s: %s", TARGET_STR, dsthost, NOADDR_ERR);
 #endif
   return ai;
 }
@@ -926,7 +873,7 @@ static inline const struct addrinfo* find_ai_pref(const struct addrinfo *res) {
   if (!ai)
     for (ai = res; ai; ai = ai->ai_next) if (ai->ai_family == AF_INET6) break;
   if (!ai)
-    WARNXC("%s: %s: %s", TARGET_STR, dsthost, strerror(EADDRNOTAVAIL));
+    WARNXT("%s: %s: %s", TARGET_STR, dsthost, strerror(EADDRNOTAVAIL));
   else if (af != ai->ai_family) {
     af = ai->ai_family;
     net_settings((af == AF_INET6) ? IPV6_ENABLED : IPV6_DISABLED);
@@ -951,11 +898,11 @@ static int set_target(const struct addrinfo *res) {
       ((af == AF_INET) ? (t_ipaddr*)&((struct sockaddr_in  *)ai->ai_addr)->sin_addr  : NULL);
     if (af && host && net_set_host(host)) {
       if (iface_addr && !net_set_ifaddr(iface_addr))
-        WARNXC("%s: %s", USEADDR_ERR, iface_addr);
+        WARNXT("%s: %s", USEADDR_ERR, iface_addr);
       else
         rc = 0; // success
     } else
-      WARNXC("%s (af=%d)", HOSTENT_ERR, af);
+      WARNXT("%s (af=%d)", HOSTENT_ERR, af);
   }
   return rc;
 }
@@ -986,7 +933,7 @@ static void init_locale(void) {
       utf_compat = true;
       return;
     }
-    WARNXC("%s", UNOPRINT_ERR);
+    WARNXT("%s", UNOPRINT_ERR);
   }
   setlocale(LC_CTYPE, NULL);
 }
@@ -1088,7 +1035,7 @@ static void resolv_with_port(t_res_rc *rr) {
     if (errno)
       errno = 0;
   } else
-    WARNXC("%s: %s", PARSE_ERR, buff);
+    WARNXT("%s: %s", PARSE_ERR, buff);
 }
 
 static inline void stat_fin(void) {
@@ -1150,22 +1097,20 @@ static inline int main_loop(struct addrinfo *ai, bool fin) {
 #ifdef ENABLE_QOS
       VALID_QOS_AF(dsthost, run_opts.qos);
 #endif
-      locker(stdout, F_WRLCK);
       if (display_open())
         display_loop();
       else
-        WARNXC("%s", OPENDISP_ERR);
+        WARNXT("%s", OPENDISP_ERR);
       net_end_transit();
       if (fin)
         display_confirm_fin();
       display_close(next_target);
-      locker(stdout, F_UNLCK);
       if (!next_target)
         next_target = true;
     }
     freeaddrinfo(ai);
   } else
-    WARNXC("%s: %s", RESFAIL_ERR, dsthost);
+    WARNXT("%s: %s", RESFAIL_ERR, dsthost);
   return rc;
 }
 
@@ -1184,7 +1129,7 @@ static inline void main_fin(void) {
   if (run_opts.stat)
     stat_fin();
   if (strerr_txt[0] && (display_mode == DisplayTUI))
-    WARNXC("%s", strerr_txt); // duplicate an error cleaned by ncurses
+    WARNXT("%s", strerr_txt); // duplicate an error cleaned by ncurses
   UNICODE_FREE;
   if (mtrname_dup) {
     mtrname = "";
@@ -1217,7 +1162,7 @@ static int resolv_n_ping(int port, bool fin) {
   if (rr.res && !rr.rc)
     rr.rc = main_loop(rr.res, fin);
   else
-    WARNXC("%s: %s: %s", RESFAIL_ERR, dsthost, rr.error ? rr.error : UNKNOWN_ERR);
+    WARNXT("%s: %s: %s", RESFAIL_ERR, dsthost, rr.error ? rr.error : UNKNOWN_ERR);
   return rr.rc;
 }
 

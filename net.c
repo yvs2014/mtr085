@@ -56,10 +56,6 @@
 #include "dns.h"
 #endif
 
-#ifdef OUTPUT_FORMAT_RAW
-#include "report.h"
-#endif
-
 #ifdef HAVE_ARC4RANDOM_UNIFORM
 #  define RANDUNIFORM(base) arc4random_uniform(base)
 #else // original version
@@ -749,10 +745,6 @@ static int net_stat(uint port, const void *addr, struct timespec *recv_at, int r
       ndx = MAXPATH - 1;
     }
     SET_NEW_ADDR(addr, mpls);
-#ifdef OUTPUT_FORMAT_RAW
-    if (run_opts.rawrep)
-      raw_rawhost(at, ndx);
-#endif
   }
 #ifdef WITH_MPLS
   else if (mpls && memcmp(&MPLS_AT_NDX(at, ndx), mpls, sizeof(mpls_data_t))) {
@@ -770,10 +762,6 @@ static int net_stat(uint port, const void *addr, struct timespec *recv_at, int r
   int n = seqlist[seq].saved_seq - host[at].saved_seq_offset;
   if ((n >= 0) && (n <= SAVED_PINGS))
     host[at].saved[n] = time2usec(tv);
-#endif
-#ifdef OUTPUT_FORMAT_RAW
-  if (run_opts.rawrep)
-    raw_rawping(at, time2usec(tv));
 #endif
   return true;
 }

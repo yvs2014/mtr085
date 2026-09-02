@@ -23,25 +23,17 @@
 #ifdef TUIMODE
 #include "tui.h"
 #endif
-#ifdef SPLITMODE
-#include "split.h"
-#endif
 
 void (*eachpass_fn)(void);
 void (*dispclear_fn)(void);
 key_action_t (*keyaction_fn)(void);
 
 bool display_open(void) {
-  switch (display_mode) {
+  return
 #ifdef TUIMODE
-    case DisplayTUI: return tui_open();
+    (display_mode == DisplayTUI) ? tui_open() :
 #endif
-#ifdef SPLITMODE
-    case DisplaySplit: split_open(); break;
-#endif
-    default: break;
-  }
-  return true;
+    true;
 }
 
 void display_close(bool next) {
@@ -49,9 +41,6 @@ void display_close(bool next) {
     case DisplayReport: report_close(next, true); break;
 #ifdef TUIMODE
     case DisplayTUI: tui_close(); break;
-#endif
-#ifdef SPLITMODE
-    case DisplaySplit: split_close(); break;
 #endif
 #ifdef OUTPUT_FORMAT_TXT
     case DisplayTXT: report_close(next, false); break;
@@ -79,12 +68,6 @@ static inline void display_set_callbacks(void) {
       keyaction_fn = tui_keyaction;
       dispclear_fn = tui_clear;
       eachpass_fn  = tui_redraw;
-      break;
-#endif
-#ifdef SPLITMODE
-    case DisplaySplit:
-      keyaction_fn = split_keyaction;
-      eachpass_fn  = split_redraw;
       break;
 #endif
 #ifdef OUTPUT_FORMAT_TXT
@@ -186,13 +169,7 @@ void display_loop(void) {
 #ifdef TUIMODE
     case DisplayTUI:
 #endif
-#ifdef SPLITMODE
-    case DisplaySplit:
-#endif
     case DisplayReport:
-#ifdef OUTPUT_FORMAT_RAW
-    case DisplayRaw:
-#endif
 #ifdef OUTPUT_FORMAT_TXT
     case DisplayTXT:
 #endif

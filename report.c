@@ -709,28 +709,3 @@ void csv_close(void) {
 #undef CKEYVAL
 #endif /*OUTPUT_FORMAT_CSV*/
 
-#ifdef OUTPUT_FORMAT_RAW
-void raw_rawping(int at, int usec) {
-#ifdef ENABLE_DNS
-  static bool raw_printed_name[MAXHOST];
-  if (!raw_printed_name[at]) {
-    const char *name = dns_ptr_lookup(at, host[at].current);
-    if (name) {
-      printf("d %d %s\n", at, name);
-      if (!raw_printed_name[at])
-        raw_printed_name[at] = true;
-    }
-  }
-#endif
-  LENVALMIL((double)usec / MIL);
-  printf("p %d %.*f\n", at, _l, _v); // ping in msec
-  fflush(stdout);
-}
-//
-void raw_rawhost(int at, int ndx) {
-  char str[MAX_ADDRSTRLEN] = {0};
-  printf("h %d %s\n", at, addr2str(&IP_AT_NDX(at, ndx), sizeof(str), str));
-  fflush(stdout);
-}
-#endif /*OUTPUT_FORMAT_RAW*/
-

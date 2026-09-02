@@ -6,7 +6,6 @@
 
 #include "common.h"
 
-#define LENVALMIL(val) double _v = (val) / (double)MIL; int _l = val2len(_v);
 #define INDENT_NUMB 4 // "NN. " length
 
 char* trim(char *str);
@@ -16,8 +15,6 @@ extern int fld_index[UCHAR_MAX + 1];
 void set_fld_active(const char *str);
 #ifdef TUIMODE
 bool is_custom_fld(void);
-#endif
-#if defined(TUIMODE) || defined(SPLITMODE)
 void onoff_jitter(void);
 #endif
 const t_stat* active_stats(size_t nth);
@@ -32,23 +29,19 @@ char* datetime_c (time_t at, size_t size, char buff[size]) NONNULL(3);
 char* datetime_FT(time_t at, size_t size, char buff[size]) NONNULL(3);
 
 #ifdef USE_COLOR
-void warnc(const char *fmt, ...);
-void warnxc(const char *fmt, ...);
-NORETURN void errc(int eval, const char *fmt, ...);
-NORETURN void errxc(int eval, const char *fmt, ...);
-#define WARNC  warnc
-#define WARNXC warnxc
-#define ERRC   errc
-#define ERRXC  errxc
+void warntty(const char *fmt, ...);
+void warnxtty(const char *fmt, ...);
+NORETURN void errtty(int eval, const char *fmt, ...);
+NORETURN void errxtty(int eval, const char *fmt, ...);
+#define WARNT  warntty
+#define WARNXT warnxtty
+#define ERRT   errtty
+#define ERRXT  errxtty
 #else
-#define WARNC  warn
-#define WARNXC warnx
-#define ERRC   err
-#define ERRXC  errx
-#endif
-
-#ifdef WITH_MENU
-void stat_keys(uint len, char buff[len]) NONNULL(2);
+#define WARNT  warn
+#define WARNXT warnx
+#define ERRT   err
+#define ERRXT  errx
 #endif
 
 #endif

@@ -27,11 +27,6 @@ void report_close(bool next, bool with_header);
 #ifdef ENABLE_DNS
 void backresolv_lookups(void);
 #endif
-#ifdef OUTPUT_FORMAT_RAW
-#include "common.h"
-void raw_rawping(int at, int usec);
-void raw_rawhost(int at, t_ipaddr *ipaddr) NONNULL(2);
-#endif
 #ifdef OUTPUT_FORMAT_CSV
 void csv_head(void);
 void csv_close(void);

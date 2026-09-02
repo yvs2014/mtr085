@@ -34,11 +34,9 @@ unicode    = get_option('UNICODE')
 nls        = get_option('NLS')
 dns        = get_option('DNS')
 ipinfo     = get_option('IPINFO')
-split      = get_option('SPLIT')
 ipv6       = get_option('IPV6')
 mpls       = get_option('MPLS')
 outfmt = []
-outraw     = get_option('OUTRAW')
 outtxt     = get_option('OUTTXT')
 outcsv     = get_option('OUTCSV')
 outjson    = get_option('OUTJSON')
@@ -211,16 +209,6 @@ else
   manexcl += 'y'
 endif
 
-# split mode
-if split
-  srcn += 'split'
-  optlist += '+SPLIT'
-  config.set('SPLITMODE', 1)
-else
-  optlist += '-SPLIT'
-  manexcl += 'p'
-endif
-
 # IPv6 support
 if ipv6
   optlist += '+IPV6'
@@ -250,12 +238,6 @@ else
 endif
 
 # text modes: output format
-if outraw
-  outfmt += 'raw'
-  config.set('OUTPUT_FORMAT_RAW', 1)
-else
-  manexcl += 'or'
-endif
 if outtxt
   outfmt += 'text'
   config.set('OUTPUT_FORMAT_TXT', 1)
@@ -401,8 +383,8 @@ if meson.version().version_compare('>=0.53')
   if tui
     sum_ops += {'MOUSE': mouse, 'MENU': menu}
   endif
-  sum_ops += {'UNICODE': unicode, 'NLS': nls, 'DNS': dns, 'IDN': idn,
-    'IPINFO': ipinfo, 'SPLIT': split, 'IPV6': ipv6, 'MPLS': mpls}
+  sum_ops += {'UNICODE': unicode, 'NLS': nls, 'DNS': dns,
+    'IDN': idn, 'IPINFO': ipinfo, 'IPV6': ipv6, 'MPLS': mpls}
   summary(sum_ops, bool_yn: true)
 endif
 

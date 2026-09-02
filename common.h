@@ -57,7 +57,7 @@
 #endif
 
 #ifndef GITREV
-#define GITREV "315"
+#define GITREV "316"
 #endif
 
 #ifndef HAVE_UINT
@@ -130,10 +130,6 @@ typedef enum {
   DisplayAuto, // curses mode if available, otherwise split mode
   DisplayReport,
   DisplayTUI,
-  DisplaySplit,
-#ifdef OUTPUT_FORMAT_RAW
-  DisplayRaw,
-#endif
 #ifdef OUTPUT_FORMAT_TXT
   DisplayTXT,
 #endif
@@ -199,8 +195,7 @@ typedef struct opts_s {
 #ifdef ENABLE_DNS
     dns,      // -n
 #endif
-    pause,    // -p
-    rawrep,   // -r (raw report mode)
+    pause,    // runtime pause/resume states
     stat,     // -S
     tcp,      // -t
     udp,      // -u
@@ -247,7 +242,6 @@ typedef union opt_sum_u {
     dns      :1, // -n
 #endif
     pause    :1, // -p
-    rawrep   :1, // -r (raw report mode)
     stat     :1, // -S
     tcp      :1, // -t
     udp      :1, // -u
@@ -380,7 +374,7 @@ extern char strerr_txt[];  // error text (any target)
 extern char tgterr_txt[];  // error text (per target)
 
 extern pid_t mypid;
-#if defined(OUTPUT_FORMAT_RAW) || defined(OUTPUT_FORMAT_TXT) || defined(OUTPUT_FORMAT_CSV) || defined(OUTPUT_FORMAT_JSON) || defined(OUTPUT_FORMAT_TOON) || defined(OUTPUT_FORMAT_XML)
+#if defined(OUTPUT_FORMAT_TXT) || defined(OUTPUT_FORMAT_CSV) || defined(OUTPUT_FORMAT_JSON) || defined(OUTPUT_FORMAT_TOON) || defined(OUTPUT_FORMAT_XML)
 #define OUTPUT_FORMAT
 extern uint mtr_optc; // cli options excluding argv[0]
 extern const char* mtr_optv[32];

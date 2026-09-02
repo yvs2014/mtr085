@@ -41,10 +41,6 @@ mtr_SOURCES += $(tuidir)/action.c $(tuidir)/action.h
 AM_CPPFLAGS += -I$(srcdir) -I$(srcdir)/$(tuidir)
 endif
 
-if SPLITMODE
-mtr_SOURCES += split.c split.h
-endif
-
 if IPINFO
 mtr_SOURCES += ipinfo.c ipinfo.h
 endif
@@ -96,9 +92,6 @@ endif
 if !OUTPUTFMT
 EXCLOPTS += o
 endif
-if !OUTPUT_RAW
-EXCLOPTS += or
-endif
 if !OUTPUT_TXT
 EXCLOPTS += ot
 endif
@@ -110,9 +103,6 @@ EXCLOPTS += oj
 endif
 if !OUTPUT_XML
 EXCLOPTS += ox
-endif
-if !SPLITMODE
-EXCLOPTS += p
 endif
 if !IPTOS
 EXCLOPTS += q

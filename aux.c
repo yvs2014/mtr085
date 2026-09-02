@@ -38,13 +38,10 @@ void set_fld_active(const char *str) {
   fld_active = fld_custom;
 }
 
-#if defined(TUIMODE) || defined(SPLITMODE)
+#ifdef TUIMODE
 #define NOT_JITTER_FLD  STR_NEQ(fld_active, fld_jitter,  sizeof(fld_jitter))
 #define NOT_DEFAULT_FLD STR_NEQ(fld_active, fld_default, sizeof(fld_default))
 void onoff_jitter(void) { fld_active = NOT_JITTER_FLD ? fld_jitter : fld_custom; }
-#endif
-
-#ifdef TUIMODE
 bool is_custom_fld(void) { return NOT_JITTER_FLD && NOT_DEFAULT_FLD; }
 #endif
 
@@ -166,13 +163,8 @@ int snprinte(char str[], size_t size, const char *format, ...) {
   return len;
 }
 
-void stat_keys(uint len, char buff[len]) { // NONNULL(2)
-  for (uint i = 0; i < len; i++)
-    buff[i] = ((int)i < stat_max) ? stats[i].key : 0;
-}
-
 #ifdef USE_COLOR
-void warnc(const char *fmt, ...) {
+void warntty(const char *fmt, ...) {
   if (mtrname)
     fprintf(stderr, "%s%s%s: ", TTY_BOLD, mtrname, TTY_NORM);
   if (istty)
@@ -186,7 +178,7 @@ void warnc(const char *fmt, ...) {
   fprintf(stderr, "%s\n", strerror(errno));
 }
 //
-void warnxc(const char *fmt, ...) {
+void warnxtty(const char *fmt, ...) {
   if (mtrname)
     fprintf(stderr, "%s%s%s: ", TTY_BOLD, mtrname, TTY_NORM);
   if (istty)
@@ -200,7 +192,7 @@ void warnxc(const char *fmt, ...) {
   putc('\n', stderr);
 }
 //
-NORETURN void errc(int eval, const char *fmt, ...) {
+NORETURN void errtty(int eval, const char *fmt, ...) {
   if (mtrname)
     fprintf(stderr, "%s%s%s: ", TTY_BOLD, mtrname, TTY_NORM);
   if (istty)
@@ -215,7 +207,7 @@ NORETURN void errc(int eval, const char *fmt, ...) {
   exit(eval);
 }
 //
-NORETURN void errxc(int eval, const char *fmt, ...) {
+NORETURN void errxtty(int eval, const char *fmt, ...) {
   if (mtrname)
     fprintf(stderr, "%s%s%s: ", TTY_BOLD, mtrname, TTY_NORM);
   if (istty)

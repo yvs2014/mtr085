@@ -160,6 +160,8 @@ static inline int addcc_un(WINDOW *win, cchar_t *cc, bool mono) {
 }
 #endif
 
+#define LENVALMIL(val) double _v = (val) / (double)MIL; int _l = val2len(_v);
+
 static void print_map1(WINDOW *win, bool mono) NONNULL(1);
 static void print_map1(WINDOW *win, bool mono) {
   waddstr(win, "  ");
