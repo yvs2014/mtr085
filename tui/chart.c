@@ -424,12 +424,16 @@ void chart_area(WINDOW *win, uint len, int saved[len]) { // NONNULL(1, 3)
 
 void chart_range_loop(void) {
   uint mode = (chart_mode + 1) % chart_mode_max;
+#ifdef USE_COLOR
   if (!mode) {
-    LOGMSG("toggle color bit: %d -> %d", run_opts.color, !run_opts.color);
-    run_opts.color = !run_opts.color;
-    if (run_opts.color)
-      mode++;
+    if (!nocolor) {
+      LOGMSG("toggle color bit: %d -> %d", run_opts.color, !run_opts.color);
+      run_opts.color = !run_opts.color;
+      if (run_opts.color)
+        mode++;
+    }
   }
+#endif
   LOGMSG("switch display mode [opt.color=%d]: %d -> %d", run_opts.color, chart_mode, mode);
   chart_mode = mode;
   run_opts.chart = mode & 3; // chart bits

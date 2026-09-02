@@ -171,3 +171,63 @@ void stat_keys(uint len, char buff[len]) { // NONNULL(2)
     buff[i] = ((int)i < stat_max) ? stats[i].key : 0;
 }
 
+#ifdef USE_COLOR
+void warnc(const char *fmt, ...) {
+  if (mtrname)
+    fprintf(stderr, "%s%s%s: ", TTY_BOLD, mtrname, TTY_NORM);
+  if (istty)
+    fprintf(stderr, "%s", ANSI_YELLOW);
+  va_list args;
+  va_start(args, fmt);
+  vfprintf(stderr, fmt, args);
+  va_end(args);
+  if (istty)
+    fprintf(stderr, "%s", ANSI_NORM);
+  fprintf(stderr, "%s\n", strerror(errno));
+}
+//
+void warnxc(const char *fmt, ...) {
+  if (mtrname)
+    fprintf(stderr, "%s%s%s: ", TTY_BOLD, mtrname, TTY_NORM);
+  if (istty)
+    fprintf(stderr, "%s", ANSI_YELLOW);
+  va_list args;
+  va_start(args, fmt);
+  vfprintf(stderr, fmt, args);
+  va_end(args);
+  if (istty)
+    fprintf(stderr, "%s", ANSI_NORM);
+  putc('\n', stderr);
+}
+//
+NORETURN void errc(int eval, const char *fmt, ...) {
+  if (mtrname)
+    fprintf(stderr, "%s%s%s: ", TTY_BOLD, mtrname, TTY_NORM);
+  if (istty)
+    fprintf(stderr, "%s", ANSI_RED);
+  va_list args;
+  va_start(args, fmt);
+  vfprintf(stderr, fmt, args);
+  va_end(args);
+  if (istty)
+    fprintf(stderr, "%s", ANSI_NORM);
+  fprintf(stderr, "%s\n", strerror(errno));
+  exit(eval);
+}
+//
+NORETURN void errxc(int eval, const char *fmt, ...) {
+  if (mtrname)
+    fprintf(stderr, "%s%s%s: ", TTY_BOLD, mtrname, TTY_NORM);
+  if (istty)
+    fprintf(stderr, "%s", ANSI_RED);
+  va_list args;
+  va_start(args, fmt);
+  vfprintf(stderr, fmt, args);
+  va_end(args);
+  if (istty)
+    fprintf(stderr, "%s", ANSI_NORM);
+  putc('\n', stderr);
+  exit(eval);
+}
+#endif
+

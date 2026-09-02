@@ -37,7 +37,7 @@ void ipinfo_head_div(size_t size, char buff[size], char div, char q) NONNULL(2);
 void ipinfo_data_fix(size_t size, char buff[size], int at, int ndx) NONNULL(2);
 void ipinfo_data_div(size_t size, char buff[size], int at, int ndx, char div, char q) NONNULL(2);
 //
-void ipinfo_head_div_q(size_t size, char buff[size], char div, char q) NONNULL(2);
+uint ipinfo_datalist(uint len, const char* key[len], const char* val[len], int at, int ndx);
 
 void query_ipinfo(void);
 

@@ -36,8 +36,10 @@ AC_SEARCH_LIBS([pow], [m],, AC_MSG_ERROR(No math library found))
 AC_SEARCH_LIBS([warnx],,, AC_MSG_ERROR(No err/warn library found))
 AC_SEARCH_LIBS([socket], [socket network],, AC_MSG_ERROR(No socket library found))
 AC_CHECK_FUNC([arc4random_uniform], AC_DEFINE(HAVE_ARC4RANDOM_UNIFORM, 1, [Define if arc4random_uniform exists]))
-AC_CHECK_FUNC([ctime_r],     AC_DEFINE(HAVE_CTIME_R,     1, [Define if ctime_r() exists]))
 AC_CHECK_FUNC([localtime_r], AC_DEFINE(HAVE_LOCALTIME_R, 1, [Define if localtime_r() exists]))
+AC_CHECK_FUNC([memmem],      AC_DEFINE(HAVE_MEMMEM,      1, [Define if memmem() exists]))
+AC_CHECK_FUNC([getprogname], AC_DEFINE(HAVE_GETPROGNAME, 1, [Define if getprogname() exists]))
+AC_CHECK_FUNC([program_invocation_short_name], AC_DEFINE(HAVE_PROGRAM_INVOCATION_SHORT_NAME, 1, [Define if program_invocation_short_name() exists]))
 
 AC_ARG_ENABLE([ipv6],
 	AS_HELP_STRING([--disable-ipv6], [Do not enable IPv6]),
@@ -165,6 +167,11 @@ AC_ARG_WITH([mpls],
 	[mpls="${withval}"], [mpls=yes])
 AM_CONDITIONAL([MPLS], [test "x$mpls" = "xyes"])
 AS_IF([test "x$mpls" = "xyes"], [AC_DEFINE([WITH_MPLS], [1], [Define to support MPLS decoding])])
+
+AC_ARG_WITH([color],
+	AS_HELP_STRING([--with-color], [build with colored output support]),
+	[color="${withval}"], [color=yes])
+AS_IF([test "x$color" = "xyes"], [AC_DEFINE([USE_COLOR], [1], [Define to support colored output])])
 
 AC_ARG_WITH([ipinfo],
 	AS_HELP_STRING([--without-ipinfo], [without IP-info lookup]),
@@ -373,6 +380,9 @@ AS_IF([test "x$ipv6"      = "xyes"],
 AS_IF([test "x$mpls"      = "xyes"],
 	[_option_list="$_option_list +MPLS"],
 	[_option_list="$_option_list -MPLS"])
+AS_IF([test "x$color"  = "xyes"],
+	[_option_list="$_option_list +COLOR"],
+	[_option_list="$_option_list -COLOR"])
 
 _option_output=""
 AS_IF([test "x$output_raw"  = "xyes"], [_option_output="${_option_output},raw"])

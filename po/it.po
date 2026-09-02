@@ -410,8 +410,11 @@ msgstr "<testo>"
 msgid "Usage"
 msgstr "Uso"
 
-msgid "TARGET[:PORT]"
-msgstr "OBIETTIVO[:PORTA]"
+msgid "TARGET"
+msgstr "OBIETTIVO"
+
+msgid "PORT"
+msgstr "PORTA"
 
 msgid "IP.ADD.RE.SS"
 msgstr "IN.DI.RI.ZZO"
@@ -431,8 +434,8 @@ msgstr "CAMPI"
 msgid "SECONDS"
 msgstr "SECONDI"
 
-msgid "SERVER,FIELDS"
-msgstr "SERVER,CAMPI"
+msgid "SERVER"
+msgstr "SERVER"
 
 msgid "BYTES"
 msgstr "BYTE"
@@ -488,7 +491,7 @@ msgstr "Obiettivo"
 msgid "Targets"
 msgstr "Obiettivi"
 
-msgid "Args"
+msgid "Arguments"
 msgstr "Argomenti"
 
 msgid "port number"

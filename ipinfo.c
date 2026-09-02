@@ -915,6 +915,33 @@ void ipinfo_data_div(size_t size, char buff[size], int at, int ndx, char div, ch
 inline void ipinfo_data_fix(size_t size, char buff[size], int at, int ndx) { // NONNULL(2)
   ipinfo_data_div(size, buff, at, ndx, 0, 0); }
 //
+uint ipinfo_datalist(uint len, const char* key[len], const char* val[len], int at, int ndx)
+{
+  uint n = 0;
+  bool exist = addr_exist(&IP_AT_NDX(at, ndx));
+  if (run_opts.asn) {
+    int iino = origins[origin_no].asnth;
+    if (key)
+      key[0] = ORIG_UNAME(iino);
+    if (val)
+      val[0] = exist ? get_ipinfo(at, ndx, iino) : UNKN;
+    n++;
+  } else {
+    for (int *iino = ipinfo_no; (n < ARRAY_LEN(ipinfo_no)) && (n < len) &&
+         (*iino >= 0) && (*iino < itemname_max);
+         iino++, n++)
+    {
+      const char *name = ORIG_UNAME(*iino);
+      if (key)
+        key[n] = name;
+      if (val) {
+        const char *value = exist ? get_ipinfo(at, ndx, *iino) : UNKN;
+        val[n] = value ? value : (name ? UNKN : NULL);
+      }
+    }
+  }
+  return n;
+}
 
 static bool alloc_ipitseq(void) {
   if (!ipitseq) {

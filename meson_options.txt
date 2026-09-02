@@ -1,5 +1,6 @@
 option('CAP',       type: 'boolean', value: true,  description: 'Linux capabilities')
 option('TUI',       type: 'boolean', value: true,  description: 'TUI: [n]curses')
+option('COLOR',     type: 'boolean', value: true,  description: 'Colored output')
 option('MOUSE',     type: 'boolean', value: true,  description: 'Mouse (TUI required)')
 # work-in-progress: menu kit
 option('MENU',      type: 'boolean', value: false, description: 'Menu,Panel,Form (TUI required)')

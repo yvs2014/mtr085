@@ -42,6 +42,13 @@
 #define NONNULL(...)
 #endif
 //
+// attribute: noreturn
+#if __has_attribute(__noreturn__)
+#define NORETURN __attribute__((__noreturn__))
+#else
+#define NORETURN
+#endif
+//
 // attribute: packed
 #if __has_attribute(__packed__)
 #define PACKIT __attribute__((__packed__))
@@ -50,7 +57,7 @@
 #endif
 
 #ifndef GITREV
-#define GITREV "314"
+#define GITREV "315"
 #endif
 
 #ifndef HAVE_UINT
@@ -363,6 +370,7 @@ typedef union opt_sum_u {
 #endif
 
 // externs
+extern const char *mtrname;
 extern int mtrtype;        // default packet type
 
 extern display_mode_t display_mode;
@@ -372,10 +380,10 @@ extern char strerr_txt[];  // error text (any target)
 extern char tgterr_txt[];  // error text (per target)
 
 extern pid_t mypid;
-extern char mtr_args[];
-#if defined(OUTPUT_FORMAT_JSON) || defined(OUTPUT_FORMAT_TOON)
-extern const char* mtr_optv[]; // cli options
-extern uint mtr_optc;          // number of 'optv'
+#if defined(OUTPUT_FORMAT_RAW) || defined(OUTPUT_FORMAT_TXT) || defined(OUTPUT_FORMAT_CSV) || defined(OUTPUT_FORMAT_JSON) || defined(OUTPUT_FORMAT_TOON) || defined(OUTPUT_FORMAT_XML)
+#define OUTPUT_FORMAT
+extern uint mtr_optc; // cli options excluding argv[0]
+extern const char* mtr_optv[32];
 #endif
 extern opts_t run_opts;    // runtime options
 extern opts_t ini_opts;    // initial options
@@ -384,6 +392,42 @@ extern opt_sum_t opt_sum;  // checksum changes
 #ifdef TUIMODE
 enum {OLDLOOK = 0, NEWLOOK/*, REVLOOK*/};
 extern int tuilook;
+extern char mtr_args[];
+#endif
+
+extern int istty;
+#define ANSI_NORM    "\033[0m"
+#define ANSI_BOLD    "\033[1m"
+#define ANSI_RED     "\033[31m"
+#define ANSI_GREEN   "\033[32m"
+#define ANSI_YELLOW  "\033[33m"
+#define ANSI_BLUE    "\033[34m"
+#define ANSI_MAGENTA "\033[35m"
+#define ANSI_CYAN    "\033[36m"
+#define ANSI_WHITE   "\033[37m"
+#ifdef USE_COLOR
+#define TTY_NORM    (istty ? ANSI_NORM    : "")
+#define TTY_BOLD    (istty ? ANSI_BOLD    : "")
+#define TTY_RED     (istty ? ANSI_RED     : "")
+#define TTY_GREEN   (istty ? ANSI_GREEN   : "")
+#define TTY_YELLOW  (istty ? ANSI_YELLOW  : "")
+#define TTY_BLUE    (istty ? ANSI_BLUE    : "")
+#define TTY_MAGENTA (istty ? ANSI_MAGENTA : "")
+#define TTY_CYAN    (istty ? ANSI_CYAN    : "")
+#define TTY_WHITE   (istty ? ANSI_WHITE   : "")
+#else
+#define TTY_NORM    ""
+#define TTY_BOLD    ""
+#define TTY_RED     ""
+#define TTY_GREEN   ""
+#define TTY_YELLOW  ""
+#define TTY_BLUE    ""
+#define TTY_MAGENTA ""
+#define TTY_CYAN    ""
+#define TTY_WHITE   ""
+#endif
+#ifdef USE_COLOR
+extern bool nocolor;
 #endif
 
 #ifdef WITH_UNICODE

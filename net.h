@@ -188,6 +188,7 @@ const char *net_elem(int at, char key);
 const char* net_settled_elem(int at, char key);
 int net_send_batch(void);
 void net_end_transit(void);
+int net_color(int at);
 
 extern bool reset_pattern;
 extern bool reset_pldsize;

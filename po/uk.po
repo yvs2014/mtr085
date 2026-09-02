@@ -410,8 +410,11 @@ msgstr "<текст>"
 msgid "Usage"
 msgstr "Використання"
 
-msgid "TARGET[:PORT]"
-msgstr "ЦІЛЬ[:ПОРТ]"
+msgid "TARGET"
+msgstr "ЦІЛЬ"
+
+msgid "PORT"
+msgstr "ПОРТ"
 
 msgid "IP.ADD.RE.SS"
 msgstr "IP.АДРЕСА"
@@ -431,8 +434,8 @@ msgstr "ПОЛЯ"
 msgid "SECONDS"
 msgstr "СЕКУНДИ"
 
-msgid "SERVER,FIELDS"
-msgstr "СЕРВЕР,ПОЛЯ"
+msgid "SERVER"
+msgstr "СЕРВЕР"
 
 msgid "BYTES"
 msgstr "БАЙТИ"
@@ -488,7 +491,7 @@ msgstr "Ціль"
 msgid "Targets"
 msgstr "Цілі"
 
-msgid "Args"
+msgid "Arguments"
 msgstr "Параметри"
 
 msgid "port number"
@@ -624,4 +627,7 @@ msgstr "Нема IPv6 сокетів"
 
 msgid "No nameservers"
 msgstr "Нема DNS серверів"
+
+msgid "Colors are disabled"
+msgstr "Кольори вимкнено"
 

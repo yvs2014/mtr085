@@ -1,4 +1,5 @@
 .ds o6 "46
+.ds oC "C
 .ds ob "b
 .ds oe "e
 .ds ol "lL
@@ -23,7 +24,7 @@
 .Nd a network diagnostic tool
 .Sh SYNOPSIS
 .Nm
-.Op Fl a\*[ob]Bcd\*[oe]fFi\*[ol]m\*[oM]\*[on]\*[oN]\*[oo]\*[op]\*[oq]rsStTuvx\*[oy]01\*[o6]
+.Op Fl a\*[ob]Bc\*[oC]d\*[oe]fFi\*[ol]m\*[oM]\*[on]\*[oN]\*[oo]\*[op]\*[oq]rsStTuvx\*[oy]01\*[o6]
 TARGET[:PORT] ...
 .Sh DESCRIPTION
 .Nm
@@ -62,6 +63,10 @@ Specify bit pattern to use in payload.  Should be either within range 0-255, or 
 Set number of ping cycles.  Duration of one cycle is set with interval option
 .Sy -i ,
 one second by default.
+.ie "C"\*[oC]" \{\
+.It Fl C, Fl -no-color
+Disable color use
+.\}
 .It Fl d, Fl -display Ar MODE
 Choose the initial display mode to chart delay values
 .Bl -tag -offset Ds

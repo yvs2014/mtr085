@@ -60,6 +60,9 @@
 /* MPLS decoding */
 #cmakedefine WITH_MPLS
 
+/* Color output support */
+#cmakedefine USE_COLOR
+
 /* output formats */
 #cmakedefine OUTPUT_FORMAT_RAW
 #cmakedefine OUTPUT_FORMAT_TXT
@@ -80,12 +83,12 @@
  aux settings
 */
 
-#cmakedefine HAVE_QUICK_EXIT
-#cmakedefine HAVE_STRERROR_R
-#cmakedefine HAVE_CTIME_R
+#cmakedefine HAVE_MEMMEM
 #cmakedefine HAVE_LOCALTIME_R
+#cmakedefine HAVE_PROGRAM_INVOCATION_SHORT_NAME
 
 /* BSD functions */
+#cmakedefine HAVE_GETPROGNAME
 #cmakedefine HAVE_ARC4RANDOM_UNIFORM
 #cmakedefine HAVE_BSD_STDLIB_H
 #cmakedefine HAVE_BSD_STRING_H

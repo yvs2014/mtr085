@@ -57,7 +57,7 @@ void display_close(bool next) {
     case DisplayTXT: report_close(next, false); break;
 #endif
 #ifdef OUTPUT_FORMAT_CSV
-    case DisplayCSV: csv_close(next); break;
+    case DisplayCSV: csv_close(); break;
 #endif
 #ifdef OUTPUT_FORMAT_JSON
     case DisplayJSON: json_close(next); break;

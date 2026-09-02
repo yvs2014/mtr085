@@ -162,16 +162,17 @@
 #define CH_STR_STR   _("<string>")
 
 // cli help
-#define STR_USAGE      _("Usage")
-#define STR_TARGET     _("TARGET[:PORT]")
-#define STR_IP_ADDRESS _("IP.ADD.RE.SS")
-#define STR_NUMBER     _("NUMBER")
-#define STR_COUNT      _("COUNT")
-#define STR_MODE       _("MODE")
-#define STR_FIELDS     _("FIELDS")
-#define STR_IN_SECONDS _("SECONDS")
-#define STR_IP_INFO    _("SERVER,FIELDS")
-#define STR_IN_BYTES   _("BYTES")
+#define STR_USAGE   _("Usage")
+#define CAP_TARGET  _("TARGET")
+#define CAP_PORT    _("PORT")
+#define CAP_IPADDR  _("IP.ADD.RE.SS")
+#define CAP_NUMBER  _("NUMBER")
+#define CAP_COUNT   _("COUNT")
+#define CAP_MODE    _("MODE")
+#define CAP_FIELDS  _("FIELDS")
+#define CAP_SECONDS _("SECONDS")
+#define CAP_SERVER  _("SERVER")
+#define CAP_BYTES   _("BYTES")
 
 // option hints
 #define BITPATT_STR    _(_BITPATT_STR)
@@ -190,7 +191,7 @@
 #define SOURCE_STR   _("Source")
 #define TARGET_STR   _("Target")
 #define TARGETS_STR  _("Targets")
-#define ARGS_STR     _("Args")
+#define ARGS_STR     _("Arguments")
 #define HOP_STR      _("Hop")
 #define DATA_STR     _("Data")
 #define ACTIVE_STR   _("Active")
@@ -208,11 +209,6 @@
 #define QUERIES_STR  _("queries")
 #define REPLIES_STR  _("replies")
 #define PORTNUM_STR  _("port number")
-
-// at start before locale init
-#define RAWSOCK_ERR  "Unable to get raw sockets"
-#define DROPPERM_ERR "Unable to drop permissions"
-#define DROPCAP_ERR  "Unable to drop capabilities"
 
 // messages
 #define ANYLTTR_STR  _("Press any letter to continue")
@@ -235,5 +231,6 @@
 #define NOPOOLMEM_ERR _("No place in pool for sockets")
 #define NOSOCK6_ERR   _("No IPv6 sockets")
 #define NODNS_ERR     _("No nameservers")
+#define DISCOLOR_ERR  _("Colors are disabled")
 
 #endif

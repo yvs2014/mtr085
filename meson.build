@@ -10,7 +10,8 @@ project('mtr085', 'c',
   ]).strip('.'),
 )
 
-add_project_arguments('-D_GNU_SOURCE', language: 'c')
+_ARGS = '-D_GNU_SOURCE'
+add_project_arguments(_ARGS, language: 'c')
 
 name = 'mtr'
 config = configuration_data()
@@ -26,6 +27,7 @@ config.set_quoted('VERSION', '.'.join(version))
 optlist = []
 cap        = get_option('CAP')
 tui        = get_option('TUI')
+color      = get_option('COLOR')
 mouse      = get_option('MOUSE')
 menu       = get_option('MENU') # work-in-progress
 unicode    = get_option('UNICODE')
@@ -76,8 +78,9 @@ fndesc = {
   'socket': {'hdr': 'sys/socket.h', 'libs': ['socket', 'network']},
   'arc4random_uniform': {'hdr': 'stdlib.h', 'req': false, 'libhdr': true},
   'localtime_r':        {'hdr': 'time.h',   'req': false},
-  'uselocale':          {'hdr': 'locale.h', 'req': false},
   'memmem':             {'hdr': 'string.h', 'req': false},
+  'getprogname':        {'hdr': 'stdlib.h', 'req': false},
+  'program_invocation_short_name': {'hdr': 'errno.h', 'req': false},
 }
 
 ## optional fetaures
@@ -143,18 +146,19 @@ if dns
   endforeach
   res = 'resolv'
   libres = cc.find_library(res, required: false)
-  if cc.has_function(fn, prefix: incl, dependencies: libres)
+  if cc.has_function(fn, args: _ARGS, prefix: incl, dependencies: libres)
     deps += libres
   else
-    if not cc.has_function(fn, prefix: incl)
+    if not cc.has_function(fn, args: _ARGS, prefix: incl)
       res = 'network'
       libres = cc.find_library(res, required: false)
-      assert(cc.has_function(fn, prefix: incl, dependencies: libres), 'DNS is enabled, but resolv not detected')
+      assert(cc.has_function(fn, args: _ARGS, prefix: incl, dependencies: libres),
+        'DNS is enabled, but resolv not detected')
       deps += libres
     endif
   endif
   fn = 'res_nmkquery'
-  if cc.has_function(fn, prefix: incl, dependencies: libres)
+  if cc.has_function(fn, args: _ARGS, prefix: incl, dependencies: libres)
     config.set('HAVE_' + fn.underscorify().to_upper(), 1)
   endif
   headers += 'sys/types.h'
@@ -170,21 +174,11 @@ else
 endif
 
 # IDN support
-ai_idn_hdr = '''
-#ifndef _GNU_SOURCE
-#define _GNU_SOURCE 1
-#endif
-#ifndef _DARWIN_C_SOURCE
-#define _DARWIN_C_SOURCE 1
-#endif
-#ifndef __EXTENSIONS__
-#define __EXTENSIONS__ 1
-#endif
-'''
+ai_idn_hdr = ''
 foreach hdr: ['sys/types.h', 'sys/socket.h', 'netdb.h']
   ai_idn_hdr += cc.has_header(hdr)  ? '\n#include <' + hdr + '>'  : ''
 endforeach
-idn = cc.get_define('AI_IDN', prefix: ai_idn_hdr) != ''
+idn = cc.get_define('AI_IDN', args: _ARGS, prefix: ai_idn_hdr) != ''
 #
 if not idn # no getaddrinfo() with AI_IDN flag
   foreach lib: ['idn2', 'idn']
@@ -244,6 +238,15 @@ if mpls
 else
   optlist += '-MPLS'
   manexcl += 'e'
+endif
+
+# COLOR support
+if color
+  optlist += '+COLOR'
+  config.set('USE_COLOR', 1)
+else
+  optlist += '-COLOR'
+  manexcl += 'C'
 endif
 
 # text modes: output format
@@ -352,7 +355,7 @@ foreach fn, desc: fndesc
   req    = 'req' in desc ? desc['req'] : true
   libhdr = 'libhdr' in desc ? desc['libhdr'] : false
   found = true
-  if cc.has_function(fn, prefix: libhdr ? '' : incl)
+  if cc.has_function(fn, args: _ARGS, prefix: libhdr ? '' : incl)
     if not libhdr
       config.set('HAVE_' + hdr.underscorify().to_upper(), 1)
     endif
@@ -363,7 +366,7 @@ foreach fn, desc: fndesc
       if not lib.found()
         lib = cc.find_library(l, required: false)
       endif
-      if lib.found() and cc.has_function(fn, prefix: incl, dependencies: lib)
+      if lib.found() and cc.has_function(fn, args: _ARGS, prefix: incl, dependencies: lib)
         if libhdr
           config.set('HAVE_' + hdr.underscorify().to_upper(), 1)
         endif
@@ -381,9 +384,8 @@ foreach fn, desc: fndesc
   endif
 endforeach
 #
-if cc.get_define('IP_TOS',
-  prefix: cc.has_header('netinet/in.h') ? '#include <netinet/in.h>' : ''
-) == ''
+_prfx = cc.has_header('netinet/in.h') ? '#include <netinet/in.h>' : ''
+if cc.get_define('IP_TOS', args: _ARGS, prefix: _prfx) == ''
   manexcl += 'q'
 endif
 # retest headers with optional ones
@@ -395,7 +397,7 @@ endforeach
 #
 
 if meson.version().version_compare('>=0.53')
-  sum_ops = {'CAP': cap, 'TUI': tui}
+  sum_ops = {'CAP': cap, 'TUI': tui, 'COLOR': color}
   if tui
     sum_ops += {'MOUSE': mouse, 'MENU': menu}
   endif

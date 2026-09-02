@@ -919,6 +919,12 @@ void net_icmp_parse(struct timespec *recv_at) { // NONNULL(1)
              mplson ? decodempls(data, size - (data - packet)) : NULL);
 }
 
+int net_color(int at) {
+  int sent = host[at].sent - (int)host[at].transit;
+  int recv = host[at].recv;
+  return ((recv < sent) ? (recv ? 1/*yellow*/ : 2/*red*/) : 0/*norm*/);
+}
+
 const char *net_elem(int at, char key) {
   static char elemstr[NETELEM_MAXLEN];
   int ival = -1;

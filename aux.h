@@ -31,6 +31,22 @@ char* fmt_datetime(time_t at, const char *fmt, size_t size, char buff[size]) NON
 char* datetime_c (time_t at, size_t size, char buff[size]) NONNULL(3);
 char* datetime_FT(time_t at, size_t size, char buff[size]) NONNULL(3);
 
+#ifdef USE_COLOR
+void warnc(const char *fmt, ...);
+void warnxc(const char *fmt, ...);
+NORETURN void errc(int eval, const char *fmt, ...);
+NORETURN void errxc(int eval, const char *fmt, ...);
+#define WARNC  warnc
+#define WARNXC warnxc
+#define ERRC   errc
+#define ERRXC  errxc
+#else
+#define WARNC  warn
+#define WARNXC warnx
+#define ERRC   err
+#define ERRXC  errx
+#endif
+
 #ifdef WITH_MENU
 void stat_keys(uint len, char buff[len]) NONNULL(2);
 #endif

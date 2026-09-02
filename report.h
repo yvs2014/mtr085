@@ -34,7 +34,7 @@ void raw_rawhost(int at, t_ipaddr *ipaddr) NONNULL(2);
 #endif
 #ifdef OUTPUT_FORMAT_CSV
 void csv_head(void);
-void csv_close(bool next);
+void csv_close(void);
 #endif
 #ifdef OUTPUT_FORMAT_XML
 void xml_close(void);
