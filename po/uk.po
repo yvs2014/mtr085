@@ -468,7 +468,7 @@ msgid "Payload size"
 msgstr "Розмір даних"
 
 msgid "Mutually exclusive options"
-msgstr "Взаємовиключні опції"
+msgstr "Несумісні опції"
 
 msgid "TCP timeout"
 msgstr "Таймаут TCP"

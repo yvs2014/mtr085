@@ -11,9 +11,11 @@
 static const double float_upto = 10;
 static const double float_dec2 = 0.1;
 
-static const char fld_default[MAXFLD + 1] = "LS_NABWV";
-static const char fld_jitter[MAXFLD + 1] = "DR_AGJMXI";
 static char fld_custom[MAXFLD + 1];
+static const char fld_default[MAXFLD + 1] = "LS_NABWV";
+#ifdef TUIMODE
+static const char fld_jitter[MAXFLD + 1] = "DR_AGJMXI";
+#endif
 
 const char* fld_active;
 int fld_index[UCHAR_MAX + 1] = {-1}; // key->index backresolv
@@ -68,9 +70,9 @@ long str2l(const char *arg) {
   if (inbuf)                                 \
     snprinte(buff, size, fmt, __VA_ARGS__);  \
   else if (opt < 0)                          \
-    warnx(               fmt, __VA_ARGS__);  \
+    WARNXT(              fmt, __VA_ARGS__);  \
   else                                       \
-    errx(errno,          fmt, __VA_ARGS__);  \
+    ERRXT(errno,         fmt, __VA_ARGS__);  \
 } while(0)
 //
 #define OPTARG_BUFERR(fmt, ...) do {           \
@@ -80,11 +82,11 @@ long str2l(const char *arg) {
     BUFWARNERR(        fmt,      __VA_ARGS__); \
 } while (0)
 //
-#define WHATARG_BUFFERR(fmt, ...) do {            \
-  if (what && what[0])                            \
-    OPTARG_BUFERR("%s: " fmt, what, __VA_ARGS__); \
-  else                                            \
-    OPTARG_BUFERR(       fmt,       __VA_ARGS__); \
+#define WHATARG_BUFFERR(fmt, ...) do {           \
+  if (what && what[0])                           \
+    OPTARG_BUFERR("%s " fmt, what, __VA_ARGS__); \
+  else                                           \
+    OPTARG_BUFERR(      fmt,       __VA_ARGS__); \
 } while (0)
 
 int arg2int(int8_t opt, const char *arg, int min, int max, // NONNULL(2)

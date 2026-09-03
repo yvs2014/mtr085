@@ -173,7 +173,8 @@ enum TTL_OPTS {
 };
 
 #ifdef OUTPUT_FORMAT
-enum OUTPUT_OPTS {
+typedef enum {
+  OUNKN = -1,
 #ifdef OUTPUT_FORMAT_TXT
   OTXT  = 't',
 #endif
@@ -189,7 +190,8 @@ enum OUTPUT_OPTS {
 #ifdef OUTPUT_FORMAT_XML
   OXML  = 'x',
 #endif
-};
+} oopt_type;
+static oopt_type oarg = OUNKN;
 #endif
 
 #include "aux.h"
@@ -213,11 +215,11 @@ int mtrtype = IPPROTO_ICMP; // ICMP as default packet type
 pid_t mypid;
 #ifdef OUTPUT_FORMAT
 uint mtr_optc;
-const char* mtr_optv[32];   // option string array
+const char* mtr_optv[32];   // option list
 #endif
+char mtr_options[64];       // options in one line
 #ifdef TUIMODE
-int tuilook = OLDLOOK;
-char mtr_args[64];          // args to display in curses title
+tuilook_t tuilook = UNKNLOOK;
 #endif
 int istty; // fd=stdout
 #ifdef USE_COLOR
@@ -590,9 +592,9 @@ static inline void option_ns(char opt) {
 
 #ifdef OUTPUT_FORMAT
 static inline void option_output(void) {
-  if (ini_opts.cycles <= 0)
-    ini_opts.cycles = REPORT_PINGS;
-  switch (tolower((int)optarg[0])) {
+  char opt = tolower((int)optarg[0]);
+  display_mode_t was = display_mode;
+  switch (opt) {
 #ifdef OUTPUT_FORMAT_TXT
     case OTXT:  display_mode = DisplayTXT;  break;
 #endif
@@ -610,18 +612,25 @@ static inline void option_output(void) {
 #endif
     default: usage(EXIT_FAILURE);
   }
+  if ((oarg != OUNKN) && (oarg != opt))
+    ERRXT(EINVAL, "-%c%c -%c%c: %s", OPT_OUTPUT, oarg, OPT_OUTPUT, opt, MUTEXCL_ERR);
+  if (was == DisplayReport)
+    ERRXT(EINVAL,   "-%c -%c%c: %s", OPT_REPORT,       OPT_OUTPUT, opt, MUTEXCL_ERR);
+  oarg = (uint8_t)opt;
+  if (ini_opts.cycles <= 0)
+    ini_opts.cycles = REPORT_PINGS;
 }
 #endif
 
-static inline void option_version(uint count UNUSED) {
+NORETURN static inline void option_version(uint count UNUSED) {
 #ifdef BUILD_OPTIONS
-  printf("%s.%s: %s\n", PACKAGE_NAME, GITREV, BUILD_OPTIONS);
+  printf("%s%s.%s%s: %s\n", TTY_BOLD, PACKAGE_NAME, GITREV, TTY_NORM, BUILD_OPTIONS);
 #else
   printf("%s.%s\n", PACKAGE_NAME, GITREV);
 #endif
 #ifdef TUIMODE
   if (count > 1)
-    printf("TUI: %s\n", tui_version());
+    printf("%s%s%s: %s\n", TTY_BOLD, "TUI", TTY_NORM, tui_version());
 #endif
   exit(EXIT_SUCCESS);
 }
@@ -663,19 +672,29 @@ static void short_set(char opt) {
   switch (opt) {
 #ifdef TUIMODE
     case OPT_OLDLOOK:
-    case OPT_NEWLOOK:
-      tuilook = (opt == OPT_NEWLOOK) ? NEWLOOK : OLDLOOK;
+    case OPT_NEWLOOK: {
+      bool nownew = (opt == OPT_NEWLOOK);
+      bool wasnew = (tuilook == NEWLOOK);
+      bool wasold = (tuilook == OLDLOOK);
+      if ((wasold && nownew) || (wasnew && !nownew))
+        ERRXT(EINVAL, "-%c -%c: %s", wasnew ? OPT_NEWLOOK : OPT_OLDLOOK, opt, MUTEXCL_ERR);
+      tuilook = nownew ? NEWLOOK : OLDLOOK;
 #ifdef WITH_MOUSE
-      ini_opts.mouse = (opt == OPT_NEWLOOK);
+      ini_opts.mouse = nownew;
 #endif
-      break;
+    } break;
 #endif
 #ifdef ENABLE_IPV6
     case OPT_IPV4:
-    case OPT_IPV6:
-      net_settings((opt == OPT_IPV4) ? IPV6_DISABLED : IPV6_ENABLED);
+    case OPT_IPV6: {
+      bool nowip4 = (opt == OPT_IPV4);
+      bool wasip4 = (af == AF_INET);
+      bool wasip6 = (af == AF_INET6);
+      if (af_specified && ((wasip6 && nowip4) || (wasip4 && !nowip4)))
+        ERRXT(EINVAL, "-%c -%c: %s", wasip4 ? OPT_IPV4 : OPT_IPV6, opt, MUTEXCL_ERR);
+      net_settings(nowip4 ? IPV6_DISABLED : IPV6_ENABLED);
       af_specified = true;
-      break;
+    } break;
 #endif
     case OPT_ADDR:
       if (optarg)
@@ -756,6 +775,10 @@ static void short_set(char opt) {
       break;
 #endif
     case OPT_REPORT:
+#ifdef OUTPUT_FORMAT
+      if (oarg != OUNKN)
+        ERRXT(EINVAL, "-%c%c -%c: %s", OPT_OUTPUT, oarg, opt, MUTEXCL_ERR);
+#endif
       display_mode = DisplayReport;
       if (ini_opts.cycles <= 0)
         ini_opts.cycles = REPORT_PINGS;
@@ -767,22 +790,21 @@ static void short_set(char opt) {
     case OPT_SUMMARY:
       ini_opts.stat = true;
       break;
-    case OPT_TCP:
-      if (mtrtype == IPPROTO_UDP)
-        ERRXT(EINVAL, "%s: -%c -%c", MUTEXCL_ERR, OPT_TCP, OPT_UDP);
-      net_set_type(IPPROTO_TCP);
-      ini_opts.tcp = true;
-      break;
     case OPT_TIMEOUT:
       if (optarg)
         ini_opts.syn = arg2int(opt, optarg, 1, TCPSYN_TOUT_MAX, TCP_TOUT_STR, NULL, 0) * MIL;
       break;
-    case OPT_UDP:
-      if (mtrtype == IPPROTO_TCP)
-        ERRXT(EINVAL, "%s: -%c -%c", MUTEXCL_ERR, OPT_UDP, OPT_TCP);
-      net_set_type(IPPROTO_UDP);
-      ini_opts.udp = true;
-      break;
+    case OPT_TCP:
+    case OPT_UDP: {
+      bool udp = (opt == OPT_UDP);
+      if ((udp && ini_opts.tcp) || (!udp && ini_opts.udp))
+        ERRXT(EINVAL, "-%c -%c: %s", ini_opts.udp ? OPT_UDP: OPT_TCP, opt, MUTEXCL_ERR);
+      net_set_type(IPPROTO_TCP);
+      if (udp)
+        ini_opts.udp = true;
+      else
+        ini_opts.tcp = true;
+    } break;
     case OPT_VERSION:
       break;
     case OPT_CACHE: if (optarg) {
@@ -827,6 +849,10 @@ static void parse_options(int argc, char **argv) {
   }
   if (countv > 0)
     option_version(countv);
+#ifdef TUIMODE
+  if (tuilook == UNKNLOOK)
+    tuilook = OLDLOOK; // by default so far at wip
+#endif
 #ifdef WITH_MOUSE
   if (ini_opts.mouse && !((display_mode == DisplayTUI) || (display_mode == DisplayAuto))) {
     WARNXT("%s", MOUSE_OUT_STR);
@@ -840,8 +866,8 @@ static void parse_options(int argc, char **argv) {
   }
 #endif
   run_opts = ini_opts; // to reflect possible interactive changes
-  for (int i = 1, len = 0; (i < optind) && (i < argc) && argv[i] && ((uint)len < sizeof(mtr_args)); i++) {
-    int inc = snprinte(mtr_args + len, sizeof(mtr_args) - len, (i > 1) ? " %s" : "%s", argv[i]);
+  for (int i = 1, len = 0; (i < optind) && (i < argc) && argv[i] && ((uint)len < sizeof(mtr_options)); i++) {
+    int inc = snprinte(mtr_options + len, sizeof(mtr_options) - len, (i > 1) ? " %s" : "%s", argv[i]);
     if (inc < 0)
       break;
     len += inc;
@@ -1110,7 +1136,7 @@ static inline int main_loop(struct addrinfo *ai, bool fin) {
     }
     freeaddrinfo(ai);
   } else
-    WARNXT("%s: %s", RESFAIL_ERR, dsthost);
+    WARNXT("%s %s", RESFAIL_ERR, dsthost);
   return rc;
 }
 
@@ -1162,7 +1188,7 @@ static int resolv_n_ping(int port, bool fin) {
   if (rr.res && !rr.rc)
     rr.rc = main_loop(rr.res, fin);
   else
-    WARNXT("%s: %s: %s", RESFAIL_ERR, dsthost, rr.error ? rr.error : UNKNOWN_ERR);
+    WARNXT("%s %s: %s", RESFAIL_ERR, dsthost, rr.error ? rr.error : UNKNOWN_ERR);
   return rr.rc;
 }
 

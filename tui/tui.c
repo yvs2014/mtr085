@@ -515,7 +515,7 @@ static void redraw_top(WINDOW *win) {
     mvwaddstr(win, 0, (x > 0) ? x : 0, title);
   }
 #ifdef WITH_MOUSE
-  if (tuilook != OLDLOOK)
+  if (tuilook == NEWLOOK)
     topbar_icons(win);
 #endif
   WREFRESH(win);
@@ -542,7 +542,7 @@ static void redraw_status(WINDOW *win) {
       print_hintmenu(win, 'q', _QUIT_STR);
     } else {
 #ifdef WITH_MOUSE
-      if (run_opts.mouse && (tuilook != OLDLOOK))
+      if (run_opts.mouse && (tuilook == NEWLOOK))
         status_n_keep_crd(win, sizeof(buff), buff);
       else
 #endif
@@ -731,8 +731,8 @@ bool tui_open(void) {
     areas_bg(bg_pair);
   // init title
   titlelen = (title_len_s){.screen = -1, .stat = -1, .chart = -1};
-  if (mtr_args[0])
-    snprinte(screen_title, sizeof(screen_title), "%s %s %s", PACKAGE_NAME, mtr_args, dsthost);
+  if (mtr_options[0])
+    snprinte(screen_title, sizeof(screen_title), "%s %s %s", PACKAGE_NAME, mtr_options, dsthost);
   else
     snprinte(screen_title, sizeof(screen_title), "%s %s", PACKAGE_NAME, dsthost);
   screen_title_len = screen_title[0] ? ustrnlen(screen_title, getmaxx(area[NDX_TOP].win)) : 0;

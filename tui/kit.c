@@ -842,14 +842,14 @@ void free_menukit(void) {
 }
 
 void menu_handler(WINDOW *_win UNUSED) {
-  if (tuilook != NEWLOOK)
-    return;
-  if (kit.posted)
-    menu_showhide();
-  else {
-    prepare_menu();
+  if (tuilook == NEWLOOK) {
     if (kit.posted)
       menu_showhide();
+    else {
+      prepare_menu();
+      if (kit.posted)
+        menu_showhide();
+    }
   }
 }
 

@@ -298,8 +298,8 @@ void report_close(bool next, bool with_header) {
   if (with_header) {
     PRINT_DATETIME("[%s] ", date);
     printf("%s: %s", srchost, PACKAGE_NAME);
-    if (mtr_args[0])
-      printf(" %s", mtr_args);
+    if (mtr_options[0])
+      printf(" %s", mtr_options);
     printf(" %s\n", dsthost);
   }
   int hostlen = longest_hopname(ustrnlen(HOST_STR, MAXNAME)) + 1;

@@ -332,7 +332,7 @@ short color_charts(void) {
     pair = pair_symb(pair, bg, &ccmap_na.unkn);
 #endif
     //
-    if (tuilook != OLDLOOK) {
+    if (tuilook == NEWLOOK) {
 #define MIN_BG_COLORS 16
 #define BG_LUM 150
 #define DEF_BGCOL COLOR_BLACK

@@ -57,7 +57,7 @@
 #endif
 
 #ifndef GITREV
-#define GITREV "316"
+#define GITREV "317"
 #endif
 
 #ifndef HAVE_UINT
@@ -376,17 +376,17 @@ extern char tgterr_txt[];  // error text (per target)
 extern pid_t mypid;
 #if defined(OUTPUT_FORMAT_TXT) || defined(OUTPUT_FORMAT_CSV) || defined(OUTPUT_FORMAT_JSON) || defined(OUTPUT_FORMAT_TOON) || defined(OUTPUT_FORMAT_XML)
 #define OUTPUT_FORMAT
-extern uint mtr_optc; // cli options excluding argv[0]
-extern const char* mtr_optv[32];
+extern uint mtr_optc;
+extern const char* mtr_optv[32]; // option list
 #endif
+extern char mtr_options[]; // options in one line
 extern opts_t run_opts;    // runtime options
 extern opts_t ini_opts;    // initial options
 extern opt_sum_t opt_sum;  // checksum changes
 
 #ifdef TUIMODE
-enum {OLDLOOK = 0, NEWLOOK/*, REVLOOK*/};
-extern int tuilook;
-extern char mtr_args[];
+typedef enum {UNKNLOOK = -1, OLDLOOK = 0, NEWLOOK/*, REVLOOK*/} tuilook_t;
+extern tuilook_t tuilook;
 #endif
 
 extern int istty;
