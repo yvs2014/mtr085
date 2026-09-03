@@ -52,6 +52,7 @@ typedef enum {
   MENU_ITEM_QOS,
 #endif
   MENU_ITEM_PSIZE,
+  MENU_ITEM_CACHE,
   MENU_ITEMS
 } mi_inst;
 
@@ -129,12 +130,14 @@ static void menu_posteditaction(mi_inst inst) {
     case MENU_ITEM_COUNT:   OPT_SUM(cycles);   break;
     case MENU_ITEM_MINTTL:  OPT_SUM(minttl);   break;
     case MENU_ITEM_MAXTTL:  OPT_SUM(maxttl);   break;
-    case MENU_ITEM_PATTERN: OPT_SUM(pattern); reset_pattern = true; break;
+    case MENU_ITEM_PATTERN: reset_pattern = true;
+                            OPT_SUM(pattern);  break;
     case MENU_ITEM_TIMEI:   OPT_SUM(interval); break;
 #ifdef ENABLE_QOS
     case MENU_ITEM_QOS:     OPT_SUM(qos);      break;
 #endif
     case MENU_ITEM_PSIZE:   OPT_SUM(size);     break;
+    case MENU_ITEM_CACHE:   OPT_SUM(cache);    break;
     default: break;
   }
 }
@@ -274,43 +277,46 @@ static void init_menuitems(void) {
   static menuitem_s menuitem[MENU_ITEMS] = {
 #ifdef ENABLE_DNS
     [MENU_ITEM_DNS]      = {.ndx = MENU_ITEM_DNS,     .type = MI_TOOGLE,
-      .action = ActionDNS,  .val.flag = &run_opts.dns},
+      .action = ActionDNS,   .val.flag = &run_opts.dns},
 #endif
 #ifdef WITH_IPINFO
     [MENU_ITEM_ASN]      = {.ndx = MENU_ITEM_ASN,     .type = MI_TOOGLE,
-      .action = ActionASN,  .val.flag = &run_opts.asn},
+      .action = ActionASN,   .val.flag = &run_opts.asn},
 #endif
     [MENU_ITEM_JITTER]   = {.ndx = MENU_ITEM_JITTER,  .type = MI_TOOGLE,
-      .action = ActionJttr, .val.flag = &run_opts.jitter},
+      .action = ActionJttr,  .val.flag = &run_opts.jitter},
     [MENU_ITEM_FIELDS]   = {.ndx = MENU_ITEM_FIELDS,  .type = MI_STRFORM,
-      .action = ActionNone, .val.pstr = &fld_active, .setter = set_fld_active},
+      .action = ActionNone,  .val.pstr = &fld_active, .setter = set_fld_active},
 #ifdef WITH_MPLS
     [MENU_ITEM_MPLS]     = {.ndx = MENU_ITEM_MPLS,    .type = MI_TOOGLE,
-      .action = ActionMPLS, .val.flag = &run_opts.mpls},
+      .action = ActionMPLS,  .val.flag = &run_opts.mpls},
 #endif
     [MENU_ITEM_COUNT]    = {.ndx = MENU_ITEM_COUNT,   .type = MI_INTFORM,
-      .action = ActionNone, .val.num  = &run_opts.cycles,
+      .action = ActionNone,  .val.num  = &run_opts.cycles,
       .min =  0, .max = INT_MAX},
     [MENU_ITEM_MINTTL]   = {.ndx = MENU_ITEM_MINTTL,  .type = MI_INTFORM,
-      .action = ActionNone, .val.num  = &run_opts.minttl,
+      .action = ActionNone,  .val.num  = &run_opts.minttl,
       .min =  1, .max = MAXHOST, .pmax = &run_opts.maxttl},
     [MENU_ITEM_MAXTTL]   = {.ndx = MENU_ITEM_MAXTTL,  .type = MI_INTFORM,
-      .action = ActionNone, .val.num  = &run_opts.maxttl,
+      .action = ActionNone,  .val.num  = &run_opts.maxttl,
       .min =  1, .max = MAXHOST, .pmin = &run_opts.minttl},
     [MENU_ITEM_PATTERN]  = {.ndx = MENU_ITEM_PATTERN, .type = MI_INTFORM,
-      .action = ActionNone, .val.num  = &run_opts.pattern,
+      .action = ActionNone,  .val.num  = &run_opts.pattern,
       .min = -1, .max = UINT8_MAX},
     [MENU_ITEM_TIMEI]    = {.ndx = MENU_ITEM_TIMEI,   .type = MI_INTFORM,
-      .action = ActionNone, .val.num  = &run_opts.interval,
+      .action = ActionNone,  .val.num  = &run_opts.interval,
       .min =  1, .max = INT_MAX},
 #ifdef ENABLE_QOS
     [MENU_ITEM_QOS]      = {.ndx = MENU_ITEM_QOS,     .type = MI_INTFORM,
-      .action = ActionNone, .val.num  = &run_opts.qos,
+      .action = ActionNone,  .val.num  = &run_opts.qos,
       .min =  0, .max = UINT8_MAX},
 #endif
     [MENU_ITEM_PSIZE]    = {.ndx = MENU_ITEM_PSIZE,   .type = MI_INTFORM,
-      .action = ActionNone, .val.num  = &run_opts.size,
+      .action = ActionNone,  .val.num  = &run_opts.size,
       .min = -PSIZEMM, .max = PSIZEMM},
+    [MENU_ITEM_CACHE]    = {.ndx = MENU_ITEM_CACHE,   .type = MI_INTFORM,
+      .action = ActionNone,  .val.num  = &run_opts.cache,
+      .min =  0, .max = INT_MAX},
   };
   //
   static char field_patt[20] = {0}; // enough for stat keys [stat_max]
@@ -340,6 +346,7 @@ static void init_menuitems(void) {
     [MENU_ITEM_QOS]     = {.name = MENUSTRW(_QOSTOS_STR)},
 #endif
     [MENU_ITEM_PSIZE]   = {.name = MENUSTRW(_PSIZE_STR)},
+    [MENU_ITEM_CACHE]   = {.name = MENUSTRW(_CACHETM_STR)},
   };
   //
   if (!kit.maxnamelen)

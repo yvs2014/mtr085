@@ -30,7 +30,6 @@
 #include <libgen.h>
 #include <getopt.h>
 #include <errno.h>
-#include <assert.h>
 
 #ifdef HAVE_NETDB_H
 #include <netdb.h>
@@ -206,7 +205,7 @@ static oopt_type oarg = OUNKN;
 #include "ipinfo.h"
 #endif
 
-enum { REPORT_PINGS = 100, CACHE_TIMEOUT = 60, TCPSYN_TOUT_MAX = 60 };
+enum { REPORT_PINGS = 100, TCPSYN_TOUT_MAX = 60 };
 
 //// global vars
 const char *mtrname;
@@ -240,7 +239,6 @@ opts_t ini_opts = { // initial bool options
   .interval =  1,             // in seconds
   .size     = PAYLOAD_SIZE,   // 64 ip payload - 8 byte header
   .syn      = MIL,            // in ms (tcp timeout)
-  .cache    = CACHE_TIMEOUT,  // in seconds (cache timeout)
   .port     = -1,             // port from 'target:port' in tcp/udp mode
 };
 
@@ -535,9 +533,9 @@ static bool split_hostport(char *buff, char* hostport[2]) {
 
 #ifdef TUIMODE
 #define VAL_TRU(nth) ((val & (1u << ((nth) - 1))) ? true : false)
-static inline void option_display(char opt, const char *optstr) NONNULL(2);
-static inline void option_display(char opt, const char *optstr) {
-  int val = arg2int(opt, optstr, 0, INT8_MAX, DISPMODE_ERR, NULL, 0);
+static void option_display(char opt, const char *arg) NONNULL(2);
+static void option_display(char opt, const char *arg) {
+  int val = arg2int(opt, arg, 0, INT8_MAX, DISPMODE_ERR, NULL, 0);
   chart_mode = (val & ~8) % chart_mode_max;
   ini_opts.chart   = val & 3;    // first two bits
                                  // 3rd reserved
@@ -549,10 +547,11 @@ static inline void option_display(char opt, const char *optstr) {
 #undef VAL_TRU
 #endif
 
-static inline void option_fields(char opt) {
-  if (strnlen(optarg, MAXFLD + 1) > MAXFLD)
-    ERRXT(EINVAL, "-%c: %s (%s=%d): %s", opt, OVERFLD_ERR, MAX_STR, MAXFLD, optarg);
-  for (char *c = optarg; c && *c; c++) {
+static void option_fields(char opt, const char *arg) NONNULL(2);
+static void option_fields(char opt, const char *arg) {
+  if (strnlen(arg, MAXFLD + 1) > MAXFLD)
+    ERRXT(EINVAL, "-%c: %s (%s=%d): %s", opt, OVERFLD_ERR, MAX_STR, MAXFLD, arg);
+  for (const char *c = arg; c && *c; c++) {
     uint cnt = 0;
     for (; cnt < ARRAY_LEN(stats); cnt++)
       if (*c == stats[cnt].key)
@@ -560,18 +559,19 @@ static inline void option_fields(char opt) {
     if (cnt >= ARRAY_LEN(stats))
       ERRXT(EINVAL, "-%c: %s: %c", opt, UNKNFLD_ERR, *c);
   }
-  set_fld_active(optarg);
+  set_fld_active(arg);
 }
 
 #ifdef ENABLE_DNS
-static inline void option_ns(char opt) {
+static void option_ns(char opt, const char *arg) NONNULL(2);
+static void option_ns(char opt, const char *arg) {
   char buff[MAX_ADDRSTRLEN + 6/*:port*/] = {0};
-  snprinte(buff, sizeof(buff), "%s", optarg);
+  snprinte(buff, sizeof(buff), "%s", arg);
   if (!buff[0])
     ERRT(EINVAL, "-%c", opt);
   char* hostport[2] = {0};
   if (!split_hostport(buff, hostport))
-    ERRXT(EINVAL, "-%c: %s: %s", opt, PARSE_ERR, buff);
+    ERRXT(EINVAL, "-%c: %s: %.*s", opt, PARSE_ERR, sizeof(buff), buff);
   if (!hostport[1])
     hostport[1] = "53";
   struct addrinfo *ns = NULL, hints = {
@@ -582,17 +582,18 @@ static inline void option_ns(char opt) {
   if (rc || !ns) {
     if (rc == EAI_SYSTEM)
       ERRT(errno, "%s", "getaddrinfo()");
-    ERRXT(EINVAL, "-%c: %s: %s", opt, optarg, gai_strerror(rc));
+    ERRXT(EINVAL, "-%c: %s: %s", opt, gai_strerror(rc), arg);
   }
   if (!set_custom_res(ns))
-    ERRXT(EXIT_FAILURE, "-%c: %s: %s", opt, SETNS_ERR, optarg);
+    ERRXT(EXIT_FAILURE, "-%c: %s %s", opt, SETNS_ERR, arg);
   freeaddrinfo(ns);
 }
 #endif
 
 #ifdef OUTPUT_FORMAT
-static inline void option_output(void) {
-  char opt = tolower((int)optarg[0]);
+static inline void option_output(const char *arg) NONNULL(1);
+static inline void option_output(const char *arg) {
+  char opt = tolower((int)arg[0]);
   display_mode_t was = display_mode;
   switch (opt) {
 #ifdef OUTPUT_FORMAT_TXT
@@ -737,7 +738,7 @@ static void short_set(char opt) {
     } break;
     case OPT_FIELDS:
       if (optarg)
-        option_fields(opt);
+        option_fields(opt, optarg);
       break;
     case OPT_INTERVAL:
       if (optarg)
@@ -757,22 +758,21 @@ static void short_set(char opt) {
       ini_opts.dns = false;
       break;
     case OPT_NS:
-      assert(optarg);
-      option_ns(opt);
+      if (optarg)
+        option_ns(opt, optarg);
       break;
 #endif
 #ifdef OUTPUT_FORMAT
     case OPT_OUTPUT:
-      assert(optarg);
-      option_output();
+      if (optarg)
+        option_output(optarg);
       break;
 #endif
 #ifdef ENABLE_QOS
-    case OPT_QOS:
-      if (optarg)
-        ini_opts.qos = arg2int(opt, optarg, 0, UINT8_MAX, QOSTOS_STR, NULL, 0);
+    case OPT_QOS: if (optarg) {
+      ini_opts.qos = arg2int(opt, optarg, 0, UINT8_MAX, QOSTOS_STR, NULL, 0);
       VALID_QOS_AF(QOSTOS_STR, ini_opts.qos);
-      break;
+    } break;
 #endif
     case OPT_REPORT:
 #ifdef OUTPUT_FORMAT
@@ -792,7 +792,7 @@ static void short_set(char opt) {
       break;
     case OPT_TIMEOUT:
       if (optarg)
-        ini_opts.syn = arg2int(opt, optarg, 1, TCPSYN_TOUT_MAX, TCP_TOUT_STR, NULL, 0) * MIL;
+        ini_opts.syn = arg2int(opt, optarg, 1, TCPSYN_TOUT_MAX, TCPTM_STR, NULL, 0) * MIL;
       break;
     case OPT_TCP:
     case OPT_UDP: {
@@ -807,10 +807,10 @@ static void short_set(char opt) {
     } break;
     case OPT_VERSION:
       break;
-    case OPT_CACHE: if (optarg) {
-      ini_opts.cache = arg2int(opt, optarg, 1, INT_MAX, CACHE_TOUT_STR, NULL, 0);
-      ini_opts.oncache = true;
-    } break;
+    case OPT_CACHE:
+      if (optarg)
+        ini_opts.cache = arg2int(opt, optarg, 0, INT_MAX, CACHETM_STR, NULL, 0);
+      break;
 #ifdef WITH_IPINFO
     case OPT_LOOKUP:
     case OPT_IPINFO: {
@@ -839,7 +839,7 @@ static void parse_options(int argc, char **argv) {
   uint countv = 0;
   while ((opt = my_getopt_long(argc, argv)) >= 0) {
     short_set((char)opt);
-    switch (opt) {
+    switch (opt) { // option processing with extra args
 #ifdef OUTPUT_FORMAT
       case OPT_OUTPUT: if (!mtr_optc) set_optv(argc, argv); break;
 #endif

@@ -44,20 +44,25 @@
 #include "kit.h"
 #endif
 
-enum { FD_BATCHMAX = 30 };
-// between poll() calls
-enum { MINSLEEP_USEC = 10 }; // in microseconds
-enum { PAUSE_MSEC = 100 };   // in milliseconds
+enum { // misc
+  FD_BATCHMAX   =  30,
+  CACHE_TIMEOUT =  60, // default, in seconds
+  // between poll() calls
+  MINSLEEP_USEC =  10, // in microseconds
+  PAUSE_MSEC    = 100, // in milliseconds
+};
 
 // base file descriptors
-enum { FD_STDIN, FD_NET,
+enum {
+  FD_STDIN, FD_NET,
 #ifdef ENABLE_DNS
-       FD_DNS,
+  FD_DNS,
 #ifdef ENABLE_IPV6
-       FD_DNS6,
+  FD_DNS6,
 #endif
 #endif
-FD_MAX };
+  FD_MAX
+};
 
 static long numpings;
 
@@ -363,11 +368,18 @@ static key_action_t keyboard_events(key_action_t action) {
 #endif
       break;
 #endif
-    case ActionCache:
-      LOGMSG("toggle %s: %d -> %d", "cache-mode", run_opts.cache, !run_opts.cache);
-      run_opts.oncache = !run_opts.oncache;
-      OPT_SUM(oncache);
-      break;
+    case ActionCache: {
+      static int cache_timeout;
+      bool cached = (run_opts.cache > 0);
+      if (cached && (cache_timeout != run_opts.cache))
+        cache_timeout = run_opts.cache;
+      if (cache_timeout <= 0)
+        cache_timeout = CACHE_TIMEOUT;
+      LOGMSG("toggle %s (timeout %d): %d -> %d", "cache-mode",
+        cache_timeout, cached, !cached);
+      run_opts.cache = cached ? 0 : cache_timeout;
+      OPT_SUM(cache);
+      } break;
 #ifdef WITH_IPINFO
     case ActionASN:
     case ActionII:

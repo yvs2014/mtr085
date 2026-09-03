@@ -405,7 +405,7 @@ static int tui_print_args(uint size, char buf[size]) {
 #endif
   INT_OPT2STR(size,     PAR_SIZE_STR, "=%d");
   //
-  BOOL_OPT2STR(oncache, PAR_CACHE_STR);
+  BOOL_OPT2STR(cache,   PAR_CACHE_STR);
   //
   if (run_opts.pause != ini_opts.pause)
     ADD_FMT_ARG("%s%s", len ? ": " : "", PAR_PAUSED_STR);

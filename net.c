@@ -627,7 +627,7 @@ static void hop_stats(int at, timemsec_t curr) {
 
   host[at].up = true;
   host[at].transit = false;
-  if (run_opts.oncache)
+  if (run_opts.cache > 0)
     host[at].seen = time(NULL);
 }
 
@@ -1026,7 +1026,7 @@ int net_send_batch(void) {
   //
   // Send packet if needed
   { bool ping = true;
-    if (run_opts.oncache && host[batch_at].up && (host[batch_at].seen > 0)
+    if ((run_opts.cache > 0) && host[batch_at].up && (host[batch_at].seen > 0)
       && ((time(NULL) - host[batch_at].seen) <= run_opts.cache))
         ping = false;
     if (ping && !( (mtrtype == IPPROTO_TCP) ?

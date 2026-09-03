@@ -57,7 +57,7 @@
 #endif
 
 #ifndef GITREV
-#define GITREV "317"
+#define GITREV "318"
 #endif
 
 #ifndef HAVE_UINT
@@ -199,7 +199,6 @@ typedef struct opts_s {
     stat,     // -S
     tcp,      // -t
     udp,      // -u
-    oncache,  // -x
 #ifdef WITH_IPINFO
     multi,    // -y
 #endif
@@ -245,7 +244,7 @@ typedef union opt_sum_u {
     stat     :1, // -S
     tcp      :1, // -t
     udp      :1, // -u
-    oncache  :1, // -x
+    cache    :1, // -x
 #ifdef WITH_IPINFO
     multi    :1, // -y (multi ipinfo sources)
 #endif

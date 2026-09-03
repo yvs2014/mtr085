@@ -129,6 +129,7 @@
 #define _PSIZE_STR    "Payload size"
 #define _FIELDS_STR   "Fields"
 #define _CUSTFLD_STR  "Custom fields"
+#define _CACHETM_STR  "Cache timeout"
 
 // cmd help
 #define COMMANDS_STR _("Commands")
@@ -184,8 +185,8 @@
 #define QOSTOS_STR     _(_QOSTOS_STR)
 #define PSIZE_STR      _(_PSIZE_STR)
 #define MUTEXCL_ERR    _("Mutually exclusive options")
-#define TCP_TOUT_STR   _("TCP timeout")
-#define CACHE_TOUT_STR _("Cache timeout")
+#define TCPTM_STR      _("TCP timeout")
+#define CACHETM_STR    _(_CACHETM_STR)
 
 // misc
 #define SOURCE_STR   _("Source")

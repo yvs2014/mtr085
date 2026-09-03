@@ -16,6 +16,8 @@ alias make-install  := install-make
 alias meson-clean := clean-meson
 alias cmake-clean := clean-cmake
 alias make-clean  := clean-make
+#
+alias menu := build-menu
 
 ##
 ## (1) preferable
@@ -28,6 +30,11 @@ install-meson: build-meson
 	meson install -C _build
 clean-meson:
 	rm -rf _build
+#
+build-menu:
+	rm -rf _build
+	meson setup _build -DMENU=true
+	meson compile -C _build
 
 ##
 ## (2)

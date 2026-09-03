@@ -234,10 +234,10 @@ static void tui_get_int(WINDOW *win, int *val, int min, int max,
     waddstr(win, hint);
   }
   int xpos = (what && what[0]) ? ustrnlen(what, getmaxx(win)) : 0;
-  char entered[MAXFLD + 1] = {0};
-  if (enter_smth(win, entered, sizeof(entered), xpos + 2)) {
+  char arg[MAXFLD + 1] = {0};
+  if (enter_smth(win, arg, sizeof(arg), xpos + 2)) {
     char error[NAMELEN] = {0};
-    int num = arg2int(0, entered, min, max, what, error, sizeof(error));
+    int num = arg2int(0, arg, min, max, what, error, sizeof(error));
     if (error[0])
       tui_msgcont(win, error, NULL);
     else
@@ -272,10 +272,10 @@ static void tui_key_c(WINDOW *win) { // set number of cycles
   dx++; maxc--;
   xpos    += (maxc > 0) ? (ustrnlen(UNLIM0_STR,  maxc) + dx) : 0;
   //
-  char entered[MAXFLD + 1] = {0};
-  if (enter_smth(win, entered, sizeof(entered), xpos)) {
+  char arg[MAXFLD + 1] = {0};
+  if (enter_smth(win, arg, sizeof(arg), xpos)) {
     char error[NAMELEN] = {0};
-    int num = arg2int(0, entered, 0, INT_MAX, NCYCLES_STR, error, sizeof(error));
+    int num = arg2int(0, arg, 0, INT_MAX, NCYCLES_STR, error, sizeof(error));
     if (error[0])
       tui_msgcont(win, error, NULL);
     else {
@@ -389,12 +389,11 @@ static void tui_key_s(WINDOW *win) { // set payload size
   waddstr(win, RANGE_STR);
   wprintw(win, "[%d,%d], ", -max, max);
   waddstr(win, NEG4RND_STR);
-  char entered[MAXFLD + 1] = {0};
   int xpos = ustrnlen(PSIZE_CHNG_STR, getmaxx(win) - 2) + 2;
-  wrefresh(win);
-  if (enter_smth(win, entered, sizeof(entered), xpos)) {
+  char arg[MAXFLD + 1] = {0};
+  if (enter_smth(win, arg, sizeof(arg), xpos)) {
     char error[NAMELEN] = {0};
-    int num = arg2int(0, entered, -max, max, PSIZE_STR, error, sizeof(error));
+    int num = arg2int(0, arg, -max, max, PSIZE_STR, error, sizeof(error));
     if (error[0])
       tui_msgcont(win, error, NULL);
     else {
