@@ -17,6 +17,7 @@
 */
 
 #include <stdio.h>
+#include <unistd.h>
 #include <string.h>
 #include <strings.h>
 #include <errno.h>
@@ -915,7 +916,7 @@ void ipinfo_data_div(size_t size, char buff[size], int at, int ndx, char div, ch
 inline void ipinfo_data_fix(size_t size, char buff[size], int at, int ndx) { // NONNULL(2)
   ipinfo_data_div(size, buff, at, ndx, 0, 0); }
 //
-uint ipinfo_datalist(uint len, const char* key[len], const char* val[len], int at, int ndx)
+uint ipinfo_datalist(uint len, const char* key[], const char* val[], int at, int ndx)
 {
   uint n = 0;
   bool exist = addr_exist(&IP_AT_NDX(at, ndx));

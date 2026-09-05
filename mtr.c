@@ -25,6 +25,7 @@
 #endif
 
 #include <stdio.h>
+#include <unistd.h>
 #include <string.h>
 #include <strings.h>
 #include <libgen.h>
@@ -211,7 +212,7 @@ enum { REPORT_PINGS = 100, TCPSYN_TOUT_MAX = 60 };
 const char *mtrname;
 static char *mtrname_dup;
 int mtrtype = IPPROTO_ICMP; // ICMP as default packet type
-pid_t mypid;
+uint16_t pid16;
 #ifdef OUTPUT_FORMAT
 uint mtr_optc;
 const char* mtr_optv[32];   // option list
@@ -799,7 +800,7 @@ static void short_set(char opt) {
       bool udp = (opt == OPT_UDP);
       if ((udp && ini_opts.tcp) || (!udp && ini_opts.udp))
         ERRXT(EINVAL, "-%c -%c: %s", ini_opts.udp ? OPT_UDP: OPT_TCP, opt, MUTEXCL_ERR);
-      net_set_type(IPPROTO_TCP);
+      net_set_type(udp ? IPPROTO_UDP : IPPROTO_TCP);
       if (udp)
         ini_opts.udp = true;
       else
@@ -1083,14 +1084,9 @@ static inline void stat_fin(void) {
 
 static inline void main_prep(int argc, char **argv) {
   net_assert();
-#ifdef USE_COLOR
-  istty = isatty(1);
-  if (!istty)
-    errno = 0;
-#endif
-  mypid = getpid();
+  pid16 = getpid() % UINT16_MAX;
 #ifndef HAVE_ARC4RANDOM_UNIFORM
-  srand(mypid); // reset random seed
+  srand(getpid()); // reset random seed
 #endif
   for (uint i = 0; i < ARRAY_LEN(stats); i++)
     fld_index[(uint8_t)stats[i].key] = i;
@@ -1100,9 +1096,6 @@ static inline void main_prep(int argc, char **argv) {
     usage(EXIT_SUCCESS);
 #ifdef WITH_SYSLOG
   openlog(PACKAGE_NAME, LOG_PID, LOG_USER);
-#endif
-#ifdef ENABLE_IPV6
-  net_setsock6();
 #endif
 #ifdef ENABLE_DNS
   if (run_opts.dns)

@@ -221,16 +221,15 @@
 #define SETNS_ERR    _("Failed to set nameserver")
 #define OPENDISP_ERR _("Unable to open display")
 #define DISPMODE_ERR _("Display mode")
+#define DISCOLOR_ERR _("Colors are disabled")
 #define OVERFLD_ERR  _("Too many stat fields")
 #define UNKNFLD_ERR  _("Unknown stat field")
 #define HOSTENT_ERR  _("Unable to set host entry")
 #define USEADDR_ERR  _("Unable to use address")
 #define UNOPRINT_ERR _("UTF8 is not printable")
 #define NOADDR_ERR   _("No address found")
-//
-#define NOPOOLMEM_ERR _("No place in pool for sockets")
-#define NOSOCK6_ERR   _("No IPv6 sockets")
-#define NODNS_ERR     _("No nameservers")
-#define DISCOLOR_ERR  _("Colors are disabled")
+#define NOPOOL_ERR   _("No place in pool for sockets")
+#define NOSOCK_ERR   _("No sockets")
+#define NODNS_ERR    _("No nameservers")
 
 #endif

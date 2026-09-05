@@ -619,8 +619,8 @@ msgstr "Dirección no encontrada"
 msgid "No place in pool for sockets"
 msgstr "No hay lugar en conjunto para sockets"
 
-msgid "No IPv6 sockets"
-msgstr "Sin sockets IPv6"
+msgid "No sockets"
+msgstr "Sin sockets"
 
 msgid "No nameservers"
 msgstr "Sin servidores DNS"

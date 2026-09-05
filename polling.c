@@ -17,6 +17,7 @@
 */
 
 #include <stdio.h>
+#include <unistd.h>
 #include <string.h>
 #include <errno.h>
 
@@ -265,33 +266,47 @@ static bool svc(struct timespec *last, const struct timespec *interval, int *tim
   return true;
 }
 
-static void toggle_proto(void) {
+static bool toggle_proto(void) {
   // icmp->udp->tcp->icmp->...
   if        (mtrtype == IPPROTO_ICMP) {
+    if ((af == AF_INET6) && !sockets6_ready(IPPROTO_UDP))
+      return false;
     net_set_type(IPPROTO_UDP);
     run_opts.udp = true;
     run_opts.tcp = false;
   } else if (mtrtype == IPPROTO_UDP) {
+    if ((af == AF_INET6) && !sockets6_ready(IPPROTO_TCP))
+      return false;
     net_set_type(IPPROTO_TCP);
     run_opts.udp = false;
     run_opts.tcp = true;
   } else if (mtrtype == IPPROTO_TCP) {
+    if ((af == AF_INET6) && !sockets6_ready(IPPROTO_ICMP))
+      return false;
     net_set_type(IPPROTO_ICMP);
     run_opts.udp = false;
     run_opts.tcp = false;
   }
+  return true;
 }
-static void toggle_udptcp(key_action_t action) {
+static bool toggle_udptcp(key_action_t action) {
   // udp=on/off, tcp=on/off
   run_opts.udp = run_opts.tcp = false;
-  if (mtrtype != IPPROTO_ICMP)
+  if (mtrtype != IPPROTO_ICMP) {
+    if ((af == AF_INET6) && !sockets6_ready(IPPROTO_ICMP))
+      return false;
     net_set_type(IPPROTO_ICMP);
+  }
   else {
     bool udp = (action == ActionUDP);
-    net_set_type(udp ? IPPROTO_UDP : IPPROTO_TCP);
+    int proto = udp ? IPPROTO_UDP : IPPROTO_TCP;
+    if ((af == AF_INET6) && !sockets6_ready(proto))
+      return false;
+    net_set_type(proto);
     if (udp) run_opts.udp = true;
     else     run_opts.tcp = true;
   }
+  return true;
 }
 
 #ifdef LOGMOD
@@ -397,20 +412,26 @@ static key_action_t keyboard_events(key_action_t action) {
 #endif
     case ActionUDP:
     case ActionTCP:
-    case ActionProto:
+    case ActionProto: {
       LOGMSG("< switch proto: %s", USED_PROTO);
+      bool ready = false;
       if (action == ActionProto)
-        toggle_proto();        // icmp->udp->tcp->icmp->...
+        ready = toggle_proto();        // icmp->udp->tcp->icmp->...
       else
-        toggle_udptcp(action); // udp=on/off, tcp=on/off
-      OPT_SUM(udp);
-      OPT_SUM(tcp);
+        ready = toggle_udptcp(action); // udp=on/off, tcp=on/off
+      if (ready) {
+        if      (af == AF_INET)
+          net_setsock4();
 #ifdef ENABLE_IPV6
-      if (af == AF_INET6)
-        net_setsock6();
+        else if (af == AF_INET6)
+          net_setsock6();
 #endif
-      LOGMSG("> switch proto: %s", USED_PROTO);
-      break;
+        OPT_SUM(udp);
+        OPT_SUM(tcp);
+        LOGMSG("> switch proto: %s", USED_PROTO);
+      } else
+        WARNX("%s", "Cannot change protocol");
+    } break;
     default:
       action = ActionNone;
   }

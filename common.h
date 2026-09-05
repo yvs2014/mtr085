@@ -3,7 +3,6 @@
 
 #include <stdbool.h>
 #include <stdlib.h>
-#include <unistd.h>
 #include <err.h>
 #include <sys/time.h>
 #include <sys/types.h>
@@ -57,7 +56,7 @@
 #endif
 
 #ifndef GITREV
-#define GITREV "318"
+#define GITREV "319"
 #endif
 
 #ifndef HAVE_UINT
@@ -372,7 +371,7 @@ extern int sum_sock[];     // summary open()/close() calls for sockets
 extern char strerr_txt[];  // error text (any target)
 extern char tgterr_txt[];  // error text (per target)
 
-extern pid_t mypid;
+extern uint16_t pid16;     // 16 bits of process ID
 #if defined(OUTPUT_FORMAT_TXT) || defined(OUTPUT_FORMAT_CSV) || defined(OUTPUT_FORMAT_JSON) || defined(OUTPUT_FORMAT_TOON) || defined(OUTPUT_FORMAT_XML)
 #define OUTPUT_FORMAT
 extern uint mtr_optc;

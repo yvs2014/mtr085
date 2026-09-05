@@ -619,8 +619,8 @@ msgstr "Адресу не знайдено"
 msgid "No place in pool for sockets"
 msgstr "Нема місця в пулі сокетів"
 
-msgid "No IPv6 sockets"
-msgstr "Нема IPv6 сокетів"
+msgid "No sockets"
+msgstr "Нема сокетів"
 
 msgid "No nameservers"
 msgstr "Нема DNS серверів"

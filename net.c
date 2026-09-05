@@ -17,6 +17,7 @@
 */
 
 #include <stdio.h>
+#include <unistd.h>
 #include <string.h>
 #include <errno.h>
 #include <math.h>
@@ -161,7 +162,7 @@ struct PACKIT icmpext_object { // RFC4884
   #define IPLEN_RAW(sz) sz
 #endif
 
-#define CLOSE(fd) if ((fd) >= 0) { close(fd); (fd) = -1; /*summ*/ sum_sock[1]++; }
+#define FD_CLOSE(fd) if ((fd) >= 0) { close(fd); (fd) = -1; /*summ*/ sum_sock[1]++; }
 
 #define NET_FAIL_WARN(fmt, ...) do {                     \
   WARNX(fmt ": %s", __VA_ARGS__, tgterr_txt);            \
@@ -178,7 +179,7 @@ struct PACKIT icmpext_object { // RFC4884
 #define FAIL_AND_CLOSE(rcode, fd, fmt, ...) do { \
   rstrerror(rcode);                              \
   if (dispclear_fn) dispclear_fn();              \
-  CLOSE(fd);                                     \
+  FD_CLOSE(fd);                                  \
   NET_FAIL_WARN(fmt, __VA_ARGS__);               \
 } while (0)
 
@@ -227,16 +228,16 @@ bool reset_pldsize = true;
 
 static struct sequence seqlist[MAXSEQ];
 
-static int sendsock4 = -1;
-static int recvsock4 = -1;
+static int recvsock4      = -1;
+static int sendsock4_icmp = -1;
+static int sendsock4_udp  = -1;
 #ifdef ENABLE_IPV6
-static int sendsock6 = -1;
+static int recvsock6      = -1;
 static int sendsock6_icmp = -1;
-static int sendsock6_udp = -1;
-static int recvsock6 = -1;
+static int sendsock6_udp  = -1;
 #endif
-static int sendsock = -1;
 static int recvsock = -1;
+static int sendsock = -1;
 
 static t_sockaddr lsa, rsa; // losal and remote sockaddr
 static t_ipaddr *remote_ipaddr = (t_ipaddr*)&rsa.sin.sin_addr; // ip4 by default
@@ -283,26 +284,6 @@ static uint16_t sum1616(const uint16_t *data, uint len, uint sum) {
   while (sum >> 16)
     sum = (sum >> 16) + (sum & 0xffff);
   return ~sum;
-}
-
-// Prepend pseudoheader to the udp datagram and calculate checksum
-static uint16_t udpsum16(struct _iphdr *ip, void *udata, int udata_len, int dsize) {
-  uint tsize = sizeof(struct _udpph) + dsize;
-  char csumpacket[tsize];
-  memset(csumpacket, bitpattern, sizeof(csumpacket));
-  struct _udpph *prepend = (struct _udpph *)csumpacket;
-  prepend->saddr = ip->saddr;
-  prepend->daddr = ip->daddr;
-  prepend->zero  = 0;
-  prepend->proto = ip->proto;
-  prepend->len   = udata_len;
-  struct udphdr *content = (struct udphdr *)(csumpacket + sizeof(struct _udpph));
-  struct udphdr *data = (struct udphdr *)udata;
-  content->uh_sport = data->uh_sport;
-  content->uh_dport = data->uh_dport;
-  content->uh_ulen  = data->uh_ulen;
-  content->uh_sum   = data->uh_sum;
-  return sum1616((uint16_t*)csumpacket, tsize / 2, (tsize % 2) ? bitpattern : 0);
 }
 
 const char* rstrerror(int rc) {
@@ -451,7 +432,7 @@ static bool net_send_tcp(int at) {
 
   int seq = port % MAXSEQ;
   if (poll_reg_fd(sock, seq) < 0)
-    FAIL_AND_CLOSE(EOVERFLOW, sock, "at=%d: %s", at, NOPOOLMEM_ERR);
+    FAIL_AND_CLOSE(EOVERFLOW, sock, "at=%d: %s", at, NOPOOL_ERR);
   save_sequence(seq, at);
   if (!save_send_ts(seq)) return false;
   connect(sock, &remote.sa, addrlen); // NOLINT(bugprone-unused-return-value)
@@ -472,17 +453,13 @@ static inline void net_fill_icmp_hdr(uint16_t seq, uint8_t type, uint8_t *data, 
   icmp->type = type;
   icmp->code = 0;
   icmp->sum  = 0;
-  icmp->id   = mypid;
+  icmp->id   = pid16;
   icmp->seq  = seq;
   icmp->sum  = sum1616((uint16_t*)data, size / 2, (size % 2) ? bitpattern : 0);
   LOGMSG("icmp: seq=%d id=%u", icmp->seq, icmp->id);
 }
 
-static inline bool net_fill_udp_hdr(uint16_t seq, uint8_t *data, uint16_t size
-#ifdef IP_HDRINCL
-  , struct _iphdr *ip
-#endif
-) {
+static inline bool net_fill_udp_hdr(uint16_t seq, uint8_t *data, uint16_t size) {
   struct udphdr *udp = (struct udphdr *)data;
   udp->uh_sum  = 0;
   udp->uh_ulen = htons(size);
@@ -491,24 +468,14 @@ static inline bool net_fill_udp_hdr(uint16_t seq, uint8_t *data, uint16_t size
   else
     SET_UDP_UH_PORTS(udp, LO_UDPPORT + seq, run_opts.port);
   LOGMSG("udp: seq=%d port=%u", seq, ntohs(udp->uh_dport));
-  switch (af) {
-    case AF_INET:
-#ifdef IP_HDRINCL
-      if (ip->saddr) { // checksum is not mandatory, calculate if source address is known
-        uint16_t sum = udpsum16(ip, udp, udp->uh_ulen, size);
-        udp->uh_sum = sum ? sum : 0xffff;
-      }
-#endif
-      return true;
 #ifdef ENABLE_IPV6
-    case AF_INET6: { // checksumming by kernel
-      int opt = 6;
-      if (setsockopt(sendsock, IPPROTO_IPV6, IPV6_CHECKSUM, &opt, sizeof(opt)))
-        FAIL_WITH_WARN(sendsock, "setsockopt6(sock=%d, IPV6_CHECKSUM)", sendsock);
-    } return true;
-    default: break;
+  if (af == AF_INET6) { // checksumming by kernel
+    int opt = 6;
+    if (setsockopt(sendsock, IPPROTO_IPV6, IPV6_CHECKSUM, &opt, sizeof(opt)))
+      FAIL_WITH_WARN(sendsock, "setsockopt6(sock=%d, IPV6_CHECKSUM)", sendsock);
+  }
+  return true;
 #endif
-  } return false;
 }
 
 
@@ -516,42 +483,24 @@ static inline bool net_fill_udp_hdr(uint16_t seq, uint8_t *data, uint16_t size
 static bool net_send_icmp_udp(int at) {
   static uint8_t packet[MAXPACKET];
   memset(packet, bitpattern, sizeof(packet));
-
+  //
   uint8_t *data = packet;
   uint16_t datasize = 8/*icmp,udp header*/ + payloadsize;
   uint16_t pktsize  = datasize;
   int echotype = 0, salen = 0;
   int ttl = at + 1;
-
+  //
   switch (af) {
     case AF_INET: {
-#ifdef IP_HDRINCL
-      // prepend data with IP header
-      struct _iphdr *ip = (struct _iphdr *)packet;
-      data    += sizeof(*ip);
-      pktsize += sizeof(*ip);
-      ip->ver   = 4;
-      ip->ihl   = 5;
-      ip->tos   = run_opts.qos;
-      ip->len   = IPLEN_RAW(pktsize);
-      ip->id    = 0;
-      ip->frag  = 0;
-      ip->ttl   = ttl;
-      ip->proto = mtrtype;
-      ip->sum   = 0;
-      // BSD needs the source IPv4 address here
-      addr_copy(&ip->saddr, &lsa.S_ADDR);
-      addr_copy(&ip->daddr, &rsa.S_ADDR);
-#else
       if (!settosttl4(sendsock, ttl))
         return false;
-#endif
       echotype = ICMP_ECHO;
       salen = sizeof(struct sockaddr_in);
     } break;
 #ifdef ENABLE_IPV6
     case AF_INET6:
-      if (!settosttl6(sendsock, ttl)) return false;
+      if (!settosttl6(sendsock, ttl))
+        return false;
       echotype = ICMP6_ECHO_REQUEST;
       salen = sizeof(struct sockaddr_in6);
       break;
@@ -559,23 +508,20 @@ static bool net_send_icmp_udp(int at) {
     default:
       FAIL_POSTPONE(EAFNOSUPPORT, af);
   }
-
+  //
   int seq = new_sequence(at);
   switch (mtrtype) {
     case IPPROTO_ICMP:
       net_fill_icmp_hdr(seq, echotype, data, datasize);
       break;
     case IPPROTO_UDP:
-      if (!net_fill_udp_hdr(seq, data, datasize
-#ifdef IP_HDRINCL
-         , (struct _iphdr *)packet
-#endif
-      )) return false;
+      if (!net_fill_udp_hdr(seq, data, datasize))
+        return false;
       break;
     default:
       FAIL_POSTPONE(EPROTONOSUPPORT, mtrtype);
   }
-
+  //
   bool okay = save_send_ts(seq);
   if (okay) {
     if (sendto(sendsock, packet, pktsize, 0, &rsa.sa, salen) < 0) {
@@ -848,9 +794,9 @@ static int got_icmp_udp(const struct udphdr *uh) { // NONNULL(1)
 #endif
 
 void net_icmp_parse(struct timespec *recv_at) { // NONNULL(1)
-#define LOGRET_UNKN_ID do { if (icmp->id != (uint16_t)mypid)  \
+#define LOGRET_UNKN_ID do { if (icmp->id != pid16)            \
   LOGRET("icmp(myid=%u): got unknown id=%u (type=%u seq=%u)", \
-         mypid, icmp->id, icmp->type, seq);                   \
+         pid16, icmp->id, icmp->type, seq);                   \
 } while (0)
   uint8_t packet[MAXPACKET];
   struct sockaddr_storage sa_in;
@@ -1057,12 +1003,13 @@ int net_send_batch(void) {
 }
 
 static void net_sock_close(void) {
-  CLOSE(sendsock4);
-  CLOSE(recvsock4);
+  FD_CLOSE(recvsock4);
+  FD_CLOSE(sendsock4_icmp);
+  FD_CLOSE(sendsock4_udp);
 #ifdef ENABLE_IPV6
-  CLOSE(sendsock6_icmp);
-  CLOSE(sendsock6_udp);
-  CLOSE(recvsock6);
+  FD_CLOSE(recvsock6);
+  FD_CLOSE(sendsock6_icmp);
+  FD_CLOSE(sendsock6_udp);
 #endif
 }
 
@@ -1090,87 +1037,100 @@ static void set_rawcap_flag(cap_flag_value_t onoff) {
 #define RAWCAP_OFF
 #endif
 
-static int net_socket(int domain, int type, int proto, const char *what) {
+static int net_rawsock(int domain, int type, int proto, const char *what) {
   RAWCAP_ON;
   int sock = socket(domain, type, proto);
-  if (sock < 0)
-    warn("%s", what);
-  else
-    /*summ*/ sum_sock[0]++;
+  int keep = errno;
   RAWCAP_OFF;
-  if (sock < 0)
+  if (sock < 0) {
+    errno = keep;
+    warn("%s", what);
     net_sock_close();
+  } else
+    /*summ*/ sum_sock[0]++;
   return sock;
 }
 
 bool net_open(void) {
   // mandatory ipv4
-  RAWCAP_ON;
-  sendsock4 = socket(AF_INET, SOCK_RAW, IPPROTO_RAW);
-  RAWCAP_OFF;
-  if (sendsock4 < 0) { // backup
-    sendsock4 = net_socket(AF_INET, SOCK_RAW, IPPROTO_ICMP, "icmp-raw-sendsock");
-    if (sendsock4 < 0)
-      return false;
-  } else
-    /*summ*/ sum_sock[0]++;
-  recvsock4 = net_socket(AF_INET, SOCK_RAW, IPPROTO_ICMP, "icmp-raw-recvsock");
+  recvsock4 = net_rawsock(AF_INET, SOCK_RAW, IPPROTO_ICMP, "icmp-raw-recvsock");
   if (recvsock4 < 0)
     return false;
+  /*summ*/ sum_sock[0]++;
+  sendsock4_icmp = net_rawsock(AF_INET, SOCK_RAW, IPPROTO_ICMP, "icmp-raw-sendsock");
+  if (sendsock4_icmp < 0)
+    return false;
+  /*summ*/ sum_sock[0]++;
+  sendsock4_udp = net_rawsock(AF_INET, SOCK_RAW, IPPROTO_UDP, "udp-raw-sendsock");
+  if (sendsock4_udp < 0)
+    return false;
+  /*summ*/ sum_sock[0]++;
 #ifdef ENABLE_IPV6
-  // optional ipv6: to not fail
+  // optional ipv6
   RAWCAP_ON;
   recvsock6 = socket(AF_INET6, SOCK_RAW, IPPROTO_ICMPV6);
   if (recvsock6 >= 0)
     sum_sock[0]++; /*summ*/
+  else
+    LOGMSG("recvsock6: %s", NOSOCK_ERR);
   sendsock6_icmp = socket(AF_INET6, SOCK_RAW, IPPROTO_ICMPV6);
   if (sendsock6_icmp >= 0)
     sum_sock[0]++; /*summ*/
+  else
+    LOGMSG("sendsock6_icmp: %s", NOSOCK_ERR);
   sendsock6_udp = socket(AF_INET6, SOCK_RAW, IPPROTO_UDP);
   if (sendsock6_udp >= 0)
     sum_sock[0]++; /*summ*/
+  else
+    LOGMSG("sendsock6_udp: %s", NOSOCK_ERR);
   RAWCAP_OFF;
-#endif
-#ifdef IP_HDRINCL
-  int trueopt = 1; // tell that we provide IP header
-  if (setsockopt(sendsock4, 0, IP_HDRINCL, &trueopt, sizeof(trueopt)) < 0) {
-    warn("setsockopt(sock=%d, IP_HDRINCL)", sendsock4);
-    net_sock_close();
-    return false;
-  }
 #endif
   return true;
 }
 
-#ifdef ENABLE_IPV6
-static inline int net_getsock6(void) {
-  switch (mtrtype) {
-    case IPPROTO_ICMP: return sendsock6_icmp;
-    case IPPROTO_UDP:  return sendsock6_udp;
+bool sockets6_ready(int type) {
+  bool ready = (recvsock6 >= 0);
+  if (ready) switch (type) {
+    case IPPROTO_ICMP:
+      ready = (sendsock6_icmp >= 0);
+      break;
+    case IPPROTO_UDP:
+      ready = (sendsock6_udp >= 0);
+      break;
     default: break;
   }
-  return -1;
+  return ready;
 }
-void net_setsock6(void) { sendsock = sendsock6 = net_getsock6(); }
+
+void net_setsock4(void) {
+  recvsock = recvsock4;
+  sendsock =
+    (mtrtype == IPPROTO_ICMP) ? sendsock4_icmp :
+    (mtrtype == IPPROTO_UDP)  ? sendsock4_udp  :
+    -1;
+}
+
+#ifdef ENABLE_IPV6
+void net_setsock6(void) {
+  recvsock = recvsock6;
+  sendsock =
+    (mtrtype == IPPROTO_ICMP) ? sendsock6_icmp :
+    (mtrtype == IPPROTO_UDP)  ? sendsock6_udp  :
+    -1;
+}
 #endif
 
 bool net_set_host(const t_ipaddr *addr) { // NONNULL(1)
   rsa.SA_AF = af;
   switch (af) {
     case AF_INET:
-      sendsock = sendsock4;
-      recvsock = recvsock4;
+      net_setsock4();
       addr_copy(&rsa.S_ADDR, addr);
       remote_ipaddr = (t_ipaddr*)&rsa.S_ADDR;
     break;
 #ifdef ENABLE_IPV6
     case AF_INET6:
-      if ((recvsock6 < 0) || ((mtrtype != IPPROTO_TCP) && (sendsock6 < 0))) {
-        warnx("%s", NOSOCK6_ERR);
-        return false;
-      }
-      sendsock = sendsock6;
-      recvsock = recvsock6;
+      net_setsock6();
       addr_copy(&rsa.S6ADDR, addr);
       remote_ipaddr = (t_ipaddr*)&rsa.S6ADDR;
     break;
@@ -1178,20 +1138,23 @@ bool net_set_host(const t_ipaddr *addr) { // NONNULL(1)
     default:
       return false;
   }
-
-  if (!addr_exist(remote_ipaddr)) {
-    warnx("%s: %s", TARGET_STR, strerror(EINVAL));
+  if ((recvsock < 0) || ((mtrtype != IPPROTO_TCP) && (sendsock < 0))) {
+    WARNXT("%s", NOSOCK_ERR);
     return false;
   }
-
+  if (!addr_exist(remote_ipaddr)) {
+    WARNXT("%s: %s", TARGET_STR, strerror(EINVAL));
+    return false;
+  }
+  //
   net_reset();
   { struct sockaddr_storage ss = {0};
     socklen_t len = sizeof(ss);
     if (getsockname(recvsock, (struct sockaddr *)&ss, &len) < 0)
-      warn("getsockname()");
+      WARNX("%s", "getsockname()");
     else {
       if (len > sizeof(ss))
-        warnx("%s: %d > %zd: %s", "recv-socket", len, sizeof(ss), strerror(EINVAL));
+        WARNXT("%s: %d > %zd: %s", "recv-socket", len, sizeof(ss), strerror(EINVAL));
       int saf = ss.ss_family;
       char *src =
 #ifdef ENABLE_IPV6
@@ -1199,14 +1162,14 @@ bool net_set_host(const t_ipaddr *addr) { // NONNULL(1)
 #endif
         ((saf == AF_INET) ? (char*)&((struct sockaddr_in  *)&ss)->sin_addr  : NULL);
       if (!src)
-        warnx("%d: %s", saf, strerror(EAFNOSUPPORT));
+        WARNXT("%d: %s", saf, strerror(EAFNOSUPPORT));
       else if (!inet_ntop(saf, src, localaddr, sizeof(localaddr))) {
-        warn("inet_ntop()");
+        WARNT("%s", "inet_ntop()");
         localaddr[0] = 0;
       }
     }
   }
-  portpid = IPPORT_RESERVED + mypid % (USHRT_MAX - IPPORT_RESERVED);
+  portpid = IPPORT_RESERVED + pid16 % (USHRT_MAX - IPPORT_RESERVED);
   return true;
 }
 
@@ -1394,6 +1357,7 @@ void net_settings(enum IPV6_ENDIS ipv6) {
     ipicmphdr_sz = sizeof(struct ip6_hdr) + sizeof(struct _icmphdr);
     sa_addr_offset = offsetof(struct sockaddr_in6, sin6_addr);
     NET46SETS(sizeof(struct sockaddr_in6), ICMP6_ECHO_REPLY, ICMP6_TIME_EXCEEDED, ICMP6_DST_UNREACH);
+    net_setsock6();
 #endif
   } else { // IPv4 by default
     af = AF_INET;
@@ -1404,6 +1368,7 @@ void net_settings(enum IPV6_ENDIS ipv6) {
     ipicmphdr_sz = iphdr_sz + sizeof(struct _icmphdr);
     sa_addr_offset = offsetof(struct sockaddr_in, sin_addr);
     NET46SETS(sizeof(struct sockaddr_in), ICMP_ECHOREPLY, ICMP_TIME_EXCEEDED, ICMP_UNREACH);
+    net_setsock4();
   }
   net_set_type(mtrtype);
 }

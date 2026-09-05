@@ -198,12 +198,14 @@ const char* addr2str(const t_ipaddr *addr, size_t size, char buff[size]) NONNULL
 bool  addr4exist(const void *a) NONNULL(1);
 bool  addr4equal(const void *a, const void *b) NONNULL(1, 2);
 void* addr4copy(void *dst, const void *src) NONNULL(1, 2);
+void  net_setsock4(void);
 #ifdef ENABLE_IPV6
 bool  addr6exist(const void *a) NONNULL(1);
 bool  addr6equal(const void *a, const void *b) NONNULL(1, 2);
 void* addr6copy(void *dst, const void *src) NONNULL(1, 2);
 void  net_setsock6(void);
 #endif
+bool sockets6_ready(int type);
 #ifdef WITH_MPLS
 const char *mpls2str(const mpls_label_t *label,
   size_t size, char buff[size], uint indent) NONNULL(1, 3);

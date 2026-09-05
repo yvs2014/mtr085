@@ -619,8 +619,8 @@ msgstr "Indirizzo non trovato"
 msgid "No place in pool for sockets"
 msgstr "Non c'è posto nel set per socket"
 
-msgid "No IPv6 sockets"
-msgstr "Nessun socket IPv6"
+msgid "No sockets"
+msgstr "Nessun socket"
 
 msgid "No nameservers"
 msgstr "Nessun server DNS"
