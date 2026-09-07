@@ -17,23 +17,25 @@
 */
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
 #include <strings.h>
 #include <resolv.h>
+#include <time.h>
 #ifdef HAVE_NETDB_H
-  #include <netdb.h>
+#include <netdb.h>
 #endif
 #ifdef HAVE_ARPA_NAMESER_H
-  #include <arpa/nameser.h>
+#include <arpa/nameser.h>
 #endif
 
 #if defined(LOG_DNS) && !defined(LOGMOD)
-  #include <errno.h>
-  #define LOGMOD
+#include <errno.h>
+#define LOGMOD
 #endif
 #if !defined(LOG_DNS) && defined(LOGMOD)
-  #undef LOGMOD
+#undef LOGMOD
 #endif
 
 #include "dns.h"

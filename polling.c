@@ -17,9 +17,11 @@
 */
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
 #include <errno.h>
+#include <time.h>
 
 #if defined(LOG_POLL) && !defined(LOGMOD)
 #define LOGMOD
@@ -28,10 +30,8 @@
 #undef LOGMOD
 #endif
 
-#include "common.h"
-#include "aux.h"
-
 #include "polling.h"
+#include "aux.h"
 #include "net.h"
 #ifdef ENABLE_DNS
 #include "dns.h"
@@ -39,7 +39,6 @@
 #ifdef WITH_IPINFO
 #include "ipinfo.h"
 #endif
-
 #include "display.h"
 #ifdef WITH_MENU
 #include "kit.h"
@@ -79,7 +78,7 @@ static const struct timespec GRACETIME = { 5, 0 };
 static bool need_dns;
 #endif
 
-#define SET_POLLFD(ndx, sock) { allfds[ndx].fd = sock; allfds[ndx].revents = 0; }
+#define SET_POLLFD(ndx, sock) { allfds[ndx].fd = (sock); allfds[ndx].revents = 0; }
 #define IN_ISSET(ndx) ((allfds[ndx].fd >= 0) && ((allfds[ndx].revents & POLLIN) == POLLIN))
 #define CLOSE_FD(ndx) { if (tcpseq) tcpseq[ndx] = -1; \
   if (allfds) { close(allfds[ndx].fd); allfds[ndx].fd = -1; allfds[ndx].revents = 0; /*summ*/ sum_sock[1]++;} \
@@ -100,7 +99,7 @@ static void set_fds(void) {
 #endif
 #endif
   // clean rest triggers
-  if ((mtrtype == IPPROTO_TCP) && (maxfd > FD_MAX))
+  if ((proto == IPPROTO_TCP) && (maxfd > FD_MAX))
     for (int i = FD_MAX; i < maxfd; i++)
       if (allfds[i].revents)
         allfds[i].revents = 0;
@@ -266,47 +265,62 @@ static bool svc(struct timespec *last, const struct timespec *interval, int *tim
   return true;
 }
 
-static bool toggle_proto(void) {
-  // icmp->udp->tcp->icmp->...
-  if        (mtrtype == IPPROTO_ICMP) {
-    if ((af == AF_INET6) && !sockets6_ready(IPPROTO_UDP))
-      return false;
-    net_set_type(IPPROTO_UDP);
-    run_opts.udp = true;
-    run_opts.tcp = false;
-  } else if (mtrtype == IPPROTO_UDP) {
-    if ((af == AF_INET6) && !sockets6_ready(IPPROTO_TCP))
-      return false;
-    net_set_type(IPPROTO_TCP);
-    run_opts.udp = false;
-    run_opts.tcp = true;
-  } else if (mtrtype == IPPROTO_TCP) {
-    if ((af == AF_INET6) && !sockets6_ready(IPPROTO_ICMP))
-      return false;
-    net_set_type(IPPROTO_ICMP);
-    run_opts.udp = false;
-    run_opts.tcp = false;
-  }
-  return true;
+static bool proto_readyset(int proto) {
+  bool ready =
+#ifdef ENABLE_IPV6
+     ((af == AF_INET6) && sock6_ready(proto)) ||
+#endif
+     (af == AF_INET);
+  if (ready)
+    net_protoset(proto);
+  return ready;
 }
+//
+static bool toggle_proto(void) {
+  bool okay = false;
+  // icmp->udp->tcp->icmp->...
+  switch (proto) {
+    case IPPROTO_ICMP:
+      okay = proto_readyset(IPPROTO_UDP);
+      if (okay) {
+        run_opts.udp = true;
+        run_opts.tcp = false;
+      }
+      break;
+    case IPPROTO_UDP:
+      okay = proto_readyset(IPPROTO_TCP);
+      if (okay) {
+        run_opts.udp = false;
+        run_opts.tcp = true;
+      }
+      break;
+    case IPPROTO_TCP:
+      okay = proto_readyset(IPPROTO_ICMP);
+      if (okay) {
+       run_opts.udp = false;
+       run_opts.tcp = false;
+      }
+      break;
+    default: break;
+  }
+  return okay;
+}
+//
 static bool toggle_udptcp(key_action_t action) {
   // udp=on/off, tcp=on/off
   run_opts.udp = run_opts.tcp = false;
-  if (mtrtype != IPPROTO_ICMP) {
-    if ((af == AF_INET6) && !sockets6_ready(IPPROTO_ICMP))
-      return false;
-    net_set_type(IPPROTO_ICMP);
-  }
+  bool okay = false;
+  if (proto != IPPROTO_ICMP)
+    okay = proto_readyset(IPPROTO_ICMP);
   else {
     bool udp = (action == ActionUDP);
-    int proto = udp ? IPPROTO_UDP : IPPROTO_TCP;
-    if ((af == AF_INET6) && !sockets6_ready(proto))
-      return false;
-    net_set_type(proto);
-    if (udp) run_opts.udp = true;
-    else     run_opts.tcp = true;
+    okay = proto_readyset(udp ? IPPROTO_UDP : IPPROTO_TCP);
+    if (okay) {
+      if (udp) run_opts.udp = true;
+      else     run_opts.tcp = true;
+    }
   }
-  return true;
+  return okay;
 }
 
 #ifdef LOGMOD
@@ -421,10 +435,10 @@ static key_action_t keyboard_events(key_action_t action) {
         ready = toggle_udptcp(action); // udp=on/off, tcp=on/off
       if (ready) {
         if      (af == AF_INET)
-          net_setsock4();
+          set_sock4();
 #ifdef ENABLE_IPV6
         else if (af == AF_INET6)
-          net_setsock6();
+          set_sock6();
 #endif
         OPT_SUM(udp);
         OPT_SUM(tcp);
@@ -467,7 +481,7 @@ static void proceed_ipinfo(void) {
 
 static inline bool tcpish(void) {
   return ((maxfd > FD_MAX) && (
-    (mtrtype == IPPROTO_TCP)
+    (proto == IPPROTO_TCP)
 #ifdef WITH_IPINFO
     || ipinfo_tcpmode
 #endif

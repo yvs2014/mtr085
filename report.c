@@ -19,16 +19,16 @@
 #include <stdio.h>
 #include <string.h>
 #include <assert.h>
+#include <time.h>
 
 #ifdef HAVE_NETDB_H
 #include <netdb.h>
 #endif
 
 #include "report.h"
-#include "common.h"
 #include "aux.h"
-#include "net.h"
 #include "nls.h"
+#include "net.h"
 
 #ifdef ENABLE_DNS
 #include "dns.h"
@@ -171,9 +171,9 @@ void backresolv_lookups(void) {
     int max = net_max();
     for (int at = net_min(); at < max; at++) {
       if (addr_exist(&CURRENT_IP(at))) {
-        dns_ptr_lookup(at, host[at].current);
+        dns_ptr_lookup(at, hop[at].current);
         for (int ndx = 0; ndx < MAXPATH; ndx++) { // multipath
-          if (ndx != host[at].current) { // not looked up yet
+          if (ndx != hop[at].current) { // not looked up yet
             if (!addr_exist(&IP_AT_NDX(at, ndx)))
               break;
             dns_ptr_lookup(at, ndx);
@@ -246,7 +246,7 @@ static void report_bodystat(int at, const t_stat *stat) {
 
 static void report_print_rest(int at, int hostlen, int infolen) {
   for (int i = 0; i < MAXPATH; i++) {
-    if (i == host[at].current)
+    if (i == hop[at].current)
       continue; // because already printed
     if (!addr_exist(&IP_AT_NDX(at, i)))
       break; // done
@@ -271,7 +271,7 @@ static void report_print_body(int at, int hostlen, int infolen) {
   if (color)
     fputs(color, stdout);
   { char info[NAMELEN] = {0};
-    ipinfo_data_fix(sizeof(info), info, at, host[at].current);
+    ipinfo_data_fix(sizeof(info), info, at, hop[at].current);
     const char *keep = color;
     if (istty && (info[0] == '?'))
       fputs(ANSI_RED, stdout);
@@ -279,7 +279,7 @@ static void report_print_body(int at, int hostlen, int infolen) {
     if (istty)
       fputs(keep ? keep : ANSI_NORM, stdout);
   }
-  print_nameaddr(at, host[at].current, hostlen);
+  print_nameaddr(at, hop[at].current, hostlen);
   // body: right
   foreach_stat(at, report_bodystat, '\n');
 #ifdef WITH_MPLS
@@ -371,7 +371,7 @@ void xml_close(void) {
     printf("%*s<" RFMT, IND_XML * 2, "", XTAG(HOP_STR));
     printf(" " RFMT "=" "%s\"%d\"%s", RKEY(PAR_TTL_STR), RVAL(at + 1));
     printf(" " RFMT "=%s\"", RKEY(HOST_STR), val);
-    print_nameaddr(at, host[at].current, -1);
+    print_nameaddr(at, hop[at].current, -1);
     printf("\"%s>\n", norm);
     foreach_stat(at, xml_statline, 0);
 #ifdef WITH_IPINFO
@@ -379,7 +379,7 @@ void xml_close(void) {
       printf("%*s<" RFMT, IND_XML * 3, "", XTAG(IPINFO_STR));
       const char *jkey[II_REC_ARR_LEN] = {0};
       const char *jval[II_REC_ARR_LEN] = {0};
-      uint n = ipinfo_datalist(II_REC_ARR_LEN, jkey, jval, at, host[at].current);
+      uint n = ipinfo_datalist(II_REC_ARR_LEN, jkey, jval, at, hop[at].current);
       const char *keep = val;
       for (uint i = 0; (i < n) && (i < II_REC_ARR_LEN) && jkey[i] && jval[i]; i++) {
         if (jval[i][0] == '?')
@@ -487,7 +487,7 @@ void json_close(bool next) {
       printf("%s%d%s", RVAL(at + 1));
       JDNI; printf(RFMTQ ": ", RKEY(_(HOST_STR)));
       printf("%s\"", val);
-      print_nameaddr(at, host[at].current, -1);
+      print_nameaddr(at, hop[at].current, -1);
       printf("\"%s", norm);
       foreach_stat(at, json_statline, 0);
 #ifdef WITH_IPINFO
@@ -495,7 +495,7 @@ void json_close(bool next) {
         JDNI; printf(RFMTQ ": [", RKEY(_(IPINFO_STR)));
         const char *jkey[II_REC_ARR_LEN] = {0};
         const char *jval[II_REC_ARR_LEN] = {0};
-        uint n = ipinfo_datalist(II_REC_ARR_LEN, jkey, jval, at, host[at].current);
+        uint n = ipinfo_datalist(II_REC_ARR_LEN, jkey, jval, at, hop[at].current);
         const char *keep = val;
         for (uint i = 0; (i < n) && (i < II_REC_ARR_LEN) && jkey[i] && jval[i]; i++) {
           if (i)
@@ -581,7 +581,7 @@ void toon_close(void) {
 #ifdef WITH_IPINFO
   if (IPINFOED) {
     const char *nkey[II_REC_ARR_LEN] = {0};
-    uint n = ipinfo_datalist(II_REC_ARR_LEN, nkey, NULL, 0, host[0].current);
+    uint n = ipinfo_datalist(II_REC_ARR_LEN, nkey, NULL, 0, hop[0].current);
     for (uint i = 0; (i < n) && (i < II_REC_ARR_LEN) && nkey[i]; i++)
       printf("%c %s" RFMTQ, DIV_TOON, TTY_BOLD, RVAL(nkey[i]));
   }
@@ -590,15 +590,15 @@ void toon_close(void) {
   for (int at = min; at < max; at++) {
     int netcolor = istty ? net_color(at) : 0;
     val = (netcolor > 0) ? ((netcolor > 1) ? TTY_RED : TTY_YELLOW) : TTY_GREEN;
-    printf("%*s%s%d%s", IND_TOON * 3, "", RVAL(at + 1)); // hop
+    printf("%*s%s%d%s", IND_TOON * 3, "", RVAL(at + 1)); // hop number
     printf("%c %s\"", DIV_TOON, val);
-    print_nameaddr(at, host[at].current, -1);  // host
+    print_nameaddr(at, hop[at].current, -1);  // hop nameaddr
     printf("\"%s", norm);
     foreach_stat(at, toon_statline, 0);
 #ifdef WITH_IPINFO
     if (IPINFOED) {
       const char *nval[II_REC_ARR_LEN] = {0};
-      uint n = ipinfo_datalist(II_REC_ARR_LEN, NULL, nval, at, host[at].current);
+      uint n = ipinfo_datalist(II_REC_ARR_LEN, NULL, nval, at, hop[at].current);
       const char *keep = val;
       for (uint i = 0; (i < n) && (i < II_REC_ARR_LEN) && nval[i]; i++) {
         if (nval[i][0] == '?')
@@ -658,13 +658,13 @@ static inline void csv_body(int at) {
   const char *val = (netcolor > 0) ? ((netcolor > 1) ? TTY_RED : TTY_YELLOW) : "";
   const char *norm = TTY_NORM;
   printf("%s%d%s%c%s\"", RVAL(at + 1), DIV_CSV, val);
-  print_nameaddr(at, host[at].current, -1);
+  print_nameaddr(at, hop[at].current, -1);
   printf("\"%s", norm);
   foreach_stat(at, csv_bodyline, DIV_CSV);
 #ifdef WITH_IPINFO
   if (IPINFOED) {
     const char *nval[II_REC_ARR_LEN] = {0};
-    uint n = ipinfo_datalist(II_REC_ARR_LEN, NULL, nval, at, host[at].current);
+    uint n = ipinfo_datalist(II_REC_ARR_LEN, NULL, nval, at, hop[at].current);
     const char *keep = val;
     for (uint i = 0; (i < n) && (i < II_REC_ARR_LEN) && nval[i]; i++) {
       if (i)
@@ -691,7 +691,7 @@ void csv_close(void) {
 #ifdef WITH_IPINFO
   if (IPINFOED) {
     const char *nkey[II_REC_ARR_LEN] = {0};
-    uint n = ipinfo_datalist(II_REC_ARR_LEN, nkey, NULL, 0, host[0].current);
+    uint n = ipinfo_datalist(II_REC_ARR_LEN, nkey, NULL, 0, hop[0].current);
     for (uint i = 0; (i < n) && (i < II_REC_ARR_LEN) && nkey[i]; i++)
       printf("%c%s" RFMTQ, DIV_CSV, TTY_BOLD, RVAL(nkey[i]));
   }

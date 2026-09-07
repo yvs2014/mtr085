@@ -25,7 +25,13 @@ config.set_quoted('VERSION', '.'.join(version))
 
 # options
 optlist = []
-cap        = get_option('CAP')
+cap  = false
+sock = get_option('SOCKET')
+if   sock == 'raw'
+  raw = true
+elif sock == 'user'
+  raw = false
+endif
 tui        = get_option('TUI')
 color      = get_option('COLOR')
 mouse      = get_option('MOUSE')
@@ -62,7 +68,6 @@ headers = ['netdb.h', 'netinet/in.h', 'sys/param.h']
 # sources
 srcn  = [name]
 srcn += 'aux'
-srcn += 'net'
 srcn += 'polling'
 srcn += 'display'
 srcn += 'report'
@@ -71,10 +76,8 @@ incs  = []
 
 # probes
 fndesc = {
-  'pow':    {'hdr': 'math.h',       'libs': ['m']},
   'warnx':  {'hdr': 'err.h',        'libs': ['bsd']},
   'socket': {'hdr': 'sys/socket.h', 'libs': ['socket', 'network']},
-  'arc4random_uniform': {'hdr': 'stdlib.h', 'req': false, 'libhdr': true},
   'localtime_r':        {'hdr': 'time.h',   'req': false},
   'memmem':             {'hdr': 'string.h', 'req': false},
   'getprogname':        {'hdr': 'stdlib.h', 'req': false},
@@ -83,19 +86,10 @@ fndesc = {
 
 ## optional fetaures
 
-# linux capabilities
-if cap
-  lib = 'cap'
-  libcap = dependency('lib' + lib, required: false)
-  if not libcap.found()
-    libcap = cc.find_library(lib)
-  endif
-  deps += libcap
-  config.set('LIBCAP', 1)
-  optlist += '+CAP'
-else
-  optlist += '-CAP'
-endif
+# main net part
+netdir = 'net'
+incs += netdir
+subdir(netdir)
 
 # TUI
 if tui
@@ -379,12 +373,16 @@ endforeach
 #
 
 if meson.version().version_compare('>=0.53')
-  sum_ops = {'CAP': cap, 'TUI': tui, 'COLOR': color}
+  sum_ops = {'SOCKET': sock}
+  if raw
+    sum_ops += {'CAP': cap}
+  endif
   if tui
     sum_ops += {'MOUSE': mouse, 'MENU': menu}
   endif
-  sum_ops += {'UNICODE': unicode, 'NLS': nls, 'DNS': dns,
-    'IDN': idn, 'IPINFO': ipinfo, 'IPV6': ipv6, 'MPLS': mpls}
+  sum_ops += {'TUI': tui, 'COLOR': color, 'UNICODE': unicode,
+    'NLS': nls, 'DNS': dns, 'IDN': idn, 'IPINFO': ipinfo,
+    'IPV6': ipv6, 'MPLS': mpls}
   summary(sum_ops, bool_yn: true)
 endif
 
@@ -418,4 +416,9 @@ if manexcl.length() > 0
 endif
 #
 install_man(manre)
+
+# warn about 'user-socket support' state (wip)
+if not raw
+  warning('user-socket support is not completed yet (work-in-progress)')
+endif
 

@@ -24,6 +24,8 @@ m4_ifdef([AX_CHECK_COMPILE_FLAG],
 	)]
 )
 
+AC_CANONICAL_HOST
+
 AC_CHECK_HEADERS([sys/types.h], [
 	AC_CHECK_TYPE([uint],  AC_DEFINE([HAVE_UINT],  [1], [type 'uint' exists] ),, [#include <sys/types.h>])
 	AC_CHECK_TYPE([ulong], AC_DEFINE([HAVE_ULONG], [1], [type 'ulong' exists]),, [#include <sys/types.h>])
@@ -54,13 +56,10 @@ AM_CONDITIONAL([TUI], [test "x$tui" = "xyes"])
 AC_ARG_WITH(mouse,
 	AS_HELP_STRING([--without-mouse], [without mouse support (TUI mode)]),
 	[mouse=${withval}], [mouse=yes])
-mousemask="no"
 AC_ARG_WITH(menu,
 	AS_HELP_STRING([--with-menu], [with menu library (TUI mode)]),
 	[menu=${withval}], [menu=no])
-newmenu="no"
 
-unicode="no"
 AS_IF([test "x$tui" = "xyes"], [
 	AC_DEFINE(TUIMODE, 1, [Build with TUI (curses library)])
 	AC_CHECK_HEADERS([ncursesw/ncurses.h ncursesw/curses.h ncurses/ncurses.h ncurses/curses.h ncurses.h curses.h], break)
@@ -75,13 +74,34 @@ AS_IF([test "x$tui" = "xyes"], [
 			mousemask="yes"
 		])
 	])
+	_sfx=
+	AC_CHECK_LIB([ncursesw], [initscr], [
+			AC_DEFINE([TUIKIND], ["ncursesw"], [Kind of TUI lib])
+			_sfx="w"
+	], [
+	AC_CHECK_LIB([ncurses],  [initscr], AC_DEFINE([TUIKIND], ["ncurses"],  [Kind of TUI lib]), [
+	AC_CHECK_LIB([curses],   [initscr], AC_DEFINE([TUIKIND], ["curses"],   [Kind of TUI lib]), [
+	])
+	])
+	])
 	AS_IF([test "x$menu" = "xyes"], [
-		menu="no"
-		AC_MSG_WARN([menu support is not ready yet])
-#		AC_SEARCH_LIBS([new_menu], ["menu"], [
-#			AC_DEFINE([WITH_MENU], [1], [Define this if curses has menu library])
-#			newmenu="yes"
-#		])
+		AC_SEARCH_LIBS([new_menu], [menu$_sfx],
+			AC_DEFINE([WITH_MENU], [1], [Define this if curses has menu library]),
+			AC_MSG_ERROR([menu library is not found])
+		)
+		AC_CHECK_HEADERS([ncursesw/menu.h ncurses/menu.h menu.h])
+		#
+		AC_SEARCH_LIBS([new_form], [form$_sfx],
+			AC_DEFINE([WITH_FORM], [1], [Define this if curses has form library]),
+			AC_MSG_ERROR([form library is not found])
+		)
+		AC_CHECK_HEADERS([ncursesw/form.h ncurses/form.h form.h])
+		#
+		AC_SEARCH_LIBS([new_panel], [panel$_sfx],
+			AC_DEFINE([WITH_PANEL], [1], [Define this if curses has panel library]),
+			AC_MSG_ERROR([panel library is not found])
+		)
+		AC_CHECK_HEADERS([ncursesw/panel.h ncurses/panel.h panel.h])
 	])
 	AC_ARG_WITH(unicode,
 		AS_HELP_STRING([--without-unicode], [without Unicode histogram]),
@@ -93,13 +113,8 @@ AS_IF([test "x$tui" = "xyes"], [
 			unicode="yes"],
 		AC_MSG_ERROR([Wide-character curses library not found]))
 	])
-	AC_CHECK_LIB([ncursesw], [initscr], AC_DEFINE([TUIKIND], ["ncursesw"], [Kind of TUI lib]), [
-	AC_CHECK_LIB([ncurses],  [initscr], AC_DEFINE([TUIKIND], ["ncurses"],  [Kind of TUI lib]), [
-	AC_CHECK_LIB([curses],   [initscr], AC_DEFINE([TUIKIND], ["curses"],   [Kind of TUI lib]), [
-	])
-	])
-	])
 ])
+AM_CONDITIONAL([MENU],  [test "x$menu"      = "xyes"])
 AM_CONDITIONAL([MOUSE], [test "x$mousemask" = "xyes"])
 
 AC_ARG_ENABLE([nls],
@@ -118,7 +133,6 @@ AC_ARG_ENABLE([dns],
 	[dns=${enableval}], [dns=yes])
 AM_CONDITIONAL([DNS], [test "x$dns" = "xyes"])
 
-AC_CANONICAL_HOST
 AS_CASE([$host_os], [darwin*], [macos=yes])
 AM_CONDITIONAL([EXTRESOLV], [test "x$macos" = "xyes"])
 
@@ -142,14 +156,24 @@ AC_ARG_WITH([libasan],
 	[libasan="${withval}"], [libasan=no])
 AM_CONDITIONAL([LIBASAN], [test "x$libasan" = "xyes"])
 
-AC_ARG_WITH(libcap,
-	AS_HELP_STRING([--without-libcap], [without Linux capabilities]),
-	[libcap=${withval}], [libcap=yes])
-AS_IF([test "x$libcap" = "xyes"], [
-	AC_SEARCH_LIBS([cap_set_flag], [cap],
-		AC_DEFINE(LIBCAP, 1, [Build with linux capabilities]),
-		AC_MSG_ERROR(Linux capability library not found))
-	])
+socket="raw"
+AC_ARG_WITH([socket], AS_HELP_STRING([--with-socket=raw], [use raw/user sockets (default: raw)]), [
+#	AC_DEFINE(TUIMODE, 1, [Build with TUI (curses library)])
+	AS_IF([test "x$withval" != "xraw" -a "x$withval" != "xuser"],
+		AC_MSG_ERROR([--with-socket requires either 'raw' or 'user' argument (not $withval)]))
+	socket="$withval"
+], [socket="raw"])
+AS_IF([test "x$socket" = "xraw"], [
+	AC_DEFINE([USE_RAW], [1], [Define this for raw sockets instead of user ones])
+	AC_SEARCH_LIBS([cap_set_flag], [cap], [
+			AC_DEFINE(LIBCAP, 1, [Build with linux capabilities])
+			cap=yes
+		],
+		[AS_CASE([$host_os], [linux*], [AC_MSG_ERROR(Linux capability library not found)])]
+	)
+])
+AC_MSG_NOTICE([socket type: $socket])
+AM_CONDITIONAL([RAW], [test "x$socket" = "xraw"])
 
 AC_ARG_ENABLE([suid_last_resort],
 	AS_HELP_STRING([--enable-suid-last-resort], [install with suid bit unless setcap is present]),
@@ -204,9 +228,7 @@ AC_ARG_WITH([output_xml],
 AM_CONDITIONAL([OUTPUT_XML], [test "x$output_xml" = "xyes"])
 AS_IF([test "x$output_xml" != "xno"], [AC_DEFINE([OUTPUT_FORMAT_XML], 1, [Support XML output format])])
 #
-AM_CONDITIONAL([OUTPUTFMT], [ "x$output_txt" = "xyes" \
-	-o "x$output_csv"  = "xyes" -o "x$output_json" = "xyes" \
-	-o "x$output_toon" = "xyes" -o "x$output_xml"  = "xyes"])
+AM_CONDITIONAL([OUTPUTFMT], [test "x$output_txt"  = "xyes" -o "x$output_csv"  = "xyes" -o "x$output_json" = "xyes" -o "x$output_toon" = "xyes" -o "x$output_xml"  = "xyes"])
 
 # Add some development options:
 #   syslog debug: poll, net, dns, ipinfo
@@ -329,18 +351,23 @@ m4_ifdef([AX_CHECK_COMPILE_FLAG], [
 ])
 
 _option_list=""
-AS_IF([test "x$libcap"    = "xyes"],
-	[_option_list="$_option_list +CAP"],
-	[_option_list="$_option_list -CAP"])
-AS_IF([test "x$tui"       = "xyes"],
-	[_option_list="$_option_list +TUI"],
-	[_option_list="$_option_list -TUI"])
-AS_IF([test "x$tui"       = "xyes" -a "x$mousemask" = "xyes"],
-	[_option_list="$_option_list +MOUSE"],
-	[_option_list="$_option_list -MOUSE"])
-AS_IF([test "x$tui"       = "xyes" -a "x$newmenu" = "xyes"],
-	[_option_list="$_option_list +MENU"],
-	[_option_list="$_option_list -MENU"])
+AS_IF([test "x$socket"    = "xraw"], [
+	[_option_list="$_option_list +RAW"]
+	AS_IF([test "x$cap"      = "xyes"],
+		[_option_list="$_option_list +CAP"],
+		[_option_list="$_option_list -CAP"])], [
+	[_option_list="$_option_list -RAW"]])
+AS_IF([test "x$tui"       = "xyes"], [
+	[_option_list="$_option_list +TUI"]
+	AS_IF([test "x$mousemask" = "xyes"],
+		[_option_list="$_option_list +MOUSE"],
+		[_option_list="$_option_list -MOUSE"])
+	AS_IF([test "x$menu"      = "xyes"],
+		[_option_list="$_option_list +MENU"],
+		[_option_list="$_option_list -MENU"])
+	], [
+	[_option_list="$_option_list -TUI"]
+])
 AS_IF([test "x$unicode"   = "xyes"],
 	[_option_list="$_option_list +UNICODE"],
 	[_option_list="$_option_list -UNICODE"])

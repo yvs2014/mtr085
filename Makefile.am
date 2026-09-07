@@ -19,14 +19,24 @@ endif
 install-exec-hook:
 	@if test `id -u` -eq 0; then $(POSTINST_HOOK); fi
 
+AM_CPPFLAGS = -I$(srcdir)
+
+netdir = net
 mtr_SOURCES = mtr.c common.h \
               aux.c aux.h \
-              net.c net.h \
               polling.c polling.h \
               display.c display.h \
-              report.c report.h
+              report.c report.h \
+              $(netdir)/net.c $(netdir)/net.h \
+              $(netdir)/gen.c $(netdir)/gen.h
+AM_CPPFLAGS += -I$(srcdir)/$(netdir)
 
-AM_CPPFLAGS =
+if RAW
+mtr_SOURCES += $(netdir)/raw.c $(netdir)/raw.h
+else
+mtr_SOURCES += $(netdir)/user.c $(netdir)/user.h
+endif
+
 mtr_LDADD = $(RESOLV_LIBS)
 
 if DNS
@@ -38,7 +48,10 @@ tuidir = tui
 mtr_SOURCES += $(tuidir)/tui.c    $(tuidir)/tui.h
 mtr_SOURCES += $(tuidir)/chart.c  $(tuidir)/chart.h
 mtr_SOURCES += $(tuidir)/action.c $(tuidir)/action.h
-AM_CPPFLAGS += -I$(srcdir) -I$(srcdir)/$(tuidir)
+if MENU
+mtr_SOURCES += $(tuidir)/kit.c $(tuidir)/kit.h
+endif
+AM_CPPFLAGS += -I$(srcdir)/$(tuidir)
 endif
 
 if IPINFO

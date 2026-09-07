@@ -1,4 +1,7 @@
-option('CAP',       type: 'boolean', value: true,  description: 'Linux capabilities')
+# work-in-progress: user sockets
+option('SOCKET',    type: 'combo', choices: ['raw', 'user'], value: 'raw',
+  description: 'RAW or USER sockets')
+#
 option('TUI',       type: 'boolean', value: true,  description: 'TUI: [n]curses')
 option('COLOR',     type: 'boolean', value: true,  description: 'Colored output')
 option('MOUSE',     type: 'boolean', value: true,  description: 'Mouse (TUI required)')

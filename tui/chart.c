@@ -124,7 +124,7 @@ static void scale_map(uint len, symb_item_s map[len], uint at) {
   uint max = net_max();
   for (; at < max; at++) {
     for (int i = 0; i < SAVED_PINGS; i++) {
-      int saved = host[at].saved[i];
+      int saved = hop[at].saved[i];
       if (saved >= 0) {
         if (saved > maxval)
           maxval = saved;

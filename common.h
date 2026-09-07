@@ -2,7 +2,6 @@
 #define COMMON_H
 
 #include <stdbool.h>
-#include <stdlib.h>
 #include <err.h>
 #include <sys/time.h>
 #include <sys/types.h>
@@ -56,7 +55,7 @@
 #endif
 
 #ifndef GITREV
-#define GITREV "319"
+#define GITREV "320"
 #endif
 
 #ifndef HAVE_UINT
@@ -363,13 +362,9 @@ typedef union opt_sum_u {
 
 // externs
 extern const char *mtrname;
-extern int mtrtype;        // default packet type
-
 extern display_mode_t display_mode;
 
 extern int sum_sock[];     // summary open()/close() calls for sockets
-extern char strerr_txt[];  // error text (any target)
-extern char tgterr_txt[];  // error text (per target)
 
 extern uint16_t pid16;     // 16 bits of process ID
 #if defined(OUTPUT_FORMAT_TXT) || defined(OUTPUT_FORMAT_CSV) || defined(OUTPUT_FORMAT_JSON) || defined(OUTPUT_FORMAT_TOON) || defined(OUTPUT_FORMAT_XML)

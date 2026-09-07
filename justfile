@@ -18,6 +18,7 @@ alias cmake-clean := clean-cmake
 alias make-clean  := clean-make
 #
 alias menu := build-menu
+alias user := build-user
 
 ##
 ## (1) preferable
@@ -34,6 +35,11 @@ clean-meson:
 build-menu:
 	rm -rf _build
 	meson setup _build -DMENU=true
+	meson compile -C _build
+
+build-user:
+	rm -rf _build
+	meson setup _build -DSOCKET=user
 	meson compile -C _build
 
 ##

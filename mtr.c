@@ -25,6 +25,7 @@
 #endif
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
 #include <strings.h>
@@ -211,7 +212,6 @@ enum { REPORT_PINGS = 100, TCPSYN_TOUT_MAX = 60 };
 //// global vars
 const char *mtrname;
 static char *mtrname_dup;
-int mtrtype = IPPROTO_ICMP; // ICMP as default packet type
 uint16_t pid16;
 #ifdef OUTPUT_FORMAT
 uint mtr_optc;
@@ -800,7 +800,7 @@ static void short_set(char opt) {
       bool udp = (opt == OPT_UDP);
       if ((udp && ini_opts.tcp) || (!udp && ini_opts.udp))
         ERRXT(EINVAL, "-%c -%c: %s", ini_opts.udp ? OPT_UDP: OPT_TCP, opt, MUTEXCL_ERR);
-      net_set_type(udp ? IPPROTO_UDP : IPPROTO_TCP);
+      net_protoset(udp ? IPPROTO_UDP : IPPROTO_TCP);
       if (udp)
         ini_opts.udp = true;
       else
@@ -1176,7 +1176,7 @@ static int resolv_n_ping(int port, bool fin) {
     }
   };
   try_to_resolv(&rr);
-  if (rr.rc && ((mtrtype == IPPROTO_TCP) || (mtrtype == IPPROTO_UDP)))
+  if (rr.rc && ((proto == IPPROTO_TCP) || (proto == IPPROTO_UDP)))
     resolv_with_port(&rr);
   if (rr.res && !rr.rc)
     rr.rc = main_loop(rr.res, fin);
@@ -1187,7 +1187,7 @@ static int resolv_n_ping(int port, bool fin) {
 
 int main(int argc, char **argv) {
   // get raw sockets
-  if (!net_open())
+  if (!open_sock46())
     errx(EXIT_FAILURE, "Unable to get raw sockets");
   // drop permissions if that's set
   if (setgid(getgid()) || setuid(getuid()))

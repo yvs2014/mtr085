@@ -17,11 +17,14 @@
 */
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
 #include <strings.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <time.h>
+#include <arpa/inet.h>
 
 #ifdef HAVE_NETDB_H
   #include <netdb.h>
@@ -1127,9 +1130,9 @@ void query_ipinfo(void) {
     int max = net_max();
     for (int at = net_min(); at < max; at++) {
       if (addr_exist(&CURRENT_IP(at))) {
-        query_iiaddr(at, host[at].current);
+        query_iiaddr(at, hop[at].current);
         for (int i = 0; i < MAXPATH; i++) {
-          if ((i != host[at].current) // already queried
+          if ((i != hop[at].current) // already queried
               && addr_exist(&IP_AT_NDX(at, i)))
             query_iiaddr(at, i);
         }

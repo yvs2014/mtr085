@@ -18,6 +18,7 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <time.h>
 
 #if defined(LOG_TUI) && !defined(LOGMOD)
 #define LOGMOD
@@ -126,7 +127,7 @@ static void printw_addr(WINDOW *win, int at, int ndx) {
       waddstr(win, info);
   }
 #endif
-  bool down = !host[at].up;
+  bool down = !hop[at].up;
   if (down)
     wattron(win, A_BOLD);
 #ifdef ENABLE_DNS
@@ -149,8 +150,8 @@ static void printw_addr(WINDOW *win, int at, int ndx) {
 
 static void seal_n_bell(int at, int max) {
   const int bell_at = SAVED_PINGS - 3; // wait at least -i interval for reliability
-  if (host[at].saved[bell_at] == CT_UNKN) {
-    host[at].saved[bell_at] = CT_SEAL; // sealed
+  if (hop[at].saved[bell_at] == CT_UNKN) {
+    hop[at].saved[bell_at] = CT_SEAL; // sealed
     if (run_opts.bell && (at != (max - 1)))
       return;
     if (run_opts.audible)
@@ -160,6 +161,11 @@ static void seal_n_bell(int at, int max) {
   }
 }
 
+static const char* settled_elem(int at, char key) {
+  // if there's no replies, show only packet counters (Lost-Drop-Recv-Sent)
+  return (hop[at].recv || strchr(SETTLED_ELEMS, key)) ? net_elem(at, key) : NULL;
+}
+
 static int print_stat(WINDOW *win, int at, int y, int x, int max) NONNULL(1);
 static int print_stat(WINDOW *win, int at, int y, int x, int max) { // statistics
   if (wmove(win, y, x) == ERR) return ERR;
@@ -167,7 +173,7 @@ static int print_stat(WINDOW *win, int at, int y, int x, int max) { // statistic
     const t_stat *stat = active_stats(i);
     if (!stat)
       break;
-    const char *str = net_settled_elem(at, stat->key);
+    const char *str = settled_elem(at, stat->key);
     wprintw(win, "%*s", stat->min, str ? str : "");
   }
   if (run_opts.audible || run_opts.visible)
@@ -178,7 +184,7 @@ static int print_stat(WINDOW *win, int at, int y, int x, int max) { // statistic
 static void print_addr_extra(WINDOW *win, int at) NONNULL(1);
 static void print_addr_extra(WINDOW *win, int at) { // multipath + mpls
   for (int ndx = 0; ndx < MAXPATH; ndx++) { // multipath
-    if (ndx != host[at].current) { // not printed yet
+    if (ndx != hop[at].current) { // not printed yet
       if (!addr_exist(&IP_AT_NDX(at, ndx)))
         break;
       wprintw(win, "%*s", INDENT_NUMB, "");
@@ -204,7 +210,7 @@ static void print_hops(WINDOW *win, int statx) {
     wprintw(win, AT_FMT, at + 1);
     waddch(win, ' ');
     if (addr_exist(&CURRENT_IP(at))) {
-      printw_addr(win, at, host[at].current);
+      printw_addr(win, at, hop[at].current);
       if (print_stat(win, at, y, statx, max) == ERR)
         break;
 #ifdef WITH_MPLS
@@ -228,18 +234,18 @@ static bool histoaddr(WINDOW *win, int at) {
   t_ipaddr *addr = &CURRENT_IP(at);
   bool exist = addr_exist(addr);
   if (exist) {
-    if (!host[at].up)
+    if (!hop[at].up)
       wattron(win, A_BOLD);
 #ifdef WITH_IPINFO
     if (IPINFOED) {
       char info[NAMELEN] = {0};
-      ipinfo_data_fix(sizeof(info), info, at, host[at].current);
+      ipinfo_data_fix(sizeof(info), info, at, hop[at].current);
       if (info[0])
         waddstr(win, info);
     }
 #endif
 #ifdef ENABLE_DNS
-    const char *name = dns_ptr_lookup(at, host[at].current);
+    const char *name = dns_ptr_lookup(at, hop[at].current);
     if (name)
       waddstr(win, name);
     else {
@@ -250,7 +256,7 @@ static bool histoaddr(WINDOW *win, int at) {
     { char str[MAX_ADDRSTRLEN] = {0};
       waddstr(win, addr2str(addr, sizeof(str), str)); }
 #endif
-    if (!host[at].up)
+    if (!hop[at].up)
       wattroff(win, A_BOLD);
   } else
     waddstr(win, UNKN_ITEM);
@@ -263,7 +269,7 @@ static void histochar(WINDOW *win, int at, int indent) {
   if (width > 0) {
     if (width > SAVED_PINGS)
       width = SAVED_PINGS;
-    chart_area(win, width, &host[at].saved[SAVED_PINGS - width]);
+    chart_area(win, width, &hop[at].saved[SAVED_PINGS - width]);
   }
 }
 

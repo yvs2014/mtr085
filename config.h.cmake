@@ -6,6 +6,9 @@
 #cmakedefine GITREV "@GITREV@"
 #cmakedefine BUILD_OPTIONS "@BUILD_OPTIONS@"
 
+/* Socket type: raw or user */
+#cmakedefine USE_RAW
+
 /* Linux capabilities */
 #cmakedefine LIBCAP
 
@@ -25,6 +28,12 @@
 #cmakedefine HAVE_NCURSESW_MENU_H
 #cmakedefine HAVE_NCURSES_MENU_H
 #cmakedefine HAVE_MENU_H
+#cmakedefine HAVE_NCURSESW_FORM_H
+#cmakedefine HAVE_NCURSES_FORM_H
+#cmakedefine HAVE_FORM_H
+#cmakedefine HAVE_NCURSESW_PANEL_H
+#cmakedefine HAVE_NCURSES_PANEL_H
+#cmakedefine HAVE_PANEL_H
 
 /* Unicode related */
 #cmakedefine WITH_UNICODE
