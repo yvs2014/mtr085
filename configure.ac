@@ -89,6 +89,8 @@ AS_IF([test "x$tui" = "xyes"], [
 			AC_DEFINE([WITH_MENU], [1], [Define this if curses has menu library]),
 			AC_MSG_ERROR([menu library is not found])
 		)
+		AC_SEARCH_LIBS([set_menu_spacing], [menu$_sfx], AC_DEFINE([HAVE_SET_MENU_SPACING], [1],
+			[Define this if menu library has set_menu_spacing fumction]))
 		AC_CHECK_HEADERS([ncursesw/menu.h ncurses/menu.h menu.h])
 		#
 		AC_SEARCH_LIBS([new_form], [form$_sfx],

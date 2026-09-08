@@ -2,7 +2,7 @@
 #define CHART_H
 
 #include "common.h"
-#include "inc.h"
+#include "inc.h" // IWYU pragma: keep
 
 short color_charts(void);
 void prepare_charts(void);

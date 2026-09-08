@@ -3,7 +3,7 @@ project('mtr085', 'c',
 #    'c_std=gnu99,c99',
 #    'b_sanitize=address,undefined',
     'warning_level=3' ],
-  meson_version: '>= 0.49.2', # 0.49.2 in deb10
+  meson_version: '>= 0.50', # deb10:0.49.2
   license: 'GPL-2.0-or-later',
   version: '.'.join(['0', '85', find_program('git', required: false).found() ?
     run_command('git', 'rev-list', '--count', '97af563..HEAD', check: false).stdout().strip() : ''
@@ -27,6 +27,7 @@ config.set_quoted('VERSION', '.'.join(version))
 optlist = []
 cap  = false
 sock = get_option('SOCKET')
+# TODO: add 'auto' (on Linux it is 'user', otherwise 'raw')
 if   sock == 'raw'
   raw = true
 elif sock == 'user'

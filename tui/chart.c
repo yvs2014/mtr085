@@ -7,25 +7,6 @@
 #undef LOGMOD
 #endif
 
-#ifdef WITH_UNICODE
-#  ifndef _XOPEN_SOURCE_EXTENDED
-#    define _XOPEN_SOURCE_EXTENDED
-#  endif
-//#  ifdef HAVE_WCHAR_H
-//#    include <wchar.h>
-//#  endif
-#  ifdef __NetBSD__
-#    define CCHAR_attr attributes
-#    define CCHAR_chars vals
-//#  elif defined(OPENSOLARIS_CURSES)
-//#    define CCHAR_attr _at
-//#    define CCHAR_chars _wc
-#  else
-#    define CCHAR_attr attr
-#    define CCHAR_chars chars
-#  endif
-#endif // WITH_UNICODE
-
 #include "chart.h"
 #include "nls.h"
 #include "net.h"

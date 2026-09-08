@@ -2,7 +2,7 @@
 #define KIT_H
 
 #include "common.h"
-#include "inc.h"
+#include "inc.h" // IWYU pragma: keep
 
 void free_menukit(void);
 void menu_handler(WINDOW *_win UNUSED);

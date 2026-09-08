@@ -2,7 +2,7 @@
 #define ACTION_H
 
 #include "common.h"
-#include "inc.h"
+#include "inc.h" // IWYU pragma: keep
 
 key_action_t tui_actionw(WINDOW *win, void (*reset)(void)) NONNULL(1);
 void status_no_crd(WINDOW *win, uint len, char buff[len]) NONNULL(1, 3);

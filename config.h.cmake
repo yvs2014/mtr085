@@ -34,6 +34,7 @@
 #cmakedefine HAVE_NCURSESW_PANEL_H
 #cmakedefine HAVE_NCURSES_PANEL_H
 #cmakedefine HAVE_PANEL_H
+#cmakedefine HAVE_SET_MENU_SPACING
 
 /* Unicode related */
 #cmakedefine WITH_UNICODE

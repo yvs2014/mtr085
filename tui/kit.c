@@ -16,6 +16,10 @@
 #include "nls.h"
 #include "net.h"
 
+#ifndef NCURSES_VERSION
+#error Non-ncurses menus are not supported yet
+#endif
+
 #define ROUNDED_CORNERS    true
 #define ON_MOUSE_DBL_CLICK C_SPACE
 
@@ -84,6 +88,13 @@ typedef struct kit_s {
 } kit_s;
 
 static kit_s kit = {.spacing = 1/*default*/, .desc_width = 10/*looks enough*/};
+
+typedef struct toogle_t {int len; char *on, *off;} toogle_t;
+static const toogle_t a_toogle = {.len = 3, .on = "[*]", .off = "[ ]"};
+#if defined(TUIWIDE) && defined(WITH_UNICODE)
+static const toogle_t u_toogle =
+  {.len = 1, .on = "✓"/*"✔"*//*"🗹 "*//*"☑"*/, .off = "◻"/*"☐"*/};
+#endif
 
 #define LOGFNFAIL(fn)     LOGMSG("%s() failed" ,    (fn))
 #define LOGECFAIL(fn, ec) LOGMSG("%s() failed: %d/%d", (fn), (ec), ((ec) == E_SYSTEM_ERROR) ? errno : 0)
@@ -203,22 +214,18 @@ static int fill_itemname(const menuitem_s *mi, const char *name,
   return rc;
 }
 
-static int fill_itemdesc(menuitem_s *mi) NONNULL(1);
-static int fill_itemdesc(menuitem_s *mi) {
+static int fill_itemdesc(menuitem_s *mi, const toogle_t *toogle) NONNULL(1, 2);
+static int fill_itemdesc(menuitem_s *mi, const toogle_t *toogle) {
   int rc = 0;
   switch (mi->type) {
     case MI_TOOGLE: {
       const bool *flag = mi->val.flag;
       if (flag) {
-        const char *toggle =
-#if defined(TUIWIDE) && defined(WITH_UNICODE)
-          utf_compat ? (*flag ? /*"☑"*//*"🗹 "*//*"✔"*/"✓" : /*"☐"*/"◻") :
-#endif
-                       (*flag ? "+" : "-");
-        rc = (kit.desc_width > 0) ?
-          snprinte(mi->desc, sizeof(mi->desc), // utf8-compat padding
-            "%*s%s ", kit.desc_width - 1/*toggle_char*/, "", toggle) :
-          snprinte(mi->desc, sizeof(mi->desc), "%s ", toggle);
+        const char *icon = *flag ? toogle->on : toogle->off;
+        int blank = (kit.desc_width > 0) ? (kit.desc_width - toogle->len) : 0;
+        rc = (blank > 0) ? // utf8-compat padding
+          snprinte(mi->desc, sizeof(mi->desc), "%*s%s ", blank, "", icon) :
+          snprinte(mi->desc, sizeof(mi->desc), "%s ", icon);
       }
     } break;
     case MI_INTFORM: {
@@ -369,6 +376,11 @@ static void init_menuitems(void) {
   //
   menuitem_s *mi = menuitem;
   const optname_s *opt = optname;
+  const toogle_t *toogle =
+#if defined(TUIWIDE) && defined(WITH_UNICODE)
+    utf_compat ? &u_toogle :
+#endif
+    &a_toogle;
   for (uint i = 0; (i < ARRAY_LEN(optname)) && opt->name; i++, opt++, mi++) {
     int pad = // utf8-compat padding
       (opt->len > 0) ? (kit.maxnamelen - opt->len) : 0;
@@ -376,7 +388,7 @@ static void init_menuitems(void) {
       (fill_itemname(mi, opt->name, sizeof(mi->name), mi->name, pad) > 0) && mi->name[0]
       ? mi->name : opt->name;
     const char *desc =
-      (fill_itemdesc(mi) > 0) && mi->desc[0]
+      (fill_itemdesc(mi, toogle) > 0) && mi->desc[0]
       ? mi->desc : NULL;
     ITEM *item = new_item(name, desc);
     if (item) {
@@ -417,7 +429,9 @@ static void prepare_menu(void) {
       if (ec != E_OK)
         LOGECFAIL("set_menu_grey", ec); }
   }
+#ifdef HAVE_MENU_SPACING
   menu_spacing(kit.menu, &kit.spacing, NULL, NULL);
+#endif
   kit.frame =
 #ifdef WITH_UNICODE
     utf_compat ? 1 :

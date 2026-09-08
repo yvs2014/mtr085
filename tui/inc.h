@@ -1,6 +1,26 @@
 #ifndef TUI_INC_H
 #define TUI_INC_H
 
+#if !defined(_XOPEN_SOURCE_EXTENDED) && !(defined(_XOPEN_SOURCE) && (_XOPEN_SOURCE - 0 >= 500))
+#  define _XOPEN_SOURCE_EXTENDED
+#endif
+
+#ifdef WITH_UNICODE
+//#  ifdef HAVE_WCHAR_H
+//#    include <wchar.h>
+//#  endif
+#  ifdef __NetBSD__
+#    define CCHAR_attr attributes
+#    define CCHAR_chars vals
+//#  elif defined(OPENSOLARIS_CURSES)
+//#    define CCHAR_attr _at
+//#    define CCHAR_chars _wc
+#  else
+#    define CCHAR_attr attr
+#    define CCHAR_chars chars
+#  endif
+#endif // WITH_UNICODE
+
 #if   defined(HAVE_NCURSESW_NCURSES_H)
 #  include <ncursesw/ncurses.h>
 #elif defined(HAVE_NCURSESW_CURSES_H)

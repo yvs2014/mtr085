@@ -5,7 +5,7 @@ _lib = 'curses'
 _prfx = ['n', '']
 _sfx  = ['w', '']
 tuisfx = ''
-libtui = dependency('', required: false)
+libtui = []
 foreach _p: _prfx
   foreach _s: _sfx
     tuisfx = _s
@@ -40,36 +40,61 @@ endif
 _dirs  = _wide ? ['ncursesw'] : []
 _dirs += ['ncurses', '']
 _prfx  = ['n', '']
+_tuih  = []
+_ncinc = ''
 foreach _d: _dirs
   foreach _p: _prfx
-    headers += _d / (_p + 'curses.h')
+    _h     = _d / (_p + 'curses.h')
+    _tuih += _h
+    if menu and cc.has_header(_h)
+      _ncinc += '#include <' + _h + '>\n'
+    endif
   endforeach
 endforeach
+headers += _tuih
 
+_tfns = ['curses_version', 'use_default_colors']
+
+if mouse
+  _tfns += 'mousemask'
+endif
+
+libtuiextra = []
+_tfnse = []
 if menu
+  ncurses_version = cc.get_define('NCURSES_VERSION', args: _ARGS, prefix: _ncinc)
+  if ncurses_version == ''
+    error('Non-ncurses menus are not supported yet')
+  endif
   _name = ['menu', 'form', 'panel']
   foreach _n: _name
     _lib = _n  + tuisfx
-    _dep = dependency(_lib)
+    _dep = dependency(_lib, required: false)
     if not _dep.found()
       _dep = cc.find_library(_lib)
     endif
     assert(_dep.found(), 'no ' + (_wide ? 'wide ' : '') + _lib + ' library found')
-    deps += _dep
+    libtuiextra += _dep
     foreach _d: _dirs
       headers += _d / _n + '.h'
     endforeach
   endforeach
+  _tfnse += 'menu_spacing'
+  deps += libtuiextra
 endif
 
-_fns = ['curses_version', 'use_default_colors']
-if mouse
-  _fns += 'mousemask'
-endif
-foreach _f: _fns
-  if cc.has_function(_f, dependencies: libtui)
-    config.set('HAVE_' + _f.underscorify().to_upper(), 1)
-  endif
+_dfns = [
+  {'dep': libtui,      'fns': _tfns},
+  {'dep': libtuiextra, 'fns': _tfnse},
+]
+foreach _d: _dfns
+  _dep = 'dep' in _d ? _d['dep'] : dependency('', required: false)
+  _fns = 'fns' in _d ? _d['fns'] : []
+  foreach _f: _fns
+    if cc.has_function(_f, dependencies: _dep)
+      config.set('HAVE_' + _f.underscorify().to_upper(), 1)
+    endif
+  endforeach
 endforeach
 
 srcf += files('tui.c')
