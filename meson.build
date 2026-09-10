@@ -22,16 +22,18 @@ if version.length() > 2
   version = [version[0], version[1]]
 endif
 config.set_quoted('VERSION', '.'.join(version))
+os = host_machine.system()
 
 # options
 optlist = []
 cap  = false
 sock = get_option('SOCKET')
-# TODO: add 'auto' (on Linux it is 'user', otherwise 'raw')
 if   sock == 'raw'
   raw = true
 elif sock == 'user'
   raw = false
+elif sock == 'auto'
+  raw = os != 'linux'
 endif
 tui        = get_option('TUI')
 color      = get_option('COLOR')
@@ -58,7 +60,6 @@ debipinfo = get_option('DEBIPINFO')
 sbin      = get_option('SBIN')
 manexcl = []
 
-os   = host_machine.system()
 cc   = meson.get_compiler('c')
 deps = []
 cpps = []
@@ -374,7 +375,9 @@ endforeach
 #
 
 if meson.version().version_compare('>=0.53')
-  sum_ops = {'SOCKET': sock}
+  rawstr = raw ? 'raw' : 'user'
+  socktype = sock == 'auto' ? sock + ' (' + rawstr + ')' : sock
+  sum_ops = {'SOCKET': socktype}
   if raw
     sum_ops += {'CAP': cap}
   endif

@@ -4,12 +4,13 @@
 #include <ctype.h>
 
 #if defined(LOG_TUI) && !defined(LOGMOD)
-#define LOGMOD
 #include <errno.h>
+#define LOGMOD
 #endif
 #if !defined(LOG_TUI) && defined(LOGMOD)
 #undef LOGMOD
 #endif
+#include "log.h"
 
 #include "kit.h"
 #include "aux.h"

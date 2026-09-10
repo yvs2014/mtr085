@@ -35,6 +35,7 @@ if RAW
 mtr_SOURCES += $(netdir)/raw.c $(netdir)/raw.h
 else
 mtr_SOURCES += $(netdir)/user.c $(netdir)/user.h
+mtr_SOURCES += $(netdir)/exterr.c $(netdir)/exterr.h
 endif
 
 mtr_LDADD = $(RESOLV_LIBS)

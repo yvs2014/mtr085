@@ -32,11 +32,13 @@
 
 #if defined(LOG_DNS) && !defined(LOGMOD)
 #include <errno.h>
+#include <arpa/inet.h>
 #define LOGMOD
 #endif
 #if !defined(LOG_DNS) && defined(LOGMOD)
 #undef LOGMOD
 #endif
+#include "log.h"
 
 #include "dns.h"
 #include "net.h"
@@ -315,7 +317,7 @@ int dns_send_query(int at, int ndx, const char *qstr, int type) {
   int len = MYRES_QUERY(myres, ns_o_query, qstr, ns_c_in, type, NULL, 0, NULL,
     ns_query_buff, sizeof(ns_query_buff));
   if (len < 0) {
-    WARN("[%d:%d type=%d]", at, ndx, type);
+    WARNF("[%d:%d type=%d]", at, ndx, type);
 RESDEB_ON
     LOGRET_RC(-1, "[%d:%d type=%s] failed", at, ndx, p_type(type));
 RESDEB_OFF
@@ -357,7 +359,7 @@ const char *dns_ptr_lookup(int at, int ndx) {
     ip2arpa(sizeof(query), query, &IP_AT_NDX(at, ndx), NULL, NULL);
     QPTR_AT_NDX(at, ndx) = strndup(query, sizeof(query));
     if (!QPTR_AT_NDX(at, ndx)) {
-      WARN("[%d:%d]: strndup()", at, ndx);
+      WARNF("[%d:%d]: strndup()", at, ndx);
       return NULL;
   }}
 

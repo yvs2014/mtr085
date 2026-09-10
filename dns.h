@@ -19,6 +19,7 @@
 #ifndef DNS_H
 #define DNS_H
 
+#include "attr.h"
 #include "common.h"
 
 extern uint dns_queries[];

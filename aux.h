@@ -4,6 +4,7 @@
 #include <stddef.h>
 #include <limits.h>
 
+#include "attr.h"
 #include "common.h"
 
 #define INDENT_NUMB 4 // "NN. " length

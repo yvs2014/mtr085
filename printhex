@@ -1,0 +1,18 @@
+/*
+#include <stdio.h> // TMP
+static void printhex(size_t len, uint8_t *data) {
+  printf("decode first 100 of %zu bytes", len);
+  if (len > 100)
+    len = 100;
+  for (uint i = 0; i < len; i++, data++) {
+    if ((i % 32) == 0)
+      printf("\nhex[%04u..%04u %04u..%04u %04u..%04u %04u..%04u]:", i, i + 7, i + 8, i + 15, i + 16, i + 23, i + 24, i + 31);
+    if ((i % 8) == 0)
+      printf("  ");
+    printf("%02x ", *data);
+  }
+  printf("\n");
+}
+*/
+
+

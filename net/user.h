@@ -11,7 +11,6 @@
 typedef bool (*ping_fn)(int at);
 
 void close_sock46(void);
-int get_valid_seq(const _icmphdr *icmp) NONNULL(1);
 
 extern int usersock;
 extern ping_fn ping_icmp;

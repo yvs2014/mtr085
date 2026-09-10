@@ -24,24 +24,22 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <time.h>
-#include <arpa/inet.h>
-
-#ifdef HAVE_NETDB_H
-  #include <netdb.h>
-#endif
-
 #include <resolv.h>
-
+#include <arpa/inet.h>
 #ifdef HAVE_ARPA_NAMESER_H
-  #include <arpa/nameser.h>
+#include <arpa/nameser.h>
+#endif
+#ifdef HAVE_NETDB_H
+#include <netdb.h>
 #endif
 
 #if defined(LOG_IPINFO) && !defined(LOGMOD)
-  #define LOGMOD
+#define LOGMOD
 #endif
 #if !defined(LOG_IPINFO) && defined(LOGMOD)
-  #undef LOGMOD
+#undef LOGMOD
 #endif
+#include "log.h"
 
 #include "ipinfo.h"
 #include "polling.h"
@@ -259,9 +257,9 @@ static bool set_newrec(int at, int ndx, int j, char *dup, int sndx) {
       free(*p);
     *p = dup;
   } else if (sndx < 0)
-    WARN("no dup[%d:%d:%d]", at, ndx, j);
+    WARNF("no dup[%d:%d:%d]", at, ndx, j);
   else
-    WARN("no dup[%d:%d:%d:%d]", at, ndx, j, sndx);
+    WARNF("no dup[%d:%d:%d:%d]", at, ndx, j, sndx);
   return dup != NULL;
 }
 
@@ -391,7 +389,7 @@ static void save_txt_answer(int at, int ndx, const char *answer, size_t alen) {
   if (answer && strnlen(answer, lim)) {
     copy = strndup(answer, lim);
     if (!copy) {
-      WARN("[%d:%d]: strndup()", at, ndx);
+      WARNF("[%d:%d]: strndup()", at, ndx);
       return;
     }
     save_txt_prepare(copy, origins[origin_no].comb_last_fields, origins[origin_no].sep);
@@ -640,7 +638,7 @@ void ipinfo_parse(int sock, int seq) { // except dns, dns.ack in dns.c
       default: break;
     }
   } else if (received < 0)
-    WARN("seq=%d recv(sock=%d)", seq, sock);
+    WARNF("seq=%d recv(sock=%d)", seq, sock);
   close_ipitseq(seq);
 }
 
@@ -743,7 +741,7 @@ static int ipinfo_lookup(int at, int ndx, const char *qstr) {
   if (!QTXT_AT_NDX(at, ndx)) {
     QTXT_AT_NDX(at, ndx) = strndup(qstr, NAMELEN);
     if (!QTXT_AT_NDX(at, ndx)) {
-      WARN("[%d:%d]: strndup()", at, ndx);
+      WARNF("[%d:%d]: strndup()", at, ndx);
       return -1;
   }}
 
@@ -955,7 +953,7 @@ static bool alloc_ipitseq(void) {
       memset(ipitseq, -1, size);
       LOGMSG("allocated %zd bytes for tcp-sockets", size);
     } else
-      WARN("tcpseq malloc(%zd)", size);
+      WARNF("tcpseq malloc(%zd)", size);
   }
   return ipitseq != NULL;
 }
@@ -1001,13 +999,13 @@ bool ipinfo_init(const char *arg) {
     arg = ASLOOKUP_DEFAULT;
   char* args[II_REC_ARR_LEN + 1] = {strdup(arg)};
   if (!args[0]) {
-    WARN("strdup(%s)", arg);
+    WARNF("strdup(%s)", arg);
     return false;
   }
   split_with_sep(ARRAY_LEN(args) - 1, args, COMMA, 0);
   if (!args[0]) {
     errno = EINVAL;
-    WARN("split_with_sep(%s)", arg);
+    WARNF("split_with_sep(%s)", arg);
     return false;
   }
   //

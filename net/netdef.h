@@ -1,6 +1,7 @@
 #ifndef NETDEF_H
 #define NETDEF_H
 
+#include "attr.h"
 #include "common.h"
 
 #define MAXHOST           64 // if you choose 256, then adjust masks: IDMASK ID2AT AT2ID ID2NDX
@@ -132,10 +133,6 @@ extern int proto; // icmp-udp-tcp proto
 extern char strerr_txt[NAMELEN];     // any target
 extern char tgterr_txt[NAMELEN];     // current target
 extern char logerr_txt[NAMELEN * 2]; // $func: $tgterr
-
-enum { QR_SUM = 0 /*sure*/, QR_ICMP, QR_UDP, QR_TCP, QR_MAX };
-extern ulong net_queries[QR_MAX]; // number of queries (sum, icmp, udp, tcp)
-extern ulong net_replies[QR_MAX]; // number of replies (sum, icmp, udp, tcp)
 
 //
 

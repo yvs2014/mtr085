@@ -1,6 +1,7 @@
 # work-in-progress: user sockets
-option('SOCKET',    type: 'combo', choices: ['raw', 'user'], value: 'raw',
-  description: 'RAW or USER sockets')
+#option('SOCKET',    type: 'combo', choices: ['raw', 'user', 'auto'], value: 'auto',
+option('SOCKET',    type: 'combo', choices: ['raw', 'user', 'auto'], value: 'raw',
+  description: 'RAW or USER sockets (AUTO is USER on Linux, otherwise RAW)')
 #
 option('TUI',       type: 'boolean', value: true,  description: 'TUI: [n]curses')
 option('COLOR',     type: 'boolean', value: true,  description: 'Colored output')

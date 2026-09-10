@@ -30,6 +30,7 @@
 
 #include "common.h"
 #include "netdef.h"
+#include "netmisc.h"
 
 // 16bits as [hash:7 at:6 ndx:3] (depends on MAXHOST MAXPATH)
 #define IDMASK    (0xFE00)
@@ -39,12 +40,10 @@
 
 #define NETELEM_MAXLEN 16
 
-enum IPV6_ENDIS { IPV6_UNDEF = -1, IPV6_DISABLED = 0, IPV6_ENABLED = 1 };
-
-void net_settings(enum IPV6_ENDIS ipv6_enabled);
+void net_settings(enum IPV6_ENDIS ip6);
 void net_assert(void);
-void net_protoset(int type);
-bool net_set_host(const t_ipaddr *ipaddr) NONNULL(1);
+void net_set_proto(int type);
+bool net_set_afhost(const t_ipaddr *ipaddr) NONNULL(1);
 bool net_set_ifaddr(const char *ifaddr) NONNULL(1);
 void net_reset(void);
 void net_close(void);
@@ -52,6 +51,9 @@ int net_wait(void);
 bool net_timedout(int seq);
 void net_icmp_parse(struct timespec *recv_at) NONNULL(1);
 void net_tcp_parse(int sock, int seq, int noerr, struct timespec *recv_at) NONNULL(4);
+#ifndef USER_RAW
+void net_sockrecverr(const struct timespec *recv_at) NONNULL(1);
+#endif
 int net_min(void);
 int net_max(void);
 const char *net_elem(int at, char key);

@@ -159,12 +159,13 @@ AC_ARG_WITH([libasan],
 AM_CONDITIONAL([LIBASAN], [test "x$libasan" = "xyes"])
 
 socket="raw"
-AC_ARG_WITH([socket], AS_HELP_STRING([--with-socket=raw], [use raw/user sockets (default: raw)]), [
-#	AC_DEFINE(TUIMODE, 1, [Build with TUI (curses library)])
-	AS_IF([test "x$withval" != "xraw" -a "x$withval" != "xuser"],
-		AC_MSG_ERROR([--with-socket requires either 'raw' or 'user' argument (not $withval)]))
+AC_ARG_WITH([socket], AS_HELP_STRING([--with-socket=auto|raw|user], ['raw' or 'user' sockets ('auto' is 'user' on Linux, otherwise 'raw')]), [
+	AS_IF([test "x$withval" != "xraw" -a "x$withval" != "xuser" -a "x$withval" != "xauto"],
+		AC_MSG_ERROR([--with-socket requires either 'raw' or 'user' or 'auto']))
 	socket="$withval"
-], [socket="raw"])
+], [socket="raw"]) # socket="auto" # wip
+AS_IF([test "x$socket" = "xauto"],
+	AS_CASE([$host_os], [linux*], [socket="user"], [socket="raw"]))
 AS_IF([test "x$socket" = "xraw"], [
 	AC_DEFINE([USE_RAW], [1], [Define this for raw sockets instead of user ones])
 	AC_SEARCH_LIBS([cap_set_flag], [cap], [

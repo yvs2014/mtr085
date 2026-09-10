@@ -12,7 +12,6 @@
 #include <netinet/icmp6.h>
 #endif
 
-#include "common.h"
 #include "netdef.h"
 
 #define BATCH_HOSTS 10      // queries in batch
@@ -49,9 +48,6 @@ extern uint8_t bitpattern;
 extern uint16_t payloadsize;
 
 extern sequence_t seqlist[MAXSEQ];
-enum { RE_PONG, RE_EXCEED, RE_UNREACH }; // reason of a pong response
-
-extern int echo_reply, time_exceed, dst_unreach;
 
 //
 
@@ -72,7 +68,7 @@ void fill_icmph(uint8_t type, uint16_t id, uint16_t seq, _icmphdr *icmp) NONNULL
 #define FD_CLOSE(fd) if ((fd) >= 0) { close(fd); (fd) = -1; /*summ*/ sum_sock[1]++; }
 //
 #define NET_FAIL_WARN(fmt, ...) do {                     \
-  WARNX(fmt ": %s", __VA_ARGS__, tgterr_txt);            \
+  WARNXF(fmt ": %s", __VA_ARGS__, tgterr_txt);           \
   snprinte(logerr_txt, sizeof(logerr_txt),               \
     fmt ": %s", __VA_ARGS__, tgterr_txt);                \
   LOGRET_RC(false, fmt ": %s", __VA_ARGS__, tgterr_txt); \

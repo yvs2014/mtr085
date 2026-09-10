@@ -6,6 +6,7 @@
 #if !defined(LOG_TUI) && defined(LOGMOD)
 #undef LOGMOD
 #endif
+#include "log.h"
 
 #include "chart.h"
 #include "nls.h"

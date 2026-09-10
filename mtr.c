@@ -82,6 +82,8 @@
 #endif
 
 #include "nls.h"
+#include "attr.h"
+
 #ifdef TUIMODE
 #  include "tui.h"
 #  include "chart.h"
@@ -795,17 +797,20 @@ static void short_set(char opt) {
       if (optarg)
         ini_opts.syn = arg2int(opt, optarg, 1, TCPSYN_TOUT_MAX, TCPTM_STR, NULL, 0) * MIL;
       break;
+#ifdef USE_RAW
+/* wip: user tcp-udp modes are not ready yet */
     case OPT_TCP:
     case OPT_UDP: {
       bool udp = (opt == OPT_UDP);
       if ((udp && ini_opts.tcp) || (!udp && ini_opts.udp))
         ERRXT(EINVAL, "-%c -%c: %s", ini_opts.udp ? OPT_UDP: OPT_TCP, opt, MUTEXCL_ERR);
-      net_protoset(udp ? IPPROTO_UDP : IPPROTO_TCP);
+      net_set_proto(udp ? IPPROTO_UDP : IPPROTO_TCP);
       if (udp)
         ini_opts.udp = true;
       else
         ini_opts.tcp = true;
     } break;
+#endif
     case OPT_VERSION:
       break;
     case OPT_CACHE:
@@ -923,7 +928,7 @@ static int set_target(const struct addrinfo *res) {
       (af == AF_INET6) ? (t_ipaddr*)&((struct sockaddr_in6 *)ai->ai_addr)->sin6_addr :
 #endif
       ((af == AF_INET) ? (t_ipaddr*)&((struct sockaddr_in  *)ai->ai_addr)->sin_addr  : NULL);
-    if (af && host && net_set_host(host)) {
+    if (af && host && net_set_afhost(host)) {
       if (iface_addr && !net_set_ifaddr(iface_addr))
         WARNXT("%s: %s", USEADDR_ERR, iface_addr);
       else
@@ -1186,7 +1191,7 @@ static int resolv_n_ping(int port, bool fin) {
 }
 
 int main(int argc, char **argv) {
-  // get raw sockets
+  // get raw/icmp sockets
   if (!open_sock46())
     errx(EXIT_FAILURE, "Unable to get raw sockets");
   // drop permissions if that's set

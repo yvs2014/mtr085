@@ -20,42 +20,8 @@
 #endif
 #define MAX_ADDRSTRLEN INET6_ADDRSTRLEN
 
-// wrapper: __has_attribute
-#ifndef __has_attribute
-#define __has_attribute(attr) 0
-#endif
-
-//
-// attribute: unused
-#if __has_attribute(unused)
-#define UNUSED __attribute__((unused))
-#else
-#define UNUSED
-#endif
-//
-// attribute: nonnull
-#if __has_attribute(nonnull)
-#define NONNULL(...) __attribute__((nonnull(__VA_ARGS__)))
-#else
-#define NONNULL(...)
-#endif
-//
-// attribute: noreturn
-#if __has_attribute(__noreturn__)
-#define NORETURN __attribute__((__noreturn__))
-#else
-#define NORETURN
-#endif
-//
-// attribute: packed
-#if __has_attribute(__packed__)
-#define PACKIT __attribute__((__packed__))
-#else
-#define PACKIT
-#endif
-
 #ifndef GITREV
-#define GITREV "321"
+#define GITREV "322"
 #endif
 
 #ifndef HAVE_UINT
@@ -272,50 +238,20 @@ typedef union opt_sum_u {
 #define USED_PROTO (run_opts.udp ? "UDP" : (run_opts.tcp ? "TCP" : "ICMP"))
 #define CHART_MODE (run_opts.chart | (run_opts.color ? (1 << 3) : 0))
 
-// logging, warnings, errors
-#if defined(__NetBSD__) || defined(__FreeBSD__) || defined(__OpenBSD__)
-#define LOG_PRIORITY LOG_NOTICE
-#else
-#define LOG_PRIORITY LOG_INFO
-#endif
-//
-#ifdef LOGMOD
-#include <syslog.h>
-#define LOGSTR(str) (str)
-#else
-#define LOGSTR(str) NULL
-#define LOGMSG(fmt, ...) ((void)0)
-#define LOGRET(fmt, ...) return
-#define LOGRET_RC(rcode, fmt, ...) return (rcode)
-#endif
 // note, VA_OPT min compat: gcc8, clang6
 #if (__GNUC__ >= 8) || (__clang_major__ >= 6) || (__STDC_VERSION__ >= 202311L)
-#define WARN(fmt, ...)   warn("%s: " fmt, __func__ __VA_OPT__(,) __VA_ARGS__)
-#define WARNX(fmt, ...) warnx("%s: " fmt, __func__ __VA_OPT__(,) __VA_ARGS__)
-#define ERRR(status, fmt, ...)  err(status, "%s: " fmt, __func__ __VA_OPT__(,) __VA_ARGS__)
-#define ERRX(status, fmt, ...) errx(status, "%s: " fmt, __func__ __VA_OPT__(,) __VA_ARGS__)
-#define FAIL(fmt, ...)         errx(EXIT_FAILURE, "%s: " fmt, __func__ __VA_OPT__(,) __VA_ARGS__)
-#ifdef LOGMOD
-#define LOGMSG(fmt, ...) syslog(LOG_PRIORITY, "%s: " fmt, __func__ __VA_OPT__(,) __VA_ARGS__)
-#define LOGRET(fmt, ...) do { \
-  syslog(LOG_PRIORITY, "%s: " fmt, __func__ __VA_OPT__(,) __VA_ARGS__); return; } while(0)
-#define LOGRET_RC(rcode, fmt, ...) do { \
-  syslog(LOG_PRIORITY, "%s: " fmt, __func__ __VA_OPT__(,) __VA_ARGS__); return (rcode); } while(0)
-#endif
-#else // no VA_OPT, use GNU extension
-#define WARN(fmt, ...)   warn("%s: " fmt, __func__, ##__VA_ARGS__)
-#define WARNX(fmt, ...) warnx("%s: " fmt, __func__, ##__VA_ARGS__)
-#define ERRR(status, fmt, ...)  err(status, "%s: " fmt, __func__, ##__VA_ARGS__)
-#define ERRX(status, fmt, ...) errx(status, "%s: " fmt, __func__, ##__VA_ARGS__)
-#define FAIL(fmt, ...)         errx(EXIT_FAILURE, "%s: " fmt, __func__, ##__VA_ARGS__)
-#ifdef LOGMOD
-#define LOGMSG(fmt, ...) syslog(LOG_PRIORITY, "%s: " fmt, __func__, ##__VA_ARGS__)
-#define LOGRET(fmt, ...) do { \
-  syslog(LOG_PRIORITY, "%s: " fmt, __func__, ##__VA_ARGS__); return; } while(0)
-#define LOGRET_RC(rcode, fmt, ...) do { \
-  syslog(LOG_PRIORITY, "%s: " fmt, __func__, ##__VA_ARGS__); return (rcode); } while(0)
-#endif
-#endif // VA_OPT
+#define WARNF(fmt, ...)   warn("%s: " fmt, __func__ __VA_OPT__(,) __VA_ARGS__)
+#define WARNXF(fmt, ...) warnx("%s: " fmt, __func__ __VA_OPT__(,) __VA_ARGS__)
+#define ERRF(status, fmt, ...)   err(status, "%s: " fmt, __func__ __VA_OPT__(,) __VA_ARGS__)
+#define ERRXF(status, fmt, ...) errx(status, "%s: " fmt, __func__ __VA_OPT__(,) __VA_ARGS__)
+#define FAILF(fmt, ...)   errx(EXIT_FAILURE, "%s: " fmt, __func__ __VA_OPT__(,) __VA_ARGS__)
+#else /* no VA_OPT, use GNU extension */
+#define WARNF(fmt, ...)   warn("%s: " fmt, __func__, ##__VA_ARGS__)
+#define WARNXF(fmt, ...) warnx("%s: " fmt, __func__, ##__VA_ARGS__)
+#define ERRF(status, fmt, ...)   err(status, "%s: " fmt, __func__, ##__VA_ARGS__)
+#define ERRXF(status, fmt, ...) errx(status, "%s: " fmt, __func__, ##__VA_ARGS__)
+#define FAILF(fmt, ...)   errx(EXIT_FAILURE, "%s: " fmt, __func__, ##__VA_ARGS__)
+#endif /* VA_OPT, VA_ARGS */
 
 // time conversions
 #define time2msec(t) ((t).tv_sec * MIL + (t).tv_nsec / MICRO)

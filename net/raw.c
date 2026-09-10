@@ -26,10 +26,10 @@
 #if defined(LOG_NET) && !defined(LOGMOD)
 #define LOGMOD
 #endif
-
 #if !defined(LOG_NET) && defined(LOGMOD)
 #undef LOGMOD
 #endif
+#include "log.h"
 
 #ifdef LIBCAP
 #include <sys/capability.h>
@@ -40,6 +40,7 @@
 //#endif
 
 #include "raw.h"
+#include "netmisc.h"
 #include "aux.h"     // IWYU pragma: keep
 #include "display.h" // IWYU pragma: keep
 #ifdef LOGMOD
@@ -158,16 +159,17 @@ static void set_rawcap_flag(cap_flag_value_t onoff) {
   if (curr) {
     cap_flag_value_t perm = onoff;
     if (cap_get_flag(curr, CAP_NET_RAW, CAP_PERMITTED, &perm) < 0)
-      WARN("cap_get_flag(%s, raw)", "PERMITTED");
+      warn("cap_get_flag(%s, raw)", "PERMITTED");
     else if (perm != CAP_CLEAR) { // permitted to set/clear
       cap_value_t raw = CAP_NET_RAW;
       if (cap_set_flag(curr, CAP_EFFECTIVE, 1, &raw, onoff) < 0)
-        WARN("cap_set_flag(%s, raw, %d)", "EFFECTIVE", onoff);
+        warn("cap_set_flag(%s, raw, %d)", "EFFECTIVE", onoff);
       else if (cap_set_proc(curr) < 0)
-        WARN("cap_set_proc(%s, raw, %d", "EFFECTIVE", onoff);
+        warn("cap_set_proc(%s, raw, %d", "EFFECTIVE", onoff);
     }
     cap_free(curr);
-  } else warn("cap_get_proc()");
+  } else
+    warn("cap_get_proc()");
 }
 #define RAWCAP_ON  set_rawcap_flag(CAP_SET)
 #define RAWCAP_OFF set_rawcap_flag(CAP_CLEAR)

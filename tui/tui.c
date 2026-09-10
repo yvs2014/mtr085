@@ -26,6 +26,7 @@
 #if !defined(LOG_TUI) && defined(LOGMOD)
 #undef LOGMOD
 #endif
+#include "log.h"
 
 #include "tui.h"
 #include "chart.h"

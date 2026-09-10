@@ -19,6 +19,7 @@
 #ifndef DISPLAY_H
 #define DISPLAY_H
 
+#include "attr.h"
 #include "common.h"
 
 void display_start(uint n_targets UNUSED);

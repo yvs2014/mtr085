@@ -3,12 +3,13 @@
 #include <string.h>
 
 #if defined(LOG_TUI) && !defined(LOGMOD)
-#define LOGMOD
 #include <ctype.h>
+#define LOGMOD
 #endif
 #if !defined(LOG_TUI) && defined(LOGMOD)
 #undef LOGMOD
 #endif
+#include "log.h"
 
 #include "action.h"
 #include "chart.h"

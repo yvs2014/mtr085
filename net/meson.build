@@ -12,7 +12,7 @@ if raw # socket type raw/user
   lib = 'cap'
   libcap = dependency('lib' + lib, required: false)
   cap = libcap.found()
-  req = host_machine.system() == 'linux'
+  req = os == 'linux'
   if not cap
     libcap = cc.find_library(lib, required: req)
     cap = libcap.found()
@@ -27,6 +27,7 @@ if raw # socket type raw/user
 else
   optlist += '+USER'
   srcf    += files('user.c')
+  srcf    += files('exterr.c')
 endif
 
 fndesc += {'pow': {'hdr': 'math.h', 'libs': ['m']}}

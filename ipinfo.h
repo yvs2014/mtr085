@@ -19,6 +19,7 @@
 #ifndef IPINFO_H
 #define IPINFO_H
 
+#include "attr.h"
 #include "common.h"
 
 #define ASLOOKUP_DEFAULT   "2,2" // ripe whois

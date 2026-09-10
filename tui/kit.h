@@ -1,6 +1,7 @@
 #ifndef KIT_H
 #define KIT_H
 
+#include "attr.h"
 #include "common.h"
 #include "inc.h" // IWYU pragma: keep
 

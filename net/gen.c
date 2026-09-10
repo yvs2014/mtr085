@@ -7,9 +7,18 @@
 #include <fcntl.h>
 #include <time.h>
 
+#if defined(LOG_NET) && !defined(LOGMOD)
+#define LOGMOD
+#endif
+#if !defined(LOG_NET) && defined(LOGMOD)
+#undef LOGMOD
+#endif
+#include "log.h"
+
 #include "gen.h"
 #include "aux.h"
 #include "nls.h"
+#include "netmisc.h"
 #include "polling.h"
 #include "display.h" // IWYU pragma: keep
 
@@ -32,8 +41,6 @@ ulong net_replies[QR_MAX];  // number of replies (sum, icmp, udp, tcp)
 char strerr_txt[NAMELEN];     // any target
 char tgterr_txt[NAMELEN];     // current target
 char logerr_txt[NAMELEN * 2]; // $func: $tgterr
-
-int echo_reply, time_exceed, dst_unreach;
 
 const t_ipaddr unspec_addr; // 0
 #define TCP_DEFAULT_PORT 80

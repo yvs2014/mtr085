@@ -6,14 +6,15 @@
 #if defined(LOG_NET) && !defined(LOGMOD)
 #define LOGMOD
 #endif
-
 #if !defined(LOG_NET) && defined(LOGMOD)
 #undef LOGMOD
 #endif
+#include "log.h"
 
 #include "raw.h"
 #include "aux.h"
 #include "nls.h"
+#include "netmisc.h"
 #include "display.h" // IWYU pragma: keep
 
 // global
@@ -21,10 +22,10 @@ int usersock = -1;
 
 //
 static int usersock4_icmp = -1;
-//static int usersock4_udp = -1; // not yet
+//static int usersock4_udp  = -1; // not yet
 #ifdef ENABLE_IPV6
 static int usersock6_icmp = -1;
-//static int usersock6_udp = -1; // not yet
+//static int usersock6_udp  = -1; // not yet
 #endif
 
 // Send packet via ICMP socket for hop 'at'
@@ -59,10 +60,18 @@ static bool usersend_icmp(int at) {
   if (okay) {
     if (sendto(usersock, packet, pktsize, 0, &rsa.sa, salen) < 0) {
       int rc = errno;
-      char str[MAX_ADDRSTRLEN] = {0};
-      const char *dst = inet_ntop(af, remote_ipaddr, str, sizeof(str));
-      errno = rc;
-      FAIL_WITH_WARN(usersock, "sendto(%s)", dst ? dst : "");
+      switch (rc) {
+        case EAGAIN:
+        case ENOMEM:
+        case ENOBUFS: { // fail
+          char str[MAX_ADDRSTRLEN] = {0};
+          const char *dst = inet_ntop(af, remote_ipaddr, str, sizeof(str));
+          errno = rc;
+          FAIL_WITH_WARN(usersock, "sendto(%s)", dst ? dst : "");
+        } break;
+        default: // read extended err later
+          break;
+      }
     }
     /*summ*/ net_queries[QR_SUM]++; net_queries[QR_ICMP]++;
   }
@@ -72,21 +81,41 @@ ping_fn ping_icmp = usersend_icmp;
 ping_fn ping_udp  = NULL/*not yet*/;
 
 //
-
+static int open_socket_n_recverr(int domain, int proto, int level, int optname) {
+  int fd = socket(domain, SOCK_DGRAM, proto);
+  if (fd < 0)
+    WARNT("socket(domain=%d, type=%d, proto=%d)", domain, SOCK_DGRAM, proto);
+  else {
+    int opt = 1;
+    if (setsockopt(fd, level, optname, &opt, sizeof(opt)) < 0) {
+      WARNT("setsockopt(level=%d, optname=%d)", level, optname);
+      close(fd);
+      fd = -1;
+    }
+  }
+  return fd;
+}
+//
 bool open_sock46(void) {
-  // mandatory ipv4
-  usersock4_icmp = socket(AF_INET, SOCK_DGRAM, IPPROTO_ICMP);
+  usersock4_icmp = open_socket_n_recverr(AF_INET, IPPROTO_ICMP, IPPROTO_IP, IP_RECVERR);
   if (usersock4_icmp < 0)
-    FAIL_WITH_WARN(usersock4_icmp, "usersock4-icmp: %s", NOSOCK_ERR);
-  sum_sock[0]++; /*summ*/
+    WARNXT("usersock4-icmp: %s", NOSOCK_ERR);
+  else {
+    sum_sock[0]++; /*summ*/
 #ifdef ENABLE_IPV6
-  // optional ipv6
-  usersock6_icmp = socket(AF_INET6, SOCK_DGRAM, IPPROTO_ICMPV6);
-  if (usersock6_icmp < 0)
-    FAIL_WITH_WARN(usersock6_icmp, "usersock6-icmp: %s", NOSOCK_ERR);
-  sum_sock[0]++; /*summ*/
+    usersock6_icmp = open_socket_n_recverr(AF_INET6, IPPROTO_ICMPV6, IPPROTO_IPV6, IPV6_RECVERR);
+    if (usersock6_icmp < 0)
+      WARNXT("usersock6-icmp: %s", NOSOCK_ERR);
+    else
+      sum_sock[0]++; /*summ*/
 #endif
-  return true;
+  }
+  LOGMSG("usersock4_icmp=%d", usersock4_icmp);
+#ifdef ENABLE_IPV6
+  LOGMSG("usersock6_icmp=%d", usersock6_icmp);
+#endif
+  // mandatory ip4 socket, optional ip6 socket
+  return (usersock4_icmp >= 0);
 }
 
 void close_sock46(void) {
@@ -144,11 +173,4 @@ void set_sock6(void) {
     -1;
 }
 #endif
-
-int get_valid_seq(const _icmphdr *icmp) { // NONNULL(1)
-  int seq = ntohs(icmp->seq);
-  LOGMSG("icmp(myid=%u): got unknown id=%u (type=%u seq=%u)",
-    pid16, (icmp)->id, (icmp)->type, seq);
-  return seq;
-}
 

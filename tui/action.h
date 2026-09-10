@@ -1,6 +1,7 @@
 #ifndef ACTION_H
 #define ACTION_H
 
+#include "attr.h"
 #include "common.h"
 #include "inc.h" // IWYU pragma: keep
 

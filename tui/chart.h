@@ -1,8 +1,9 @@
 #ifndef CHART_H
 #define CHART_H
 
-#include "common.h"
-#include "inc.h" // IWYU pragma: keep
+#include "attr.h"
+#include "common.h" // IWYU pragma: keep
+#include "inc.h"    // IWYU pragma: keep
 
 short color_charts(void);
 void prepare_charts(void);

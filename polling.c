@@ -29,6 +29,7 @@
 #if !defined(LOG_POLL) && defined(LOGMOD)
 #undef LOGMOD
 #endif
+#include "log.h"
 
 #include "polling.h"
 #include "aux.h"
@@ -79,7 +80,8 @@ static bool need_dns;
 #endif
 
 #define SET_POLLFD(ndx, sock) { allfds[ndx].fd = (sock); allfds[ndx].revents = 0; }
-#define IN_ISSET(ndx) ((allfds[ndx].fd >= 0) && ((allfds[ndx].revents & POLLIN) == POLLIN))
+#define IN_ISSET(ndx) ((allfds[ndx].fd >= 0) && ((allfds[ndx].revents & POLLIN)  == POLLIN ))
+#define IN_ISERR(ndx) ((allfds[ndx].fd >= 0) && ((allfds[ndx].revents & POLLERR) == POLLERR))
 #define CLOSE_FD(ndx) { if (tcpseq) tcpseq[ndx] = -1; \
   if (allfds) { close(allfds[ndx].fd); allfds[ndx].fd = -1; allfds[ndx].revents = 0; /*summ*/ sum_sock[1]++;} \
 }
@@ -131,7 +133,7 @@ static bool allocate_more_memory(void) {
   size_t tcpseq_size = (maxfd + FD_BATCHMAX) * sizeof(int);
   void *mem = realloc(tcpseq, tcpseq_size);
   if (!mem) {
-    WARN("seq realloc(%zd)", tcpseq_size);
+    WARNF("seq realloc(%zd)", tcpseq_size);
     return false;
   }
   tcpseq = (int*)mem;
@@ -140,7 +142,7 @@ static bool allocate_more_memory(void) {
   size_t pollfd_size = (maxfd + FD_BATCHMAX) * sizeof(struct pollfd);
   mem = realloc(allfds, pollfd_size);
   if (!mem) {
-    WARN("fd realloc(%zd)", pollfd_size);
+    WARNF("fd realloc(%zd)", pollfd_size);
     return false;
   }
   allfds = (struct pollfd *)mem;
@@ -265,6 +267,8 @@ static bool svc(struct timespec *last, const struct timespec *interval, int *tim
   return true;
 }
 
+#ifdef USE_RAW
+/* wip: user tcp-udp modes are not ready yet */
 static bool proto_readyset(int proto) {
   bool ready =
 #ifdef ENABLE_IPV6
@@ -272,7 +276,7 @@ static bool proto_readyset(int proto) {
 #endif
      (af == AF_INET);
   if (ready)
-    net_protoset(proto);
+    net_set_proto(proto);
   return ready;
 }
 //
@@ -322,6 +326,7 @@ static bool toggle_udptcp(key_action_t action) {
   }
   return okay;
 }
+#endif
 
 #ifdef LOGMOD
 static const char* actname[MaxActions] = {
@@ -424,6 +429,8 @@ static key_action_t keyboard_events(key_action_t action) {
 #endif
       break;
 #endif
+#ifdef USE_RAW
+/* wip: user tcp-udp modes are not ready yet */
     case ActionUDP:
     case ActionTCP:
     case ActionProto: {
@@ -444,8 +451,9 @@ static key_action_t keyboard_events(key_action_t action) {
         OPT_SUM(tcp);
         LOGMSG("> switch proto: %s", USED_PROTO);
       } else
-        WARNX("%s", "Cannot change protocol");
+        WARNXF("%s", "Cannot change protocol");
     } break;
+#endif
     default:
       action = ActionNone;
   }
@@ -507,6 +515,12 @@ static key_action_t conclude(struct timespec *polled_at) {
     LOGMSG("got %s", "icmp or udp response");
     net_icmp_parse(polled_at);
   }
+#ifndef USE_RAW
+  else if (IN_ISERR(FD_NET)) {
+    if (proto == IPPROTO_ICMP/*no udp yet*/)
+      net_sockrecverr(polled_at);
+  }
+#endif
 #ifdef ENABLE_DNS
   if (need_dns) { // dns lookup
     if (IN_ISSET(FD_DNS)) {
@@ -530,7 +544,7 @@ static bool seqfd_init(void) {
   size_t size = FD_MAX * sizeof(int);
   tcpseq = malloc(size);
   if (!tcpseq) {
-    WARN("seq malloc(%zd)", size);
+    WARNF("seq malloc(%zd)", size);
     return false;
   }
   memset(tcpseq, -1, size);
@@ -538,7 +552,7 @@ static bool seqfd_init(void) {
   size = FD_MAX * sizeof(struct pollfd);
   allfds = malloc(size);
   if (!allfds) {
-    WARN("fd malloc(%zd)", size);
+    WARNF("fd malloc(%zd)", size);
     free(tcpseq);
     tcpseq = NULL;
     return false;
@@ -610,7 +624,7 @@ bool poll_loop(void) {
       int e = errno;
       display_close(true);
       const char* str = rstrerror(e);
-      WARN("%s", str);
+      WARNF("%s", str);
       LOGMSG("%s", str);
       break;
     }

@@ -32,10 +32,10 @@
 #if defined(LOG_NET) && !defined(LOGMOD)
 #define LOGMOD
 #endif
-
 #if !defined(LOG_NET) && defined(LOGMOD)
 #undef LOGMOD
 #endif
+#include "log.h"
 
 #ifdef HAVE_NETDB_H
 #include <netdb.h>
@@ -47,6 +47,7 @@
 #include "raw.h"
 #else
 #include "user.h"
+#include "exterr.h"
 #endif
 #include "aux.h"
 #include "nls.h"
@@ -108,25 +109,29 @@ struct PACKIT icmpext_object { // RFC4884
 #define MPLSMIN 120 // min after: [ip] icmp ip
 #endif /*MPLS*/
 
+typedef struct ieset {
+  bool ip6;
+  socklen_t salen;
+  size_t ipicmphsz; // set in net_settings()
+  uint8_t pong, exceed, unreach;
+} ieset_t;
+
+
 // global
 int proto = IPPROTO_ICMP; // ICMP as default packet type
-char localaddr[MAX_ADDRSTRLEN];
 bool reset_pattern = true;
 bool reset_pldsize = true;
-ping_fn netping;
 
 //
 
-static size_t ipicmphsz; // set in net_settings()
-static size_t minfailsz; // set in net_settings:net_protoset()
-static size_t hdr_minsz;
-static size_t sa_addr_offset;
-static socklen_t sa_len;
-
+static ping_fn netping;
 static int batch_at;
 static int numhosts = BATCH_HOSTS;
 static int stopper  = MAXHOST;
 
+static size_t minfailsz; // set in net_set_proto()
+static size_t hdr_minsz;
+static ieset_t ieset;
 
 //
 
@@ -250,17 +255,26 @@ static inline void set_new_mpls(int at, int ndx, const mpls_data_t *mpls) {
 #define SET_NEW_ADDR(addr, unused) set_new_addr(at, ndx, (addr))
 #endif
 
+#ifdef WITH_MPLS
+#define MPLS_DATA_T mpls_data_t
+#else
+#define MPLS_DATA_T void
+#endif
+
+static const t_ipaddr* sa2addr(const struct sockaddr *sa) {
+  return
+#ifdef ENABLE_IPV6
+    ieset.ip6 ? (void*)&((const struct sockaddr_in6 *)sa)->sin6_addr :
+#endif
+                (void*)&((const struct sockaddr_in  *)sa)->sin_addr;
+}
+
 // Got a return
-static int net_stat(uint port, const void *addr, struct timespec *recv_at, int reason
-#ifdef WITH_MPLS
-  , const mpls_data_t *mpls
-#endif
-) NONNULL(2, 3);
-static int net_stat(uint port, const void *addr, struct timespec *recv_at, int reason
-#ifdef WITH_MPLS
-  , const mpls_data_t *mpls
-#endif
-) {
+static int net_stat(uint port, const t_ipaddr *addr, const struct timespec *recv_at,
+  int reason, const MPLS_DATA_T *mpls) NONNULL(2, 3);
+static int net_stat(uint port, const t_ipaddr *addr, const struct timespec *recv_at,
+  int reason, const MPLS_DATA_T *mpls)
+{
   uint seq = port % MAXSEQ;
   if (!seqlist[seq].transit)
     return true;
@@ -268,10 +282,18 @@ static int net_stat(uint port, const void *addr, struct timespec *recv_at, int r
   seqlist[seq].transit = false;
   int at = seqlist[seq].at;
   //
+#ifdef LOGMOD
+  { char buff[MAX_ADDRSTRLEN] = {0};
+    addr2str(addr, sizeof(buff), buff);
 #ifdef WITH_MPLS
-  LOGMSG("at=%d seq=%d (labels=%d)", at, seq, mpls ? mpls->n : 0);
+    LOGMSG("at=%d seq=%d (labels=%d): addr=%s", at, seq, mpls ? mpls->n : 0, buff);
 #else
-  LOGMSG("at=%d seq=%d", at, seq);
+    LOGMSG("at=%d seq=%d: addr=%s", at, seq, buff);
+#endif
+    LOGMSG("reason: %s", reason == RE_PONG    ? "PONG"    :
+                         reason == RE_EXCEED  ? "EXCEED"  :
+                         reason == RE_UNREACH ? "UNREACH" : UNKN_ITEM);
+  }
 #endif
   //
   if (reason == RE_UNREACH) {
@@ -317,18 +339,20 @@ static int net_stat(uint port, const void *addr, struct timespec *recv_at, int r
   return true;
 }
 
-#ifdef WITH_MPLS
-#define NET_STAT(port, addr, recvat, reason, mpls)   net_stat((port), (addr), (recvat), (reason), (mpls))
-#else
-#define NET_STAT(port, addr, recvat, reason, unused) net_stat((port), (addr), (recvat), (reason))
-#endif
-
-#ifdef WITH_MPLS
-static inline bool mplslike(ssize_t psize, ssize_t hsize) {
-  return (run_opts.mpls && ((psize - hsize) >= MPLSMIN));
+int net_stat_sa(unsigned port, const struct sockaddr *sa,
+  const struct timespec *recv_at, int reason, const void *mpls)
+{
+  return net_stat(port, sa2addr(sa), recv_at, reason, mpls);
 }
 
-static mpls_data_t *decodempls(const uint8_t *data, int size) {
+
+#ifdef WITH_MPLS
+inline bool mplslike(ssize_t psize, ssize_t hsize) {
+  return (run_opts.mpls && ((psize - hsize) >= MPLSMIN));
+}
+//
+//mpls_data_t *decodempls(const uint8_t *data, int size) {
+void* decodempls(const uint8_t *data, int size) { // NONNULL(1)
   // given: icmpext_struct(4) icmpext_object(4) label(4) [label(4) ...]
   static const size_t mplsoff = MPLSMIN - (IES_SZ + IEO_SZ + LAB_SZ);
   static const size_t ieomin = IEO_SZ + LAB_SZ;
@@ -400,16 +424,16 @@ static int got_icmp_udp(const _udphdr *uh) {
 #endif
 
 void net_icmp_parse(struct timespec *recv_at) { // NONNULL(1)
-  uint8_t packet[MAXPACKET];
-  struct sockaddr_storage sa_in;
+  uint8_t packet[MAXPACKET] = {0};
+  struct sockaddr_storage sa_in = {0};
   //
-  ssize_t size = recvfrom(RECVSOCK, packet, MAXPACKET, 0, (struct sockaddr *)&sa_in, &sa_len);
+  ssize_t size = recvfrom(RECVSOCK, packet, MAXPACKET, 0, (struct sockaddr *)&sa_in, &ieset.salen);
   LOGMSG("got %zd bytes", size);
   if (size < (ssize_t)hdr_minsz)
     LOGRET("incorrect packet size %zd [af=%d proto=%d minsize=%zd]", size, af, proto, hdr_minsz);
   //
   _icmphdr *icmp = (_icmphdr*)(packet + IPHSZ_IN_REPLY);
-  uint8_t *data = ((uint8_t*)icmp) + ipicmphsz;
+  uint8_t *data = ((uint8_t*)icmp) + ieset.ipicmphsz;
   //
 #ifdef WITH_MPLS
   bool mplson = false;
@@ -417,20 +441,28 @@ void net_icmp_parse(struct timespec *recv_at) { // NONNULL(1)
   int seq = -1, reason = -1;
   switch (proto) {
     case IPPROTO_ICMP: {
-      if (icmp->type == echo_reply) {
+      if (icmp->type == ieset.pong) {
+#ifdef USE_RAW
         seq = get_valid_seq(icmp);
         if (seq < 0)
           return;
+#else
+        seq = ntohs(icmp->seq);
+#endif
         reason = RE_PONG;
       } else
-      if ((icmp->type == time_exceed) || (icmp->type == dst_unreach)) {
+      if ((icmp->type == ieset.exceed) || (icmp->type == ieset.unreach)) {
         if (size < (ssize_t)minfailsz)
           LOGRET("incorrect packet size %zd [af=%d proto=%d expect>=%zd]", size, af, proto, minfailsz);
+#ifdef USE_RAW
         seq = get_valid_seq((_icmphdr *)data);
         if (seq < 0)
           return;
+#else
+        seq = ntohs(((_icmphdr *)data)->seq);
+#endif
         MPLS_LIKE_TEST;
-        reason = (icmp->type == time_exceed) ? RE_EXCEED : RE_UNREACH;
+        reason = (icmp->type == ieset.exceed) ? RE_EXCEED : RE_UNREACH;
       }
       LOGMSG_ICMP;
       if (seq >= 0) /*summ*/ net_replies[QR_ICMP]++;
@@ -452,9 +484,14 @@ void net_icmp_parse(struct timespec *recv_at) { // NONNULL(1)
     default: LOGRET("Unsupported proto %d", proto);
   }
   /*summ*/ net_replies[QR_SUM]++;
-  if (seq >= 0)
-    NET_STAT(seq, ((uint8_t*)&sa_in) + sa_addr_offset, recv_at, reason,
-             mplson ? decodempls(data, size - (data - packet)) : NULL);
+  if (seq >= 0) {
+#ifdef WITH_MPLS
+    const mpls_data_t *mpls = mplson ? decodempls(data, size - (data - packet)) : NULL;
+#else
+    const void *mpls = NULL;
+#endif
+    net_stat_sa(seq, (struct sockaddr *)&sa_in, recv_at, reason, mpls);
+  }
 }
 
 int net_color(int at) {
@@ -622,7 +659,7 @@ void net_reset(void) {
   numhosts = BATCH_HOSTS;
 }
 
-bool net_set_host(const t_ipaddr *addr) { // NONNULL(1)
+bool net_set_afhost(const t_ipaddr *addr) { // NONNULL(1)
   rsa.SA_AF = af;
   switch (af) {
     case AF_INET:
@@ -653,22 +690,22 @@ bool net_set_host(const t_ipaddr *addr) { // NONNULL(1)
   { struct sockaddr_storage ss = {0};
     socklen_t len = sizeof(ss);
     if (getsockname(RECVSOCK, (struct sockaddr *)&ss, &len) < 0)
-      WARNX("%s", "getsockname()");
+      WARNXF("%s", "getsockname()");
     else {
       if (len > sizeof(ss))
         WARNXT("%s: %d > %zd: %s", "recv-socket", len, sizeof(ss), strerror(EINVAL));
       int saf = ss.ss_family;
-      char *src =
+      char *srcaddr =
 #ifdef ENABLE_IPV6
         (saf == AF_INET6) ? (char*)&((struct sockaddr_in6 *)&ss)->sin6_addr :
 #endif
         ((saf == AF_INET) ? (char*)&((struct sockaddr_in  *)&ss)->sin_addr  : NULL);
-      if (!src)
+      if (srcaddr) {
+        char buff[MAX_ADDRSTRLEN] = {0};
+        if (!inet_ntop(saf, srcaddr, buff, sizeof(buff)))
+          WARNT("%s", "inet_ntop()");
+      } else
         WARNXT("%d: %s", saf, strerror(EAFNOSUPPORT));
-      else if (!inet_ntop(saf, src, localaddr, sizeof(localaddr))) {
-        WARNT("%s", "inet_ntop()");
-        localaddr[0] = 0;
-      }
     }
   }
   portpid = IPPORT_RESERVED + pid16 % (USHRT_MAX - IPPORT_RESERVED);
@@ -676,6 +713,7 @@ bool net_set_host(const t_ipaddr *addr) { // NONNULL(1)
 }
 
 bool net_set_ifaddr(const char *ifaddr) { // NONNULL(1)
+  LOGMSG("ifaddr: %s", ifaddr);
   int len = 0;
   lsa.SA_AF = af;
   switch (af) {
@@ -740,7 +778,7 @@ void net_tcp_parse(int sock, int seq, int noerr, struct timespec *recv_at) { // 
     case 0: // no error
       /*no MPLS decoding?*/
       if (remote_ipaddr)
-        NET_STAT(seq, remote_ipaddr, recv_at, reason, NULL);
+        net_stat(seq, remote_ipaddr, recv_at, reason, NULL);
       LOGMSG("stat seq=%d for sock=%d", seq, sock);
       break;
 //  case EAGAIN: // need to wait more
@@ -784,7 +822,7 @@ static void save_ptr_answer(int at, int ndx, const char* answer, size_t alen) {
     RPTR_AT_NDX(at, ndx) = strndup(addr2str(&IP_AT_NDX(at, ndx), sizeof(str), str), NAMELEN);
   }
   if (!RPTR_AT_NDX(at, ndx))
-    WARN("[%d:%d] strndup()", at, ndx);
+    WARNF("[%d:%d] strndup()", at, ndx);
 }
 #endif
 
@@ -802,7 +840,7 @@ void net_assert(void) { // to be sure
 
 int net_wait(void) { return RECVSOCK; }
 
-void set_protosock(int type) {
+static void set_protosock(int type) {
   proto = type;
 #ifdef ENABLE_IPV6
   if (af == AF_INET6)
@@ -812,7 +850,7 @@ void set_protosock(int type) {
   { set_sock4(); }
 }
 
-void net_protoset(int type) {
+void net_set_proto(int type) {
   LOGMSG("proto type: %d", type);
   set_protosock(type);
   hdr_minsz = IPHSZ_IN_REPLY;
@@ -826,26 +864,24 @@ void net_protoset(int type) {
   minfailsz = hdr_minsz + IPHSZ_IN_REPLY + sizeof(_icmphdr);
 }
 
-#define NET46SETS(n_sz, n_er, n_te, n_un) do { \
-  sa_len      = n_sz; \
-  echo_reply  = n_er; \
-  time_exceed = n_te; \
-  dst_unreach = n_un; \
-} while (0)
-
-void net_settings(enum IPV6_ENDIS ipv6) {
+void net_settings(enum IPV6_ENDIS ip6) {
 #ifdef ENABLE_DNS
   dns_ptr_handler = save_ptr_answer; // no checks, handler for net-module only
 #endif
-  if (ipv6 == IPV6_ENABLED) {
+  if (ip6 == IPV6_ENABLED) {
 #ifdef ENABLE_IPV6
     af = AF_INET6;
     addr_exist = addr6exist;
     addr_equal = addr6equal;
     addr_copy  = addr6copy;
-    ipicmphsz = sizeof(struct ip6_hdr) + sizeof(_icmphdr);
-    sa_addr_offset = offsetof(struct sockaddr_in6, sin6_addr);
-    NET46SETS(sizeof(struct sockaddr_in6), ICMP6_ECHO_REPLY, ICMP6_TIME_EXCEEDED, ICMP6_DST_UNREACH);
+    ieset = (ieset_t){
+      .ip6       = true,
+      .salen     = sizeof(struct sockaddr_in6),
+      .ipicmphsz = sizeof(struct ip6_hdr) + sizeof(_icmphdr),
+      .pong      = ICMP6_ECHO_REPLY,
+      .exceed    = ICMP6_TIME_EXCEEDED,
+      .unreach   = ICMP6_DST_UNREACH,
+    };
     set_sock6();
 #endif
   } else { // IPv4 by default
@@ -853,12 +889,21 @@ void net_settings(enum IPV6_ENDIS ipv6) {
     addr_exist = addr4exist;
     addr_equal = addr4equal;
     addr_copy  = addr4copy;
-    ipicmphsz = sizeof(_iphdr) + sizeof(_icmphdr);
-    sa_addr_offset = offsetof(struct sockaddr_in, sin_addr);
-    NET46SETS(sizeof(struct sockaddr_in), ICMP_ECHOREPLY, ICMP_TIME_EXCEEDED, ICMP_UNREACH);
+    ieset = (ieset_t){
+      .ip6       = false,
+      .salen     = sizeof(struct sockaddr_in),
+      .ipicmphsz = sizeof(_iphdr) + sizeof(_icmphdr),
+      .pong      = ICMP_ECHOREPLY,
+      .exceed    = ICMP_TIME_EXCEEDED,
+      .unreach   = ICMP_UNREACH,
+    };
     set_sock4();
   }
-  net_protoset(proto);
+#ifndef USE_RAW
+  ee_settings(ip6);
+#endif
+  LOGMSG("af: %d", af);
+  net_set_proto(proto);
 }
 
 const char* addr2str(const t_ipaddr *addr, size_t size, char buff[size]) { // NONNULL(1, 3)
@@ -886,4 +931,12 @@ uint16_t str2hint(const char* str, uint16_t at, uint16_t ndx) {
   hint |= ID2NDX(ndx);
   return hint;
 }
+
+#ifndef USE_RAW
+inline void net_sockrecverr(const struct timespec *recv_at) { // NONNULL(1)
+  if (remote_ipaddr)
+    sockrecverr(usersock, recv_at, remote_ipaddr);
+}
+#endif
+
 
