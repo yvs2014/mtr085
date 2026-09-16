@@ -1,2 +1,0 @@
-#!/bin/sh
-command -v setcap >/dev/null && setcap cap_net_raw+p /usr/bin/mtr

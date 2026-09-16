@@ -370,8 +370,11 @@ static void tui_key_Q(WINDOW *win) { // set QoS
     tui_msgcont(win, strerror(EOPNOTSUPP), "IPv6 QOS");
   else
 #endif
-  { tui_get_int(win, &run_opts.qos, 0, UINT8_MAX, QOSTOS_STR, TOS_HINT_STR);
-    OPT_SUM(qos); }
+  {
+    tui_get_int(win, &run_opts.qos, 0, UINT8_MAX, QOSTOS_STR, TOS_HINT_STR);
+    net_set_qos();
+    OPT_SUM(qos);
+  }
 }
 #endif
 
@@ -472,7 +475,9 @@ static key_action_t action_map[UINT8_MAX] =  {
   [CTRL_C]    = ActionQuit,
   ['q']       = ActionQuit,
   ['r'] = ActionReset,
+#ifdef USE_RAW
   ['t'] = ActionTCP,
+#endif
   ['u'] = ActionUDP,
   ['x'] = ActionCache,
 #ifdef WITH_IPINFO
@@ -510,7 +515,9 @@ static void reset_by_key(int key, void (*reset)(void)) {
     case 'Q': // qos
 #endif
     case 's': // payload size
+#ifdef USE_RAW
     case 't': // [ActionTCP]
+#endif
     case 'u': // [ActionUDP]
     case 'x': // [ActionCache]
       reset();

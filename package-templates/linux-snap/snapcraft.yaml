@@ -49,11 +49,8 @@ parts:
       - gettext
       - build-essential
       - libncurses-dev
-      - libcap-dev
-      - libcap2-bin
     stage-packages:
       - libncursesw6
-      - libcap2
     prime:
       - usr/bin/mtr
       - usr/share/man/man8/mtr.8

@@ -163,7 +163,7 @@ AC_ARG_WITH([socket], AS_HELP_STRING([--with-socket=auto|raw|user], ['raw' or 'u
 	AS_IF([test "x$withval" != "xraw" -a "x$withval" != "xuser" -a "x$withval" != "xauto"],
 		AC_MSG_ERROR([--with-socket requires either 'raw' or 'user' or 'auto']))
 	socket="$withval"
-], [socket="raw"]) # socket="auto" # wip
+], [socket="auto"])
 AS_IF([test "x$socket" = "xauto"],
 	AS_CASE([$host_os], [linux*], [socket="user"], [socket="raw"]))
 AS_IF([test "x$socket" = "xraw"], [
@@ -355,11 +355,11 @@ m4_ifdef([AX_CHECK_COMPILE_FLAG], [
 
 _option_list=""
 AS_IF([test "x$socket"    = "xraw"], [
-	[_option_list="$_option_list +RAW"]
+	[_option_list="$_option_list SOCKET=raw"]
 	AS_IF([test "x$cap"      = "xyes"],
 		[_option_list="$_option_list +CAP"],
 		[_option_list="$_option_list -CAP"])], [
-	[_option_list="$_option_list -RAW"]])
+	[_option_list="$_option_list SOCKET=user"]])
 AS_IF([test "x$tui"       = "xyes"], [
 	[_option_list="$_option_list +TUI"]
 	AS_IF([test "x$mousemask" = "xyes"],

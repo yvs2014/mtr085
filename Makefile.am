@@ -35,7 +35,7 @@ if RAW
 mtr_SOURCES += $(netdir)/raw.c $(netdir)/raw.h
 else
 mtr_SOURCES += $(netdir)/user.c $(netdir)/user.h
-mtr_SOURCES += $(netdir)/exterr.c $(netdir)/exterr.h
+mtr_SOURCES += $(netdir)/linux-exterr.c $(netdir)/linux-exterr.h
 endif
 
 mtr_LDADD = $(RESOLV_LIBS)
@@ -120,6 +120,10 @@ EXCLOPTS += ox
 endif
 if !IPTOS
 EXCLOPTS += q
+endif
+if !RAW
+EXCLOPTS += t
+EXCLOPTS += T
 endif
 
 $(man_MANS): $(man_MANS).in config.h

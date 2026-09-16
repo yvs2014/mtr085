@@ -17,16 +17,17 @@
 
 #include "gen.h"
 #include "aux.h"
-#include "nls.h"
-#include "netmisc.h"
-#include "polling.h"
+#include "nls.h"     // IWYU pragma: keep
 #include "display.h" // IWYU pragma: keep
+#include "netmisc.h"
+#ifdef USE_RAW
+#include "polling.h"
+#endif
 
 // global
 //
-int af = AF_INET;    // address family (ip4 by default)
-t_sockaddr lsa, rsa; // local and remote sockaddr
-t_ipaddr *remote_ipaddr = (t_ipaddr*)&rsa.sin.sin_addr; // ip4 by default
+struct sockaddr_storage lsa, rsa; // local and remote sockaddr
+t_ipaddr *remote_ipaddr = (t_ipaddr*)&SADDR4(&rsa); // ip4 by default
 
 hop_t hop[MAXHOST];
 struct sequence seqlist[MAXSEQ];
@@ -123,39 +124,39 @@ bool save_curr_ts(int seq) {
 
 #define NET_SETTTL(PROTO_VERSION, TTL_TYPE) do {                        \
   if (setsockopt(sock, PROTO_VERSION, TTL_TYPE, &ttl, sizeof(ttl)) < 0) \
-    FAIL_WITH_WARN(sock, "%s(sock=%d, ttl=%d)", __func__, sock, ttl);   \
+    FAIL_WITH_WARN(sock, "sock=%d, ttl=%d", sock, ttl);                 \
+  return true;                                                          \
 } while (0)
 //
 #ifdef ENABLE_QOS
-#define NET_SETTOS(PROTO_VERSION, TOS_TYPE) do {                          \
-  int qos = run_opts.qos & 0xff;                                          \
-  if (qos)                                                                \
-    if (setsockopt(sock, PROTO_VERSION, TOS_TYPE, &qos, sizeof(qos)) < 0) \
-      FAIL_WITH_WARN(sock, "%s(sock=%d, tos=%d)", __func__, sock, qos);   \
+#define NET_SETTOS(PROTO_VERSION, TOS_TYPE) do {        \
+  int okay = true;                                      \
+  int qos = run_opts.qos & 0xff;                        \
+  if (qos)                                              \
+    okay = (setsockopt(sock, PROTO_VERSION, TOS_TYPE,   \
+      &qos, sizeof(qos)) >= 0);                         \
+  if (!okay)                                            \
+    WARNXT("%s: sock=%d, tos=%d", __func__, sock, qos); \
+  return okay;                                          \
 } while (0)
 #endif
 //
-bool settosttl4(int sock, int ttl) {
-  NET_SETTTL(IPPROTO_IP, IP_TTL);
 #ifdef ENABLE_QOS4
-  NET_SETTOS(IPPROTO_IP, IP_TOS);
+bool set_tos4(int sock) { NET_SETTOS(IPPROTO_IP, IP_TOS); }
 #endif
-  return true;
-}
+bool set_ttl4(int sock, int ttl) { NET_SETTTL(IPPROTO_IP, IP_TTL); }
 //
 #ifdef ENABLE_IPV6
-bool settosttl6(int sock, int ttl) {
-  NET_SETTTL(IPPROTO_IPV6, IPV6_UNICAST_HOPS);
 #ifdef ENABLE_QOS6
-  NET_SETTOS(IPPROTO_IPV6, IPV6_TCLASS);
+bool set_tos6(int sock) { NET_SETTOS(IPPROTO_IPV6, IPV6_TCLASS); }
 #endif
-  return true;
-}
+bool set_ttl6(int sock, int ttl) { NET_SETTTL(IPPROTO_IPV6, IPV6_UNICAST_HOPS); }
 #endif
 //
 #undef NET_SETTOS
 #undef NET_SETTTL
 
+#ifdef USE_RAW
 // Create TCP socket for hop 'at', and try to connect (poll results later)
 bool ping_tcp(int at) {
 #define SET_ADDR_PORT(src_addr, ssa_addr, dst_addr, dst_port) { \
@@ -166,45 +167,44 @@ bool ping_tcp(int at) {
   int sock = socket(af, SOCK_STREAM, 0);
   if (sock < 0)
     FAIL_WITH_WARN(sock, "socket[at=%d]", at);
+  int ttl = at + 1;
+  if (!(netkit.set_ttl && netkit.set_ttl(sock, ttl))) {
+    close(sock);
+    return false;
+  }
   /*summ*/ sum_sock[0]++;
   //
-  t_sockaddr local = {0}, remote = {0};
-  local.SA_AF = remote.SA_AF = af;
-  socklen_t addrlen = sizeof(local);
+  struct sockaddr_storage local  = {.ss_family = af};
+  struct sockaddr_storage remote = {.ss_family = af};
   switch (af) {
     case AF_INET:
-      SET_ADDR_PORT(local.S_ADDR, lsa.S_ADDR, remote.S_ADDR, remote.S_PORT);
-      addrlen = sizeof(lsa.sin);
+      SET_ADDR_PORT(SADDR4(&local), SADDR4(&lsa), SADDR4(&remote), SPORT4(&remote));
       break;
 #ifdef ENABLE_IPV6
     case AF_INET6:
-      SET_ADDR_PORT(local.S6ADDR, lsa.S6ADDR, remote.S6ADDR, remote.S6PORT)
-      addrlen = sizeof(lsa.sin6);
+      SET_ADDR_PORT(SADDR6(&local), SADDR6(&lsa), SADDR6(&remote), SPORT6(&remote));
       break;
 #endif
     default:
       FAIL_POSTPONE(EAFNOSUPPORT, af);
   }
-  if (bind(sock, &local.sa, addrlen))
+  uint salen = netkit.salen;
+  if (bind(sock, SA(&local), salen))
     FAIL_WITH_WARN(sock, "bind[at=%d]", at);
-  if (getsockname(sock, &local.sa, &addrlen))
+  if (getsockname(sock, SA(&local), &salen))
     FAIL_WITH_WARN(sock, "getsockname[at=%d]", at);
   int flags = fcntl(sock, F_GETFL, 0);
   if (fcntl(sock, F_SETFL, flags | O_NONBLOCK) < 0)
     FAIL_WITH_WARN(sock, "fcntl(O_NONBLOCK)[at=%d]", at);
   //
-  int ttl = at + 1, port = 0;
+  int port = 0;
   switch (af) {
     case AF_INET:
-      if (!settosttl4(sock, ttl))
-        return false;
-      port = ntohs(local.S_PORT);
+      port = ntohs(SPORT4(&local));
     break;
 #ifdef ENABLE_IPV6
     case AF_INET6:
-      if (!settosttl6(sock, ttl))
-        return false;
-      port = ntohs(local.S6PORT);
+      port = ntohs(SPORT6(&local));
     break;
 #endif
     default:
@@ -217,7 +217,7 @@ bool ping_tcp(int at) {
   save_sequence(seq, at);
   if (!save_curr_ts(seq))
     return false;
-  connect(sock, &remote.sa, addrlen); // NOLINT(bugprone-unused-return-value)
+  connect(sock, SA(&remote), salen); // NOLINT(bugprone-unused-return-value)
 #ifdef LOGMOD
   { struct timespec now;
     int rc = clock_gettime(CLOCK_MONOTONIC, &now); // LOGMOD for debug only
@@ -229,6 +229,7 @@ bool ping_tcp(int at) {
   return true;
 #undef SET_ADDR_PORT
 }
+#endif
 
 void fill_icmph(uint8_t type, uint16_t id, uint16_t seq, _icmphdr *icmp) { // NONNULL(4)
   icmp->type = type;
@@ -238,4 +239,26 @@ void fill_icmph(uint8_t type, uint16_t id, uint16_t seq, _icmphdr *icmp) { // NO
   icmp->seq  = htons(seq);
   LOGMSG("icmp: seq=%d id=%u", ntohs(icmp->seq), ntohs(icmp->id));
 }
+
+void fill_udph(uint16_t seq, _udphdr *udp, uint16_t size) { // NONNULL(2)
+  udp->uh_sum  = 0;
+  udp->uh_ulen = htons(size);
+  if (run_opts.port < 0)
+    SET_UDP_UH_PORTS(udp, portpid, LO_UDPPORT + seq)
+  else
+    SET_UDP_UH_PORTS(udp, LO_UDPPORT + seq, run_opts.port);
+  LOGMSG("udp: seq=%d port=%u", seq, ntohs(udp->uh_dport));
+}
+
+#ifdef ENABLE_IPV6
+bool set_opt_ck6(int sock) {
+  // checksumming by kernel
+  int opt = 6;
+  if (setsockopt(sock, IPPROTO_IPV6, IPV6_CHECKSUM, &opt, sizeof(opt)) < 0) {
+    LOGMSG("sock=%d", sock);
+    FAIL_WITH_WARN(sock, "%s", "setsockopt6(IPV6_CHECKSUM)");
+  }
+  return true;
+}
+#endif
 

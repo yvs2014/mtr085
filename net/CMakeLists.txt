@@ -3,9 +3,9 @@
 
 if(RAW)
   set(USE_RAW ON PARENT_SCOPE)
-  list(APPEND OPTION_LIST "+RAW")
+  list(APPEND OPTION_LIST "SOCKET=raw")
   if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-    # libcap: mandatory on linux
+    # libcap: mandatory on linux with raw sockets
     pkg_check_modules(CAP REQUIRED IMPORTED_TARGET libcap)
   else()
     pkg_check_modules(CAP IMPORTED_TARGET libcap)
@@ -20,8 +20,10 @@ if(RAW)
   endif()
   target_sources("${NAME}" PRIVATE raw.c)
 else()
-  list(APPEND OPTION_LIST "+USER")
-  target_sources("${NAME}" PRIVATE user.c)
+  list(APPEND OPTION_LIST "SOCKET=user")
+  target_sources("${NAME}" PRIVATE user.c linux-exterr.c)
+  list(APPEND MAN_EXCL t)
+  list(APPEND MAN_EXCL T)
 endif()
 
 target_include_directories("${NAME}" PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/..")

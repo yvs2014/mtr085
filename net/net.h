@@ -44,14 +44,19 @@ void net_settings(enum IPV6_ENDIS ip6);
 void net_assert(void);
 void net_set_proto(int type);
 bool net_set_afhost(const t_ipaddr *ipaddr) NONNULL(1);
+bool net_peername_ok(void);
 bool net_set_ifaddr(const char *ifaddr) NONNULL(1);
+#ifdef ENABLE_QOS
+void net_set_qos(void);
+#endif
 void net_reset(void);
 void net_close(void);
 int net_wait(void);
 bool net_timedout(int seq);
 void net_icmp_parse(struct timespec *recv_at) NONNULL(1);
+#ifdef USE_RAW
 void net_tcp_parse(int sock, int seq, int noerr, struct timespec *recv_at) NONNULL(4);
-#ifndef USER_RAW
+#else
 void net_sockrecverr(const struct timespec *recv_at) NONNULL(1);
 #endif
 int net_min(void);

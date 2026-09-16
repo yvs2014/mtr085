@@ -12,7 +12,10 @@
 .ds ooj "j
 .ds oon "n
 .ds oox "x
+.ds op "[:PORT]
 .ds oq "q
+.ds ot "t
+.ds oT "T
 .ds oy "y
 .Dd $Mdocdate$
 .Dt MTR 8 SMM
@@ -22,8 +25,8 @@
 .Nd a network diagnostic tool
 .Sh SYNOPSIS
 .Nm
-.Op Fl a\*[ob]Bc\*[oC]d\*[oe]fFi\*[ol]m\*[oM]\*[on]\*[oN]\*[oo]\*[oq]rsStTuvx\*[oy]01\*[o6]
-TARGET[:PORT] ...
+.Op Fl a\*[ob]Bc\*[oC]d\*[oe]fFi\*[ol]m\*[oM]\*[on]\*[oN]\*[oo]\*[oq]rsS\*[ot]\*[oT]uvx\*[oy]01\*[o6]
+TARGET\*[op] ...
 .Sh DESCRIPTION
 .Nm
 combines the functionality of the
@@ -269,10 +272,14 @@ to measure the quality of your network may result in decreased network performan
 Set payload size. A negative value is used to set it randomly within range from 0 to BYTES every cycle. Default is 56 bytes.
 .It Fl S, Fl -summary
 Print send/receive summary at exit
+.ie "t"\*[ot]" \{\
 .It Fl t, Fl -tcp
 Use TCP SYN packets instead of ICMP ECHO
+.\}
+.ie "T"\*[oT]" \{\
 .It Fl T, Fl -timeout Ar SECONDS
 The number of seconds (minimum 1, maximum 60) to keep the TCP socket open before giving up on the connection.  This will only affect the final hop.  Using large values for this, will use up a lot of file descriptors.
+.\}
 .It Fl u, Fl -udp
 Use UDP datagrams instead of ICMP ECHO
 .It Fl v, Fl -version

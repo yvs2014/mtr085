@@ -11,11 +11,10 @@ URL:        https://github.com/yvs2014/%{name}
 Source0:    %{name}-%{version}.tar.gz
 
 Requires: ncurses
-BuildRequires: meson, git, sed, pkgconf, ncurses-devel, libcap-devel
+BuildRequires: meson, git, sed, pkgconf, ncurses-devel
 BuildRequires: (gettext-runtime or gettext)
 BuildRequires: (gcc or clang)
 %if 0%{?is_opensuse}
-BuildRequires: libcap-progs
 %if 0%{?suse_version} == 1600 && 0%{?is_opensuse}
 %if %{defined source_date_epoch_from_changelog}
 %global source_date_epoch_from_changelog 0
@@ -48,9 +47,6 @@ Main project's location is https://github.com/traviscross/mtr
 %install
 %meson_install
 %find_lang %{name}
-
-%post
-setcap cap_net_raw+p %{_bindir}/%{binname}
 
 %files -f %{name}.lang
 %defattr(-,root,root,-)

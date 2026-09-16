@@ -21,7 +21,7 @@
 #define MAX_ADDRSTRLEN INET6_ADDRSTRLEN
 
 #ifndef GITREV
-#define GITREV "322"
+#define GITREV "323"
 #endif
 
 #ifndef HAVE_UINT
@@ -57,19 +57,6 @@ typedef union inaddr_union {
   struct in6_addr in6;
 #endif
 } t_ipaddr;
-
-typedef union sockaddr_union {
-  struct sockaddr     sa;
-  struct sockaddr_in  sin;
-#define SA_AF sa.sa_family
-#define S_ADDR sin.sin_addr
-#define S_PORT sin.sin_port
-#ifdef ENABLE_IPV6
-  struct sockaddr_in6 sin6;
-#define S6ADDR sin6.sin6_addr
-#define S6PORT sin6.sin6_port
-#endif
-} t_sockaddr;
 
 // stat fields description
 typedef struct s_stat {
@@ -113,7 +100,11 @@ typedef enum {
 
 typedef enum {
   ActionNone = 0, ActionQuit, ActionReset, ActionPauseResume,
-  ActionProto, ActionUDP, ActionTCP, ActionCache, ActionJttr,
+  ActionProto, ActionUDP,
+#ifdef USE_RAW
+  ActionTCP,
+#endif
+  ActionCache, ActionJttr,
 #ifdef WITH_MPLS
   ActionMPLS,
 #endif
@@ -314,7 +305,7 @@ extern opts_t ini_opts;    // initial options
 extern opt_sum_t opt_sum;  // checksum changes
 
 #ifdef TUIMODE
-typedef enum {UNKNLOOK = -1, OLDLOOK = 0, NEWLOOK/*, REVLOOK*/} tuilook_t;
+typedef enum {UNKNLOOK = -1, OLDLOOK = 0, NEWLOOK = 1/*, REVLOOK*/} tuilook_t;
 extern tuilook_t tuilook;
 #endif
 

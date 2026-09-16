@@ -82,7 +82,7 @@ static bool need_dns;
 #define SET_POLLFD(ndx, sock) { allfds[ndx].fd = (sock); allfds[ndx].revents = 0; }
 #define IN_ISSET(ndx) ((allfds[ndx].fd >= 0) && ((allfds[ndx].revents & POLLIN)  == POLLIN ))
 #define IN_ISERR(ndx) ((allfds[ndx].fd >= 0) && ((allfds[ndx].revents & POLLERR) == POLLERR))
-#define CLOSE_FD(ndx) { if (tcpseq) tcpseq[ndx] = -1; \
+#define CLOSE_TCPFD(ndx) { if (tcpseq) tcpseq[ndx] = -1; \
   if (allfds) { close(allfds[ndx].fd); allfds[ndx].fd = -1; allfds[ndx].revents = 0; /*summ*/ sum_sock[1]++;} \
 }
 
@@ -168,12 +168,12 @@ int poll_reg_fd(int sock, int seq) {
   return slot;
 }
 
-void poll_dereg_fd(int slot) { if ((slot >=0) && (slot < maxfd)) CLOSE_FD(slot); }
+void poll_dereg_fd(int slot) { if ((slot >=0) && (slot < maxfd)) CLOSE_TCPFD(slot); }
 
 void poll_close_tcpfds(void) {
   if ((maxfd > FD_MAX) && allfds)
     for (int i = FD_MAX; i < maxfd; i++)
-      if (allfds[i].fd >= 0) CLOSE_FD(i);
+      if (allfds[i].fd >= 0) CLOSE_TCPFD(i);
 }
 
 // not relying on ETIMEDOUT close stalled TCP connections
@@ -190,14 +190,14 @@ static void tcp_timedout(void) {
       if (timedout) {
         tcpseq[i] = -1;
         if (allfds[i].fd >= 0)
-          CLOSE_FD(i);
+          CLOSE_TCPFD(i);
       }
     }
   }
 }
 
-static void proceed_tcp(struct timespec *tm) NONNULL(1);
-static void proceed_tcp(struct timespec *tm) {
+static void proceed_tcp(struct timespec *tm UNUSED) NONNULL(1);
+static void proceed_tcp(struct timespec *tm UNUSED) {
   for (int i = FD_MAX; i < maxfd; i++) {
     int sock = allfds[i].fd;
     short ev = allfds[i].revents;
@@ -206,9 +206,11 @@ static void proceed_tcp(struct timespec *tm) {
     LOGMSG("slot#%d sock=%d event=%d", i, sock, ev);
     int seq = tcpseq[i];
     if (seq >= 0) {
-      if (seq < MAXSEQ) { // ping tcp-mode
+      if (seq < MAXSEQ) { // tcp-mode ping
+#ifdef USE_RAW
         net_tcp_parse(sock, seq, ev == POLLOUT, tm);
-        CLOSE_FD(i);
+        CLOSE_TCPFD(i);
+#endif
       }
 #ifdef WITH_IPINFO
       else { // ipinfo tcp-origin
@@ -267,16 +269,14 @@ static bool svc(struct timespec *last, const struct timespec *interval, int *tim
   return true;
 }
 
-#ifdef USE_RAW
-/* wip: user tcp-udp modes are not ready yet */
-static bool proto_readyset(int proto) {
+static bool proto_readyset(int type) {
   bool ready =
 #ifdef ENABLE_IPV6
-     ((af == AF_INET6) && sock6_ready(proto)) ||
+     ((af == AF_INET6) && sock6_ready(type)) ||
 #endif
-     (af == AF_INET);
+     ((af == AF_INET)  && sock4_ready(type));
   if (ready)
-    net_set_proto(proto);
+    net_set_proto(type);
   return ready;
 }
 //
@@ -292,6 +292,7 @@ static bool toggle_proto(void) {
       }
       break;
     case IPPROTO_UDP:
+#ifdef USE_RAW
       okay = proto_readyset(IPPROTO_TCP);
       if (okay) {
         run_opts.udp = false;
@@ -299,6 +300,7 @@ static bool toggle_proto(void) {
       }
       break;
     case IPPROTO_TCP:
+#endif
       okay = proto_readyset(IPPROTO_ICMP);
       if (okay) {
        run_opts.udp = false;
@@ -326,7 +328,6 @@ static bool toggle_udptcp(key_action_t action) {
   }
   return okay;
 }
-#endif
 
 #ifdef LOGMOD
 static const char* actname[MaxActions] = {
@@ -336,7 +337,9 @@ static const char* actname[MaxActions] = {
   [ActionPauseResume] = "pause/resume",
   [ActionProto] = "proto",
   [ActionUDP]   = "udp",
+#ifdef USE_RAW
   [ActionTCP]   = "tcp",
+#endif
   [ActionCache] = "cache",
   [ActionJttr]  = "jitter",
 #ifdef WITH_MPLS
@@ -429,10 +432,10 @@ static key_action_t keyboard_events(key_action_t action) {
 #endif
       break;
 #endif
-#ifdef USE_RAW
-/* wip: user tcp-udp modes are not ready yet */
     case ActionUDP:
+#ifdef USE_RAW
     case ActionTCP:
+#endif
     case ActionProto: {
       LOGMSG("< switch proto: %s", USED_PROTO);
       bool ready = false;
@@ -453,7 +456,6 @@ static key_action_t keyboard_events(key_action_t action) {
       } else
         WARNXF("%s", "Cannot change protocol");
     } break;
-#endif
     default:
       action = ActionNone;
   }
@@ -511,15 +513,13 @@ static key_action_t conclude(struct timespec *polled_at) {
         rc = act;
     }
   }
-  if (IN_ISSET(FD_NET)) { // net packet
+  if (IN_ISSET(FD_NET)) { /* in user-mode: PONG only */
     LOGMSG("got %s", "icmp or udp response");
     net_icmp_parse(polled_at);
   }
 #ifndef USE_RAW
-  else if (IN_ISERR(FD_NET)) {
-    if (proto == IPPROTO_ICMP/*no udp yet*/)
-      net_sockrecverr(polled_at);
-  }
+  else if (IN_ISERR(FD_NET))
+    net_sockrecverr(polled_at); /* extended error via user socket */
 #endif
 #ifdef ENABLE_DNS
   if (need_dns) { // dns lookup

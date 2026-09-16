@@ -9,9 +9,9 @@
 #if !defined(LOG_NET) && defined(LOGMOD)
 #undef LOGMOD
 #endif
-#include "log.h"
+#include "log.h" // IWYU pragma: keep
 
-#include "raw.h"
+#include "user.h"
 #include "aux.h"
 #include "nls.h"
 #include "netmisc.h"
@@ -22,43 +22,20 @@ int usersock = -1;
 
 //
 static int usersock4_icmp = -1;
-//static int usersock4_udp  = -1; // not yet
+static int usersock4_udp  = -1;
 #ifdef ENABLE_IPV6
 static int usersock6_icmp = -1;
-//static int usersock6_udp  = -1; // not yet
+static int usersock6_udp  = -1;
 #endif
 
-// Send packet via ICMP socket for hop 'at'
-static bool usersend_icmp(int at) {
-  uint8_t packet[MAXPACKET];
-  memset(packet, bitpattern, sizeof(packet));
-  //
-  _icmphdr *icmp = (_icmphdr *)packet;
-  uint16_t pktsize = sizeof(_icmphdr) + payloadsize;
-  int ttl = at + 1, echotype = 0, salen = 0;
-  switch (af) {
-    case AF_INET:  // TODO: set it once (or when it's changed)
-      if (!settosttl4(usersock, ttl))
-        return false;
-      echotype = ICMP_ECHO;
-      salen = sizeof(struct sockaddr_in);
-    break;
-#ifdef ENABLE_IPV6
-    case AF_INET6: // TODO: set it once (or when it's changed)
-      if (!settosttl6(usersock, ttl))
-        return false;
-      echotype = ICMP6_ECHO_REQUEST;
-      salen = sizeof(struct sockaddr_in6);
-      break;
-#endif
-    default:
-      FAIL_POSTPONE(EAFNOSUPPORT, af);
-  }
-  int seq = new_sequence(at);
-  fill_icmph(echotype, 0, seq, icmp);
+static bool savets_n_sendto(int seq, const struct sockaddr *sa,
+  uint16_t len, const uint8_t packet[len]) NONNULL(2, 4);
+static bool savets_n_sendto(int seq, const struct sockaddr *sa,
+  uint16_t len, const uint8_t packet[len])
+{
   bool okay = save_curr_ts(seq);
   if (okay) {
-    if (sendto(usersock, packet, pktsize, 0, &rsa.sa, salen) < 0) {
+    if (sendto(usersock, packet, len, MSG_DONTWAIT, sa, netkit.salen) < 0) {
       int rc = errno;
       switch (rc) {
         case EAGAIN:
@@ -77,8 +54,43 @@ static bool usersend_icmp(int at) {
   }
   return okay;
 }
+
+// Send packet via ICMP socket for hop 'at'
+static bool usersend_icmp(int at) {
+  bool okay = (netkit.set_ttl && netkit.set_ttl(usersock, at + 1));
+  if (okay) {
+    uint8_t packet[MAXPACKET];
+    memset(packet, bitpattern, sizeof(packet));
+    int seq = new_sequence(at);
+    fill_icmph(netkit.ping, 0, seq, (_icmphdr*)packet);
+    okay = savets_n_sendto(seq, SA(&rsa), sizeof(_icmphdr) + payloadsize, packet);
+  }
+  return okay;
+}
+
+// Send packet via UDP socket for hop 'at'
+static bool usersend_udp(int at) {
+  bool okay = (netkit.set_ttl && netkit.set_ttl(usersock, at + 1));
+  if (okay) {
+    uint8_t packet[MAXPACKET];
+    memset(packet, bitpattern, sizeof(packet));
+    int seq = new_sequence(at);
+    struct sockaddr_storage ss = rsa;
+    uint16_t port = htons(LO_UDPPORT + seq);
+#ifdef ENABLE_IPV6
+    if (af == AF_INET6)
+      SPORT6(&ss) = port;
+    else
+#endif
+    { SPORT4(&ss) = port; }
+    okay = savets_n_sendto(seq, SA(&ss), sizeof(_udphdr) + payloadsize, packet);
+    LOGMSG("seq=%d port=%u", seq, port);
+  }
+  return okay;
+}
+
 ping_fn ping_icmp = usersend_icmp;
-ping_fn ping_udp  = NULL/*not yet*/;
+ping_fn ping_udp  = usersend_udp;
 
 //
 static int open_socket_n_recverr(int domain, int proto, int level, int optname) {
@@ -96,81 +108,104 @@ static int open_socket_n_recverr(int domain, int proto, int level, int optname) 
   return fd;
 }
 //
-bool open_sock46(void) {
-  usersock4_icmp = open_socket_n_recverr(AF_INET, IPPROTO_ICMP, IPPROTO_IP, IP_RECVERR);
-  if (usersock4_icmp < 0)
-    WARNXT("usersock4-icmp: %s", NOSOCK_ERR);
+static int opensockprot(const char *desc, int domain, int proto, int level, int optname) {
+  int sock = open_socket_n_recverr(domain, proto, level, optname);
+  if (sock < 0)
+    WARNXT("%d: %s", desc ? desc : "", NOSOCK_ERR);
   else {
+    usersock = sock;
     sum_sock[0]++; /*summ*/
-#ifdef ENABLE_IPV6
-    usersock6_icmp = open_socket_n_recverr(AF_INET6, IPPROTO_ICMPV6, IPPROTO_IPV6, IPV6_RECVERR);
-    if (usersock6_icmp < 0)
-      WARNXT("usersock6-icmp: %s", NOSOCK_ERR);
-    else
-      sum_sock[0]++; /*summ*/
-#endif
   }
-  LOGMSG("usersock4_icmp=%d", usersock4_icmp);
+  return sock;
+}
+//
+#define GETSOCKPROT(sock, desc, dom, prot, level, opt) do {     \
+  FD_CLOSE(sock);                                               \
+  (sock) = opensockprot((desc), (dom), (prot), (level), (opt)); \
+} while (0)
+#define GETSOCKICMP4 GETSOCKPROT(usersock4_icmp, "usersock4-icmp", AF_INET,  IPPROTO_ICMP,   IPPROTO_IP,   IP_RECVERR)
+#define GETSOCKUDP4  GETSOCKPROT(usersock4_udp,  "usersock4-udp",  AF_INET,  IPPROTO_UDP,    IPPROTO_IP,   IP_RECVERR)
+#define GETSOCKICMP6 GETSOCKPROT(usersock6_icmp, "usersock6-icmp", AF_INET6, IPPROTO_ICMPV6, IPPROTO_IPV6, IPV6_RECVERR)
+#define GETSOCKUDP6  GETSOCKPROT(usersock6_udp,  "usersock6-udp",  AF_INET6, IPPROTO_UDP,    IPPROTO_IPV6, IPV6_RECVERR)
+//
+bool open_sock(int type) {
 #ifdef ENABLE_IPV6
-  LOGMSG("usersock6_icmp=%d", usersock6_icmp);
+  if (af == AF_INET6) {
+    if      (type == IPPROTO_ICMP)
+      GETSOCKICMP6;
+    else if (type == IPPROTO_UDP)
+      GETSOCKUDP6;
+    setsock_qos6();
+  } else
 #endif
-  // mandatory ip4 socket, optional ip6 socket
-  return (usersock4_icmp >= 0);
+  {
+    if      (type == IPPROTO_ICMP)
+      GETSOCKICMP4;
+    else if (type == IPPROTO_UDP)
+      GETSOCKUDP4;
+    setsock_qos4();
+  }
+  LOGMSG("usersock4_icmp=%d usersock4_udp=%d", usersock4_icmp, usersock4_udp);
+#ifdef ENABLE_IPV6
+  LOGMSG("usersock6_icmp=%d usersock6_udp=%d", usersock6_icmp, usersock6_udp);
+#endif
+  LOGMSG("usersock=%d SENDSOCK=%d RECVSOCK=%d", usersock, SENDSOCK, RECVSOCK);
+  return (usersock >= 0);
 }
 
-void close_sock46(void) {
-  FD_CLOSE(usersock4_icmp);
-//  FD_CLOSE(usersock4_udp);
+void close_all_socks(void) {
 #ifdef ENABLE_IPV6
   FD_CLOSE(usersock6_icmp);
-//  FD_CLOSE(usersock6_udp);
+  FD_CLOSE(usersock6_udp);
 #endif
+  FD_CLOSE(usersock4_icmp);
+  FD_CLOSE(usersock4_udp);
   usersock = -1;
 }
 
 bool sock4_ready(int type) {
-  bool ready = false;
-  switch (type) {
-    case IPPROTO_ICMP:
-      ready = (usersock4_icmp >= 0);
-      break;
-//    case IPPROTO_UDP:
-//      ready = (usersock4_udp >= 0);
-//      break;
-    default: break;
-  }
-  return ready;
+  bool ready =
+    (type == IPPROTO_ICMP) ? (usersock4_icmp >= 0) :
+    (type == IPPROTO_UDP)  ? (usersock4_udp  >= 0) :
+    false;
+  return ready ? ready : open_sock(type);
 }
 
 #ifdef ENABLE_IPV6
 bool sock6_ready(int type) {
-  bool ready = false;
-  switch (type) {
-    case IPPROTO_ICMP:
-      ready = (usersock6_icmp >= 0);
-      break;
-//    case IPPROTO_UDP:
-//      ready = (usersock6_udp >= 0);
-//      break;
-    default: break;
-  }
-  return ready;
+  bool ready =
+    (type == IPPROTO_ICMP) ? (usersock6_icmp >= 0) :
+    (type == IPPROTO_UDP)  ? (usersock6_udp  >= 0) :
+    false;
+  return ready ? ready : open_sock(type);
 }
 #endif
 
+inline void setsock_qos4(void) {
+  if (usersock >= 0)
+    set_tos4(usersock);
+}
+//
 void set_sock4(void) {
   usersock =
     (proto == IPPROTO_ICMP) ? usersock4_icmp :
-//    (proto == IPPROTO_UDP)  ? usersock4_udp  :
+    (proto == IPPROTO_UDP)  ? usersock4_udp  :
     -1;
+  setsock_qos4();
 }
-
+//
 #ifdef ENABLE_IPV6
+inline void setsock_qos6(void) {
+  if (usersock >= 0)
+    set_tos6(usersock);
+}
+//
 void set_sock6(void) {
   usersock =
     (usersock == IPPROTO_ICMP) ? usersock6_icmp :
-//    (usersock == IPPROTO_UDP)  ? usersock6_udp  :
+    (usersock == IPPROTO_UDP)  ? usersock6_udp  :
     -1;
+  setsock_qos6();
 }
 #endif
 

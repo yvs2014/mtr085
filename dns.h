@@ -24,7 +24,7 @@
 
 extern uint dns_queries[];
 extern uint dns_replies[];
-extern t_sockaddr *custom_res;
+extern struct sockaddr *custom_res;
 
 bool dns_open(void);
 void dns_close(void);

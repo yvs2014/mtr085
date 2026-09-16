@@ -146,7 +146,8 @@ static void menu_posteditaction(mi_inst inst) {
                             OPT_SUM(pattern);  break;
     case MENU_ITEM_TIMEI:   OPT_SUM(interval); break;
 #ifdef ENABLE_QOS
-    case MENU_ITEM_QOS:     OPT_SUM(qos);      break;
+    case MENU_ITEM_QOS:     net_set_qos();
+                            OPT_SUM(qos);      break;
 #endif
     case MENU_ITEM_PSIZE:   OPT_SUM(size);     break;
     case MENU_ITEM_CACHE:   OPT_SUM(cache);    break;

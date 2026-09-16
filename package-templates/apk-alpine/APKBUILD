@@ -15,12 +15,11 @@ giturl="$url"
 arch='all'
 license='GPL'
 depends='!mtr-*'
-makedepends='git meson pkgconf gcc libintl gettext gettext-dev ncurses-dev libcap-dev libidn-dev'
+makedepends='git meson pkgconf gcc libintl gettext gettext-dev ncurses-dev libidn-dev'
 options='strip !debug !check'
 subpackages="$pkgname-doc $pkgname-lang"
 
 provides="$_bin"
-install="$pkgname.post-install $pkgname.post-upgrade"
 
 snapshot() {
   mkdir -p "$srcdir"
@@ -51,10 +50,6 @@ build() {
 #  cd "$srcdir/$pkgname"
 #  meson test -C "$_build"
 #}
-
-post_install() {
-  setcap 'cap_net_raw+p' "usr/bin/$_bin" || :
-}
 
 package() {
   cd "$srcdir/$pkgname"

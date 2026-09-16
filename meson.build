@@ -1,7 +1,7 @@
 project('mtr085', 'c',
   default_options: [
 #    'c_std=gnu99,c99',
-#    'b_sanitize=address,undefined',
+    'b_sanitize=address,undefined',
     'warning_level=3' ],
   meson_version: '>= 0.50', # deb10:0.49.2
   license: 'GPL-2.0-or-later',
@@ -420,9 +420,4 @@ if manexcl.length() > 0
 endif
 #
 install_man(manre)
-
-# warn about 'user-socket support' state (wip)
-if not raw
-  warning('user-socket support is not completed yet (work-in-progress)')
-endif
 

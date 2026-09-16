@@ -123,9 +123,9 @@ static struct __res_state myres;
 #endif
 
 // global
-uint dns_queries[3];     // number of queries (sum, ptr, txt)
-uint dns_replies[3];     // number of replies (sum, ptr, txt)
-t_sockaddr *custom_res;  // -N option
+uint dns_queries[3]; // number of queries (sum, ptr, txt)
+uint dns_replies[3]; // number of replies (sum, ptr, txt)
+struct sockaddr *custom_res; // -N option
 
 // external callbacks for 'ns_t_ptr' and 'ns_t_txt' replies
 //   first one by net-module
@@ -139,7 +139,7 @@ static int resfd4 = -1;
 static int resfd6 = -1;
 #endif
 
-static t_sockaddr sa_from;
+static struct sockaddr_storage sa_from;
 
 int dns_wait(int family) {
  return dns_ready ? (
@@ -185,10 +185,10 @@ static inline void dns_nses(void) {
   // note2: res.options are from resolv.conf unless nsserver is defined
   if (custom_res) {
     myres.options = RES_RECURSE;
-    if (custom_res->SA_AF == AF_INET)
+    if (custom_res->sa_family == AF_INET)
       memcpy(&nsaddr4[nscount4++], custom_res, sizeof(nsaddr4[0]));
 #ifdef ENABLE_IPV6
-    else if (custom_res->SA_AF == AF_INET6)
+    else if (custom_res->sa_family == AF_INET6)
       memcpy(&nsaddr6[nscount6++], custom_res, sizeof(nsaddr6[0]));
 #endif
   } else {
@@ -619,20 +619,20 @@ static void dns_parse_reply(const uint8_t *data, size_t len) {
 static bool validns(int family) {
 #ifdef ENABLE_IPV6
   if        (family == AF_INET6) {
-    bool local = !addr6exist(&sa_from.S6ADDR);
+    bool local = !addr6exist(&SADDR6(&sa_from));
     for (uint i = 0; i < nscount6; i++) {
       struct in6_addr *addr = &nsaddr6[i].sin6_addr;
-      if (addr6equal(addr, &sa_from.S6ADDR))
+      if (addr6equal(addr, &SADDR6(&sa_from)))
         return true;
       if (local && addr6exist(addr))
         return true;
     }
   } else if (family == AF_INET)
 #endif
-  { bool local = !addr4exist(&sa_from.S_ADDR);
+  { bool local = !addr4exist(&SADDR4(&sa_from));
     for (uint i = 0; i < nscount4; i++) {
       struct in_addr *addr = &nsaddr4[i].sin_addr;
-      if (addr4equal(addr, &sa_from.S_ADDR))
+      if (addr4equal(addr, &SADDR4(&sa_from)))
         return true;
       if (local && addr4exist(addr))
         return true;
@@ -643,7 +643,7 @@ static bool validns(int family) {
 void dns_parse(int fd, int family) {
   uint8_t packet[NS_PACKETSZ];
   socklen_t fromlen = sizeof(sa_from);
-  ssize_t r = recvfrom(fd, packet, sizeof(packet), 0, &sa_from.sa, &fromlen);
+  ssize_t r = recvfrom(fd, packet, sizeof(packet), 0, SA(&sa_from), &fromlen);
   if (r > 0) {
     if (validns(family))
       dns_parse_reply(packet, r);

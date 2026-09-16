@@ -148,7 +148,12 @@ extern bool  (*addr_exist)(const void *a) NONNULL(1); // true if not 0
 extern bool  (*addr_equal)(const void *a, const void *b) NONNULL(1, 2);
 extern void* (*addr_copy)(void *dst, const void *src) NONNULL(1, 2);
 
-bool open_sock46(void);
+void close_all_socks(void);
+#ifdef USE_RAW
+bool open_all_socks(void);
+#else
+bool open_sock(int type);
+#endif
 void set_sock4(void);
 bool sock4_ready(int type);
 #ifdef ENABLE_IPV6
@@ -158,5 +163,13 @@ bool sock6_ready(int type);
 
 void keep_error(int rc, const char *prefix) NONNULL(2);
 const char* rstrerror(int rc);
+
+#define SA(sa)  ((struct sockaddr     *)(sa))
+#define SA4(sa) ((struct sockaddr_in  *)(sa))
+#define SA6(sa) ((struct sockaddr_in6 *)(sa))
+#define SADDR4(sa) (((struct sockaddr_in  *)(sa))->sin_addr )
+#define SPORT4(sa) (((struct sockaddr_in  *)(sa))->sin_port )
+#define SADDR6(sa) (((struct sockaddr_in6 *)(sa))->sin6_addr)
+#define SPORT6(sa) (((struct sockaddr_in6 *)(sa))->sin6_port)
 
 #endif

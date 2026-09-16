@@ -47,8 +47,6 @@
 #include "nls.h"
 #endif
 
-#define SET_UDP_UH_PORTS(uh, s, d) { (uh)->uh_sport = htons(s); (uh)->uh_dport = htons(d); }
-
 // global vars
 int recvsock = -1;
 int sendsock = -1;
@@ -73,64 +71,24 @@ static uint16_t sum1616(const uint16_t *data, uint len, uint sum) {
   return ~sum;
 }
 
-static bool fill_udph(uint16_t seq, _udphdr *udp, uint16_t size) NONNULL(2);
-static bool fill_udph(uint16_t seq, _udphdr *udp, uint16_t size) {
-  udp->uh_sum  = 0;
-  udp->uh_ulen = htons(size);
-  if (run_opts.port < 0)
-    SET_UDP_UH_PORTS(udp, portpid, LO_UDPPORT + seq)
-  else
-    SET_UDP_UH_PORTS(udp, LO_UDPPORT + seq, run_opts.port);
-  LOGMSG("udp: seq=%d port=%u", seq, ntohs(udp->uh_dport));
-#ifdef ENABLE_IPV6
-  if (af == AF_INET6) { // checksumming by kernel
-    int opt = 6;
-    if (setsockopt(sendsock, IPPROTO_IPV6, IPV6_CHECKSUM, &opt, sizeof(opt)))
-      FAIL_WITH_WARN(sendsock, "setsockopt6(sock=%d, IPV6_CHECKSUM)", sendsock);
-  }
-  return true;
-#endif
-}
-
 // Send DGRAM packet via RAW socket for hop 'at'
 static bool rawsend_icmp_udp(int at) {
-  static uint8_t packet[MAXPACKET];
-  memset(packet, bitpattern, sizeof(packet));
-  //
-  uint8_t *data = packet;
-  uint16_t datasize = 8/*icmp,udp header*/ + payloadsize;
-  uint16_t pktsize  = datasize;
-  int echotype = 0, salen = 0;
   int ttl = at + 1;
-  //
-  switch (af) {
-    case AF_INET:  // TODO: set it once
-      if (!settosttl4(sendsock, ttl))
-        return false;
-      echotype = ICMP_ECHO;
-      salen = sizeof(struct sockaddr_in);
-      break;
-#ifdef ENABLE_IPV6
-    case AF_INET6: // TODO: set it once
-      if (!settosttl6(sendsock, ttl))
-        return false;
-      echotype = ICMP6_ECHO_REQUEST;
-      salen = sizeof(struct sockaddr_in6);
-      break;
-#endif
-    default:
-      FAIL_POSTPONE(EAFNOSUPPORT, af);
-  }
-  //
+  if (!(netkit.set_ttl && netkit.set_ttl(sendsock, ttl)))
+    return false;
+  uint8_t packet[MAXPACKET];
+  memset(packet, bitpattern, sizeof(packet));
+  uint16_t pktsize = 8/*icmp,udp header*/ + payloadsize;
   int seq = new_sequence(at);
   switch (proto) {
     case IPPROTO_ICMP:
-      fill_icmph(echotype, pid16, seq, (_icmphdr*)data);
-      ((_icmphdr *)data)->sum =
-        sum1616((uint16_t *)data, datasize / 2, (datasize % 2) ? bitpattern : 0);
+      fill_icmph(netkit.ping, pid16, seq, (_icmphdr*)packet);
+      ((_icmphdr *)packet)->sum =
+        sum1616((uint16_t *)packet, pktsize / 2, (pktsize % 2) ? bitpattern : 0);
       break;
     case IPPROTO_UDP:
-      if (!fill_udph(seq, (_udphdr*)data, datasize))
+      fill_udph(seq, (_udphdr*)packet, pktsize);
+      if ((af == AF_INET6) && !set_opt_ck6(sendsock))
         return false;
       break;
     default:
@@ -139,7 +97,7 @@ static bool rawsend_icmp_udp(int at) {
   //
   bool okay = save_curr_ts(seq);
   if (okay) {
-    if (sendto(sendsock, packet, pktsize, 0, &rsa.sa, salen) < 0) {
+    if (sendto(sendsock, packet, pktsize, 0, SA(&rsa), netkit.salen) < 0) {
       int rc = errno;
       char str[MAX_ADDRSTRLEN] = {0};
       const char *dst = inet_ntop(af, remote_ipaddr, str, sizeof(str));
@@ -186,7 +144,7 @@ static int rawsock(int domain, int type, int proto, const char *what) {
   if (sock < 0) {
     errno = keep;
     warn("%s", what);
-    close_sock46();
+    close_all_socks();
   } else
     /*summ*/ sum_sock[0]++;
   return sock;
@@ -194,7 +152,7 @@ static int rawsock(int domain, int type, int proto, const char *what) {
 
 //
 
-bool open_sock46(void) {
+bool open_all_socks(void) {
   // mandatory ipv4
   recvsock4 = rawsock(AF_INET, SOCK_RAW, IPPROTO_ICMP, "icmp-raw-recvsock");
   if (recvsock4 < 0)
@@ -208,6 +166,7 @@ bool open_sock46(void) {
   if (sendsock4_udp < 0)
     return false;
   /*summ*/ sum_sock[0]++;
+  LOGMSG("sendsock4_icmp=%d sendsock4_udp=%d", sendsock4_icmp, sendsock4_udp);
 #ifdef ENABLE_IPV6
   // optional ipv6
   RAWCAP_ON;
@@ -227,11 +186,12 @@ bool open_sock46(void) {
   else
     LOGMSG("sendsock6_udp: %s", NOSOCK_ERR);
   RAWCAP_OFF;
+  LOGMSG("sendsock6_icmp=%d sendsock6_udp=%d", sendsock6_icmp, sendsock6_udp);
 #endif
   return true;
 }
 
-void close_sock46(void) {
+void close_all_socks(void) {
   FD_CLOSE(recvsock4);
   FD_CLOSE(sendsock4_icmp);
   FD_CLOSE(sendsock4_udp);
@@ -273,21 +233,37 @@ bool sock6_ready(int type) {
 }
 #endif
 
+void setsock_qos4(void) {
+  if (recvsock >= 0)
+    set_tos4(recvsock);
+  if (sendsock >= 0)
+    set_tos4(sendsock);
+}
+//
 void set_sock4(void) {
   recvsock = recvsock4;
   sendsock =
     (proto == IPPROTO_ICMP) ? sendsock4_icmp :
     (proto == IPPROTO_UDP)  ? sendsock4_udp  :
     -1;
+  setsock_qos4();
 }
-
+//
 #ifdef ENABLE_IPV6
+void setsock_qos6(void) {
+  if (recvsock >= 0)
+    set_tos6(recvsock);
+  if (sendsock >= 0)
+    set_tos6(sendsock);
+}
+//
 void set_sock6(void) {
   recvsock = recvsock6;
   sendsock =
     (proto == IPPROTO_ICMP) ? sendsock6_icmp :
     (proto == IPPROTO_UDP)  ? sendsock6_udp  :
     -1;
+  setsock_qos6();
 }
 #endif
 

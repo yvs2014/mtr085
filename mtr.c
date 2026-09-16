@@ -161,8 +161,10 @@ enum OPTIONS {
   OPT_REPORT   = 'r',
   OPT_SIZE     = 's',
   OPT_SUMMARY  = 'S',
+#ifdef USE_RAW
   OPT_TCP      = 't',
   OPT_TIMEOUT  = 'T',
+#endif
   OPT_UDP      = 'u',
   OPT_VERSION  = 'v',
   OPT_CACHE    = 'x',
@@ -327,8 +329,10 @@ static struct option long_options[] = {
   {"report",     0, 0, OPT_REPORT},
   {"psize",      1, 0, OPT_SIZE},     // payload size
   {"summary",    0, 0, OPT_SUMMARY},  // print send/recv summary at exit
+#ifdef USE_RAW
   {"tcp",        0, 0, OPT_TCP},      // TCP (note: default is ICMP)
   {"timeout",    1, 0, OPT_TIMEOUT},  // timeout for TCP sockets
+#endif
   {"udp",        0, 0, OPT_UDP},      // UDP (note: default is ICMP)
   {"version",    0, 0, OPT_VERSION},
   {"cache",      1, 0, OPT_CACHE},    // enable cache with timeout in seconds
@@ -403,7 +407,9 @@ static void set_opt_desc(char opt, uint len, const char* desc[len]) {
     case OPT_BITS:    str = CAP_NUMBER;  break;
     case OPT_INTERVAL:
     case OPT_CACHE:
+#ifdef USE_RAW
     case OPT_TIMEOUT: str = CAP_SECONDS; break;
+#endif
     case OPT_ADDR:    str = CAP_IPADDR;  break;
     case OPT_COUNT:   str = CAP_COUNT;   break;
 #ifdef TUIMODE
@@ -457,7 +463,11 @@ NORETURN static void usage(int status) {
     if (short_options[i] != ':')
       putchar(short_options[i]);
   printf("%s", rest);
+#ifdef USE_RAW
   printf("] %s%s%s[:%s] ...\n", bold, CAP_TARGET, rest, CAP_PORT);
+#else
+  printf("] %s%s%s ...\n", bold, CAP_TARGET, rest);
+#endif
   for (int i = 0; long_options[i].name; i++) {
     printf("\t[%s", yell);
     char opt = (char)long_options[i].val;
@@ -482,9 +492,9 @@ NORETURN static void usage(int status) {
 static bool set_custom_res(struct addrinfo *ns) {
   if (ns && ns->ai_addr && (
 #ifdef ENABLE_IPV6
-       (ns->ai_family == AF_INET6) ? addr6exist(&((struct sockaddr_in6 *)ns->ai_addr)->sin6_addr) :
+       (ns->ai_family == AF_INET6) ? addr6exist(&SADDR6(ns->ai_addr)) :
 #endif
-      ((ns->ai_family == AF_INET)  ? addr4exist(&((struct sockaddr_in *)ns->ai_addr)->sin_addr) : false))) {
+      ((ns->ai_family == AF_INET)  ? addr4exist(&SADDR4(ns->ai_addr)) : false))) {
     if (custom_res) {
       free(custom_res);
       WARNXT("%s", MANYNS_WARN);
@@ -494,9 +504,9 @@ static bool set_custom_res(struct addrinfo *ns) {
       memcpy(custom_res, ns->ai_addr, ns->ai_addrlen);
       uint16_t *port =
 #ifdef ENABLE_IPV6
-        (ns->ai_family == AF_INET6) ? &custom_res->S6PORT :
+        (ns->ai_family == AF_INET6) ? &SPORT6(custom_res) :
 #endif
-       ((ns->ai_family == AF_INET)  ? &custom_res->S_PORT : NULL);
+       ((ns->ai_family == AF_INET)  ? &SPORT4(custom_res) : NULL);
       if (port && !*port) *port = htons(53);
       return true;
     }
@@ -793,24 +803,27 @@ static void short_set(char opt) {
     case OPT_SUMMARY:
       ini_opts.stat = true;
       break;
+#ifdef USE_RAW
     case OPT_TIMEOUT:
       if (optarg)
         ini_opts.syn = arg2int(opt, optarg, 1, TCPSYN_TOUT_MAX, TCPTM_STR, NULL, 0) * MIL;
       break;
-#ifdef USE_RAW
-/* wip: user tcp-udp modes are not ready yet */
     case OPT_TCP:
-    case OPT_UDP: {
+#endif
+    case OPT_UDP: { // user-socket tcp-mode is not ready yet
       bool udp = (opt == OPT_UDP);
       if ((udp && ini_opts.tcp) || (!udp && ini_opts.udp))
-        ERRXT(EINVAL, "-%c -%c: %s", ini_opts.udp ? OPT_UDP: OPT_TCP, opt, MUTEXCL_ERR);
+#ifdef USE_RAW
+        ERRXT(EINVAL, "-%c -%c: %s", ini_opts.udp ? OPT_UDP : OPT_TCP, opt, MUTEXCL_ERR);
+#else
+        ERRXT(EINVAL, "-%c -%c: %s", OPT_UDP, opt, MUTEXCL_ERR);
+#endif
       net_set_proto(udp ? IPPROTO_UDP : IPPROTO_TCP);
       if (udp)
         ini_opts.udp = true;
       else
         ini_opts.tcp = true;
     } break;
-#endif
     case OPT_VERSION:
       break;
     case OPT_CACHE:
@@ -886,7 +899,8 @@ static inline const struct addrinfo* find_ai_af(const struct addrinfo *res) {
   for (ai = res; ai; ai = ai->ai_next)
     if (ai->ai_family == af) // desired AF
       break;
-  if (ai && (ai->ai_family != af)) ai = NULL; // unsuitable AF
+  if (ai && (ai->ai_family != af))
+    ai = NULL; // unsuitable AF
   if (!ai) // not found
 #ifdef ENABLE_IPV6
     WARNXT("%s: %s: IPv%c: %s", TARGET_STR, dsthost,
@@ -901,15 +915,17 @@ static inline const struct addrinfo* find_ai_af(const struct addrinfo *res) {
 static inline const struct addrinfo* find_ai_pref(const struct addrinfo *res) {
   // preference: first ipv4, second ipv6
   const struct addrinfo *ai = NULL;
-  for (ai = res; ai; ai = ai->ai_next) if (ai->ai_family == AF_INET) break;
+  for (ai = res; ai; ai = ai->ai_next)
+    if (ai->ai_family == AF_INET)
+      break;
   if (!ai)
-    for (ai = res; ai; ai = ai->ai_next) if (ai->ai_family == AF_INET6) break;
+    for (ai = res; ai; ai = ai->ai_next)
+      if (ai->ai_family == AF_INET6)
+        break;
   if (!ai)
     WARNXT("%s: %s: %s", TARGET_STR, dsthost, strerror(EADDRNOTAVAIL));
-  else if (af != ai->ai_family) {
-    af = ai->ai_family;
-    net_settings((af == AF_INET6) ? IPV6_ENABLED : IPV6_DISABLED);
-  }
+  else if (af != ai->ai_family)
+    net_settings((ai->ai_family == AF_INET6) ? IPV6_ENABLED : IPV6_DISABLED);
   return ai;
 }
 #endif
@@ -925,9 +941,9 @@ static int set_target(const struct addrinfo *res) {
   if (ai) {
     t_ipaddr *host =
 #ifdef ENABLE_IPV6
-      (af == AF_INET6) ? (t_ipaddr*)&((struct sockaddr_in6 *)ai->ai_addr)->sin6_addr :
+      (af == AF_INET6) ? (t_ipaddr*)&SADDR6(ai->ai_addr) :
 #endif
-      ((af == AF_INET) ? (t_ipaddr*)&((struct sockaddr_in  *)ai->ai_addr)->sin_addr  : NULL);
+      ((af == AF_INET) ? (t_ipaddr*)&SADDR4(ai->ai_addr) : NULL);
     if (af && host && net_set_afhost(host)) {
       if (iface_addr && !net_set_ifaddr(iface_addr))
         WARNXT("%s: %s", USEADDR_ERR, iface_addr);
@@ -1045,6 +1061,7 @@ static void try_to_resolv(t_res_rc *rr) {
   }
 }
 
+#ifdef USE_RAW
 static void resolv_with_port(t_res_rc *rr) NONNULL(1);
 static void resolv_with_port(t_res_rc *rr) {
   const t_res_rc copy = *rr;
@@ -1069,6 +1086,7 @@ static void resolv_with_port(t_res_rc *rr) {
   } else
     WARNXT("%s: %s", PARSE_ERR, buff);
 }
+#endif
 
 static inline void stat_fin(void) {
   printf("SOCKET: %u %s, %u %s\n", sum_sock[0], OPENED_STR, sum_sock[1], CLOSED_STR);
@@ -1111,26 +1129,42 @@ static inline void main_prep(int argc, char **argv) {
   display_start((argc > optind) ? (argc - optind) : 0);
 }
 
+static void run_loop(bool next, bool fin) {
+  if (display_open())
+    display_loop();
+  else
+    WARNXT("%s", OPENDISP_ERR);
+  net_end_transit();
+  if (fin)
+    display_confirm_fin();
+  display_close(next);
+#ifndef USE_RAW
+  close_all_socks();
+#endif
+}
+
 // return: failed or not
-static inline int main_loop(struct addrinfo *ai, bool fin) {
-  static bool next_target;
+static inline int main_loop(struct addrinfo *ai, bool next, bool fin) {
   int rc = -1;
   if (ai) {
     rc = set_target(ai);
-    if (!rc) {
+    if (rc)
+      WARNXT("af=%d proto=%d: %s %s", af, proto, "Cannot set target AI for", dsthost);
+    else {
 #ifdef ENABLE_QOS
       VALID_QOS_AF(dsthost, run_opts.qos);
 #endif
-      if (display_open())
-        display_loop();
-      else
-        WARNXT("%s", OPENDISP_ERR);
-      net_end_transit();
-      if (fin)
-        display_confirm_fin();
-      display_close(next_target);
-      if (!next_target)
-        next_target = true;
+#ifndef USE_RAW
+      if (proto != IPPROTO_TCP) {
+        rc = !open_sock(proto);
+        if (!rc)
+          rc = !net_peername_ok();
+        if (rc)
+          WARNXT("af=%d proto=%d: %s %s", af, proto, "Cannot open user socket for", dsthost);
+      }
+      if (!rc)
+#endif
+      { run_loop(next, fin); }
     }
     freeaddrinfo(ai);
   } else
@@ -1163,7 +1197,7 @@ static inline void main_fin(void) {
 }
 
 // return: failed or not
-static int resolv_n_ping(int port, bool fin) {
+static int resolv_n_ping(int port, bool next, bool fin) {
   tgterr_txt[0] = 0;    // clear per target error message
   ini_opts.port = port; // set initial port
   t_res_rc rr = {       // default resolv data
@@ -1181,19 +1215,23 @@ static int resolv_n_ping(int port, bool fin) {
     }
   };
   try_to_resolv(&rr);
+#ifdef USE_RAW
   if (rr.rc && ((proto == IPPROTO_TCP) || (proto == IPPROTO_UDP)))
     resolv_with_port(&rr);
+#endif
   if (rr.res && !rr.rc)
-    rr.rc = main_loop(rr.res, fin);
+    rr.rc = main_loop(rr.res, next, fin);
   else
     WARNXT("%s %s: %s", RESFAIL_ERR, dsthost, rr.error ? rr.error : UNKNOWN_ERR);
   return rr.rc;
 }
 
 int main(int argc, char **argv) {
+#ifdef USE_RAW
   // get raw/icmp sockets
-  if (!open_sock46())
+  if (!open_all_socks())
     errx(EXIT_FAILURE, "Unable to get raw sockets");
+#endif
   // drop permissions if that's set
   if (setgid(getgid()) || setuid(getuid()))
     errx(EXIT_FAILURE, "Unable to drop permissions");
@@ -1226,8 +1264,10 @@ int main(int argc, char **argv) {
   int port = ini_opts.port;
   int ec = 0;
   for (int ndx = optind; (ndx < argc) && argv[ndx];) {
-    dsthost = argv[ndx++]; // there's ++
-    int rc = resolv_n_ping(port, ndx == argc);
+    bool next = ndx > optind;
+    dsthost   = argv[ndx++]; // there's ++
+    bool fin  = ndx == argc;
+    int rc = resolv_n_ping(port, next, fin);
     if (rc && !ec)
       ec = rc;
   }

@@ -47,7 +47,7 @@
 #include "raw.h"
 #else
 #include "user.h"
-#include "exterr.h"
+#include "linux-exterr.h"
 #endif
 #include "aux.h"
 #include "nls.h"
@@ -109,16 +109,10 @@ struct PACKIT icmpext_object { // RFC4884
 #define MPLSMIN 120 // min after: [ip] icmp ip
 #endif /*MPLS*/
 
-typedef struct ieset {
-  bool ip6;
-  socklen_t salen;
-  size_t ipicmphsz; // set in net_settings()
-  uint8_t pong, exceed, unreach;
-} ieset_t;
-
-
 // global
 int proto = IPPROTO_ICMP; // ICMP as default packet type
+netkit_t netkit;
+int af; // address family
 bool reset_pattern = true;
 bool reset_pldsize = true;
 
@@ -131,7 +125,6 @@ static int stopper  = MAXHOST;
 
 static size_t minfailsz; // set in net_set_proto()
 static size_t hdr_minsz;
-static ieset_t ieset;
 
 //
 
@@ -264,9 +257,9 @@ static inline void set_new_mpls(int at, int ndx, const mpls_data_t *mpls) {
 static const t_ipaddr* sa2addr(const struct sockaddr *sa) {
   return
 #ifdef ENABLE_IPV6
-    ieset.ip6 ? (void*)&((const struct sockaddr_in6 *)sa)->sin6_addr :
+    netkit.ip6 ? (t_ipaddr*)&SADDR6(sa) :
 #endif
-                (void*)&((const struct sockaddr_in  *)sa)->sin_addr;
+                 (t_ipaddr*)&SADDR4(sa);
 }
 
 // Got a return
@@ -292,7 +285,8 @@ static int net_stat(uint port, const t_ipaddr *addr, const struct timespec *recv
 #endif
     LOGMSG("reason: %s", reason == RE_PONG    ? "PONG"    :
                          reason == RE_EXCEED  ? "EXCEED"  :
-                         reason == RE_UNREACH ? "UNREACH" : UNKN_ITEM);
+                         reason == RE_UNREACH ? "UNREACH" :
+                         UNKN_ITEM);
   }
 #endif
   //
@@ -427,13 +421,13 @@ void net_icmp_parse(struct timespec *recv_at) { // NONNULL(1)
   uint8_t packet[MAXPACKET] = {0};
   struct sockaddr_storage sa_in = {0};
   //
-  ssize_t size = recvfrom(RECVSOCK, packet, MAXPACKET, 0, (struct sockaddr *)&sa_in, &ieset.salen);
+  ssize_t size = recvfrom(RECVSOCK, packet, MAXPACKET, 0, (struct sockaddr *)&sa_in, &netkit.salen);
   LOGMSG("got %zd bytes", size);
   if (size < (ssize_t)hdr_minsz)
     LOGRET("incorrect packet size %zd [af=%d proto=%d minsize=%zd]", size, af, proto, hdr_minsz);
   //
   _icmphdr *icmp = (_icmphdr*)(packet + IPHSZ_IN_REPLY);
-  uint8_t *data = ((uint8_t*)icmp) + ieset.ipicmphsz;
+  uint8_t *data = ((uint8_t*)icmp) + netkit.ipicmphsz;
   //
 #ifdef WITH_MPLS
   bool mplson = false;
@@ -441,7 +435,7 @@ void net_icmp_parse(struct timespec *recv_at) { // NONNULL(1)
   int seq = -1, reason = -1;
   switch (proto) {
     case IPPROTO_ICMP: {
-      if (icmp->type == ieset.pong) {
+      if (icmp->type == netkit.pong) {
 #ifdef USE_RAW
         seq = get_valid_seq(icmp);
         if (seq < 0)
@@ -451,7 +445,7 @@ void net_icmp_parse(struct timespec *recv_at) { // NONNULL(1)
 #endif
         reason = RE_PONG;
       } else
-      if ((icmp->type == ieset.exceed) || (icmp->type == ieset.unreach)) {
+      if ((icmp->type == netkit.exceed) || (icmp->type == netkit.unreach)) {
         if (size < (ssize_t)minfailsz)
           LOGRET("incorrect packet size %zd [af=%d proto=%d expect>=%zd]", size, af, proto, minfailsz);
 #ifdef USE_RAW
@@ -462,7 +456,7 @@ void net_icmp_parse(struct timespec *recv_at) { // NONNULL(1)
         seq = ntohs(((_icmphdr *)data)->seq);
 #endif
         MPLS_LIKE_TEST;
-        reason = (icmp->type == ieset.exceed) ? RE_EXCEED : RE_UNREACH;
+        reason = (icmp->type == netkit.exceed) ? RE_EXCEED : RE_UNREACH;
       }
       LOGMSG_ICMP;
       if (seq >= 0) /*summ*/ net_replies[QR_ICMP]++;
@@ -659,85 +653,96 @@ void net_reset(void) {
   numhosts = BATCH_HOSTS;
 }
 
-bool net_set_afhost(const t_ipaddr *addr) { // NONNULL(1)
-  rsa.SA_AF = af;
+bool net_peername_ok(void) {
+  bool okay = false;
+  struct sockaddr_storage ss = {0};
+  socklen_t len = sizeof(ss);
+  if (getsockname(RECVSOCK, (struct sockaddr *)&ss, &len) < 0)
+    WARNF("%s", "getsockname()");
+  else {
+    if (len > sizeof(ss))
+      WARNXT("%s: %d > %zd: %s", "recv-socket", len, sizeof(ss), strerror(EINVAL));
+    int saf = ss.ss_family;
+    char *srcaddr =
+#ifdef ENABLE_IPV6
+      (saf == AF_INET6) ? (char*)&SADDR6(&ss) :
+#endif
+      ((saf == AF_INET) ? (char*)&SADDR4(&ss) : NULL);
+    if (srcaddr) {
+      char buff[MAX_ADDRSTRLEN] = {0};
+      okay = inet_ntop(saf, srcaddr, buff, sizeof(buff));
+      if (!okay)
+        WARNT("%s", "inet_ntop()");
+    } else
+      WARNXT("%d: %s", saf, strerror(EAFNOSUPPORT));
+  }
+  return okay;
+}
+
+bool net_set_afhost(const t_ipaddr *ipaddr) { // NONNULL(1)
+  rsa.ss_family = af;
   switch (af) {
     case AF_INET:
       set_sock4();
-      addr_copy(&rsa.S_ADDR, addr);
-      remote_ipaddr = (t_ipaddr*)&rsa.S_ADDR;
+      addr_copy(&SADDR4(&rsa), ipaddr);
+      remote_ipaddr = (t_ipaddr*)&SADDR4(&rsa);
     break;
 #ifdef ENABLE_IPV6
     case AF_INET6:
       set_sock6();
-      addr_copy(&rsa.S6ADDR, addr);
-      remote_ipaddr = (t_ipaddr*)&rsa.S6ADDR;
+      addr_copy(&SADDR6(&rsa), ipaddr);
+      remote_ipaddr = (t_ipaddr*)&SADDR6(&rsa);
     break;
 #endif
     default:
       return false;
   }
+#ifdef USE_RAW
   if ((RECVSOCK < 0) || ((proto != IPPROTO_TCP) && (SENDSOCK < 0))) {
     WARNXT("%s", NOSOCK_ERR);
     return false;
   }
+#endif
   if (!addr_exist(remote_ipaddr)) {
     WARNXT("%s: %s", TARGET_STR, strerror(EINVAL));
     return false;
   }
   //
   net_reset();
-  { struct sockaddr_storage ss = {0};
-    socklen_t len = sizeof(ss);
-    if (getsockname(RECVSOCK, (struct sockaddr *)&ss, &len) < 0)
-      WARNXF("%s", "getsockname()");
-    else {
-      if (len > sizeof(ss))
-        WARNXT("%s: %d > %zd: %s", "recv-socket", len, sizeof(ss), strerror(EINVAL));
-      int saf = ss.ss_family;
-      char *srcaddr =
-#ifdef ENABLE_IPV6
-        (saf == AF_INET6) ? (char*)&((struct sockaddr_in6 *)&ss)->sin6_addr :
-#endif
-        ((saf == AF_INET) ? (char*)&((struct sockaddr_in  *)&ss)->sin_addr  : NULL);
-      if (srcaddr) {
-        char buff[MAX_ADDRSTRLEN] = {0};
-        if (!inet_ntop(saf, srcaddr, buff, sizeof(buff)))
-          WARNT("%s", "inet_ntop()");
-      } else
-        WARNXT("%d: %s", saf, strerror(EAFNOSUPPORT));
-    }
-  }
   portpid = IPPORT_RESERVED + pid16 % (USHRT_MAX - IPPORT_RESERVED);
+#ifdef USE_RAW
+  return net_peername_ok();
+#else
   return true;
+#endif
 }
 
 bool net_set_ifaddr(const char *ifaddr) { // NONNULL(1)
   LOGMSG("ifaddr: %s", ifaddr);
   int len = 0;
-  lsa.SA_AF = af;
+  lsa.ss_family = af;
   switch (af) {
     case AF_INET:
-      lsa.S_PORT = 0;
-      if (!inet_aton(ifaddr, &lsa.S_ADDR)) {
+      SPORT4(&lsa) = 0;
+      if (!inet_aton(ifaddr, &SADDR4(&lsa))) {
         warnx("%s: %s", ifaddr, strerror(EFAULT));
         return false;
       }
-      len = sizeof(lsa.sin);
+      len = sizeof(SADDR4(&lsa));
       break;
 #ifdef ENABLE_IPV6
     case AF_INET6:
-      lsa.S6PORT = 0;
-      if (inet_pton(af, ifaddr, &lsa.S6ADDR) < 1) {
+      SPORT6(&lsa) = 0;
+      if (inet_pton(af, ifaddr, &SADDR6(&lsa)) < 1) {
         warnx("%s: %s", ifaddr, strerror(EFAULT));
         return false;
       }
-      len = sizeof(lsa.sin6);
+      len = sizeof(SADDR6(&lsa));
       break;
 #endif
     default: break;
   }
-  if (bind(SENDSOCK, &lsa.sa, len) < 0) {
+  if (bind(SENDSOCK, SA(&lsa), len) < 0) {
     warn("bind(%d)", SENDSOCK);
     return false;
   }
@@ -745,16 +750,17 @@ bool net_set_ifaddr(const char *ifaddr) { // NONNULL(1)
 }
 
 void net_close(void) {
-  close_sock46();
+  close_all_socks();
   // clear memory allocated for query-response cache
   for (int at = 0; at < MAXHOST; at++)
     for (int ndx = 0; ndx < MAXPATH; ndx++)
       SET_NEW_ADDR(&unspec_addr, NULL);
 }
 
+#ifdef USE_RAW
 static int err_slippage(int sock) {
-  socklen_t namelen = sizeof(rsa);
-  int rc = getpeername(sock, &rsa.sa, &namelen);
+  socklen_t namelen = netkit.salen;
+  int rc = getpeername(sock, SA(&rsa), &namelen);
   if ((rc < 0) && (errno == ENOTCONN)) {
     rc = read(sock, &namelen, 1);
     if (rc >= 0) return -1; // sanity lost
@@ -787,6 +793,7 @@ void net_tcp_parse(int sock, int seq, int noerr, struct timespec *recv_at) { // 
   seqlist[seq].transit = false;
   if (noerr) { /*summ*/ net_replies[QR_SUM]++; net_replies[QR_TCP]++; }
 }
+#endif
 
 // Clean timed out TCP connection
 bool net_timedout(int seq) {
@@ -838,7 +845,7 @@ void net_assert(void) { // to be sure
   net_settings(IPV6_UNDEF);
 }
 
-int net_wait(void) { return RECVSOCK; }
+inline int net_wait(void) { return RECVSOCK; }
 
 static void set_protosock(int type) {
   proto = type;
@@ -858,10 +865,15 @@ void net_set_proto(int type) {
   switch (type) {
     case IPPROTO_ICMP: hdr_minsz += sizeof(_icmphdr); netping = ping_icmp; break;
     case IPPROTO_UDP:  hdr_minsz += sizeof(_udphdr);  netping = ping_udp;  break;
+#ifdef USE_RAW
     case IPPROTO_TCP:  hdr_minsz += sizeof(_tcphdr);  netping = ping_tcp;  break;
+#endif
     default: warnx("%d: %s", type, strerror(EPROTONOSUPPORT));
   }
   minfailsz = hdr_minsz + IPHSZ_IN_REPLY + sizeof(_icmphdr);
+#ifndef USE_RAW
+  ee_settings(af == AF_INET ? IPV6_DISABLED : IPV6_ENABLED, proto, MAXSEQ);
+#endif
 }
 
 void net_settings(enum IPV6_ENDIS ip6) {
@@ -874,36 +886,37 @@ void net_settings(enum IPV6_ENDIS ip6) {
     addr_exist = addr6exist;
     addr_equal = addr6equal;
     addr_copy  = addr6copy;
-    ieset = (ieset_t){
+    netkit = (netkit_t){
       .ip6       = true,
       .salen     = sizeof(struct sockaddr_in6),
       .ipicmphsz = sizeof(struct ip6_hdr) + sizeof(_icmphdr),
+      .ping      = ICMP6_ECHO_REQUEST,
       .pong      = ICMP6_ECHO_REPLY,
       .exceed    = ICMP6_TIME_EXCEEDED,
       .unreach   = ICMP6_DST_UNREACH,
+      .set_ttl   = set_ttl6,
     };
-    set_sock6();
 #endif
   } else { // IPv4 by default
     af = AF_INET;
     addr_exist = addr4exist;
     addr_equal = addr4equal;
     addr_copy  = addr4copy;
-    ieset = (ieset_t){
+    netkit = (netkit_t){
       .ip6       = false,
       .salen     = sizeof(struct sockaddr_in),
       .ipicmphsz = sizeof(_iphdr) + sizeof(_icmphdr),
+      .ping      = ICMP_ECHO,
       .pong      = ICMP_ECHOREPLY,
       .exceed    = ICMP_TIME_EXCEEDED,
       .unreach   = ICMP_UNREACH,
+      .set_ttl   = set_ttl4,
     };
-    set_sock4();
   }
-#ifndef USE_RAW
-  ee_settings(ip6);
-#endif
-  LOGMSG("af: %d", af);
   net_set_proto(proto);
+  LOGMSG("netkit%c: af=%d ptoto=%d salen=%u ipicmphsz=%u ping=%d pong=%u exceed=%u unreach=%u",
+    ip6 == IPV6_ENABLED ? '6' : '4', af, proto,
+    netkit.salen, netkit.ipicmphsz, netkit.ping, netkit.pong, netkit.exceed, netkit.unreach);
 }
 
 const char* addr2str(const t_ipaddr *addr, size_t size, char buff[size]) { // NONNULL(1, 3)
@@ -939,4 +952,13 @@ inline void net_sockrecverr(const struct timespec *recv_at) { // NONNULL(1)
 }
 #endif
 
+void net_set_qos(void) {
+  switch (af) {
+    case AF_INET:  setsock_qos4(); break;
+#ifdef ENABLE_IPV6
+    case AF_INET6: setsock_qos6(); break;
+#endif
+    default: break;
+  }
+}
 

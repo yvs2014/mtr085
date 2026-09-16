@@ -38,8 +38,7 @@ target_compile_options("${NAME}" PRIVATE -Wall -Wextra -Wpedantic -D_GNU_SOURCE)
 
 # options
 set(OPTION_LIST)
-#set(SOCKET "auto" CACHE STRING # wip
-set(SOCKET "raw" CACHE STRING
+set(SOCKET "auto" CACHE STRING
   "RAW or USER sockets (AUTO is USER on Linux, otherwise RAW)")
 set_property(CACHE SOCKET PROPERTY STRINGS "raw" "user" "auto")
 set(VALID_SOCKETS "raw" "user" "auto")
@@ -435,7 +434,7 @@ message("")
 
 
 # install
-set(EXECDIR "${CMAKE_INSTALL_BINDIR}") # with cap_net_raw
+set(EXECDIR "${CMAKE_INSTALL_BINDIR}")
 if(SBIN)
   set(EXECDIR "${CMAKE_INSTALL_SBINDIR}")
 endif()

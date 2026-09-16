@@ -18,12 +18,24 @@
 #define MPLS_LIKE_TEST NOOP
 #endif
 
+#define LO_UDPPORT 33433 // start from LO_UDPPORT+1
+#define UDPPORTS      90 // go thru udp:33434-33523 acl
+
 enum IPV6_ENDIS {IPV6_UNDEF = -1, IPV6_DISABLED = 0, IPV6_ENABLED = 1};
 enum {RE_PONG, RE_EXCEED, RE_UNREACH}; // reasons of a pong response
 
 enum {QR_SUM = 0/*sure*/, QR_ICMP, QR_UDP, QR_TCP, QR_MAX};
 extern ulong net_queries[QR_MAX]; // number of queries (sum, icmp, udp, tcp)
 extern ulong net_replies[QR_MAX]; // number of replies (sum, icmp, udp, tcp)
+
+typedef struct netkit {
+  bool ip6;
+  socklen_t salen;
+  uint ipicmphsz;
+  uint8_t ping, pong, exceed, unreach;
+  bool (*set_ttl)(int sock, int ttl);
+} netkit_t;
+extern netkit_t netkit;
 
 int net_stat_sa(uint port, const struct sockaddr *sa, // NONNULL(2, 3)
   const struct timespec *recv_at, int reason, const void *mpls);

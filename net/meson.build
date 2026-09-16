@@ -5,7 +5,7 @@ srcf += files('net.c')
 srcf += files('gen.c')
 
 if raw # socket type raw/user
-  optlist += '+RAW'
+  optlist += 'SOCKET=raw'
   srcf    += files('raw.c')
   config.set('USE_RAW', 1)
   # libcap: mandatory on linux
@@ -25,9 +25,12 @@ if raw # socket type raw/user
     optlist += '-CAP'
   endif
 else
-  optlist += '+USER'
+  optlist += 'SOCKET=user'
   srcf    += files('user.c')
-  srcf    += files('exterr.c')
+  srcf    += files('linux-exterr.c')
+  manexcl += 't' # user-socket tcp-mode is not ready yet
+  manexcl += 'T'
+  manexcl += 'p'
 endif
 
 fndesc += {'pow': {'hdr': 'math.h', 'libs': ['m']}}

@@ -3,12 +3,10 @@
 #ifndef GEN_H
 #define GEN_H
 
-#include <netinet/ip.h>
 #include <netinet/tcp.h>
 #include <netinet/udp.h>
 #include <netinet/ip_icmp.h>
 #ifdef ENABLE_IPV6
-#include <netinet/ip6.h>
 #include <netinet/icmp6.h>
 #endif
 
@@ -35,27 +33,42 @@ typedef struct sequence {
 #endif
 } sequence_t;
 
+typedef bool (*ping_fn)(int at);
+extern ping_fn ping_icmp;
+extern ping_fn ping_udp;
+
 //
 
-extern int portpid;
-#define LO_UDPPORT 33433 // start from LO_UDPPORT+1
-#define UDPPORTS      90 // go thru udp:33434-33523 acl
-
 extern const t_ipaddr unspec_addr;
-extern t_sockaddr lsa, rsa; // local and remote sockaddr
+extern struct sockaddr_storage lsa, rsa; // local and remote sockaddr
 extern t_ipaddr *remote_ipaddr;
 extern uint8_t bitpattern;
 extern uint16_t payloadsize;
+extern int portpid;
 
 extern sequence_t seqlist[MAXSEQ];
 
 //
 
+#ifdef USE_RAW
 bool ping_tcp(int at);
+#endif
 
-bool settosttl4(int sock, int ttl);
+void setsock_qos4(void);
 #ifdef ENABLE_IPV6
-bool settosttl6(int sock, int ttl);
+void setsock_qos6(void);
+#endif
+
+#ifdef ENABLE_QOS4
+bool set_tos4(int sock);
+#endif
+bool set_ttl4(int sock, int ttl);
+//
+#ifdef ENABLE_IPV6
+#ifdef ENABLE_QOS6
+bool set_tos6(int sock);
+#endif
+bool set_ttl6(int sock, int ttl);
 #endif
 
 bool save_curr_ts(int seq);
@@ -63,6 +76,12 @@ bool save_curr_ts(int seq);
 int new_sequence(int at);
 void save_sequence(int seq, int at);
 void fill_icmph(uint8_t type, uint16_t id, uint16_t seq, _icmphdr *icmp) NONNULL(4);
+void fill_udph(uint16_t seq, _udphdr *udp, uint16_t size) NONNULL(2);
+#ifdef ENABLE_IPV6
+bool set_opt_ck6(int sock);
+#endif
+
+#define SET_UDP_UH_PORTS(uh, s, d) { (uh)->uh_sport = htons(s); (uh)->uh_dport = htons(d); }
 
 //
 #define FD_CLOSE(fd) if ((fd) >= 0) { close(fd); (fd) = -1; /*summ*/ sum_sock[1]++; }
