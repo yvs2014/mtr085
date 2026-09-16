@@ -36,6 +36,7 @@ jobs:
         run: sudo dpkg -i debs/mtr085_*.deb
       - name: Run on ${{matrix.os}}
         run: |
+          sudo sysctl net.ipv4.ping_group_range='0 2147483647'
           mtr -r localhost
           mtr -vv
 

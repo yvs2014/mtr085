@@ -1,5 +1,6 @@
 // net-user part of mtr085
 
+#include <unistd.h>
 #include <errno.h>
 #include <arpa/inet.h>
 
