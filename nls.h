@@ -145,7 +145,11 @@
 #define CMD_M_STR    _("set max TTL (default 30)")
 #define CMD_N_STR    _("toggle DNS")
 #define CMD_O_STR    _("set stat fields to display (default: LS_NABWV)")
+#ifdef USE_RAW
 #define CMD_P_STR    _("switch protocol (ICMP/UDP/TCP)")
+#else
+#define CMD_P_STR    _("switch protocol (ICMP/UDP)")
+#endif
 #define CMD_Q_STR    _("quit")
 #define CMD_QQ_STR   _("set ToS/QoS (quality of service)")
 #define CMD_R_STR    _("reset statistics")

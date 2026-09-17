@@ -44,6 +44,7 @@ typedef struct eekit {
   uint8_t orig, icmpcode, udpcode;
   void (*handler)(const struct sock_extended_err *e, const struct msghdr *msg,
     const struct timespec *recv_at, uint len);
+  int elevel, etype; /*cmsg_level, cmsg_type*/
   uint16_t maxseq;
 } eekit_t;
 
@@ -98,12 +99,11 @@ static void ee_handler_udp(const struct sock_extended_err *e, const struct msghd
   {
     struct sockaddr *from = SO_EE_OFFENDER(e);
     if (from && (from->sa_family == eekit.af)) {
-      struct sockaddr *sa = msg->msg_name;
       uint16_t dport =
 #ifdef ENABLE_IPV6
-        netkit.ip6 ? ((struct sockaddr_in6 *)sa)->sin6_port :
+        netkit.ip6 ? ((struct sockaddr_in6 *)msg->msg_name)->sin6_port :
 #endif
-                     ((struct sockaddr_in  *)sa)->sin_port;
+                     ((struct sockaddr_in  *)msg->msg_name)->sin_port;
       uint16_t port = __be16_to_cpu(dport);
       if (port >= LO_UDPPORT) {
         uint16_t seq = port - LO_UDPPORT;
@@ -132,7 +132,7 @@ static int recverrmsg(int sock, struct msghdr *msg,
                    (void*)&((struct sockaddr_in  *)msg->msg_name)->sin_addr;
     if (!memcmp(addr, remote, eekit.addrlen)) // be sure target-address is correct
       for (struct cmsghdr *c = CMSG_FIRSTHDR(msg); c; c = CMSG_NXTHDR(msg, c))
-        if ((c->cmsg_level == IPPROTO_IP) && (c->cmsg_type == IP_RECVERR)) {
+        if ((c->cmsg_level == eekit.elevel) && (c->cmsg_type == eekit.etype)) {
           const struct sock_extended_err *e = (struct sock_extended_err *)CMSG_DATA(c);
           if (e && eekit.handler)
             eekit.handler(e, msg, recv_at, rc);
@@ -172,6 +172,8 @@ void ee_settings(enum IPV6_ENDIS ip6, int proto, uint maxseq) {
 #ifdef ENABLE_IPV6
     eekit = (eekit_t){
       .af       = AF_INET6,
+      .elevel   = IPPROTO_IPV6,
+      .etype    = IPV6_RECVERR,
       .addrlen  = sizeof(struct in6_addr),
       .orig     = SO_EE_ORIGIN_ICMP6,
       .icmpcode = ICMPV6_EXC_HOPLIMIT, /*the same ICMPV6_NOROUTE value*/
@@ -181,6 +183,8 @@ void ee_settings(enum IPV6_ENDIS ip6, int proto, uint maxseq) {
   } else {
     eekit = (eekit_t){
       .af       = AF_INET,
+      .elevel   = IPPROTO_IP,
+      .etype    = IP_RECVERR,
       .addrlen  = sizeof(struct in_addr),
       .orig     = SO_EE_ORIGIN_ICMP,
       .icmpcode = ICMP_EXC_TTL, /*the same ICMP_NET_UNREACH value*/

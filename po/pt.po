@@ -333,6 +333,9 @@ msgstr "mudar modo de visualização"
 msgid "switch protocol (ICMP/UDP/TCP)"
 msgstr "mudar protocolo (ICMP/UDP/TCP)"
 
+msgid "switch protocol (ICMP/UDP)"
+msgstr "mudar protocolo (ICMP/UDP)"
+
 msgid "toggle MPLS info"
 msgstr "(des)ativar a info MPLS"
 

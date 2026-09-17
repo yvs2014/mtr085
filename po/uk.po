@@ -332,6 +332,9 @@ msgstr "змінити режим відображення"
 msgid "switch protocol (ICMP/UDP/TCP)"
 msgstr "змінити протокол (ICMP/UDP/TCP)"
 
+msgid "switch protocol (ICMP/UDP)"
+msgstr "змінити протокол (ICMP/UDP)"
+
 msgid "toggle MPLS info"
 msgstr "увімкнути/вимкнути MPLS відображення"
 
