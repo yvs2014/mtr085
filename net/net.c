@@ -348,13 +348,12 @@ inline bool mplslike(ssize_t psize, ssize_t hsize) {
 //mpls_data_t *decodempls(const uint8_t *data, int size) {
 void* decodempls(const uint8_t *data, int size) { // NONNULL(1)
   // given: icmpext_struct(4) icmpext_object(4) label(4) [label(4) ...]
-  static const size_t mplsoff = MPLSMIN - (IES_SZ + IEO_SZ + LAB_SZ);
-  static const size_t ieomin = IEO_SZ + LAB_SZ;
   if (size < MPLSMIN) {
     LOGMSG("got %u bytes of data, whereas mpls min is %u", size, MPLSMIN);
     return NULL;
   }
-  uint off = mplsoff; // at least 12bytes ahead: icmp_ext_struct(4) icmp_ext_object(4) label(4) [label(4) ...]
+  uint off = MPLSMIN - (IES_SZ + IEO_SZ + LAB_SZ);
+  // at least 12bytes ahead: icmp_ext_struct(4) icmp_ext_object(4) label(4) [label(4) ...]
   // icmp extension structure
   struct icmpext_struct *ies = (struct icmpext_struct *)&data[off];
   if ((ies->ver != ICMP_EXT_VER) || ies->res || !ies->sum) {
@@ -365,7 +364,7 @@ void* decodempls(const uint8_t *data, int size) { // NONNULL(1)
   // icmp extension object
   struct icmpext_object *ieo = (struct icmpext_object *)&data[off];
   ieo->len = ntohs(ieo->len);
-  if ((ieo->len < ieomin) || (ieo->class != ICMP_EXT_CLASS_MPLS) || (ieo->type != ICMP_EXT_TYPE_MPLS)) {
+  if ((ieo->len < (IEO_SZ + LAB_SZ)) || (ieo->class != ICMP_EXT_CLASS_MPLS) || (ieo->type != ICMP_EXT_TYPE_MPLS)) {
     LOGMSG("got len=%u class=%u type=%u, expected len>=%zd class=%u type=%u",
       ieo->len, ieo->class, ieo->type, ieomin, ICMP_EXT_CLASS_MPLS, ICMP_EXT_TYPE_MPLS);
     return NULL;

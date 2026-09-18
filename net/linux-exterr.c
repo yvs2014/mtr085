@@ -68,16 +68,14 @@ static void ee_handler_icmp(const struct sock_extended_err *e, const struct msgh
         int reason = (e->ee_type == netkit.exceed) ? RE_EXCEED : RE_UNREACH;
         struct icmphdr *icmp = (struct icmphdr*)iov->iov_base;
         uint16_t seq = __be16_to_cpu(icmp->un.echo.sequence);
-//        /* not yet, not tested*/
-//#ifdef WITH_MPLS
-//        bool mplson = mplslike(recv_size, 0);
-//#endif
-//        LOGMSG_ICMP;
-        LOGMSG("icmp seq=%d type=%d", seq, icmp->type);
+#ifdef WITH_MPLS
+        bool mplson = mplslike(recv_size, 0);
+#endif
+        LOGMSG_ICMP;
         net_stat_sa(seq, from, recv_at, reason,
-//#ifdef WITH_MPLS
-//          mplson ? decodempls((uint8_t*)icmp, size) :
-//#endif
+#ifdef WITH_MPLS
+          mplson ? decodempls((uint8_t*)icmp, recv_size) :
+#endif
           NULL);
         /*summ*/ net_replies[QR_ICMP]++;
         /*summ*/ net_replies[QR_SUM]++;

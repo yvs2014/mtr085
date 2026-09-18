@@ -112,7 +112,7 @@ static int open_socket_n_recverr(int domain, int proto, int level, int optname) 
 static int opensockprot(const char *desc, int domain, int proto, int level, int optname) {
   int sock = open_socket_n_recverr(domain, proto, level, optname);
   if (sock < 0)
-    WARNXT("%d: %s", desc ? desc : "", NOSOCK_ERR);
+    WARNXT("%s: %s", desc ? desc : "", NOSOCK_ERR);
   else {
     usersock = sock;
     sum_sock[0]++; /*summ*/
