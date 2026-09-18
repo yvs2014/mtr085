@@ -1,7 +1,7 @@
 #ifndef USER_H
 #define USER_H
 
-#include <gen.h>
+#include <netcommon.h>
 
 #define RECVSOCK usersock
 #define SENDSOCK usersock

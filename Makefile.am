@@ -23,12 +23,12 @@ AM_CPPFLAGS = -I$(srcdir)
 
 netdir = net
 mtr_SOURCES = mtr.c common.h \
-              aux.c aux.h \
-              polling.c polling.h \
-              display.c display.h \
-              report.c report.h \
-              $(netdir)/net.c $(netdir)/net.h \
-              $(netdir)/gen.c $(netdir)/gen.h
+	aux.c aux.h \
+	polling.c polling.h \
+	display.c display.h \
+	report.c report.h \
+	$(netdir)/net.c $(netdir)/net.h \
+	$(netdir)/netcommon.c $(netdir)/netcommon.h
 AM_CPPFLAGS += -I$(srcdir)/$(netdir)
 
 if RAW

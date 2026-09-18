@@ -1,7 +1,7 @@
 #ifndef RAW_H
 #define RAW_H
 
-#include <gen.h>
+#include <netcommon.h>
 
 #define RECVSOCK recvsock
 #define SENDSOCK sendsock

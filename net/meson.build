@@ -2,7 +2,7 @@
 # NET part of mtr085-meson
 
 srcf += files('net.c')
-srcf += files('gen.c')
+srcf += files('netcommon.c')
 
 if raw # socket type raw/user
   optlist += 'SOCKET=raw'

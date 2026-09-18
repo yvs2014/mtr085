@@ -42,7 +42,7 @@
 #endif
 
 #include "net.h"
-#include "gen.h"
+#include "netcommon.h"
 #ifdef USE_RAW
 #include "raw.h"
 #else

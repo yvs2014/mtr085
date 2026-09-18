@@ -21,7 +21,7 @@
 #define MAX_ADDRSTRLEN INET6_ADDRSTRLEN
 
 #ifndef GITREV
-#define GITREV "326"
+#define GITREV "327"
 #endif
 
 #ifndef HAVE_UINT

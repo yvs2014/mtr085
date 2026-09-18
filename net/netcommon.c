@@ -15,7 +15,7 @@
 #endif
 #include "log.h"
 
-#include "gen.h"
+#include "netcommon.h"
 #include "aux.h"
 #include "nls.h"     // IWYU pragma: keep
 #include "display.h" // IWYU pragma: keep

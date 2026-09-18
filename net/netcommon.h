@@ -1,7 +1,7 @@
 // net-common part of mtr085
 
-#ifndef GEN_H
-#define GEN_H
+#ifndef NETCOMMON_H
+#define NETCOMMON_H
 
 #include <netinet/tcp.h>
 #include <netinet/udp.h>
