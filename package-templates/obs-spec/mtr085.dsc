@@ -7,4 +7,4 @@ Maintainer: yvs <VSYakovetsky@gmail.com>
 Homepage: https://github.com/yvs2014/mtr085
 Architecture: any
 Standards-Version: 4.6.2
-Build-Depends: libncurses-dev, debhelper, dpkg-dev, devscripts, sed, pkgconf | pkg-config, gettext-base | gettext, meson (>=0.50), git
+Build-Depends: libncurses-dev, debhelper, dpkg-dev, devscripts, sed, pkgconf | pkg-config, gettext-base | gettext, meson (>=0.50), git, gpg, gpgv
