@@ -5,7 +5,12 @@
 #include "common.h"
 #include "inc.h" // IWYU pragma: keep
 
-typedef enum {KITMENU_NONE = -1, KITMENU_MAIN = 0, KITMENU_CYCLES = 1} menu_ndx_t;
+typedef enum {
+  KITMENU_NONE   = -1,
+  KITMENU_MAIN   =  0,
+  KITMENU_CYCLES =  1,
+  KITMENU_XCACHE =  2,
+} menu_ndx_t;
 
 void free_menus(void);
 bool menu_active(void);

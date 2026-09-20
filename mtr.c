@@ -211,7 +211,7 @@ static oopt_type oarg = OUNKN;
 #include "ipinfo.h"
 #endif
 
-enum { REPORT_PINGS = 100, TCPSYN_TOUT_MAX = 60 };
+#define TCPSYN_TOUT_MAX 60
 
 //// global vars
 const char *mtrname;

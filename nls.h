@@ -131,6 +131,7 @@
 #define _FIELDS_STR   "Fields"
 #define _CUSTFLD_STR  "Custom fields"
 #define _CACHETM_STR  "Cache timeout"
+#define _NOCACHE_STR  "No cache"
 
 // cmd help
 #define COMMANDS_STR _("Commands")

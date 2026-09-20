@@ -47,7 +47,6 @@
 
 enum { // misc
   FD_BATCHMAX   =  30,
-  CACHE_TIMEOUT =  60, // default, in seconds
   // between poll() calls
   MINSLEEP_USEC =  10, // in microseconds
   PAUSE_MSEC    = 100, // in milliseconds
@@ -355,6 +354,7 @@ static const char* actname[MaxActions] = {
 #endif
 #ifdef WITH_MENU
   [ActionMenuCyclesUnlim] = "cycles-unlim",
+  [ActionMenuNoCache]     = "no-cache",
 #endif
 };
 #endif

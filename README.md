@@ -22,7 +22,8 @@ EXTRA
 - Native Language Support
 - Internationalized Domain Names
 - Additional IP address information
-- work-in-progress: run without extra privileges using user sockets on Linux
+- work-in-progress: user sockets on Linux (no extra privileges)
+- work-in-progress: TUI menu (ncurses)
 
 DETAILS
 -------
