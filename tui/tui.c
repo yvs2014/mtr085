@@ -776,7 +776,7 @@ void tui_close(void) {
   disable_mouse();
 #endif
 #ifdef WITH_MENU
-  free_menukit();
+  free_menus();
 #endif
   if (stdscr && screen_ready) {
     endwin();

@@ -444,8 +444,8 @@ static tui_key_fn actfn_map[UINT8_MAX] =  {
   ['i'] = tui_key_i, // interval
   ['m'] = tui_key_m, // max ttl
 #ifdef WITH_MENU
-  [C_ESCAPE] = menu_handler,
-  [MENUKEY]  = menu_handler,
+  [C_ESCAPE] = menu_showup,
+  [MENUKEY]  = menu_showup,
 #endif
   ['o'] = tui_key_o, // fields to display
 #ifdef ENABLE_QOS
@@ -532,7 +532,7 @@ static void reset_by_key(int key, void (*reset)(void)) {
     case KEY_ENTER: // [MenuToggle]
     case '\r':
     case '\n':
-      if (menuactive)
+      if (menu_active())
         reset();
 #endif
     default: break;
@@ -629,11 +629,12 @@ static int mouse2key(void) {
       LOGCHAR("key=", ch);
     else {
 #ifdef WITH_MENU
-      if (menuactive) {
-        if (inside_menu(event.x, event.y)) {
+      if (menu_active()) {
+        menu_ndx_t ndx = inside_curr_menu(event.x, event.y);
+        if (ndx != KITMENU_NONE) {
           // handle mouse click events later calling menu_driver(KEY_MOUSE)
           ungetmouse(&event);
-          ch = mouse_select_n_toggle();
+          ch = mouse_select_n_toggle(ndx);
           LOGMSG("%s", ch ? "toggle" : "select");
         } else {
           ch = C_ESCAPE;
@@ -680,7 +681,7 @@ key_action_t tui_actionw(WINDOW *win, void (*reset)(void)) { // NONNULL(1)
     reset_by_key(ch, reset);
 //
 #ifdef WITH_MENU
-  if (menuactive && (posted_form >= 0)) {
+  if (menu_active() && (posted_form >= 0)) {
     ch = menu_form_key(ch);
     if (!ch)
       return action;
@@ -695,7 +696,7 @@ key_action_t tui_actionw(WINDOW *win, void (*reset)(void)) { // NONNULL(1)
         fn(w);
     } else {   // or somewhere else
 #ifdef WITH_MENU
-      if (menuactive) switch (ch) {
+      if (menu_active()) switch (ch) {
         case C_SPACE:
         case KEY_ENTER:
         case '\r':
@@ -718,7 +719,7 @@ key_action_t tui_actionw(WINDOW *win, void (*reset)(void)) { // NONNULL(1)
     case KEY_UP:
 #ifdef WITH_MENU
       // navigate up menuline
-      menuactive ? menuline_updown(true)  :
+      menu_active() ? menu_line_updown(true)  :
 #endif
       // decrease number of visible hops by one line
       dec_lines(1);
@@ -726,7 +727,7 @@ key_action_t tui_actionw(WINDOW *win, void (*reset)(void)) { // NONNULL(1)
     case KEY_DOWN:
 #ifdef WITH_MENU
       // navigate down menuline
-      menuactive ? menuline_updown(false) :
+      menu_active() ? menu_line_updown(false) :
 #endif
       // increase number of visible hops by one line
       inc_lines(1);
@@ -734,7 +735,7 @@ key_action_t tui_actionw(WINDOW *win, void (*reset)(void)) { // NONNULL(1)
     case KEY_PPAGE: // PageUp
 #ifdef WITH_MENU
       // navigate up N menulines
-      menuactive ? menupage_updown(+LINES_PER_PAGE) :
+      menu_active() ? menu_page_updown(+LINES_PER_PAGE) :
 #endif
       // decrease number of visible hops by 'page'-lines
       dec_lines(LINES_PER_PAGE);
@@ -742,11 +743,19 @@ key_action_t tui_actionw(WINDOW *win, void (*reset)(void)) { // NONNULL(1)
     case KEY_NPAGE: // PageDown
 #ifdef WITH_MENU
       // navigate down N menulines
-      menuactive ? menupage_updown(-LINES_PER_PAGE) :
+      menu_active() ? menu_page_updown(-LINES_PER_PAGE) :
 #endif
       // increase number of visible hops by 'page'-lines
       inc_lines(LINES_PER_PAGE);
       break;
+#ifdef WITH_MENU
+    case KEY_LEFT:
+    case KEY_RIGHT:
+      if (menu_active())
+        menu_inout(ch);
+      break;
+#endif
+
     default: break;
   }
   LOGMSG("action in result: %d", action);

@@ -24,81 +24,123 @@
 #define ROUNDED_CORNERS    true
 #define ON_MOUSE_DBL_CLICK C_SPACE
 
-#define LOGWINSIZE(title, win) LOGMSG("%s: x0=%d y0=%d w=%d h=%d", \
- (title), getbegx(win), getbegy(win), getmaxx(win), getmaxy(win))
+#define LOGWINSIZE(name, kind, win) LOGMSG("menu %s, %s: x0=%d y0=%d w=%d h=%d", \
+ (name), (kind), getbegx(win), getbegy(win), getmaxx(win), getmaxy(win))
 
-bool menuactive;
 int posted_form = -1;
 
 typedef enum {
   MI_TOOGLE,
   MI_INTFORM,
   MI_STRFORM,
+  MI_SUBMENU,
 } mi_type;
 
 typedef enum {
 #ifdef ENABLE_DNS
-  MENU_ITEM_DNS,
+  MENU_MAIN_DNS,
 #endif
 #ifdef WITH_IPINFO
-  MENU_ITEM_ASN,
+  MENU_MAIN_ASN,
 #endif
-  MENU_ITEM_JITTER,
-  MENU_ITEM_FIELDS,
+  MENU_MAIN_JITTER,
+  MENU_MAIN_FIELDS,
 #ifdef WITH_MPLS
-  MENU_ITEM_MPLS,
+  MENU_MAIN_MPLS,
 #endif
-  MENU_ITEM_COUNT,
-  MENU_ITEM_MINTTL,
-  MENU_ITEM_MAXTTL,
-  MENU_ITEM_PATTERN,
-  MENU_ITEM_TIMEI,
+  SUBMENU_CYCLES,
+  MENU_MAIN_MINTTL,
+  MENU_MAIN_MAXTTL,
+  MENU_MAIN_PATTERN,
+  MENU_MAIN_TIMEI,
 #ifdef ENABLE_QOS
-  MENU_ITEM_QOS,
+  MENU_MAIN_QOS,
 #endif
-  MENU_ITEM_PSIZE,
-  MENU_ITEM_CACHE,
-  MENU_ITEMS
+  MENU_MAIN_PSIZE,
+  MENU_MAIN_CACHE,
+  MENU_MAIN_LEN
 } mi_inst;
+
+typedef enum {
+  SUBMENU_CYCLES_INF,
+  SUBMENU_CYCLES_CNT,
+  SUBMENU_CYCLES_LEN
+} smi_cycles_inst;
 
 typedef struct wsp_s {
   WINDOW *win;
-  WINDOW *sub;
+  WINDOW *der;
   PANEL  *pan;
 } wsp_s;
 
-typedef struct miff_s {
+typedef struct mi_s {
   FORM  *form;
   FIELD *field[2]; // NULL terminated
   wsp_s wsp;
   bool posted;
-} miff_s;
+  struct kitmenu_s *sub;
+} mi_s;
 
-typedef struct kit_s {
-  ITEM *item[MENU_ITEMS + 1];
-  miff_s ff[MENU_ITEMS];
-  MENU *menu;
-  wsp_s wsp;
-  bool posted;
+typedef struct attr_s {
+  short bg;
   int x0, y0;
-  short bg;       // background
+} attr_s;
+
+typedef enum {
+  KIT_MENU,
+  KIT_SUBMENU,
+} kit_type_inst;
+
+typedef struct kitmenu_s {
+  menu_ndx_t ndx;
+  kit_type_inst type;
+  //
+  uint len;
+  ITEM **items; // items[len]
+  mi_s *mis;    // mis[len]
+  //
+  MENU *menu;
+  bool posted, active;
+  wsp_s wsp;
+  attr_s attr;
   int frame;
   int maxnamelen; // in utf8 characters
   int spacing;
+  const int pad;  // 1 for ' menu-item-text '
   const int desc_width;
-} kit_s;
+  const char *log;
+} kitmenu_s;
 
-static kit_s kit = {.spacing = 1/*default*/, .desc_width = 10/*looks enough*/};
+static ITEM*   main_items[MENU_MAIN_LEN + 1];
+static mi_s       main_mi[MENU_MAIN_LEN];
+static ITEM* cycles_items[SUBMENU_CYCLES_LEN + 1];
+static mi_s     cycles_mi[SUBMENU_CYCLES_LEN];
 
-typedef struct toogle_t {int len; char *on, *off;} toogle_t;
-static const toogle_t a_toogle = {.len = 3, .on = "[*]", .off = "[ ]"};
+#define NAMEDESC_SPACING   1
+#define BORDER_PAD         1
+static kitmenu_s kitmenu[] = {
+  [KITMENU_MAIN]   = {.ndx = KITMENU_MAIN,   .type = KIT_MENU,    .log = "main",
+    .len = MENU_MAIN_LEN,      .items = main_items,   .mis = main_mi,
+    .spacing = NAMEDESC_SPACING, .pad = BORDER_PAD, .desc_width = 10/*looks enough*/},
+  [KITMENU_CYCLES] = {.ndx = KITMENU_CYCLES, .type = KIT_SUBMENU, .log = "cycles",
+    .len = SUBMENU_CYCLES_LEN, .items = cycles_items, .mis = cycles_mi,
+    .spacing = NAMEDESC_SPACING, .pad = BORDER_PAD, .desc_width = 5},
+};
+
+typedef struct menuico_t {int len; char *on, *off;} menuico_t;
+static const menuico_t a_toogle = {.len = 3, .on = "[*]", .off = "[ ]"};
 #if defined(TUIWIDE) && defined(WITH_UNICODE)
-static const toogle_t u_toogle =
+static const menuico_t u_toogle =
   {.len = 1, .on = "✓"/*"✔"*//*"🗹 "*//*"☑"*/, .off = "◻"/*"☐"*/};
 #endif
+static const menuico_t a_menuexp = {.len = 1, .on = ">", .off = "<"};
+#if defined(TUIWIDE) && defined(WITH_UNICODE)
+static const menuico_t u_menuexp = {.len = 1, .on = "▼"/*▾*//*▶*//*▷*/, .off = "▶"};
+#endif
 
-#define LOGFNFAIL(fn)     LOGMSG("%s() failed" ,    (fn))
-#define LOGECFAIL(fn, ec) LOGMSG("%s() failed: %d/%d", (fn), (ec), ((ec) == E_SYSTEM_ERROR) ? errno : 0)
+#define LOGFNFAIL(title, fn)     LOGMSG("%s: %s() failed", (title), (fn))
+#define LOGECFAIL(title, fn, ec) LOGMSG("%s: %s() failed: %d/%d", \
+  (title), (fn), (ec), ((ec) == E_SYSTEM_ERROR) ? errno : 0)
 
 #if defined(TUIWIDE) && defined (WITH_UNICODE)
 #define MENUSTRW(str) utf_compat ? _(str) : (str)
@@ -116,7 +158,7 @@ static const toogle_t u_toogle =
 
 typedef struct menuitem_s {
   const mi_type type;
-  const mi_inst ndx;
+  const uint8_t ndx;
   char name[NAMELEN];
   char desc[NAMELEN];
   const key_action_t action;
@@ -128,6 +170,8 @@ typedef struct menuitem_s {
   const int min, max, *pmin, *pmax;
   const char *patt;
   void (*setter)(const char *str);
+  //
+  kitmenu_s *submenu;
 } menuitem_s;
 
 typedef struct optname_s {
@@ -137,25 +181,32 @@ typedef struct optname_s {
 
 //
 
-static void menu_posteditaction(mi_inst inst) {
-  switch (inst) {
-    case MENU_ITEM_COUNT:   OPT_SUM(cycles);   break;
-    case MENU_ITEM_MINTTL:  OPT_SUM(minttl);   break;
-    case MENU_ITEM_MAXTTL:  OPT_SUM(maxttl);   break;
-    case MENU_ITEM_PATTERN: reset_pattern = true;
-                            OPT_SUM(pattern);  break;
-    case MENU_ITEM_TIMEI:   OPT_SUM(interval); break;
+static attr_s common_attr;
+
+static struct subopts {
+  bool unlim_cycles;
+} subopts;
+
+static void menu_posteditaction(int opt) {
+  switch (opt) {
+    case SUBMENU_CYCLES_INF:
+    case SUBMENU_CYCLES_CNT: OPT_SUM(cycles);   break;
+    case MENU_MAIN_MINTTL:   OPT_SUM(minttl);   break;
+    case MENU_MAIN_MAXTTL:   OPT_SUM(maxttl);   break;
+    case MENU_MAIN_PATTERN:  reset_pattern = true;
+                             OPT_SUM(pattern);  break;
+    case MENU_MAIN_TIMEI:    OPT_SUM(interval); break;
 #ifdef ENABLE_QOS
-    case MENU_ITEM_QOS:     net_set_qos();
-                            OPT_SUM(qos);      break;
+    case MENU_MAIN_QOS:      net_set_qos();
+                             OPT_SUM(qos);      break;
 #endif
-    case MENU_ITEM_PSIZE:   OPT_SUM(size);     break;
-    case MENU_ITEM_CACHE:   OPT_SUM(cache);    break;
+    case MENU_MAIN_PSIZE:    OPT_SUM(size);     break;
+    case MENU_MAIN_CACHE:    OPT_SUM(cache);    break;
     default: break;
   }
 }
 
-static void mi_selectabale(int ndx UNUSED, ITEM *item UNUSED) {
+static void mi_selectabale(int ndx UNUSED, ITEM *item) {
 #if defined(ENABLE_QOS) && (!defined(ENABLE_QOS4) || !defined(ENABLE_QOS6))
 #if   !defined(ENABLE_QOS4)
   if ((ndx == MENU_ITEM_QOS) && (af == AF_INET))
@@ -165,6 +216,8 @@ static void mi_selectabale(int ndx UNUSED, ITEM *item UNUSED) {
     item_opts_off(item, O_SELECTABLE);
 #endif
 #endif
+  if ((ndx == SUBMENU_CYCLES_CNT) && (run_opts.cycles <= 0))
+    item_opts_off(item, O_SELECTABLE);
 }
 
 static int fill_itemname(const menuitem_s *mi, const char *name,
@@ -175,6 +228,7 @@ static int fill_itemname(const menuitem_s *mi, const char *name,
   buff[0] = 0;
   int rc = 0;
   switch (mi->type) {
+    case MI_SUBMENU:
     case MI_TOOGLE:
       rc = (pad > 0) ?
         snprinte(buff, size, MI_DEF_FMT "%*s", name, pad, "") :
@@ -216,38 +270,49 @@ static int fill_itemname(const menuitem_s *mi, const char *name,
   return rc;
 }
 
-static int fill_itemdesc(menuitem_s *mi, const toogle_t *toogle) NONNULL(1, 2);
-static int fill_itemdesc(menuitem_s *mi, const toogle_t *toogle) {
+static int fill_itemdesc(const kitmenu_s *kit, menuitem_s *mitem,
+  const menuico_t *toogle, const menuico_t *menuexp) NONNULL(1, 2, 3, 4);
+static int fill_itemdesc(const kitmenu_s *kit, menuitem_s *mitem,
+  const menuico_t *toogle, const menuico_t *menuexp)
+{
   int rc = 0;
-  switch (mi->type) {
+  switch (mitem->type) {
     case MI_TOOGLE: {
-      const bool *flag = mi->val.flag;
+      const bool *flag = mitem->val.flag;
       if (flag) {
         const char *icon = *flag ? toogle->on : toogle->off;
-        int blank = (kit.desc_width > 0) ? (kit.desc_width - toogle->len) : 0;
+        int blank = (kit->desc_width > 0) ? (kit->desc_width - toogle->len) : 0;
         rc = (blank > 0) ? // utf8-compat padding
-          snprinte(mi->desc, sizeof(mi->desc), "%*s%s ", blank, "", icon) :
-          snprinte(mi->desc, sizeof(mi->desc), "%s ", icon);
+          snprinte(mitem->desc, sizeof(mitem->desc), "%*s%s ", blank, "", icon) :
+          snprinte(mitem->desc, sizeof(mitem->desc), "%s ", icon);
       }
     } break;
     case MI_INTFORM: {
-      int *num = mi->val.num;
+      int *num = mitem->val.num;
       if (num) {
-        rc = (kit.desc_width > 0) ?
-          snprinte(mi->desc, sizeof(mi->desc), "%*d ", kit.desc_width, *num) :
-          snprinte(mi->desc, sizeof(mi->desc), "%d ", *num);
+        rc = (kit->desc_width > 0) ?
+          snprinte(mitem->desc, sizeof(mitem->desc), "%*d ", kit->desc_width, *num) :
+          snprinte(mitem->desc, sizeof(mitem->desc), "%d ", *num);
       }
     }  break;
     case MI_STRFORM: {
-      const char *str = mi->val.pstr ? *mi->val.pstr : NULL;
+      const char *str = mitem->val.pstr ? *mitem->val.pstr : NULL;
       if (str) {
-        rc = (kit.desc_width > 0) ?
-          snprinte(mi->desc, sizeof(mi->desc), "%*s ", kit.desc_width, str) :
-          snprinte(mi->desc, sizeof(mi->desc), "%s ", str);
+        rc = (kit->desc_width > 0) ?
+          snprinte(mitem->desc, sizeof(mitem->desc), "%*s ", kit->desc_width, str) :
+          snprinte(mitem->desc, sizeof(mitem->desc), "%s ", str);
       }
     }  break;
+    case MI_SUBMENU: {
+      const bool *flag = mitem->val.flag;
+      const char *icon = (flag && *flag) ? menuexp->on : menuexp->off;
+      int blank = (kit->desc_width > 0) ? (kit->desc_width - toogle->len) : 0;
+      rc = (blank > 0) ? // utf8-compat padding
+        snprinte(mitem->desc, sizeof(mitem->desc), "%*s%s ", blank, "", icon) :
+        snprinte(mitem->desc, sizeof(mitem->desc), "%s ", icon);
+    }  break;
     default:
-      LOGMSG("unknwon menuitem type: %d", mi->type);
+      LOGMSG("menu %s: unknown menuitem type: %d", kit->log, mitem->type);
       break;
   }
   return rc;
@@ -281,49 +346,145 @@ static void stat_keys(uint len, char buff[len]) { // NONNULL(2)
     buff[i] = ((int)i < stat_max) ? stats[i].key : 0;
 }
 
-static void init_menuitems(void) {
+static void init_kititems(kitmenu_s *kit,
+  uint mlen, menuitem_s mi[mlen], optname_s opt[mlen],
+  const menuico_t *toogle, const menuico_t *menuexp)
+  NONNULL(1, 3, 4, 5, 6);
+static void init_kititems(kitmenu_s *kit,
+  uint mlen, menuitem_s mi[mlen], optname_s opt[mlen],
+  const menuico_t *toogle, const menuico_t *menuexp)
+{
+  if (!kit->maxnamelen)
+    kit->maxnamelen  = calc_maxnamelen(mlen, mi, opt);
+  //
+  if (kit->items[0]) {
+    // disconnect and free previous menuitems
+    // menu has to be unposted
+    int ec = set_menu_items(kit->menu, NULL);
+    if (ec == E_OK) {
+      for (uint i = 0; i < kit->len; i++) {
+        if (kit->items[i]) {
+          int ec = free_item(kit->items[i]);
+          if (ec != E_OK)
+            LOGECFAIL(kit->log, "free_item", ec);
+          kit->items[i] = NULL;
+        }
+      }
+    } else
+      LOGECFAIL(kit->log, "set_menu_items", ec);
+  }
+  //
+  for (uint i = 0; (i < mlen) && opt->name; i++, opt++, mi++) {
+    int pad = // utf8-compat padding
+      (opt->len > 0) ? (kit->maxnamelen - opt->len) : 0;
+    const char *name =
+      (fill_itemname(mi, opt->name, sizeof(mi->name), mi->name, pad) > 0) && mi->name[0]
+      ? mi->name : opt->name;
+    const char *desc =
+      (fill_itemdesc(kit, mi, toogle, menuexp) > 0) && mi->desc[0]
+      ? mi->desc : NULL;
+    ITEM *item = new_item(name, desc);
+    if (item) {
+      LOGMSG("menu %s, item[%u]: \"%s\"=\"%s\"", kit->log, i, item_name(item), item_description(item));
+      set_item_userptr(item, mi);
+      kit->items[i] = item;
+      mi_selectabale(i, item);
+    } else {
+      LOGMSG("menu %s, new_item(#%u, %s) failed: %d", kit->log, i, opt->name, errno);
+      break;
+    }
+  }
+}
+
+static void set_menus_attr(void) {
+  for (uint i = 0; i < ARRAY_LEN(kitmenu); i++)
+    kitmenu[i].attr = common_attr;
+  LOGMSG("common: bg=%d x0=%d y0=%d", common_attr.bg, common_attr.x0, common_attr.bg);
+  // cycles
+  kitmenu_s *main = &kitmenu[KITMENU_MAIN];
+  attr_s *attr = &kitmenu[KITMENU_CYCLES].attr;
+  attr->y0 += SUBMENU_CYCLES;
+  attr->x0 += main->maxnamelen;
+  attr->x0 += main->spacing - 1;
+  attr->x0 += main->desc_width;
+  attr->x0 += (main->frame + main->pad) * 2;
+  LOGMSG("%s: bg=%d x0=%d y0=%d", kitmenu[KITMENU_CYCLES].log, kitmenu[KITMENU_CYCLES].attr.bg,
+    kitmenu[KITMENU_CYCLES].attr.x0, kitmenu[KITMENU_CYCLES].attr.y0);
+}
+
 #define PSIZEMM (MAXPACKET - MINPACKET)
-  static menuitem_s menuitem[MENU_ITEMS] = {
+
+static void init_menu_items(void) {
+  //
+  // icon set
+  const menuico_t *toogle =
+#if defined(TUIWIDE) && defined(WITH_UNICODE)
+    utf_compat ? &u_toogle :
+#endif
+    &a_toogle;
+  const menuico_t *menuexp =
+#if defined(TUIWIDE) && defined(WITH_UNICODE)
+    utf_compat ? &u_menuexp :
+#endif
+    &a_menuexp;
+  //
+  // submenu 'cycles'
+  static menuitem_s mi_cycles[] = {
+    [SUBMENU_CYCLES_INF] = {.ndx = SUBMENU_CYCLES_INF, .type = MI_TOOGLE,
+      .action = ActionMenuCyclesUnlim, .val.flag = &subopts.unlim_cycles},
+    [SUBMENU_CYCLES_CNT] = {.ndx = SUBMENU_CYCLES_CNT, .type = MI_INTFORM,
+      .action = ActionNone,            .val.num  = &run_opts.cycles,
+      .min = 1, .max = INT_MAX},
+  };
+  optname_s opt_cycles[ARRAY_LEN(mi_cycles)] = {
+    [SUBMENU_CYCLES_INF] = {.name = MENUSTRW(_UNLIM_STR)},
+    [SUBMENU_CYCLES_CNT] = {.name = MENUSTRW(_NCYCLES_STR)},
+  };
+  subopts.unlim_cycles = run_opts.cycles <= 0;
+  init_kititems(&kitmenu[KITMENU_CYCLES], ARRAY_LEN(mi_cycles), mi_cycles, opt_cycles, toogle, menuexp);
+  //
+  // main menu
+  static menuitem_s mi_main[] = {
 #ifdef ENABLE_DNS
-    [MENU_ITEM_DNS]      = {.ndx = MENU_ITEM_DNS,     .type = MI_TOOGLE,
+    [MENU_MAIN_DNS]      = {.ndx = MENU_MAIN_DNS,     .type = MI_TOOGLE,
       .action = ActionDNS,   .val.flag = &run_opts.dns},
 #endif
 #ifdef WITH_IPINFO
-    [MENU_ITEM_ASN]      = {.ndx = MENU_ITEM_ASN,     .type = MI_TOOGLE,
+    [MENU_MAIN_ASN]      = {.ndx = MENU_MAIN_ASN,     .type = MI_TOOGLE,
       .action = ActionASN,   .val.flag = &run_opts.asn},
 #endif
-    [MENU_ITEM_JITTER]   = {.ndx = MENU_ITEM_JITTER,  .type = MI_TOOGLE,
+    [MENU_MAIN_JITTER]   = {.ndx = MENU_MAIN_JITTER,  .type = MI_TOOGLE,
       .action = ActionJttr,  .val.flag = &run_opts.jitter},
-    [MENU_ITEM_FIELDS]   = {.ndx = MENU_ITEM_FIELDS,  .type = MI_STRFORM,
+    [MENU_MAIN_FIELDS]   = {.ndx = MENU_MAIN_FIELDS,  .type = MI_STRFORM,
       .action = ActionNone,  .val.pstr = &fld_active, .setter = set_fld_active},
 #ifdef WITH_MPLS
-    [MENU_ITEM_MPLS]     = {.ndx = MENU_ITEM_MPLS,    .type = MI_TOOGLE,
+    [MENU_MAIN_MPLS]     = {.ndx = MENU_MAIN_MPLS,    .type = MI_TOOGLE,
       .action = ActionMPLS,  .val.flag = &run_opts.mpls},
 #endif
-    [MENU_ITEM_COUNT]    = {.ndx = MENU_ITEM_COUNT,   .type = MI_INTFORM,
-      .action = ActionNone,  .val.num  = &run_opts.cycles,
-      .min =  0, .max = INT_MAX},
-    [MENU_ITEM_MINTTL]   = {.ndx = MENU_ITEM_MINTTL,  .type = MI_INTFORM,
+    [SUBMENU_CYCLES]     = {.ndx = SUBMENU_CYCLES,    .type = MI_SUBMENU,
+      .action = ActionNone,  .val.flag = &kitmenu[KITMENU_CYCLES].active,
+      .submenu = &kitmenu[KITMENU_CYCLES]},
+    [MENU_MAIN_MINTTL]   = {.ndx = MENU_MAIN_MINTTL,  .type = MI_INTFORM,
       .action = ActionNone,  .val.num  = &run_opts.minttl,
       .min =  1, .max = MAXHOST, .pmax = &run_opts.maxttl},
-    [MENU_ITEM_MAXTTL]   = {.ndx = MENU_ITEM_MAXTTL,  .type = MI_INTFORM,
+    [MENU_MAIN_MAXTTL]   = {.ndx = MENU_MAIN_MAXTTL,  .type = MI_INTFORM,
       .action = ActionNone,  .val.num  = &run_opts.maxttl,
       .min =  1, .max = MAXHOST, .pmin = &run_opts.minttl},
-    [MENU_ITEM_PATTERN]  = {.ndx = MENU_ITEM_PATTERN, .type = MI_INTFORM,
+    [MENU_MAIN_PATTERN]  = {.ndx = MENU_MAIN_PATTERN, .type = MI_INTFORM,
       .action = ActionNone,  .val.num  = &run_opts.pattern,
       .min = -1, .max = UINT8_MAX},
-    [MENU_ITEM_TIMEI]    = {.ndx = MENU_ITEM_TIMEI,   .type = MI_INTFORM,
+    [MENU_MAIN_TIMEI]    = {.ndx = MENU_MAIN_TIMEI,   .type = MI_INTFORM,
       .action = ActionNone,  .val.num  = &run_opts.interval,
       .min =  1, .max = INT_MAX},
 #ifdef ENABLE_QOS
-    [MENU_ITEM_QOS]      = {.ndx = MENU_ITEM_QOS,     .type = MI_INTFORM,
+    [MENU_MAIN_QOS]      = {.ndx = MENU_MAIN_QOS,     .type = MI_INTFORM,
       .action = ActionNone,  .val.num  = &run_opts.qos,
       .min =  0, .max = UINT8_MAX},
 #endif
-    [MENU_ITEM_PSIZE]    = {.ndx = MENU_ITEM_PSIZE,   .type = MI_INTFORM,
+    [MENU_MAIN_PSIZE]    = {.ndx = MENU_MAIN_PSIZE,   .type = MI_INTFORM,
       .action = ActionNone,  .val.num  = &run_opts.size,
       .min = -PSIZEMM, .max = PSIZEMM},
-    [MENU_ITEM_CACHE]    = {.ndx = MENU_ITEM_CACHE,   .type = MI_INTFORM,
+    [MENU_MAIN_CACHE]    = {.ndx = MENU_MAIN_CACHE,   .type = MI_INTFORM,
       .action = ActionNone,  .val.num  = &run_opts.cache,
       .min =  0, .max = INT_MAX},
   };
@@ -331,211 +492,183 @@ static void init_menuitems(void) {
   static char field_patt[20] = {0}; // enough for stat keys [stat_max]
   if (!field_patt[0])
     stat_keys(ARRAY_LEN(field_patt) - 1, field_patt);
-  if (!menuitem[MENU_ITEM_FIELDS].patt)
-    menuitem[MENU_ITEM_FIELDS].patt = field_patt;
+  if (!mi_main[MENU_MAIN_FIELDS].patt)
+    mi_main[MENU_MAIN_FIELDS].patt = field_patt;
   //
-  optname_s optname[ARRAY_LEN(menuitem)] = {
+  optname_s opt_main[ARRAY_LEN(mi_main)] = {
 #ifdef ENABLE_DNS
-    [MENU_ITEM_DNS]     = {.name = MENUSTRW(_DNS_STR)},
+    [MENU_MAIN_DNS]     = {.name = MENUSTRW(_DNS_STR)},
 #endif
 #ifdef WITH_IPINFO
-    [MENU_ITEM_ASN]     = {.name = MENUSTRW(_ASN_STR)},
+    [MENU_MAIN_ASN]     = {.name = MENUSTRW(_ASN_STR)},
 #endif
-    [MENU_ITEM_JITTER]  = {.name = MENUSTRW(_JITTER_STR)},
-    [MENU_ITEM_FIELDS]  = {.name = MENUSTRW(_FIELDS_STR)},
+    [MENU_MAIN_JITTER]  = {.name = MENUSTRW(_JITTER_STR)},
+    [MENU_MAIN_FIELDS]  = {.name = MENUSTRW(_FIELDS_STR)},
 #ifdef WITH_MPLS
-    [MENU_ITEM_MPLS]    = {.name = MENUSTRW(_MPLS_STR)},
+    [MENU_MAIN_MPLS]    = {.name = MENUSTRW(_MPLS_STR)},
 #endif
-    [MENU_ITEM_COUNT]   = {.name = MENUSTRW(_NCYCLES_STR)},
-    [MENU_ITEM_MINTTL]  = {.name = MENUSTRW(_MINTTL_STR)},
-    [MENU_ITEM_MAXTTL]  = {.name = MENUSTRW(_MAXTTL_STR)},
-    [MENU_ITEM_PATTERN] = {.name = MENUSTRW(_BITPATT_STR)},
-    [MENU_ITEM_TIMEI]   = {.name = MENUSTRW(_GAPINSEC_STR)},
+    [SUBMENU_CYCLES]    = {.name = MENUSTRW(_NCYCLES_STR)},
+    [MENU_MAIN_MINTTL]  = {.name = MENUSTRW(_MINTTL_STR)},
+    [MENU_MAIN_MAXTTL]  = {.name = MENUSTRW(_MAXTTL_STR)},
+    [MENU_MAIN_PATTERN] = {.name = MENUSTRW(_BITPATT_STR)},
+    [MENU_MAIN_TIMEI]   = {.name = MENUSTRW(_GAPINSEC_STR)},
 #ifdef ENABLE_QOS
-    [MENU_ITEM_QOS]     = {.name = MENUSTRW(_QOSTOS_STR)},
+    [MENU_MAIN_QOS]     = {.name = MENUSTRW(_QOSTOS_STR)},
 #endif
-    [MENU_ITEM_PSIZE]   = {.name = MENUSTRW(_PSIZE_STR)},
-    [MENU_ITEM_CACHE]   = {.name = MENUSTRW(_CACHETM_STR)},
+    [MENU_MAIN_PSIZE]   = {.name = MENUSTRW(_PSIZE_STR)},
+    [MENU_MAIN_CACHE]   = {.name = MENUSTRW(_CACHETM_STR)},
   };
   //
-  if (!kit.maxnamelen)
-    kit.maxnamelen = calc_maxnamelen(ARRAY_LEN(menuitem), menuitem, optname);
+  init_kititems(&kitmenu[KITMENU_MAIN], ARRAY_LEN(mi_main), mi_main, opt_main, toogle, menuexp);
   //
-  if (kit.item[0]) {
-    // disconnect and free previous menuitems
-    // menu has to be unposted
-    int ec = set_menu_items(kit.menu, NULL);
-    if (ec == E_OK) {
-      for (uint i = 0; i < ARRAY_LEN(kit.item); i++) if (kit.item[i]) {
-        int ec = free_item(kit.item[i]);
-        if (ec != E_OK)
-          LOGECFAIL("free_item", ec);
-        kit.item[i] = NULL;
-      }
-    } else
-      LOGECFAIL("set_menu_items", ec);
-  }
-  //
-  menuitem_s *mi = menuitem;
-  const optname_s *opt = optname;
-  const toogle_t *toogle =
-#if defined(TUIWIDE) && defined(WITH_UNICODE)
-    utf_compat ? &u_toogle :
-#endif
-    &a_toogle;
-  for (uint i = 0; (i < ARRAY_LEN(optname)) && opt->name; i++, opt++, mi++) {
-    int pad = // utf8-compat padding
-      (opt->len > 0) ? (kit.maxnamelen - opt->len) : 0;
-    const char *name =
-      (fill_itemname(mi, opt->name, sizeof(mi->name), mi->name, pad) > 0) && mi->name[0]
-      ? mi->name : opt->name;
-    const char *desc =
-      (fill_itemdesc(mi, toogle) > 0) && mi->desc[0]
-      ? mi->desc : NULL;
-    ITEM *item = new_item(name, desc);
-    if (item) {
-      LOGMSG("menuitem[%u]: \"%s\"=\"%s\"", i, item_name(item), item_description(item));
-      set_item_userptr(item, mi);
-      kit.item[i] = item;
-      mi_selectabale(i, item);
-    } else {
-      LOGMSG("new_item(#%u, %s) failed: %d", i, opt->name, errno);
-      break;
-    }
-  }
+  set_menus_attr();
 }
 
-static void prepare_menu(void) {
-  if (!kit.item[0]) {
-    init_menuitems();
-    if (!kit.item[0]) {
-      LOGMSG("%s", "no items");
+static void prepare_menu_kit(kitmenu_s *kit) NONNULL(1);
+static void prepare_menu_kit(kitmenu_s *kit) {
+  if (!kit->menu) {
+    kit->menu = new_menu(kit->items);
+    if (!kit->menu) {
+      LOGECFAIL(kit->log, "new_menu", errno);
       return;
     }
-  }
-  if (!kit.menu) {
-    kit.menu = new_menu(kit.item);
-    if (!kit.menu) {
-      LOGECFAIL("new_menu", errno);
-      return;
+    { int ec = set_menu_mark(kit->menu, NULL);
+      if (ec != E_OK)
+        LOGFNFAIL(kit->log, "set_menu_mark"); }
+    if (kit->attr.bg > 0) {
+      int ec = set_menu_back(kit->menu, COLOR_PAIR(kit->attr.bg));
+      if (ec != E_OK)
+        LOGECFAIL(kit->log, "set_menu_back", ec);
     }
-    { int ec = set_menu_mark(kit.menu, NULL);
+    { int ec = set_menu_grey(kit->menu, COLOR_PAIR(kit->attr.bg > 0 ? kit->attr.bg : 0) | A_DIM);
       if (ec != E_OK)
-        LOGFNFAIL("set_menu_mark"); }
-    if (kit.bg > 0) {
-      int ec = set_menu_back(kit.menu, COLOR_PAIR(kit.bg));
-      if (ec != E_OK)
-        LOGECFAIL("set_menu_back", ec);
-    }
-    { int ec = set_menu_grey(kit.menu, COLOR_PAIR(kit.bg > 0 ? kit.bg : 0) | A_DIM);
-      if (ec != E_OK)
-        LOGECFAIL("set_menu_grey", ec); }
+        LOGECFAIL(kit->log, "set_menu_grey", ec); }
   }
 #ifdef HAVE_MENU_SPACING
-  menu_spacing(kit.menu, &kit.spacing, NULL, NULL);
+  menu_spacing(kit->menu, &kit->spacing, NULL, NULL);
 #endif
-  kit.frame =
+  kit->frame =
 #ifdef WITH_UNICODE
     utf_compat ? 1 :
 #endif
   0;
-  LOGMSG("frame=%d spacing=%d", kit.frame, kit.spacing);
-  int h = MENU_ITEMS, w = (kit.maxnamelen > 0) ? kit.maxnamelen : 16;
-  w += kit.spacing;
-  w += kit.desc_width;
+  LOGMSG("menu %s: frame=%d spacing=%d", kit->log, kit->frame, kit->spacing);
+  int h = kit->len, w = (kit->maxnamelen > 0) ? kit->maxnamelen : 16;
+  w += kit->spacing;
+  w += kit->desc_width;
   w++;
-  if (!kit.wsp.win) {
-    kit.wsp.win = newwin(h + 2 * kit.frame, w + 2 * kit.frame, kit.y0, kit.x0);
-    if (!kit.wsp.win) {
-      LOGFNFAIL("newwin");
+  if (!kit->wsp.win) {
+    kit->wsp.win = newwin(h + 2 * kit->frame, w + 2 * kit->frame, kit->attr.y0, kit->attr.x0);
+    if (!kit->wsp.win) {
+      LOGFNFAIL(kit->log, "newwin");
       return;
     }
-    keypad(kit.wsp.win, TRUE);
-    if (kit.bg > 0)
-      wbkgd(kit.wsp.win, COLOR_PAIR(kit.bg));
-    if (kit.frame) {
+    keypad(kit->wsp.win, TRUE);
+    if (kit->attr.bg > 0)
+      wbkgd(kit->wsp.win, COLOR_PAIR(kit->attr.bg));
+    if (kit->frame) {
 #ifdef ROUNDED_CORNERS
       cchar_t tl = {0}, tr = {0}, bl = {0}, br = {0};
       setcchar(&tl, L"╭", A_NORMAL, 0, NULL);
       setcchar(&tr, L"╮", A_NORMAL, 0, NULL);
       setcchar(&bl, L"╰", A_NORMAL, 0, NULL);
       setcchar(&br, L"╯", A_NORMAL, 0, NULL);
-      wborder_set(kit.wsp.win, NULL, NULL, NULL, NULL, &tl, &tr, &bl, &br);
+      wborder_set(kit->wsp.win, NULL, NULL, NULL, NULL, &tl, &tr, &bl, &br);
 #else
       box(menuwin, 0, 0);
 #endif
     }
-    LOGWINSIZE("menuwin", kit.wsp.win);
+    LOGWINSIZE(kit->log, "base", kit->wsp.win);
   }
-  if (!kit.wsp.sub) {
-    kit.wsp.sub = derwin(kit.wsp.win, h, w, kit.frame, kit.frame);
-    if (!kit.wsp.sub) {
-      LOGFNFAIL("derwin");
+  if (!kit->wsp.der) {
+    kit->wsp.der = derwin(kit->wsp.win, h, w, kit->frame, kit->frame);
+    if (!kit->wsp.der) {
+      LOGFNFAIL(kit->log, "derwin");
       return;
     }
-    LOGWINSIZE("menusub", kit.wsp.sub);
+    LOGWINSIZE(kit->log, "derived", kit->wsp.der);
   }
   //
-  if (menu_win(kit.menu) != kit.wsp.win) {
-    int ec = set_menu_win(kit.menu, kit.wsp.win);
+  if (menu_win(kit->menu) != kit->wsp.win) {
+    int ec = set_menu_win(kit->menu, kit->wsp.win);
     if (ec != E_OK) {
-      LOGECFAIL("set_menu_win", ec);
-      free_menu(kit.menu);
-      kit.menu = NULL;
+      LOGECFAIL(kit->log, "set_menu_win", ec);
+      free_menu(kit->menu);
+      kit->menu = NULL;
       return;
     }
   }
-  if (menu_sub(kit.menu) != kit.wsp.sub) {
-    int ec = set_menu_sub(kit.menu, kit.wsp.sub);
+  if (menu_sub(kit->menu) != kit->wsp.der) {
+    int ec = set_menu_sub(kit->menu, kit->wsp.der);
     if (ec != E_OK) {
-      LOGECFAIL("set_menu_sub", ec);
-      free_menu(kit.menu);
-      kit.menu = NULL;
+      LOGECFAIL(kit->log, "set_menu_sub", ec);
+      free_menu(kit->menu);
+      kit->menu = NULL;
       return;
     }
   }
   //
-  if (!kit.wsp.pan) {
-    kit.wsp.pan = new_panel(kit.wsp.win);
-    if (!kit.wsp.pan) {
-      LOGFNFAIL("new_panel");
+  if (!kit->wsp.pan) {
+    kit->wsp.pan = new_panel(kit->wsp.win);
+    if (!kit->wsp.pan) {
+      LOGFNFAIL(kit->log, "new_panel");
       return;
     }
   }
   //
-  if (!kit.posted)
-    kit.posted = (post_menu(kit.menu) == E_OK);
+  if (!kit->posted)
+    kit->posted = (post_menu(kit->menu) == E_OK);
+  hide_panel(kit->wsp.pan);
+  bottom_panel(kit->wsp.pan);
 }
 
-static void menu_showhide(void) {
-  LOGMSG("%s", menuactive ? "hide" : "show");
-  if (menuactive) {
-    hide_panel(kit.wsp.pan);
-    bottom_panel(kit.wsp.pan);
-  } else {
-    top_panel(kit.wsp.pan);
-    show_panel(kit.wsp.pan);
+static void prepare_menus(void) {
+  if (!kitmenu[KITMENU_MAIN].items[0]) {
+    init_menu_items();
+    if (!kitmenu[KITMENU_MAIN].items[0])
+      LOGMSG("%s", "no items");
   }
-  menuactive = !menuactive;
+  for (uint i = 0; i < ARRAY_LEN(kitmenu); i++)
+    prepare_menu_kit(&kitmenu[i]);
+  set_menus_attr();
+}
+
+static void menu_hide(kitmenu_s *kit) NONNULL(1);
+static void menu_hide(kitmenu_s *kit) {
+  LOGMSG("menu %s", kit->log);
+  hide_panel(kit->wsp.pan);
+  bottom_panel(kit->wsp.pan);
   update_panels();
   doupdate();
+  kit->active = false;
 }
 
-static void position_inside_menu(int was) {
-  int count = (kit.menu && (was >= 0)) ? item_count(kit.menu) : -1;
+static void menu_show(kitmenu_s *kit) NONNULL(1);
+static void menu_show(kitmenu_s *kit) {
+  LOGMSG("menu %s", kit->log);
+  top_panel(kit->wsp.pan);
+  show_panel(kit->wsp.pan);
+  update_panels();
+  doupdate();
+  kit->active = true;
+}
+
+static void position_inside_menu(kitmenu_s *kit, int was) NONNULL(1);
+static void position_inside_menu(kitmenu_s *kit, int was) {
+  int count = (kit->menu && (was >= 0)) ? item_count(kit->menu) : -1;
   if (count > 0) {
-    ITEM **list = menu_items(kit.menu);
+    ITEM **list = menu_items(kit->menu);
     if (list) for (int i = 0; i < count; i++) {
       ITEM *item = list[i];
       int now = item ? item_index(item) : -1;
       if (now == was) {
-        set_current_item(kit.menu, item);
-        LOGMSG("%d", now);
+        set_current_item(kit->menu, item);
+        LOGMSG("menu %s: %d", kit->log, now);
         return;
       }
     }
   }
-  LOGMSG("%s", "state isn't restored");
+  LOGMSG("menu %s: %s", kit->log, "state isn't restored");
 }
 
 static void set_field_num(FIELD *field, int num, int width) NONNULL(1);
@@ -546,7 +679,7 @@ static void set_field_num(FIELD *field, int num, int width) {
   if (rc > 0) {
     int ec = set_field_buffer(field, 0, buff);
     if (ec != E_OK)
-      LOGECFAIL("set_field_buffer", ec);
+      LOGECFAIL("num", "set_field_buffer", ec);
   }
 }
 
@@ -558,34 +691,34 @@ static void set_field_str(FIELD *field, const char *str, int width) {
   if (rc > 0) {
     int ec = set_field_buffer(field, 0, buff);
     if (ec != E_OK)
-      LOGECFAIL("set_field_buffer", ec);
+      LOGECFAIL("str", "set_field_buffer", ec);
   }
 }
 
-static void prepare_form(int ndx, menuitem_s *data) NONNULL(2);
-static void prepare_form(int ndx, menuitem_s *data) {
+static void prepare_form(kitmenu_s *kit, int ndx, menuitem_s *data) NONNULL(1, 3);
+static void prepare_form(kitmenu_s *kit, int ndx, menuitem_s *data) {
   // menuitem types: INTFORM, STRFORM
-  if ((ndx < 0) || (ndx >= (int)ARRAY_LEN(kit.ff))) {
+  if ((ndx < 0) || (ndx >= (int)kit->len)) {
     LOGMSG("wrong index: %d", ndx);
     return;
   }
-  int desc_x0 = kit.maxnamelen + kit.spacing;
-  LOGMSG("index=%d desc-offset=%d", ndx, desc_x0);
-  int x0 = getbegx(kit.wsp.sub) + desc_x0;
-  int y0 = getbegy(kit.wsp.sub) + ndx;
-  int w  = getmaxx(kit.wsp.sub) - (desc_x0 + 1);
+  int desc_x0 = kit->maxnamelen + kit->spacing;
+  LOGMSG("menu %s: index=%d desc-offset=%d", kit->log, ndx, desc_x0);
+  int x0 = getbegx(kit->wsp.der) + desc_x0;
+  int y0 = getbegy(kit->wsp.der) + ndx;
+  int w  = getmaxx(kit->wsp.der) - (desc_x0 + 1);
   int h  = 1;
   //
-  FIELD *field = kit.ff[ndx].field[0];
+  FIELD *field = kit->mis[ndx].field[0];
   if (!field) {
     field = new_field(h, w, 0, 0, 0, 0);
     if (!field) {
-      LOGECFAIL("new_field", errno);
+      LOGECFAIL(kit->log, "new_field", errno);
       return;
     }
     set_field_back(field, A_UNDERLINE);
     field_opts_off(field, O_AUTOSKIP);
-    kit.ff[ndx].field[0] = field;
+    kit->mis[ndx].field[0] = field;
   }
   switch (data->type) {
     case MI_INTFORM:
@@ -601,96 +734,96 @@ static void prepare_form(int ndx, menuitem_s *data) {
       break;
   }
   //
-  FORM *form = kit.ff[ndx].form;
+  FORM *form = kit->mis[ndx].form;
   if (!form) {
-    form = new_form(kit.ff[ndx].field);
+    form = new_form(kit->mis[ndx].field);
     if (!form) {
-      LOGECFAIL("new_form", errno);
+      LOGECFAIL(kit->log, "new_form", errno);
       return;
     }
-    kit.ff[ndx].form = form;
+    kit->mis[ndx].form = form;
   }
-  WINDOW *win = kit.ff[ndx].wsp.win;
+  WINDOW *win = kit->mis[ndx].wsp.win;
   if (!win) {
     win = newwin(h, w, y0, x0);
     if (!win) {
-      LOGFNFAIL("newwin");
+      LOGFNFAIL(kit->log, "newwin");
       return;
     }
     keypad(win, TRUE);
-    kit.ff[ndx].wsp.win = win;
+    kit->mis[ndx].wsp.win = win;
   }
-  WINDOW *sub = kit.ff[ndx].wsp.sub;
-  if (!sub) {
-    sub = derwin(win, h, w, 0, 0);
-    if (!sub) {
-      LOGFNFAIL("derwin");
+  WINDOW *der = kit->mis[ndx].wsp.der;
+  if (!der) {
+    der = derwin(win, h, w, 0, 0);
+    if (!der) {
+      LOGFNFAIL(kit->log, "derwin");
       return;
     }
-    kit.ff[ndx].wsp.sub = sub;
+    kit->mis[ndx].wsp.der = der;
   }
   //
   if (form_win(form) != win) {
     int ec = set_form_win(form, win);
     if (ec != E_OK) {
-      LOGECFAIL("set_form_win", ec);
+      LOGECFAIL(kit->log, "set_form_win", ec);
       free_form(form);
-      kit.ff[ndx].form = NULL;
+      kit->mis[ndx].form = NULL;
       return;
     }
   }
-  if (form_sub(form) != sub) {
-    int ec = set_form_sub(form, sub);
+  if (form_sub(form) != der) {
+    int ec = set_form_sub(form, der);
     if (ec != E_OK) {
-      LOGECFAIL("set_form_sub", ec);
+      LOGECFAIL(kit->log, "set_form_sub", ec);
       free_form(form);
-      kit.ff[ndx].form = NULL;
+      kit->mis[ndx].form = NULL;
       return;
     }
   }
   //
-  PANEL *pan = kit.ff[ndx].wsp.pan;
+  PANEL *pan = kit->mis[ndx].wsp.pan;
   if (!pan) {
     pan = new_panel(win);
     if (!pan) {
-      LOGFNFAIL("new_panel");
+      LOGFNFAIL(kit->log, "new_panel");
       return;
     }
-    kit.ff[ndx].wsp.pan = pan;
+    kit->mis[ndx].wsp.pan = pan;
   }
 }
 
-static void close_form(miff_s *ff) NONNULL(1);
-static void close_form(miff_s *ff) {
-  bottom_panel(ff->wsp.pan);
-  unpost_form(ff->form);
-  ff->posted = false;
+static void close_form(mi_s *mi) NONNULL(1);
+static void close_form(mi_s *mi) {
+  bottom_panel(mi->wsp.pan);
+  unpost_form(mi->form);
+  mi->posted = false;
   posted_form = -1;
   LOGMSG("%s", "done");
 }
 
-static void activate_form(ITEM *item, menuitem_s *data) NONNULL(1, 2);
-static void activate_form(ITEM *item, menuitem_s *data) {
+static void activate_form(kitmenu_s *kit, ITEM *item, menuitem_s *data) NONNULL(1, 2, 3);
+static void activate_form(kitmenu_s *kit, ITEM *item, menuitem_s *data) {
   // menuitem types: INTFORM, STRFORM
   int ndx = item_index(item);
-  if ((ndx < 0) || (ndx >= (int)ARRAY_LEN(kit.ff))) {
-    LOGMSG("%s", "no item/data");
+  if ((ndx < 0) || (ndx >= (int)kit->len)) {
+    LOGMSG("menu %s: %s", kit->log, "no item/data");
     return;
   }
-  miff_s *curr = &kit.ff[ndx];
+  mi_s *curr = &kit->mis[ndx];
   if (!curr->form || !curr->field[0]) {
-    prepare_form(ndx, data);
+    prepare_form(kit, ndx, data);
     if (!curr->form || !curr->field[0])
       return;
   }
-  LOGMSG("< form[%d] posted=%d", ndx, curr->posted);
+  LOGMSG("< menu=%s form[%d] posted=%d", kit->log, ndx, curr->posted);
   // unpost all other menuitem forms if there are posted ones
-  { miff_s *ff = kit.ff;
-    for (int i = 0; i < (int)ARRAY_LEN(kit.ff); i++, ff++)
-      if (ff->posted && (i != ndx)) {
-        bottom_panel(ff->wsp.pan);
-        unpost_form(ff->form);
-        ff->posted = false;
+  { mi_s *mi = kit->mis;
+    for (int i = 0; i < (int)kit->len; i++, mi++)
+      if (mi->posted && (i != ndx)) {
+        bottom_panel(mi->wsp.pan);
+        unpost_form(mi->form);
+        mi->posted = false;
       }
     posted_form = -1;
   }
@@ -703,15 +836,15 @@ static void activate_form(ITEM *item, menuitem_s *data) {
       posted_form = ndx;
     else {
       curr->posted = false;
-      LOGECFAIL("post_form", ec);
+      LOGECFAIL(kit->log, "post_form", ec);
     }
   } else {
     bottom_panel(curr->wsp.pan);
     int ec = unpost_form(curr->form);
     if (ec != E_OK)
-      LOGECFAIL("unpost_form", ec);
+      LOGECFAIL(kit->log, "unpost_form", ec);
   }
-  LOGMSG("> form[%d] posted=%d", ndx, curr->posted);
+  LOGMSG("> menu=%s form[%d] posted=%d", kit->log, ndx, curr->posted);
   update_panels();
   doupdate();
 }
@@ -722,9 +855,9 @@ static void free_wsp(wsp_s *wsp) {
     del_panel(wsp->pan);
     wsp->pan = NULL;
   }
-  if (wsp->sub) {
-    delwin(wsp->sub);
-    wsp->sub = NULL;
+  if (wsp->der) {
+    delwin(wsp->der);
+    wsp->der = NULL;
   }
   if (wsp->win) {
     delwin(wsp->win);
@@ -732,8 +865,11 @@ static void free_wsp(wsp_s *wsp) {
   }
 }
 
-static void process_form_input(const char *got, ITEM *item, FIELD *field) NONNULL(1, 2, 3);
-static void process_form_input(const char *got, ITEM *item, FIELD *field) {
+static void process_form_input(kitmenu_s *kit, const char *got,
+  ITEM *item, FIELD *field) NONNULL(1, 2, 3, 4);
+static void process_form_input(kitmenu_s *kit, const char *got,
+  ITEM *item, FIELD *field)
+{
   menuitem_s *data = item_userptr(item);
   if (!data)
     return;
@@ -770,7 +906,7 @@ static void process_form_input(const char *got, ITEM *item, FIELD *field) {
         const char *key = str;
         valid = key && key[0];
         if (valid) {
-          for (int i = 0; (i < kit.desc_width) && *key; i++, key++)
+          for (int i = 0; (i < kit->desc_width) && *key; i++, key++)
             if (!strchr(patt, *key)) {
               LOGMSG("invalid key: %c", *key);
               valid = false;
@@ -781,7 +917,7 @@ static void process_form_input(const char *got, ITEM *item, FIELD *field) {
       const char *val = data->val.pstr ? *data->val.pstr : NULL;
       if (valid) {
         LOGMSG("str: %s", str);
-        if (val && STR_NEQ(val, str, kit.desc_width)) {
+        if (val && STR_NEQ(val, str, kit->desc_width)) {
           if (data->setter)
             data->setter(str);
           else // ? snprinte(val[len], len, "%s", str)
@@ -800,9 +936,9 @@ static void process_form_input(const char *got, ITEM *item, FIELD *field) {
   }
 }
 
-static void fin_form(miff_s *ff, ITEM *item) NONNULL(1, 2);
-static void fin_form(miff_s *ff, ITEM *item) {
-  FIELD *field = ff->field[0];
+static void fin_form(kitmenu_s *kit, mi_s *mi, ITEM *item) NONNULL(1, 2, 3);
+static void fin_form(kitmenu_s *kit, mi_s *mi, ITEM *item) {
+  FIELD *field = mi->field[0];
   if (field) {
     LOGMSG("%s", item_name(item));
     char *got = field_buffer(field, 0);
@@ -811,149 +947,255 @@ static void fin_form(miff_s *ff, ITEM *item) {
       char value[NAMELEN] = {0};
       int rc = snprinte(value, sizeof(value), "%s", got);
       char *arg = ((rc > 0) && value[0]) ? trim(value) : NULL;
-      process_form_input(arg ? arg : got, item, field);
+      process_form_input(kit, arg ? arg : got, item, field);
     }
   }
 }
 
-
-//
-// global
-
-void free_menukit(void) {
-  LOGMSG("%s", "free menu stuff");
+static void free_menukit(kitmenu_s *kit) NONNULL(1);
+static void free_menukit(kitmenu_s *kit) {
+  LOGMSG("menu %s: %s", kit->log, "free menu stuff");
   // menu itself
-  if (kit.menu) {
-    if (kit.posted) {
-      unpost_menu(kit.menu);
-      kit.posted = false;
+  if (kit->menu) {
+    if (kit->posted) {
+      unpost_menu(kit->menu);
+      kit->posted = false;
     }
-    set_menu_items(kit.menu, NULL);
-    free_menu(kit.menu);
-    kit.menu = NULL;
+    set_menu_items(kit->menu, NULL);
+    free_menu(kit->menu);
+    kit->menu = NULL;
   }
   // items
-  ITEM **item = kit.item;
-  for (uint i = 0; i < ARRAY_LEN(kit.item); i++, item++) {
+  ITEM **item = kit->items;
+  for (uint i = 0; i < kit->len; i++, item++) {
     if (*item) {
       free_item(*item);
       *item = NULL;
     }
   }
   // forms-n-fields
-  miff_s *ff = kit.ff;
-  for (uint i = 0; i < ARRAY_LEN(kit.ff); i++, ff++) {
-    if (ff->form) {
-      if (ff->posted) {
-        unpost_form(ff->form);
-        ff->posted = false;
+  mi_s *mi = kit->mis;
+  for (uint i = 0; i < kit->len; i++, mi++) {
+    if (mi->form) {
+      if (mi->posted) {
+        unpost_form(mi->form);
+        mi->posted = false;
       }
-      free_form(ff->form);
-      ff->form = NULL;
+      free_form(mi->form);
+      mi->form = NULL;
     }
-    if (ff->field[0]) {
-      free_field(ff->field[0]);
-      ff->field[0] = NULL;
+    if (mi->field[0]) {
+      free_field(mi->field[0]);
+      mi->field[0] = NULL;
     }
-    // ff's panel-n-windows
-    free_wsp(&ff->wsp);
+    // menuitem's panel-n-windows
+    free_wsp(&mi->wsp);
   }
   // panel-n-windows
-  free_wsp(&kit.wsp);
-  //
-  menuactive = false;
+  free_wsp(&kit->wsp);
 }
 
-void menu_handler(WINDOW *_win UNUSED) {
-  if (tuilook == NEWLOOK) {
-    if (kit.posted)
-      menu_showhide();
-    else {
-      prepare_menu();
-      if (kit.posted)
-        menu_showhide();
-    }
+static inline kitmenu_s *get_active_priokit(void) {
+  return kitmenu[KITMENU_CYCLES].active ? &kitmenu[KITMENU_CYCLES] :
+         kitmenu[KITMENU_MAIN].active   ? &kitmenu[KITMENU_MAIN]   : NULL;
+}
+
+static void menu_repost(kitmenu_s *kit) NONNULL(1);
+static void menu_repost(kitmenu_s *kit) {
+  if (kit->posted) {
+    LOGMSG("%s", kit->log);
+    ITEM *curr = current_item(kit->menu);
+    int ndx = curr ? item_index(curr) : -1;
+    unpost_menu(kit->menu);
+    kit->posted = false;
+    init_menu_items();
+    if (kit->items[0]) {
+      int ec = set_menu_items(kit->menu, kit->items);
+      if (ec == E_OK) {
+        position_inside_menu(kit, ndx);
+        int ec = post_menu(kit->menu);
+        if (ec == E_OK) {
+          kit->posted = true;
+          LOGMSG("menu %s: %s", kit->log, "reposted");
+        } else
+          LOGECFAIL(kit->log, "post_menu", ec);
+      } else
+        LOGECFAIL(kit->log, "set_menu_items", ec);
+    } else
+      LOGMSG("menu %s: %s", kit->log, "cannot reinit menu items");
   }
 }
 
-void menuline_updown(bool up) {
-  menu_driver(kit.menu, up ? REQ_UP_ITEM : REQ_DOWN_ITEM);
+//
+// global
+
+void free_menus(void) {
+  for (uint i = 0; i < ARRAY_LEN(kitmenu); i++) {
+    menu_hide(&kitmenu[i]);
+    free_menukit(&kitmenu[i]);
+  }
 }
 
-void menupage_updown(int lines) {
+#ifdef LOGMOD
+#define LOGKITMENUACTIVE do {                                        \
+  for (uint i = 0; i < ARRAY_LEN(kitmenu); i++)                      \
+    LOGMSG("menu %s: active=%d", kitmenu[i].log, kitmenu[i].active); \
+} while (0)
+#else
+#define LOGKITMENUACTIVE
+#endif
+
+void menu_showup(WINDOW *_win UNUSED) {
+  if (tuilook == NEWLOOK) {
+    if (!kitmenu[KITMENU_MAIN].posted) {
+      prepare_menus();
+      if (!kitmenu[KITMENU_MAIN].posted)
+        return;
+    }
+    LOGKITMENUACTIVE;
+    if (kitmenu[KITMENU_CYCLES].active)
+      menu_hide(&kitmenu[KITMENU_CYCLES]);
+    else {
+      if (kitmenu[KITMENU_MAIN].active)
+        menu_hide(&kitmenu[KITMENU_MAIN]);
+      else
+        menu_show(&kitmenu[KITMENU_MAIN]);
+    }
+    menu_toggle_look();
+    update_panels();
+    doupdate();
+  }
+}
+
+void menu_inout(int key) {
+  bool dosmth = false;
+  kitmenu_s *kit = get_active_priokit();
+  if (kit) {
+    LOGKITMENUACTIVE;
+    if        (key == KEY_LEFT) {
+      dosmth = (kit->type == KIT_SUBMENU);
+      if (dosmth)
+        menu_hide(kit);
+    } else if (key == KEY_RIGHT) {
+      ITEM *item = kit->menu ? current_item(kit->menu) : NULL;
+      menuitem_s *menuitem = (item && (item_opts(item) & O_SELECTABLE)) ? item_userptr(item) : NULL;
+      dosmth = (menuitem && (menuitem->type == MI_SUBMENU) && menuitem->submenu);
+      if (dosmth)
+        menu_show(menuitem->submenu);
+    }
+  }
+  if (dosmth) {
+    menu_toggle_look();
+    update_panels();
+    doupdate();
+  }
+}
+
+void menu_line_updown(bool up) {
+  kitmenu_s *kit = get_active_priokit();
+  if (kit)
+    menu_driver(kit->menu, up ? REQ_UP_ITEM : REQ_DOWN_ITEM);
+}
+
+void menu_page_updown(int lines) {
   bool up = (lines > 0);
   if (lines < 0)
     lines = -lines;
   for (int i = 0; i < lines; i++)
-    menuline_updown(up);
+    menu_line_updown(up);
+}
+
+static void action_cycles_unlim(void) {
+  static int prev_run_cycles; // last known, not unlim
+  bool limited = run_opts.cycles > 0;
+  if (limited)
+    prev_run_cycles = run_opts.cycles;
+  int cycles = limited ? 0 : prev_run_cycles;
+  LOGMSG("cycles: %d -> %d", run_opts.cycles, cycles);
+  run_opts.cycles = cycles;
+  subopts.unlim_cycles = run_opts.cycles > 0;
+  menu_posteditaction(SUBMENU_CYCLES_INF);
+  menu_toggle_look();
 }
 
 key_action_t menu_action(void) {
-  ITEM *item = (kit.posted && kit.menu) ? current_item(kit.menu) : NULL;
-  menuitem_s *data = item ? item_userptr(item) : NULL;
-  if (!data)
-    return ActionNone;
-  switch (data->type) {
-    case MI_TOOGLE:
-      LOGMSG("%d", data->action);
-      break;
-    case MI_INTFORM:
-    case MI_STRFORM:
-      activate_form(item, data);
-      break;
-    default: break;
+  LOGKITMENUACTIVE;
+  kitmenu_s *kit = get_active_priokit();
+  ITEM *item = (kit && kit->posted && kit->menu) ? current_item(kit->menu) : NULL;
+  key_action_t action = ActionNone;
+  if (item && (item_opts(item) & O_SELECTABLE)) {
+    menuitem_s *data = item_userptr(item);
+    if (data) {
+      action = data->action;
+      switch (data->type) {
+        case MI_TOOGLE:
+          LOGMSG("menu %s: %d", kit->log, data->action);
+          switch (action) {
+            case ActionMenuCyclesUnlim:
+              action_cycles_unlim();
+              action = ActionNone;
+              break;
+            default: break;
+          } break;
+        case MI_INTFORM:
+        case MI_STRFORM:
+          activate_form(kit, item, data);
+          break;
+        case MI_SUBMENU: {
+          kitmenu_s *sub = data->submenu;
+          if (sub) {
+            sub->active ? menu_hide(sub) : menu_show(sub);
+            menu_toggle_look();
+          }
+        }  break;
+        default: break;
+      }
+    }
   }
-  return data->action;
+  return action;
 }
 
 void menu_toggle_look(void) {
-  if (kit.posted) {
-    ITEM *curr = current_item(kit.menu);
-    int ndx = curr ? item_index(curr) : -1;
-    unpost_menu(kit.menu);
-    kit.posted = false;
-    init_menuitems();
-    if (kit.item[0]) {
-      int ec = set_menu_items(kit.menu, kit.item);
-      if (ec == E_OK) {
-        position_inside_menu(ndx);
-        int ec = post_menu(kit.menu);
-        if (ec == E_OK) {
-          kit.posted = true;
-          LOGMSG("%s", "menu reposted");
-        } else
-          LOGECFAIL("post_menu", ec);
-      } else
-        LOGECFAIL("set_menu_items", ec);
-    } else
-      LOGMSG("%s", "cannot reinit menu items");
-  }
+  for (uint i = 0; i < ARRAY_LEN(kitmenu); i++)
+    if (kitmenu[i].active)
+      menu_repost(&kitmenu[i]);
 }
 
-bool inside_menu(int x, int y) {
-  return kit.wsp.win ? wenclose(kit.wsp.win, y, x) : false;
+inline static bool enclose_kit(kitmenu_s *kit, int x, int y) NONNULL(1);
+inline static bool enclose_kit(kitmenu_s *kit, int x, int y) {
+  return (kit->active && kit->wsp.win) ? wenclose(kit->wsp.win, y, x) : false;
 }
 
-int mouse_select_n_toggle(void) {
-  int rc = menu_driver(kit.menu, KEY_MOUSE);
-  LOGMSG("menu_driver(KEY_MOUSE): rc=%d", rc);
+menu_ndx_t inside_curr_menu(int x, int y) {
+  kitmenu_s *kit = get_active_priokit();
+  return (kit && enclose_kit(kit, x, y)) ? kit->ndx : KITMENU_NONE;
+}
+
+int mouse_select_n_toggle(menu_ndx_t ndx) {
+  kitmenu_s *kit = ((ndx >= 0) && (ndx < (int)ARRAY_LEN(kitmenu)))
+    ? &kitmenu[ndx] : NULL;
+  int rc = kit ? menu_driver(kit->menu, KEY_MOUSE) : 0;
+  LOGMSG("menu %s, driver(KEY_MOUSE): rc=%d", kit ? kit->log : "UNKN", rc);
   return (rc == E_UNKNOWN_COMMAND) ? ON_MOUSE_DBL_CLICK : 0;
 }
 
 void set_kit_attr(const short *bg, const int *x0, const int *y0) {
   if (bg)
-    kit.bg = *bg;
+    common_attr.bg = *bg;
   if (x0)
-    kit.x0 = *x0;
+    common_attr.x0 = *x0;
   if (y0)
-    kit.y0 = *y0;
+    common_attr.y0 = *y0;
 }
 
 int menu_form_key(int key) {
-  int ndx = posted_form;
-  if ((ndx < 0) || (ndx >= (int)ARRAY_LEN(kit.ff)))
+  kitmenu_s *kit = get_active_priokit();
+  if (!kit)
     return key;
-  FORM *form = kit.ff[ndx].form;
+  int ndx = posted_form;
+  if ((ndx < 0) || (ndx >= (int)kit->len))
+    return key;
+  FORM *form = kit->mis[ndx].form;
   if (!form)
     return key;
   int rc = 0;
@@ -976,11 +1218,11 @@ int menu_form_key(int key) {
     case '\r':
     case '\n': {
       form_driver(form, REQ_VALIDATION);
-      ITEM *item = kit.item[ndx];
-      miff_s *ff = &kit.ff[ndx];
+      ITEM *item = kit->items[ndx];
+      mi_s *mi = &kit->mis[ndx];
       if (item)
-        fin_form(ff, item);
-      close_form(ff);
+        fin_form(kit, mi, item);
+      close_form(mi);
       menuitem_s *data = item ? item_userptr(item) : NULL;
       if (data && (data->action == ActionNone))
         menu_posteditaction(data->ndx);
@@ -991,19 +1233,17 @@ int menu_form_key(int key) {
         form_driver(form, key);
       else {
         rc = key;
-        close_form(&kit.ff[ndx]);
+        close_form(&kit->mis[ndx]);
       }
       break;
   }
   return rc;
 }
 
-//void cursor_at_form(void) {
-//  int ndx = posted_form;
-//  if ((ndx >= 0) && (ndx < (int)ARRAY_LEN(kit.ff))) {
-//    FORM *form = kit.ff[ndx].form;
-//    if (form)
-//      pos_form_cursor(form);
-//  }
-//}
+bool menu_active(void) {
+  for (uint i = 0; i < ARRAY_LEN(kitmenu); i++)
+    if (kitmenu[i].active)
+      return true;
+  return false;
+}
 

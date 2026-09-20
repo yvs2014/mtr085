@@ -452,6 +452,9 @@ msgstr "Patrón de bits"
 msgid "Number of cycles"
 msgstr "Número de ciclos"
 
+msgid "Unlimited"
+msgstr "Ilimitado"
+
 msgid "Minimum TTL"
 msgstr "TTL mínimo"
 

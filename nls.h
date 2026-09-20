@@ -122,6 +122,7 @@
 #define _PROTO_STR    "Protocol"
 #define _BITPATT_STR  "Bit pattern"
 #define _NCYCLES_STR  "Number of cycles"
+#define _UNLIM_STR    "Unlimited"
 #define _MINTTL_STR   "Minimum TTL"
 #define _MAXTTL_STR   "Maximum TTL"
 #define _GAPINSEC_STR "Interval in seconds"

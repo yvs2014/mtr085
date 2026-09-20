@@ -351,7 +351,10 @@ static const char* actname[MaxActions] = {
 #ifdef WITH_IPINFO
   [ActionASN]   = "asn",
   [ActionII]    = "ipinfo",
-  [ActionMultiII] = "multi-source"
+  [ActionMultiII]         = "multi-source",
+#endif
+#ifdef WITH_MENU
+  [ActionMenuCyclesUnlim] = "cycles-unlim",
 #endif
 };
 #endif

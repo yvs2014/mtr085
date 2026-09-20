@@ -452,6 +452,9 @@ msgstr "Бітовий шаблон"
 msgid "Number of cycles"
 msgstr "Кількість циклів"
 
+msgid "Unlimited"
+msgstr "Необмежено"
+
 msgid "Minimum TTL"
 msgstr "Мінімальний  TTL"
 

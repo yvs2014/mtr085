@@ -17,7 +17,7 @@ void disable_mouse(void);
 extern uint display_offset;
 
 #ifdef WITH_MENU
-#define WREFRESH(win) menuactive ? update_panels() : (void)wnoutrefresh(win)
+#define WREFRESH(win) menu_active() ? update_panels() : (void)wnoutrefresh(win)
 #else
 #define WREFRESH(win) wnoutrefresh(win)
 #endif
