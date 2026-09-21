@@ -121,6 +121,7 @@
 #define _MPLS_STR     "MPLS"
 #define _PROTO_STR    "Protocol"
 #define _BITPATT_STR  "Bit pattern"
+#define _RANDOM_STR   "Random"
 #define _NCYCLES_STR  "Number of cycles"
 #define _UNLIM_STR    "Unlimited"
 #define _MINTTL_STR   "Minimum TTL"

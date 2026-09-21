@@ -449,6 +449,9 @@ msgstr "BYTES"
 msgid "Bit pattern"
 msgstr "Patrón de bits"
 
+msgid "Random"
+msgstr "Aleatorio"
+
 msgid "Number of cycles"
 msgstr "Número de ciclos"
 

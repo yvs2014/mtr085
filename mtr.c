@@ -241,6 +241,7 @@ opts_t ini_opts = { // initial bool options
   .minttl   =  1,             // start at first hop
   .maxttl   = 30,             // supposedly enough for today's internet
   .cycles   = REPORT_PINGS,   // note that 0 should be set explicitly
+  .pattern  = BITPATTERN,     // payload pattern
   .interval =  1,             // in seconds
   .size     = PAYLOAD_SIZE,   // 64 ip payload - 8 byte header
   .syn      = MIL,            // in ms (tcp timeout)

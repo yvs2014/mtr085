@@ -449,6 +449,9 @@ msgstr "БАЙТИ"
 msgid "Bit pattern"
 msgstr "Бітовий шаблон"
 
+msgid "Random"
+msgstr "Випадково"
+
 msgid "Number of cycles"
 msgstr "Кількість циклів"
 

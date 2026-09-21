@@ -450,6 +450,9 @@ msgstr "BYTES"
 msgid "Bit pattern"
 msgstr "Padrão de bits"
 
+msgid "Random"
+msgstr "Aleatório"
+
 msgid "Number of cycles"
 msgstr "Número de ciclos"
 

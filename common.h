@@ -21,7 +21,7 @@
 #define MAX_ADDRSTRLEN INET6_ADDRSTRLEN
 
 #ifndef GITREV
-#define GITREV "331"
+#define GITREV "332"
 #endif
 
 #ifndef HAVE_UINT
@@ -117,6 +117,7 @@ typedef enum {
 #ifdef WITH_MENU
   ActionMenuCyclesUnlim,
   ActionMenuNoCache,
+  ActionMenuPattRnd,
 #endif
   MaxActions
 } key_action_t;
@@ -136,6 +137,7 @@ typedef enum {
 #define C_SPACE ' '
 
 #define REPORT_PINGS 100 // default run-cycles
+#define BITPATTERN     0 // default payload pattern
 #define CACHE_TIMEOUT 60 // default if enabled, in seconds
 
 // options

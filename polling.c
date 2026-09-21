@@ -355,6 +355,7 @@ static const char* actname[MaxActions] = {
 #ifdef WITH_MENU
   [ActionMenuCyclesUnlim] = "cycles-unlim",
   [ActionMenuNoCache]     = "no-cache",
+  [ActionMenuPattRnd]     = "random-bit-patt",
 #endif
 };
 #endif

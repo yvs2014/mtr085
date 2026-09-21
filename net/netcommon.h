@@ -5,6 +5,7 @@
 
 #include <netinet/tcp.h>
 #include <netinet/udp.h>
+#include <netinet/ip.h>
 #include <netinet/ip_icmp.h>
 #ifdef ENABLE_IPV6
 #include <netinet/icmp6.h>
