@@ -124,6 +124,7 @@
 #define _RANDOM_STR   "Random"
 #define _NCYCLES_STR  "Number of cycles"
 #define _UNLIM_STR    "Unlimited"
+#define _TTL_STR      "TTL"
 #define _MINTTL_STR   "Minimum TTL"
 #define _MAXTTL_STR   "Maximum TTL"
 #define _GAPINSEC_STR "Interval in seconds"

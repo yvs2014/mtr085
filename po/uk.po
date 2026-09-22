@@ -458,6 +458,9 @@ msgstr "Кількість циклів"
 msgid "Unlimited"
 msgstr "Необмежено"
 
+msgid "TTL"
+msgstr "TTL"
+
 msgid "Minimum TTL"
 msgstr "Мінімальний  TTL"
 
