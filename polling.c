@@ -356,6 +356,7 @@ static const char* actname[MaxActions] = {
   [ActionMenuCyclesUnlim] = "cycles-unlim",
   [ActionMenuNoCache]     = "no-cache",
   [ActionMenuPattRnd]     = "random-bit-patt",
+  [ActionMenuPldSize]     = "payload-size",
 #endif
 };
 #endif

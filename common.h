@@ -21,7 +21,7 @@
 #define MAX_ADDRSTRLEN INET6_ADDRSTRLEN
 
 #ifndef GITREV
-#define GITREV "332"
+#define GITREV "333"
 #endif
 
 #ifndef HAVE_UINT
@@ -118,6 +118,7 @@ typedef enum {
   ActionMenuCyclesUnlim,
   ActionMenuNoCache,
   ActionMenuPattRnd,
+  ActionMenuPldSize,
 #endif
   MaxActions
 } key_action_t;

@@ -56,7 +56,7 @@ typedef enum {
 #ifdef ENABLE_QOS
   MENU_MAIN_QOS,
 #endif
-  MENU_MAIN_PSIZE,
+  SUBMENU_PSIZE,
   SUBMENU_XCACHE,
   MENU_MAIN_LEN
 } mi_inst;
@@ -70,6 +70,11 @@ enum {
   SUBMENU_BPATT_RND,
   SUBMENU_BPATT_NUM,
   SUBMENU_BPATT_LEN,
+};
+enum {
+  SUBMENU_PSIZE_RND,
+  SUBMENU_PSIZE_NUM,
+  SUBMENU_PSIZE_LEN,
 };
 enum {
   SUBMENU_XCACHE_NOT,
@@ -107,12 +112,14 @@ static const menuico_t a_toogle = {.len = 3, .on = "[*]", .off = "[ ]"};
 static const menuico_t u_toogle =
   {.len = 1, .on = "✓"/*"✔"*//*"🗹 "*//*"☑"*/, .off = "◻"/*"☐"*/};
 #endif
+static const menuico_t *toogle  = &a_toogle;
 static const menuico_t a_menuexp = {.len = 3, .on = "  |", .off = "..."};
 #if defined(TUIWIDE) && defined(WITH_UNICODE)
 static const menuico_t u_menuexp = {.len = 1, .on = "◀"/*▼▾▶▷*/, .off = "…"/*▶*/};
 #endif
+static const menuico_t *menuexp = &a_menuexp;
 
-typedef void (*mi_init_fn)(const menuico_t *toogle, const menuico_t *menuexp) NONNULL(1, 2);
+typedef void (*mi_init_fn)(void);
 
 typedef struct kitmenu_s {
   menu_ndx_t ndx;
@@ -142,13 +149,16 @@ static ITEM* cycles_items[SUBMENU_CYCLES_LEN + 1];
 static mi_s     cycles_mi[SUBMENU_CYCLES_LEN];
 static ITEM*  bpatt_items[SUBMENU_BPATT_LEN + 1];
 static mi_s      bpatt_mi[SUBMENU_BPATT_LEN];
+static ITEM* psize_items[SUBMENU_PSIZE_LEN + 1];
+static mi_s     psize_mi[SUBMENU_PSIZE_LEN];
 static ITEM* xcache_items[SUBMENU_XCACHE_LEN + 1];
 static mi_s     xcache_mi[SUBMENU_XCACHE_LEN];
 
-static void init_mi_bpatt (const menuico_t *toogle, const menuico_t *menuexp) NONNULL(1, 2);
-static void init_mi_cycles(const menuico_t *toogle, const menuico_t *menuexp) NONNULL(1, 2);
-static void init_mi_xcache(const menuico_t *toogle, const menuico_t *menuexp) NONNULL(1, 2);
-static void init_mi_main  (const menuico_t *toogle, const menuico_t *menuexp) NONNULL(1, 2);
+static void init_mi_main  (void);
+static void init_mi_cycles(void);
+static void init_mi_bpatt (void);
+static void init_mi_psize (void);
+static void init_mi_xcache(void);
 
 #define NAMEDESC_SPACING    1
 #define BORDER_PAD          1
@@ -163,10 +173,14 @@ static kitmenu_s kitmenu[] = {
     .len = SUBMENU_CYCLES_LEN, .items = cycles_items, .mis = cycles_mi, .nth = SUBMENU_CYCLES,
     .spacing = NAMEDESC_SPACING, .pad = BORDER_PAD, .desc_width = SUBMENU_DSC_WIDTH,
     .mi_init = init_mi_cycles},
-  [KITMENU_BPATT]  = {.ndx = KITMENU_BPATT,  .type = KIT_SUBMENU, .log = "bit-pattern",
+  [KITMENU_BPATT]  = {.ndx = KITMENU_BPATT,  .type = KIT_SUBMENU, .log = "bpattern",
     .len = SUBMENU_BPATT_LEN,  .items = bpatt_items,  .mis = bpatt_mi,  .nth = SUBMENU_BPATT,
     .spacing = NAMEDESC_SPACING, .pad = BORDER_PAD, .desc_width = SUBMENU_DSC_WIDTH,
     .mi_init = init_mi_bpatt},
+  [KITMENU_PSIZE]  = {.ndx = KITMENU_PSIZE,  .type = KIT_SUBMENU, .log = "psize",
+    .len = SUBMENU_PSIZE_LEN,  .items = psize_items,  .mis = psize_mi,  .nth = SUBMENU_PSIZE,
+    .spacing = NAMEDESC_SPACING, .pad = BORDER_PAD, .desc_width = SUBMENU_DSC_WIDTH,
+    .mi_init = init_mi_psize},
   [KITMENU_XCACHE] = {.ndx = KITMENU_XCACHE, .type = KIT_SUBMENU, .log = "xcache",
     .len = SUBMENU_XCACHE_LEN, .items = xcache_items, .mis = xcache_mi, .nth = SUBMENU_XCACHE,
     .spacing = NAMEDESC_SPACING, .pad = BORDER_PAD, .desc_width = SUBMENU_DSC_WIDTH,
@@ -204,7 +218,8 @@ typedef struct menuitem_s {
   } val;
   const int min, max, *pmin, *pmax;
   const char *patt;
-  void (*setter)(const char *str);
+  void (*str_setter)(const char *str);
+  void (*int_setter)(int);
   //
   kitmenu_s *submenu;
 } menuitem_s;
@@ -222,10 +237,12 @@ static struct subopts {
   char fields[20]; // enough for stat keys [stat_max]
   bool cycles_inf;
   int  cycles_val;
-  bool xcache_nop;
-  int  xcache_val;
   bool  bpatt_rnd;
   int   bpatt_val;
+  bool  psize_rnd;
+  int   psize_val;
+  bool xcache_nop;
+  int  xcache_val;
 } subopts;
 
 #define MI_NDX(menu_ndx, item_ndx) (((menu_ndx) << 8) | ((item_ndx) & 0xFF))
@@ -242,8 +259,6 @@ static void menu_posteditaction(int type, int opt) {
       net_set_qos();
       OPT_SUM(qos);      break;
 #endif
-    case MI_NDX(KITMENU_MAIN, MENU_MAIN_PSIZE):
-      OPT_SUM(size);     break;
     case MI_NDX(KITMENU_CYCLES, SUBMENU_CYCLES_INF):
     case MI_NDX(KITMENU_CYCLES, SUBMENU_CYCLES_NUM):
       OPT_SUM(cycles);   break;
@@ -251,6 +266,10 @@ static void menu_posteditaction(int type, int opt) {
     case MI_NDX(KITMENU_BPATT,  SUBMENU_BPATT_NUM):
       reset_pattern = true;
       OPT_SUM(pattern);  break;
+    case MI_NDX(KITMENU_PSIZE,  SUBMENU_PSIZE_RND):
+    case MI_NDX(KITMENU_PSIZE,  SUBMENU_PSIZE_NUM):
+      reset_pldsize = true;
+      OPT_SUM(size);     break;
     case MI_NDX(KITMENU_XCACHE, SUBMENU_XCACHE_NOT):
     case MI_NDX(KITMENU_XCACHE, SUBMENU_XCACHE_NUM):
       OPT_SUM(cache);    break;
@@ -336,11 +355,8 @@ static int fill_itemname(const menuitem_s *mi, const char *name,
   return rc;
 }
 
-static int fill_itemdesc(const kitmenu_s *kit, menuitem_s *mitem,
-  const menuico_t *toogle, const menuico_t *menuexp) NONNULL(1, 2, 3, 4);
-static int fill_itemdesc(const kitmenu_s *kit, menuitem_s *mitem,
-  const menuico_t *toogle, const menuico_t *menuexp)
-{
+static int fill_itemdesc(const kitmenu_s *kit, menuitem_s *mitem) NONNULL(1, 2);
+static int fill_itemdesc(const kitmenu_s *kit, menuitem_s *mitem) {
   int rc = 0;
   switch (mitem->type) {
     case MI_TOOGLE: {
@@ -412,14 +428,8 @@ static void set_stat_keys(uint len, char buff[len]) {
     buff[i] = ((int)i < stat_max) ? stats[i].key : 0;
 }
 
-static void init_kititems(kitmenu_s *kit,
-  uint mlen, menuitem_s mi[mlen], optname_s opt[mlen],
-  const menuico_t *toogle, const menuico_t *menuexp)
-  NONNULL(1, 3, 4, 5, 6);
-static void init_kititems(kitmenu_s *kit,
-  uint mlen, menuitem_s mi[mlen], optname_s opt[mlen],
-  const menuico_t *toogle, const menuico_t *menuexp)
-{
+static void init_kititems(kitmenu_s *kit, uint mlen, menuitem_s mi[mlen], optname_s opt[mlen]) NONNULL(1, 3, 4);
+static void init_kititems(kitmenu_s *kit, uint mlen, menuitem_s mi[mlen], optname_s opt[mlen]) {
   if (!kit->maxnamelen)
     kit->maxnamelen  = calc_maxnamelen(mlen, mi, opt);
   //
@@ -447,7 +457,7 @@ static void init_kititems(kitmenu_s *kit,
       (fill_itemname(mi, opt->name, sizeof(mi->name), mi->name, pad) > 0) && mi->name[0]
       ? mi->name : opt->name;
     const char *desc =
-      (fill_itemdesc(kit, mi, toogle, menuexp) > 0) && mi->desc[0]
+      (fill_itemdesc(kit, mi) > 0) && mi->desc[0]
       ? mi->desc : NULL;
     ITEM *item = new_item(name, desc);
     if (item) {
@@ -481,7 +491,7 @@ static void set_menus_attr(void) {
   }
 }
 
-static void init_mi_cycles(const menuico_t *toogle, const menuico_t *menuexp) { // NONNULL(1, 2)
+static void init_mi_cycles(void) {
   static menuitem_s mi_cycles[] = {
     [SUBMENU_CYCLES_INF] = {.ndx = SUBMENU_CYCLES_INF, .type = MI_TOOGLE,
       .action = ActionMenuCyclesUnlim, .val.flag = &subopts.cycles_inf},
@@ -489,14 +499,14 @@ static void init_mi_cycles(const menuico_t *toogle, const menuico_t *menuexp) { 
       .action = ActionNone,            .val.num  = &run_opts.cycles,
       .min = 1, .max = INT_MAX},
   };
-  optname_s opt_cycles[ARRAY_LEN(mi_cycles)] = {
+  optname_s opts[ARRAY_LEN(mi_cycles)] = {
     [SUBMENU_CYCLES_INF] = {.name = MENUSTRW(_UNLIM_STR)},
     [SUBMENU_CYCLES_NUM] = {.name = MENUSTRW(_NCYCLES_STR)},
   };
-  init_kititems(&kitmenu[KITMENU_CYCLES], ARRAY_LEN(mi_cycles), mi_cycles, opt_cycles, toogle, menuexp);
+  init_kititems(&kitmenu[KITMENU_CYCLES], ARRAY_LEN(mi_cycles), mi_cycles, opts);
 }
 
-static void init_mi_bpatt(const menuico_t *toogle, const menuico_t *menuexp) { // NONNULL(1, 2)
+static void init_mi_bpatt(void) {
   static menuitem_s mi_bpatt[] = {
     [SUBMENU_BPATT_RND] = {.ndx = SUBMENU_BPATT_RND, .type = MI_TOOGLE,
       .action = ActionMenuPattRnd, .val.flag = &subopts.bpatt_rnd},
@@ -504,14 +514,35 @@ static void init_mi_bpatt(const menuico_t *toogle, const menuico_t *menuexp) { /
       .action = ActionNone,        .val.num  = &run_opts.pattern,
       .min = 0, .max = UINT8_MAX},
   };
-  optname_s opt_bpatt[ARRAY_LEN(mi_bpatt)] = {
+  optname_s opts[ARRAY_LEN(mi_bpatt)] = {
     [SUBMENU_BPATT_RND] = {.name = MENUSTRW(_RANDOM_STR)},
     [SUBMENU_BPATT_NUM] = {.name = MENUSTRW(_BITPATT_STR)},
   };
-  init_kititems(&kitmenu[KITMENU_BPATT], ARRAY_LEN(mi_bpatt), mi_bpatt, opt_bpatt, toogle, menuexp);
+  init_kititems(&kitmenu[KITMENU_BPATT], ARRAY_LEN(mi_bpatt), mi_bpatt, opts);
 }
 
-static void init_mi_xcache(const menuico_t *toogle, const menuico_t *menuexp) { // NONNULL(1, 2)
+static void set_psize(int value) {
+  run_opts.size = (value < 0) ? -value : value;
+  if (subopts.psize_rnd && value)
+    run_opts.size = -run_opts.size;
+}
+
+static void init_mi_psize(void) {
+  static menuitem_s mi_psize[] = {
+    [SUBMENU_PSIZE_RND] = {.ndx = SUBMENU_PSIZE_RND, .type = MI_TOOGLE,
+      .action = ActionMenuPldSize, .val.flag = &subopts.psize_rnd},
+    [SUBMENU_PSIZE_NUM] = {.ndx = SUBMENU_PSIZE_NUM, .type = MI_INTFORM,
+      .action = ActionNone,        .val.num  = &subopts.psize_val, .int_setter = set_psize,
+      .min = 0, .max = MAXPACKET - MINPACKET},
+  };
+  optname_s opts[ARRAY_LEN(mi_psize)] = {
+    [SUBMENU_PSIZE_RND] = {.name = MENUSTRW(_RANDOM_STR)},
+    [SUBMENU_PSIZE_NUM] = {.name = MENUSTRW(_PSIZE_STR)},
+  };
+  init_kititems(&kitmenu[KITMENU_PSIZE], ARRAY_LEN(mi_psize), mi_psize, opts);
+}
+
+static void init_mi_xcache(void) {
   static menuitem_s mi_xcache[] = {
     [SUBMENU_XCACHE_NOT] = {.ndx = SUBMENU_XCACHE_NOT, .type = MI_TOOGLE,
       .action = ActionMenuNoCache, .val.flag = &subopts.xcache_nop},
@@ -519,15 +550,14 @@ static void init_mi_xcache(const menuico_t *toogle, const menuico_t *menuexp) { 
       .action = ActionNone,        .val.num  = &run_opts.cache,
       .min = 1, .max = INT_MAX},
   };
-  optname_s opt_xcache[ARRAY_LEN(mi_xcache)] = {
+  optname_s opts[ARRAY_LEN(mi_xcache)] = {
     [SUBMENU_XCACHE_NOT] = {.name = MENUSTRW(_NOCACHE_STR)},
     [SUBMENU_XCACHE_NUM] = {.name = MENUSTRW(_CACHETM_STR)},
   };
-  init_kititems(&kitmenu[KITMENU_XCACHE], ARRAY_LEN(mi_xcache), mi_xcache, opt_xcache, toogle, menuexp);
+  init_kititems(&kitmenu[KITMENU_XCACHE], ARRAY_LEN(mi_xcache), mi_xcache, opts);
 }
 
-#define PSIZEMM (MAXPACKET - MINPACKET)
-static void init_mi_main(const menuico_t *toogle, const menuico_t *menuexp) { // NONNULL(1, 2)
+static void init_mi_main(void) {
   static menuitem_s mi_main[] = {
 #ifdef ENABLE_DNS
     [MENU_MAIN_DNS]      = {.ndx = MENU_MAIN_DNS,     .type = MI_TOOGLE,
@@ -540,7 +570,7 @@ static void init_mi_main(const menuico_t *toogle, const menuico_t *menuexp) { //
     [MENU_MAIN_JITTER]   = {.ndx = MENU_MAIN_JITTER,  .type = MI_TOOGLE,
       .action = ActionJttr,  .val.flag = &run_opts.jitter},
     [MENU_MAIN_FIELDS]   = {.ndx = MENU_MAIN_FIELDS,  .type = MI_STRFORM,
-      .action = ActionNone,  .val.pstr = &fld_active, .setter = set_fld_active,
+      .action = ActionNone,  .val.pstr = &fld_active, .str_setter = set_fld_active,
       .patt = subopts.fields},
 #ifdef WITH_MPLS
     [MENU_MAIN_MPLS]     = {.ndx = MENU_MAIN_MPLS,    .type = MI_TOOGLE,
@@ -566,15 +596,15 @@ static void init_mi_main(const menuico_t *toogle, const menuico_t *menuexp) { //
       .action = ActionNone,  .val.num  = &run_opts.qos,
       .min =  0, .max = UINT8_MAX},
 #endif
-    [MENU_MAIN_PSIZE]    = {.ndx = MENU_MAIN_PSIZE,   .type = MI_INTFORM,
-      .action = ActionNone,  .val.num  = &run_opts.size,
-      .min = -PSIZEMM, .max = PSIZEMM},
+    [SUBMENU_PSIZE]      = {.ndx = SUBMENU_PSIZE,     .type = MI_SUBMENU,
+      .action = ActionNone,  .val.flag = &kitmenu[KITMENU_PSIZE].active,
+      .submenu = &kitmenu[KITMENU_PSIZE]},
     [SUBMENU_XCACHE]     = {.ndx = SUBMENU_XCACHE,    .type = MI_SUBMENU,
       .action = ActionNone,  .val.flag = &kitmenu[KITMENU_XCACHE].active,
       .submenu = &kitmenu[KITMENU_XCACHE]},
   };
   //
-  optname_s opt_main[ARRAY_LEN(mi_main)] = {
+  optname_s opts[ARRAY_LEN(mi_main)] = {
 #ifdef ENABLE_DNS
     [MENU_MAIN_DNS]     = {.name = MENUSTRW(_DNS_STR)},
 #endif
@@ -594,15 +624,12 @@ static void init_mi_main(const menuico_t *toogle, const menuico_t *menuexp) { //
 #ifdef ENABLE_QOS
     [MENU_MAIN_QOS]     = {.name = MENUSTRW(_QOSTOS_STR)},
 #endif
-    [MENU_MAIN_PSIZE]   = {.name = MENUSTRW(_PSIZE_STR)},
+    [SUBMENU_PSIZE]     = {.name = MENUSTRW(_PSIZE_STR)},
     [SUBMENU_XCACHE]    = {.name = MENUSTRW(_CACHETM_STR)},
   };
   //
-  init_kititems(&kitmenu[KITMENU_MAIN], ARRAY_LEN(mi_main), mi_main, opt_main, toogle, menuexp);
+  init_kititems(&kitmenu[KITMENU_MAIN], ARRAY_LEN(mi_main), mi_main, opts);
 }
-
-static const menuico_t *toogle  = &a_toogle;
-static const menuico_t *menuexp = &a_menuexp;
 
 static void set_item_icons(void) {
   toogle =
@@ -619,6 +646,7 @@ static void set_item_icons(void) {
 
 static inline bool is_value_cycles(void) { return run_opts.cycles  >  0; }
 static inline bool is_value_bpatt (void) { return run_opts.pattern >= 0; }
+static inline bool is_value_psize (void) { return run_opts.size    >= 0; }
 static inline bool is_value_xcache(void) { return run_opts.cache   >  0; }
 
 static void set_subopt_values(void) {
@@ -627,6 +655,9 @@ static void set_subopt_values(void) {
   //
   subopts.bpatt_val  = is_value_bpatt()  ? run_opts.pattern : BITPATTERN;
   subopts.bpatt_rnd  = !is_value_bpatt();
+  //
+  subopts.psize_val  = is_value_psize()  ? run_opts.size    : PAYLOAD_SIZE;
+  subopts.psize_rnd  = !is_value_psize();
   //
   subopts.xcache_val = is_value_xcache() ? run_opts.cache   : CACHE_TIMEOUT;
   subopts.xcache_nop = !is_value_xcache();
@@ -637,10 +668,11 @@ static void set_subopt_values(void) {
 static void init_all_menuitems(void) { // supposed to call once
   set_subopt_values();
   set_item_icons();
-  init_mi_cycles(toogle, menuexp);
-  init_mi_bpatt (toogle, menuexp);
-  init_mi_xcache(toogle, menuexp);
-  init_mi_main  (toogle, menuexp);
+  init_mi_cycles();
+  init_mi_bpatt ();
+  init_mi_psize ();
+  init_mi_xcache();
+  init_mi_main  ();
   set_menus_attr();
 }
 
@@ -1016,6 +1048,8 @@ static void process_form_input(kitmenu_s *kit, const char *got,
         LOGMSG("num: %d", num);
         if (val && (*val != num))
           *val = num;
+        if (data->int_setter)
+          data->int_setter(num);
       }
     } break;
     case MI_STRFORM: {
@@ -1037,8 +1071,8 @@ static void process_form_input(kitmenu_s *kit, const char *got,
       if (valid) {
         LOGMSG("str: %s", str);
         if (val && STR_NEQ(val, str, kit->desc_width)) {
-          if (data->setter)
-            data->setter(str);
+          if (data->str_setter)
+            data->str_setter(str);
           else // ? snprinte(val[len], len, "%s", str)
             LOGMSG("%s", "no setter for string form");
         }
@@ -1149,7 +1183,7 @@ static void menu_repost(kitmenu_s *kit) {
     unpost_menu(kit->menu);
     kit->posted = false;
     if (kit->mi_init)
-      kit->mi_init(toogle, menuexp);
+      kit->mi_init();
     if (kit->items[0]) {
       int ec = set_menu_items(kit->menu, kit->items);
       if (ec == E_OK) {
@@ -1184,10 +1218,22 @@ static void action_rnd_pattern(void) {
   if (last) // keep
     subopts.bpatt_val = run_opts.pattern;
   int value = last ? -1 : subopts.bpatt_val; // toggle
-  LOGMSG("bit-pattern: %d -> %d", run_opts.pattern, value);
+  LOGMSG("bpattern: %d -> %d", run_opts.pattern, value);
   run_opts.pattern = value;
   subopts.bpatt_rnd = !is_value_bpatt();
   menu_posteditaction(KITMENU_BPATT, SUBMENU_BPATT_RND);
+  menu_toggle_look();
+}
+
+static void action_rnd_psize(void) {
+  bool last = is_value_psize();
+  if (last) // keep
+    subopts.psize_val = run_opts.size;
+  int value = last ? -subopts.psize_val : subopts.psize_val; // toggle
+  LOGMSG("psize: %d -> %d", run_opts.size, value);
+  run_opts.size = value;
+  subopts.psize_rnd = !is_value_psize();
+  menu_posteditaction(KITMENU_PSIZE, SUBMENU_PSIZE_RND);
   menu_toggle_look();
 }
 
@@ -1300,6 +1346,10 @@ key_action_t menu_action(void) {
               break;
             case ActionMenuPattRnd:
               action_rnd_pattern();
+              action = ActionNone;
+              break;
+            case ActionMenuPldSize:
+              action_rnd_psize();
               action = ActionNone;
               break;
             case ActionMenuNoCache:

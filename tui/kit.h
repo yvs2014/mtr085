@@ -10,7 +10,8 @@ typedef enum {
   KITMENU_MAIN   =  0,
   KITMENU_CYCLES =  1,
   KITMENU_BPATT  =  2,
-  KITMENU_XCACHE =  3,
+  KITMENU_PSIZE  =  3,
+  KITMENU_XCACHE =  4,
 } menu_ndx_t;
 
 void free_menus(void);
