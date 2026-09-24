@@ -119,6 +119,7 @@
 #define _ASN_STR      "ASN"
 #define _INFO_STR     "Info"
 #define _MPLS_STR     "MPLS"
+#define _MPLS_EXT_STR "MPLS extension"
 #define _PROTO_STR    "Protocol"
 #define _BITPATT_STR  "Bit pattern"
 #define _RANDOM_STR   "Random"
@@ -134,6 +135,9 @@
 #define _CUSTFLD_STR  "Custom fields"
 #define _CACHETM_STR  "Cache timeout"
 #define _NOCACHE_STR  "No cache"
+#define _ICMP_STR     "ICMP"
+#define _UDP_STR      "UDP"
+#define _TCP_STR      "TCP"
 
 // cmd help
 #define COMMANDS_STR _("Commands")

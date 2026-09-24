@@ -268,7 +268,7 @@ static bool svc(struct timespec *last, const struct timespec *interval, int *tim
   return true;
 }
 
-static bool proto_readyset(int type) {
+static bool try_to_set_proto(int type) {
   bool ready =
 #ifdef ENABLE_IPV6
      ((af == AF_INET6) && sock6_ready(type)) ||
@@ -279,53 +279,87 @@ static bool proto_readyset(int type) {
   return ready;
 }
 //
-static bool toggle_proto(void) {
-  bool okay = false;
-  // icmp->udp->tcp->icmp->...
-  switch (proto) {
+static bool set_ping_proto(int want) {
+  bool okay = want == proto;
+  if (!okay) switch (want) {
     case IPPROTO_ICMP:
-      okay = proto_readyset(IPPROTO_UDP);
+      okay = try_to_set_proto(IPPROTO_ICMP);
+      if (okay) {
+        run_opts.udp = false;
+        run_opts.tcp = false;
+      }
+      break;
+    case IPPROTO_UDP:
+      okay = try_to_set_proto(IPPROTO_UDP);
       if (okay) {
         run_opts.udp = true;
         run_opts.tcp = false;
       }
       break;
-    case IPPROTO_UDP:
 #ifdef USE_RAW
-      okay = proto_readyset(IPPROTO_TCP);
+    case IPPROTO_TCP:
+      okay = try_to_set_proto(IPPROTO_TCP);
       if (okay) {
         run_opts.udp = false;
         run_opts.tcp = true;
       }
       break;
+#endif
+    default: break;
+  }
+  return okay;
+}
+//
+static bool toggle_proto(void) {
+  bool okay = false;
+  // icmp->udp->tcp->icmp->...
+  switch (proto) {
+    case IPPROTO_ICMP:
+      okay = set_ping_proto(IPPROTO_UDP);
+      break;
+    case IPPROTO_UDP:
+#ifdef USE_RAW
+      okay = set_ping_proto(IPPROTO_TCP);
+      break;
     case IPPROTO_TCP:
 #endif
-      okay = proto_readyset(IPPROTO_ICMP);
-      if (okay) {
-       run_opts.udp = false;
-       run_opts.tcp = false;
-      }
+      okay = set_ping_proto(IPPROTO_ICMP);
       break;
     default: break;
   }
   return okay;
 }
 //
-static bool toggle_udptcp(key_action_t action) {
-  // udp=on/off, tcp=on/off
-  run_opts.udp = run_opts.tcp = false;
-  bool okay = false;
-  if (proto != IPPROTO_ICMP)
-    okay = proto_readyset(IPPROTO_ICMP);
-  else {
-    bool udp = (action == ActionUDP);
-    okay = proto_readyset(udp ? IPPROTO_UDP : IPPROTO_TCP);
-    if (okay) {
-      if (udp) run_opts.udp = true;
-      else     run_opts.tcp = true;
-    }
+bool switch_proto_action(key_action_t action) {
+  bool ready = false;
+  switch (action) {
+    case ActionToggleProto: // icmp->udp->tcp->icmp->...
+      ready = toggle_proto();
+      break;
+    case ActionToggleUDP:   // udp=on/off
+      ready = set_ping_proto(proto != IPPROTO_ICMP ? IPPROTO_ICMP : IPPROTO_UDP);
+      break;
+#ifdef USE_RAW
+    case ActionToggleTCP:   // tcp=on/off
+      ready = set_ping_proto(proto != IPPROTO_ICMP ? IPPROTO_ICMP : IPPROTO_TCP);
+      break;
+#endif
+#ifdef WITH_MENU
+    case ActionSetICMP:     // icmp
+      ready = set_ping_proto(IPPROTO_ICMP);
+      break;
+    case ActionSetUDP:      // udp
+      ready = set_ping_proto(IPPROTO_UDP);
+      break;
+#ifdef USE_RAW
+    case ActionSetTCP:      // tcp
+      ready = set_ping_proto(IPPROTO_TCP);
+      break;
+#endif
+#endif
+    default: break;
   }
-  return okay;
+  return ready;
 }
 
 #ifdef LOGMOD
@@ -334,10 +368,17 @@ static const char* actname[MaxActions] = {
   [ActionQuit]  = "quit",
   [ActionReset] = "reset network counters",
   [ActionPauseResume] = "pause/resume",
-  [ActionProto] = "proto",
-  [ActionUDP]   = "udp",
+  [ActionToggleProto] = "toggle-proto",
+  [ActionToggleUDP]   = "toggle-udp",
 #ifdef USE_RAW
-  [ActionTCP]   = "tcp",
+  [ActionToggleTCP]   = "toggle-tcp",
+#endif
+#ifdef WITH_MENU
+  [ActionSetICMP]     = "set-icmp",
+  [ActionSetUDP]      = "set-udp",
+#ifdef USE_RAW
+  [ActionSetTCP]      = "set-tcp",
+#endif
 #endif
   [ActionCache] = "cache",
   [ActionJttr]  = "jitter",
@@ -351,12 +392,6 @@ static const char* actname[MaxActions] = {
   [ActionASN]   = "asn",
   [ActionII]    = "ipinfo",
   [ActionMultiII]         = "multi-source",
-#endif
-#ifdef WITH_MENU
-  [ActionMenuCyclesUnlim] = "cycles-unlim",
-  [ActionMenuPldSize]     = "payload-size",
-  [ActionMenuPattRnd]     = "random-pattern",
-  [ActionMenuNoCache]     = "no-cache",
 #endif
 };
 #endif
@@ -391,7 +426,7 @@ static key_action_t keyboard_events(key_action_t action) {
 #endif
 #ifdef WITH_MPLS
     case ActionMPLS:
-      LOGMSG("toggle %s: %d -> %d", "MPLS", run_opts.mpls, !run_opts.mpls);
+      LOGMSG("toggle %s: %d -> %d", _MPLS_STR, run_opts.mpls, !run_opts.mpls);
       run_opts.mpls = !run_opts.mpls;
       OPT_SUM(mpls);
 #ifdef WITH_MENU
@@ -401,7 +436,7 @@ static key_action_t keyboard_events(key_action_t action) {
 #endif
 #ifdef ENABLE_DNS
     case ActionDNS:
-      LOGMSG("toggle %s: %d -> %d", "DNS", run_opts.dns, !run_opts.dns);
+      LOGMSG("toggle %s: %d -> %d", _DNS_STR, run_opts.dns, !run_opts.dns);
       run_opts.dns = !run_opts.dns;
       OPT_SUM(dns);
       dns_open();
@@ -437,18 +472,20 @@ static key_action_t keyboard_events(key_action_t action) {
 #endif
       break;
 #endif
-    case ActionUDP:
+    case ActionToggleProto:
+    case ActionToggleUDP:
 #ifdef USE_RAW
-    case ActionTCP:
+    case ActionToggleTCP:
 #endif
-    case ActionProto: {
+#ifdef WITH_MENU
+    case ActionSetICMP:
+    case ActionSetUDP:
+#ifdef USE_RAW
+    case ActionSetTCP:
+#endif
+#endif
       LOGMSG("< switch proto: %s", USED_PROTO);
-      bool ready = false;
-      if (action == ActionProto)
-        ready = toggle_proto();        // icmp->udp->tcp->icmp->...
-      else
-        ready = toggle_udptcp(action); // udp=on/off, tcp=on/off
-      if (ready) {
+      if (switch_proto_action(action)) {
         if      (af == AF_INET)
           set_sock4();
 #ifdef ENABLE_IPV6
@@ -460,7 +497,10 @@ static key_action_t keyboard_events(key_action_t action) {
         LOGMSG("> switch proto: %s", USED_PROTO);
       } else
         WARNXF("%s", "Cannot change protocol");
-    } break;
+#ifdef WITH_MENU
+      menu_toggle_look();
+#endif
+      break;
     default:
       action = ActionNone;
   }

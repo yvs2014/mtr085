@@ -409,8 +409,9 @@ static void set_opt_desc(char opt, uint len, const char* desc[len]) {
     case OPT_INTERVAL:
     case OPT_CACHE:
 #ifdef USE_RAW
-    case OPT_TIMEOUT: str = CAP_SECONDS; break;
+    case OPT_TIMEOUT:
 #endif
+                      str = CAP_SECONDS; break;
     case OPT_ADDR:    str = CAP_IPADDR;  break;
     case OPT_COUNT:   str = CAP_COUNT;   break;
 #ifdef TUIMODE

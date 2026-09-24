@@ -563,9 +563,9 @@ static void redraw_status(WINDOW *win) {
   const char *date = tui_datetime ? tui_datetime(time(NULL), sizeof(str), str) : NULL;
   int len = (date && date[0]) ? ((tuilook == OLDLOOK) ?
     snprinte(buff, sizeof(buff), "%.*s: %s",
-      (int)strnlen(srchost, getmaxx(win) / 2), srchost, date) :
+      (int)strnlen(srchost, getmaxx(win) / 2), srchost, date) : (
 #ifdef WITH_UNICODE
-    (utf_compat ?
+    utf_compat ?
       snprinte(buff, sizeof(buff), " %s %s", VUSLASH, date) :
 #endif
       snprinte(buff, sizeof(buff), " %c %s", VSLASH, date))) : 0;

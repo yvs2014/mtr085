@@ -249,9 +249,9 @@ static void tui_get_int(WINDOW *win, int *val, int min, int max,
 
 static void tui_key_b(WINDOW *win) NONNULL(1);
 static void tui_key_b(WINDOW *win) { // bit pattern
-  LOGMSG("action: %s", BITPATT_STR);
-  if (tuilook == NEWLOOK) // not yet, TODO: window with input form
+  if (tuilook == NEWLOOK)
     return;
+  LOGMSG("action: %s", BITPATT_STR);
   tui_get_int(win, &run_opts.pattern, -1, UINT8_MAX, BITPATT_STR, RANGENEG_STR);
   OPT_SUM(pattern);
   reset_pattern = true;
@@ -259,9 +259,9 @@ static void tui_key_b(WINDOW *win) { // bit pattern
 
 static void tui_key_c(WINDOW *win) NONNULL(1);
 static void tui_key_c(WINDOW *win) { // set number of cycles
-  LOGMSG("action: %s", NCYCLES_STR);
-  if (tuilook == NEWLOOK) // not yet, TODO: window with input form
+  if (tuilook == NEWLOOK)
     return;
+  LOGMSG("action: %s", NCYCLES_STR);
   MOUSE_OFF;
   mvwaddstr(win, 0, 0, NCYCLES_STR);
   waddstr(win, " (");
@@ -293,17 +293,17 @@ static void tui_key_d(WINDOW *win UNUSED) { // display modes (charts)
 
 static void tui_key_f(WINDOW *win) NONNULL(1);
 static void tui_key_f(WINDOW *win) { // first ttl
-  LOGMSG("action: %s", MINTTL_STR);
-  if (tuilook == NEWLOOK) // not yet, TODO: window with input form
+  if (tuilook == NEWLOOK)
     return;
+  LOGMSG("action: %s", MINTTL_STR);
   tui_get_int(win, &run_opts.minttl, 1, run_opts.maxttl, MINTTL_STR, NULL);
   OPT_SUM(minttl);
 }
 
 static void tui_key_i(WINDOW *win) NONNULL(1);
 static void tui_key_i(WINDOW *win) { // interval
+  if (tuilook == NEWLOOK)
   LOGMSG("action: %s", GAPINSEC_STR);
-  if (tuilook == NEWLOOK) // not yet, TODO: window with input form
     return;
   tui_get_int(win, &run_opts.interval, 1, INT_MAX, GAPINSEC_STR, NULL);
   OPT_SUM(interval);
@@ -311,9 +311,9 @@ static void tui_key_i(WINDOW *win) { // interval
 
 static void tui_key_m(WINDOW *win) NONNULL(1);
 static void tui_key_m(WINDOW *win) { // max ttl
-  LOGMSG("action: %s", MAXTTL_STR);
-  if (tuilook == NEWLOOK) // not yet, TODO: window with input form
+  if (tuilook == NEWLOOK)
     return;
+  LOGMSG("action: %s", MAXTTL_STR);
   tui_get_int(win, &run_opts.maxttl, run_opts.minttl, MAXHOST, MAXTTL_STR, NULL);
   OPT_SUM(maxttl);
 }
@@ -339,9 +339,9 @@ static void tui_key_o_hints(int x0, int y0) {
 
 static void tui_key_o(WINDOW *win) NONNULL(1);
 static void tui_key_o(WINDOW *win) { // set fields to display and their order
-  LOGMSG("action: %s", FIELDS_STR);
-  if (tuilook == NEWLOOK) // not yet, TODO: window with input form
+  if (tuilook == NEWLOOK)
     return;
+  LOGMSG("action: %s", FIELDS_STR);
   MOUSE_OFF;
   tui_key_o_hints(getbegx(win), getbegy(win) + getmaxy(win));
   wclear(win);
@@ -358,9 +358,9 @@ static void tui_key_o(WINDOW *win) { // set fields to display and their order
 #ifdef ENABLE_QOS
 static void tui_key_Q(WINDOW *win) NONNULL(1);
 static void tui_key_Q(WINDOW *win) { // set QoS
-  LOGMSG("action: %s", QOSTOS_STR);
-  if (tuilook == NEWLOOK) // not yet, TODO: window with input form
+  if (tuilook == NEWLOOK)
     return;
+  LOGMSG("action: %s", QOSTOS_STR);
 #if   !defined(ENABLE_QOS4)
   if (af == AF_INET)
     tui_msgcont(win, strerror(EOPNOTSUPP), "IPv4 QOS");
@@ -380,9 +380,9 @@ static void tui_key_Q(WINDOW *win) { // set QoS
 
 static void tui_key_s(WINDOW *win) NONNULL(1);
 static void tui_key_s(WINDOW *win) { // set payload size
-  LOGMSG("action: %s", PSIZE_STR);
-  if (tuilook == NEWLOOK) // not yet, TODO: window with input form
+  if (tuilook == NEWLOOK)
     return;
+  LOGMSG("action: %s", PSIZE_STR);
   MOUSE_OFF;
   wclear(win);
   int x = 0, y = 0;
@@ -471,14 +471,14 @@ static key_action_t action_map[UINT8_MAX] =  {
 #endif
   [C_SPACE]   = ActionPauseResume,
   ['p']       = ActionPauseResume,
-  ['P'] = ActionProto,
+  ['P'] = ActionToggleProto,
   [CTRL_C]    = ActionQuit,
   ['q']       = ActionQuit,
   ['r'] = ActionReset,
 #ifdef USE_RAW
-  ['t'] = ActionTCP,
+  ['t'] = ActionToggleTCP,
 #endif
-  ['u'] = ActionUDP,
+  ['u'] = ActionToggleUDP,
   ['x'] = ActionCache,
 #ifdef WITH_IPINFO
   ['y'] = ActionMultiII,
@@ -510,15 +510,15 @@ static void reset_by_key(int key, void (*reset)(void)) {
     case 'o': // fields to display and their order
     case C_SPACE:
     case 'p': // [ActionPauseResume]
-    case 'P': // [ActionProto]
+    case 'P': // [ActionToggleProto]
 #ifdef ENABLE_QOS
     case 'Q': // qos
 #endif
     case 's': // payload size
 #ifdef USE_RAW
-    case 't': // [ActionTCP]
+    case 't': // [ActionToggleTCP]
 #endif
-    case 'u': // [ActionUDP]
+    case 'u': // [ActionToggleUDP]
     case 'x': // [ActionCache]
       reset();
       break;
@@ -828,8 +828,16 @@ void status_no_crd(WINDOW *win, uint len, char buff[len]) { // NONNULL(1, 3)
 void enable_mouse(void) {
   mouse_on = run_opts.mouse;
   if (run_opts.mouse) {
-    menu_icon = utf_compat ? MENU_ICON_UTF8 : MENU_ICON_ASCII;
-    quit_icon = utf_compat ? QUIT_ICON_UTF8 : QUIT_ICON_ASCII;
+    menu_icon =
+#ifdef WITH_UNICODE
+      utf_compat ? MENU_ICON_UTF8 :
+#endif
+      MENU_ICON_ASCII;
+    quit_icon =
+#ifdef WITH_UNICODE
+      utf_compat ? QUIT_ICON_UTF8 :
+#endif
+      QUIT_ICON_ASCII;
 //    menu_icon_len = ustrnlen(menu_icon, NAMELEN);
     quit_icon_len = ustrnlen(quit_icon, NAMELEN);
     mousemask(BUTTON1_CLICKED | BUTTON1_DOUBLE_CLICKED | REPORT_MOUSE_POSITION, NULL);

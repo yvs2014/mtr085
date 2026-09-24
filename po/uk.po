@@ -101,6 +101,9 @@ msgstr "Інфо"
 msgid "MPLS"
 msgstr "MPLS"
 
+msgid "MPLS extension"
+msgstr "MPLS розширення"
+
 msgid "Proto"
 msgstr "Прото"
 

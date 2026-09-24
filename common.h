@@ -21,7 +21,7 @@
 #define MAX_ADDRSTRLEN INET6_ADDRSTRLEN
 
 #ifndef GITREV
-#define GITREV "334"
+#define GITREV "335"
 #endif
 
 #ifndef HAVE_UINT
@@ -100,9 +100,17 @@ typedef enum {
 
 typedef enum {
   ActionNone = 0, ActionQuit, ActionReset, ActionPauseResume,
-  ActionProto, ActionUDP,
+  ActionToggleProto,
+  ActionToggleUDP,
 #ifdef USE_RAW
-  ActionTCP,
+  ActionToggleTCP,
+#endif
+#ifdef WITH_MENU
+  ActionSetICMP,
+  ActionSetUDP,
+#ifdef USE_RAW
+  ActionSetTCP,
+#endif
 #endif
   ActionCache, ActionJttr,
 #ifdef WITH_MPLS
@@ -113,12 +121,6 @@ typedef enum {
 #endif
 #ifdef WITH_IPINFO
   ActionASN, ActionII, ActionMultiII,
-#endif
-#ifdef WITH_MENU
-  ActionMenuCyclesUnlim,
-  ActionMenuPldSize,
-  ActionMenuPattRnd,
-  ActionMenuNoCache,
 #endif
   MaxActions
 } key_action_t;
@@ -236,7 +238,7 @@ typedef union opt_sum_u {
 } opt_sum_t;
 
 #define OPT_SUM(tag) do {opt_sum.s.tag = (run_opts.tag != ini_opts.tag);} while(0)
-#define USED_PROTO (run_opts.udp ? "UDP" : (run_opts.tcp ? "TCP" : "ICMP"))
+#define USED_PROTO (run_opts.udp ? _UDP_STR : (run_opts.tcp ? _TCP_STR : _ICMP_STR))
 #define CHART_MODE (run_opts.chart | (run_opts.color ? (1 << 3) : 0))
 
 // note, VA_OPT min compat: gcc8, clang6
