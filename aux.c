@@ -18,6 +18,8 @@ static const char fld_default[MAXFLD + 1] = "LS_NABWV";
 static const char fld_jitter[MAXFLD + 1] = "DR_AGJMXI";
 #endif
 
+bool color_ready;
+
 const char* fld_active;
 int fld_index[UCHAR_MAX + 1] = {-1}; // key->index backresolv
 

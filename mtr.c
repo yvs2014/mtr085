@@ -978,7 +978,7 @@ static void init_locale(void) {
   if (strcasecmp("UTF-8", nl_langinfo(CODESET)) == 0) { // NOLINT(concurrency-mt-unsafe)
     if (iswprint(L'▁')) {
 #ifdef TUIMODE
-      chart_mode_max++;
+      chart_mode_max = 4;
 #endif
       utf_compat = true;
       return;

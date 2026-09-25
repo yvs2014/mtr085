@@ -330,7 +330,7 @@ static bool toggle_proto(void) {
   return okay;
 }
 //
-bool switch_proto_action(key_action_t action) {
+static bool switch_proto_action(key_action_t action) {
   bool ready = false;
   switch (action) {
     case ActionToggleProto: // icmp->udp->tcp->icmp->...

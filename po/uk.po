@@ -92,6 +92,19 @@ msgstr "Джиттер"
 msgid "Chart"
 msgstr "Діаграма"
 
+# кольорова [діаграма]
+msgid "Colored"
+msgstr "Кольорова"
+
+msgid "Mode 1 (ASCII)"
+msgstr "Режим 1 (ASCII)"
+
+msgid "Mode 2 (ASCII)"
+msgstr "Режим 1 (ASCII)"
+
+msgid "Mode 3 (Unicode)"
+msgstr "Режим 3 (Unicode)"
+
 msgid "ASN"
 msgstr "АС"
 

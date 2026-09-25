@@ -37,8 +37,6 @@ uint chart_mode_max = 3;
 
 //
 
-static bool color_ready;
-
 static symb_color_s map1[] = { // 2 intervals
   {.c.a = '.', .color = COLOR_WHITE },
   {.c.a = '>', .color = COLOR_YELLOW},

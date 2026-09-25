@@ -14,6 +14,7 @@
 
 #include "kit.h"
 #include "aux.h"
+#include "chart.h"
 #include "nls.h"
 #include "net.h"
 
@@ -44,6 +45,7 @@ typedef enum {
 #ifdef WITH_IPINFO
   MENU_MAIN_ASN,
 #endif
+  SUBMENU_CHART,
   MENU_MAIN_JITTER,
   MENU_MAIN_FIELDS,
   SUBMENU_CYCLES,
@@ -62,6 +64,14 @@ typedef enum {
   MENU_MAIN_LEN
 } mi_inst;
 
+enum {
+  SUBMENU_CHART_ON,
+  SUBMENU_CHART_1,
+  SUBMENU_CHART_2,
+  SUBMENU_CHART_3,
+  SUBMENU_CHART_CLR,
+  SUBMENU_CHART_LEN
+};
 enum {
   SUBMENU_CYCLES_INF,
   SUBMENU_CYCLES_NUM,
@@ -168,6 +178,8 @@ typedef struct kitmenu_s {
 
 static ITEM*   main_items[MENU_MAIN_LEN + 1];
 static mi_s       main_mi[MENU_MAIN_LEN];
+static ITEM*  chart_items[SUBMENU_CHART_LEN + 1];
+static mi_s      chart_mi[SUBMENU_CHART_LEN];
 static ITEM* cycles_items[SUBMENU_CYCLES_LEN + 1];
 static mi_s     cycles_mi[SUBMENU_CYCLES_LEN];
 static ITEM*    ttl_items[SUBMENU_TTL_LEN + 1];
@@ -182,6 +194,7 @@ static ITEM* xcache_items[SUBMENU_XCACHE_LEN + 1];
 static mi_s     xcache_mi[SUBMENU_XCACHE_LEN];
 
 static void init_mi_main  (void);
+static void init_mi_chart (void);
 static void init_mi_cycles(void);
 static void init_mi_ttl   (void);
 static void init_mi_psize (void);
@@ -198,6 +211,10 @@ static kitmenu_s kitmenu[] = {
     .len = MENU_MAIN_LEN,      .items = main_items,   .mis = main_mi,
     .spacing = NAMEDESC_SPACING, .pad = BORDER_PAD, .desc_width = MAINMENU_DSC_WIDTH,
     .mi_init = init_mi_main},
+  [KITMENU_CHART]  = {.ndx = KITMENU_CHART,  .type = KIT_SUBMENU, .log = "chart",
+    .len = SUBMENU_CHART_LEN, .items = chart_items,   .mis = chart_mi, .nth = SUBMENU_CHART,
+    .spacing = NAMEDESC_SPACING, .pad = BORDER_PAD, .desc_width = SUBMENU_DSC_WIDTH,
+    .mi_init = init_mi_chart},
   [KITMENU_CYCLES] = {.ndx = KITMENU_CYCLES, .type = KIT_SUBMENU, .log = "cycles",
     .len = SUBMENU_CYCLES_LEN, .items = cycles_items, .mis = cycles_mi, .nth = SUBMENU_CYCLES,
     .spacing = NAMEDESC_SPACING, .pad = BORDER_PAD, .desc_width = SUBMENU_DSC_WIDTH,
@@ -244,7 +261,8 @@ static kitmenu_s kitmenu[] = {
 
 typedef enum {
   ActionMenuNone = 0,
-  ActionMenuCyclesUnlim,
+  ActionMenuChart,
+  ActionMenuCyclesInf,
   ActionMenuPldSize,
   ActionMenuPattRnd,
   ActionMenuNoCache,
@@ -267,7 +285,7 @@ typedef struct menuitem_s {
     const bool  *flag;
     const char **pstr;
     int *num;
-    const int *pos;
+    const uint *pos;
   } val;
   const int min, max, *pmin, *pmax;
   const char *patt;
@@ -288,6 +306,8 @@ static attr_s common_attr;
 
 static struct subopts {
   char fields[20]; // enough for stat keys [stat_max]
+  bool chart_on;
+  uint chart_mod;
   bool cycles_inf;
   int  cycles_val;
   bool  psize_rnd;
@@ -296,7 +316,7 @@ static struct subopts {
   int   bpatt_val;
   bool xcache_nop;
   int  xcache_val;
-  int  proto_pos;
+  uint proto_pos;
 } subopts;
 
 #define MI_NDX(menu_ndx, item_ndx) (((menu_ndx) << 8) | ((item_ndx) & 0xFF))
@@ -309,6 +329,12 @@ static void menu_posteditaction(int type, int opt) {
       net_set_qos();
       OPT_SUM(qos);      break;
 #endif
+    case MI_NDX(KITMENU_CHART,  SUBMENU_CHART_ON):
+    case MI_NDX(KITMENU_CHART,  SUBMENU_CHART_1):
+    case MI_NDX(KITMENU_CHART,  SUBMENU_CHART_2):
+    case MI_NDX(KITMENU_CHART,  SUBMENU_CHART_3):
+    case MI_NDX(KITMENU_CHART,  SUBMENU_CHART_CLR):
+      OPT_SUM(chart);    break;
     case MI_NDX(KITMENU_CYCLES, SUBMENU_CYCLES_INF):
     case MI_NDX(KITMENU_CYCLES, SUBMENU_CYCLES_NUM):
       OPT_SUM(cycles);   break;
@@ -344,6 +370,16 @@ static void mi_selectabale(int type, int opt, ITEM *item) {
 #endif
       break;
 #endif
+    case MI_NDX(KITMENU_CHART,  SUBMENU_CHART_1):
+    case MI_NDX(KITMENU_CHART,  SUBMENU_CHART_2):
+      dim = !subopts.chart_on;
+      break;
+    case MI_NDX(KITMENU_CHART,  SUBMENU_CHART_3):
+      dim = !subopts.chart_on || (chart_mode_max < 4);
+      break;
+    case MI_NDX(KITMENU_CHART,  SUBMENU_CHART_CLR):
+      dim = !subopts.chart_on || !color_ready;
+      break;
     case MI_NDX(KITMENU_CYCLES, SUBMENU_CYCLES_NUM):
       dim = (run_opts.cycles <= 0);
       break;
@@ -430,7 +466,7 @@ static int fill_itemdesc(const kitmenu_s *kit, menuitem_s *mitem) {
           *flag, toggle_cb);
     } break;
     case MI_TOGGLE_RB: {
-      const int *pos = mitem->val.pos;
+      const uint *pos = mitem->val.pos;
       if (pos && toggle_rb)
         rc = fill_toggle_desc(kit->desc_width, sizeof(mitem->desc), mitem->desc,
           *pos == mitem->ndx, toggle_rb);
@@ -547,7 +583,7 @@ static void submenu_attr(attr_s *attr, int nth, kitmenu_s *main) {
   attr->x0 += (main->frame + main->pad) * 2;
 }
 
-static void set_menus_attr(void) {
+static void init_menus_attr(void) {
   LOGMSG("common: bg=%d x0=%d y0=%d", common_attr.bg, common_attr.x0, common_attr.bg);
   kitmenu_s *kit = kitmenu, *main = &kitmenu[KITMENU_MAIN];
   for (uint i = 0; i < ARRAY_LEN(kitmenu); i++, kit++) if (kit) {
@@ -557,12 +593,42 @@ static void set_menus_attr(void) {
   }
 }
 
+static void set_subopt_chart(void) {
+  subopts.chart_on = chart_mode != 0;
+  if (!subopts.chart_mod)
+    subopts.chart_mod = chart_mode ? chart_mode : 1;
+}
+
+static void init_mi_chart(void) {
+  static menuitem_s mi_chart[] = {
+    [SUBMENU_CHART_ON]  = {.ndx = SUBMENU_CHART_ON,  .type = MI_TOGGLE_CB,
+      .extra_action = ActionMenuChart, .val.flag = &subopts.chart_on},
+    [SUBMENU_CHART_1]   = {.ndx = SUBMENU_CHART_1,   .type = MI_TOGGLE_RB,
+      .extra_action = ActionMenuChart, .val.pos  = &chart_mode},
+    [SUBMENU_CHART_2]   = {.ndx = SUBMENU_CHART_2,   .type = MI_TOGGLE_RB,
+      .extra_action = ActionMenuChart, .val.pos  = &chart_mode},
+    [SUBMENU_CHART_3]   = {.ndx = SUBMENU_CHART_3,   .type = MI_TOGGLE_RB,
+      .extra_action = ActionMenuChart, .val.pos  = &chart_mode},
+    [SUBMENU_CHART_CLR] = {.ndx = SUBMENU_CHART_CLR, .type = MI_TOGGLE_CB,
+      .extra_action = ActionMenuChart, .val.flag = &run_opts.color},
+  };
+  optname_s opts[ARRAY_LEN(mi_chart)] = {
+    [SUBMENU_CHART_ON]  = {.name = MENUSTRW(_CHART_STR)},
+    [SUBMENU_CHART_1]   = {.name = MENUSTRW(_ASCMOD1_STR)},
+    [SUBMENU_CHART_2]   = {.name = MENUSTRW(_ASCMOD2_STR)},
+    [SUBMENU_CHART_3]   = {.name = MENUSTRW(_UTFMOD1_STR)},
+    [SUBMENU_CHART_CLR] = {.name = MENUSTRW(_COLORED_STR)},
+  };
+  set_subopt_chart();
+  init_kititems(&kitmenu[KITMENU_CHART], ARRAY_LEN(mi_chart), mi_chart, opts);
+}
+
 static void init_mi_cycles(void) {
   static menuitem_s mi_cycles[] = {
     [SUBMENU_CYCLES_INF] = {.ndx = SUBMENU_CYCLES_INF, .type = MI_TOGGLE_CB,
-      .extra_action = ActionMenuCyclesUnlim, .val.flag = &subopts.cycles_inf},
+      .extra_action = ActionMenuCyclesInf, .val.flag = &subopts.cycles_inf},
     [SUBMENU_CYCLES_NUM] = {.ndx = SUBMENU_CYCLES_NUM, .type = MI_INTFORM,
-      .min = 1, .max = INT_MAX,              .val.num  = &run_opts.cycles},
+      .min = 1, .max = INT_MAX,            .val.num  = &run_opts.cycles},
   };
   optname_s opts[ARRAY_LEN(mi_cycles)] = {
     [SUBMENU_CYCLES_INF] = {.name = MENUSTRW(_UNLIM_STR)},
@@ -669,48 +735,41 @@ static void init_mi_xcache(void) {
 static void init_mi_main(void) {
   static menuitem_s mi_main[] = {
 #ifdef ENABLE_DNS
-    [MENU_MAIN_DNS]      = {.ndx = MENU_MAIN_DNS,     .type = MI_TOGGLE_CB,
-      .action = ActionDNS,   .val.flag = &run_opts.dns},
+    [MENU_MAIN_DNS]    = {.ndx = MENU_MAIN_DNS,    .type = MI_TOGGLE_CB, .action = ActionDNS,
+      .val.flag = &run_opts.dns},
 #endif
 #ifdef WITH_IPINFO
-    [MENU_MAIN_ASN]      = {.ndx = MENU_MAIN_ASN,     .type = MI_TOGGLE_CB,
-      .action = ActionASN,   .val.flag = &run_opts.asn},
+    [MENU_MAIN_ASN]    = {.ndx = MENU_MAIN_ASN,    .type = MI_TOGGLE_CB, .action = ActionASN,
+      .val.flag = &run_opts.asn},
 #endif
-    [MENU_MAIN_JITTER]   = {.ndx = MENU_MAIN_JITTER,  .type = MI_TOGGLE_CB,
-      .action = ActionJttr,  .val.flag = &run_opts.jitter},
-    [MENU_MAIN_FIELDS]   = {.ndx = MENU_MAIN_FIELDS,  .type = MI_STRFORM,
-      .action = ActionNone,  .val.pstr = &fld_active, .str_setter = set_fld_active,
-      .patt = subopts.fields},
-    [SUBMENU_CYCLES]     = {.ndx = SUBMENU_CYCLES,    .type = MI_SUBMENU,
-      .action = ActionNone,  .val.flag = &kitmenu[KITMENU_CYCLES].active,
-      .submenu = &kitmenu[KITMENU_CYCLES]},
-    [SUBMENU_TTL]        = {.ndx = SUBMENU_TTL,       .type = MI_SUBMENU,
-      .action = ActionNone,  .val.flag = &kitmenu[KITMENU_TTL].active,
-      .submenu = &kitmenu[KITMENU_TTL]},
-    [SUBMENU_PSIZE]      = {.ndx = SUBMENU_PSIZE,     .type = MI_SUBMENU,
-      .action = ActionNone,  .val.flag = &kitmenu[KITMENU_PSIZE].active,
-      .submenu = &kitmenu[KITMENU_PSIZE]},
-    [SUBMENU_BPATT]      = {.ndx = SUBMENU_BPATT,     .type = MI_SUBMENU,
-      .action = ActionNone,  .val.flag = &kitmenu[KITMENU_BPATT].active,
-      .submenu = &kitmenu[KITMENU_BPATT]},
-    [MENU_MAIN_TIMEI]    = {.ndx = MENU_MAIN_TIMEI,   .type = MI_INTFORM,
-      .action = ActionNone,  .val.num  = &run_opts.interval,
-      .min =  1, .max = INT_MAX},
+    [SUBMENU_CHART]    = {.ndx = SUBMENU_CHART,    .type = MI_SUBMENU,
+      .val.flag = &kitmenu[KITMENU_CHART].active,  .submenu = &kitmenu[KITMENU_CHART]},
+    [MENU_MAIN_JITTER] = {.ndx = MENU_MAIN_JITTER, .type = MI_TOGGLE_CB,
+      .action = ActionJttr, .val.flag = &run_opts.jitter},
+    [MENU_MAIN_FIELDS] = {.ndx = MENU_MAIN_FIELDS, .type = MI_STRFORM,
+      .val.pstr = &fld_active, .str_setter = set_fld_active, .patt = subopts.fields},
+    [SUBMENU_CYCLES]   = {.ndx = SUBMENU_CYCLES,   .type = MI_SUBMENU,
+      .val.flag = &kitmenu[KITMENU_CYCLES].active, .submenu = &kitmenu[KITMENU_CYCLES]},
+    [SUBMENU_TTL]      = {.ndx = SUBMENU_TTL,      .type = MI_SUBMENU,
+      .val.flag = &kitmenu[KITMENU_TTL].active,    .submenu = &kitmenu[KITMENU_TTL]},
+    [SUBMENU_PSIZE]    = {.ndx = SUBMENU_PSIZE,    .type = MI_SUBMENU,
+      .val.flag = &kitmenu[KITMENU_PSIZE].active,  .submenu = &kitmenu[KITMENU_PSIZE]},
+    [SUBMENU_BPATT]    = {.ndx = SUBMENU_BPATT,    .type = MI_SUBMENU,
+      .val.flag = &kitmenu[KITMENU_BPATT].active,  .submenu = &kitmenu[KITMENU_BPATT]},
+    [MENU_MAIN_TIMEI]  = {.ndx = MENU_MAIN_TIMEI,  .type = MI_INTFORM,
+      .val.num  = &run_opts.interval, .min =  1, .max = INT_MAX},
 #ifdef ENABLE_QOS
-    [MENU_MAIN_QOS]      = {.ndx = MENU_MAIN_QOS,     .type = MI_INTFORM,
-      .action = ActionNone,  .val.num  = &run_opts.qos,
-      .min =  0, .max = UINT8_MAX},
+    [MENU_MAIN_QOS]   = {.ndx = MENU_MAIN_QOS,    .type = MI_INTFORM,
+      .val.num  = &run_opts.qos,      .min =  0, .max = UINT8_MAX},
 #endif
 #ifdef WITH_MPLS
-    [MENU_MAIN_MPLS]     = {.ndx = MENU_MAIN_MPLS,    .type = MI_TOGGLE_CB,
-      .action = ActionMPLS,  .val.flag = &run_opts.mpls},
+    [MENU_MAIN_MPLS]  = {.ndx = MENU_MAIN_MPLS,   .type = MI_TOGGLE_CB, .action = ActionMPLS,
+      .val.flag = &run_opts.mpls},
 #endif
-    [SUBMENU_PROTO]      = {.ndx = SUBMENU_PROTO,     .type = MI_SUBMENU,
-      .action = ActionNone,  .val.flag = &kitmenu[KITMENU_PROTO].active,
-      .submenu = &kitmenu[KITMENU_PROTO]},
-    [SUBMENU_XCACHE]     = {.ndx = SUBMENU_XCACHE,    .type = MI_SUBMENU,
-      .action = ActionNone,  .val.flag = &kitmenu[KITMENU_XCACHE].active,
-      .submenu = &kitmenu[KITMENU_XCACHE]},
+    [SUBMENU_PROTO]   = {.ndx = SUBMENU_PROTO,    .type = MI_SUBMENU,
+      .val.flag = &kitmenu[KITMENU_PROTO].active,  .submenu = &kitmenu[KITMENU_PROTO]},
+    [SUBMENU_XCACHE]  = {.ndx = SUBMENU_XCACHE,   .type = MI_SUBMENU,
+      .val.flag = &kitmenu[KITMENU_XCACHE].active, .submenu = &kitmenu[KITMENU_XCACHE]},
   };
   //
   optname_s opts[ARRAY_LEN(mi_main)] = {
@@ -720,6 +779,7 @@ static void init_mi_main(void) {
 #ifdef WITH_IPINFO
     [MENU_MAIN_ASN]     = {.name = MENUSTRW(_ASN_STR)},
 #endif
+    [SUBMENU_CHART]     = {.name = MENUSTRW(_CHART_STR)},
     [MENU_MAIN_JITTER]  = {.name = MENUSTRW(_JITTER_STR)},
     [MENU_MAIN_FIELDS]  = {.name = MENUSTRW(_FIELDS_STR)},
     [SUBMENU_CYCLES]    = {.name = MENUSTRW(_NCYCLES_STR)},
@@ -740,7 +800,7 @@ static void init_mi_main(void) {
   init_kititems(&kitmenu[KITMENU_MAIN], ARRAY_LEN(mi_main), mi_main, opts);
 }
 
-static void set_item_icons(void) {
+static void init_item_icons(void) {
   toggle_cb =
 #if defined(TUIWIDE) && defined(WITH_UNICODE)
     utf_compat ? &u_toggle_cb :
@@ -763,8 +823,7 @@ static inline bool is_value_psize (void) { return run_opts.size    >= 0; }
 static inline bool is_value_bpatt (void) { return run_opts.pattern >= 0; }
 static inline bool is_value_xcache(void) { return run_opts.cache   >  0; }
 
-static void set_subopt_values(void) {
-  // supposed to set once
+static void init_subopt_values(void) {
   subopts.cycles_val = is_value_cycles() ? run_opts.cycles  : REPORT_PINGS;
   subopts.cycles_inf = !is_value_cycles();
   //
@@ -778,13 +837,13 @@ static void set_subopt_values(void) {
   subopts.xcache_nop = !is_value_xcache();
   //
   set_stat_keys(ARRAY_LEN(subopts.fields) - 1, subopts.fields);
-  // at runtime too
-  set_subopt_proto();
 }
 
 static void init_all_menuitems(void) { // supposed to call once
-  set_subopt_values();
-  set_item_icons();
+  init_subopt_values();
+  init_item_icons();
+  //
+  init_mi_chart ();
   init_mi_cycles();
   init_mi_ttl   ();
   init_mi_psize ();
@@ -792,7 +851,8 @@ static void init_all_menuitems(void) { // supposed to call once
   init_mi_proto ();
   init_mi_xcache();
   init_mi_main  ();
-  set_menus_attr();
+  //
+  init_menus_attr();
 }
 
 static void prepare_menu_kit(kitmenu_s *kit) NONNULL(1);
@@ -1320,7 +1380,29 @@ static void menu_repost(kitmenu_s *kit) {
   }
 }
 
-static void action_cycles_unlim(void) {
+static void action_chart(uint ndx) {
+  switch (ndx) {
+    case SUBMENU_CHART_ON:
+      chart_mode = subopts.chart_on ? 0                 :
+                  subopts.chart_mod ? subopts.chart_mod : 1;
+      break;
+    case SUBMENU_CHART_1:
+    case SUBMENU_CHART_2:
+    case SUBMENU_CHART_3:
+      chart_mode = (ndx - SUBMENU_CHART_1) + 1;
+      subopts.chart_mod = chart_mode;
+      break;
+    case SUBMENU_CHART_CLR:
+      if (color_ready)
+        run_opts.color = !run_opts.color;
+      break;
+    default: break;
+  }
+  run_opts.chart = chart_mode & 3;
+  LOGMSG("on=%d, mode=%d, color=%d", subopts.chart_on, chart_mode, run_opts.color);
+}
+
+static void action_cycles_unlim(uint ndx UNUSED) {
   bool last = is_value_cycles();
   if (last) // keep
     subopts.cycles_val = run_opts.cycles;
@@ -1330,7 +1412,7 @@ static void action_cycles_unlim(void) {
   subopts.cycles_inf = !is_value_cycles();
 }
 
-static void action_rnd_psize(void) {
+static void action_rnd_psize(uint ndx UNUSED) {
   bool last = is_value_psize();
   if (last) // keep
     subopts.psize_val = run_opts.size;
@@ -1340,7 +1422,7 @@ static void action_rnd_psize(void) {
   subopts.psize_rnd = !is_value_psize();
 }
 
-static void action_rnd_pattern(void) {
+static void action_rnd_pattern(uint ndx UNUSED) {
   bool last = is_value_bpatt();
   if (last) // keep
     subopts.bpatt_val = run_opts.pattern;
@@ -1350,7 +1432,7 @@ static void action_rnd_pattern(void) {
   subopts.bpatt_rnd = !is_value_bpatt();
 }
 
-static void action_no_xcache(void) {
+static void action_no_xcache(uint ndx UNUSED) {
   bool last = is_value_xcache();
   if (last) // keep
     subopts.xcache_val = run_opts.cache;
@@ -1360,7 +1442,7 @@ static void action_no_xcache(void) {
   subopts.xcache_nop = !is_value_xcache();
 }
 
-key_action_t extra2action[MaxMenuActions] = {
+static key_action_t ext2action[MaxMenuActions] = {
   [ActionMenuICMP] = ActionSetICMP,
   [ActionMenuUDP]  = ActionSetUDP,
 #ifdef USE_RAW
@@ -1368,12 +1450,13 @@ key_action_t extra2action[MaxMenuActions] = {
 #endif
 };
 
-typedef void (*void_fn)(void);
-void_fn extra2voidfn[MaxMenuActions] = {
-  [ActionMenuCyclesUnlim] = action_cycles_unlim,
-  [ActionMenuPldSize]     = action_rnd_psize,
-  [ActionMenuPattRnd]     = action_rnd_pattern,
-  [ActionMenuNoCache]     = action_no_xcache,
+typedef void (*menu_action_fn)(uint ndx);
+static menu_action_fn ext2fn_action[MaxMenuActions] = {
+  [ActionMenuChart]     = action_chart,
+  [ActionMenuCyclesInf] = action_cycles_unlim,
+  [ActionMenuPldSize]   = action_rnd_psize,
+  [ActionMenuPattRnd]   = action_rnd_pattern,
+  [ActionMenuNoCache]   = action_no_xcache,
 };
 
 //
@@ -1465,15 +1548,15 @@ key_action_t menu_action(void) {
       switch (data->type) {
         case MI_TOGGLE_CB:
         case MI_TOGGLE_RB: {
-          extra_action_t extra = data->extra_action;
-          LOGMSG("menu %s: extra=%d", kit->log, extra);
-          if (extra != ActionMenuNone) {
-            void_fn fn = ((extra >= 0) && (extra <= ARRAY_LEN(extra2voidfn))) ?
-              extra2voidfn[extra] : NULL;
+          extra_action_t ext = data->extra_action;
+          LOGMSG("menu %s: extra=%d", kit->log, ext);
+          if (ext != ActionMenuNone) {
+            menu_action_fn fn = ((ext >= 0) && (ext < ARRAY_LEN(ext2fn_action))) ?
+              ext2fn_action[ext] : NULL;
             if (fn)
-              fn();
-            action = ((extra >= 0) && (extra <= ARRAY_LEN(extra2action))) ?
-              extra2action[extra] : ActionNone;
+              fn(data->ndx);
+            action = ((ext >= 0) && (ext < ARRAY_LEN(ext2action))) ?
+              ext2action[ext] : ActionNone;
           }
           LOGMSG("menu %s: action=%d", kit->log, action);
           if (action == ActionNone) { // i.e. it's already handled

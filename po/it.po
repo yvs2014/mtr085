@@ -92,6 +92,19 @@ msgstr "Jitter"
 msgid "Chart"
 msgstr "Diagramma"
 
+# [diagramma] colorata
+msgid "Colored"
+msgstr "Colorata"
+
+msgid "Mode 1 (ASCII)"
+msgstr "Modalità 1 (ASCII)"
+
+msgid "Mode 2 (ASCII)"
+msgstr "Modalità 2 (ASCII)"
+
+msgid "Mode 3 (Unicode)"
+msgstr "Modalità 3 (Unicode)"
+
 msgid "ASN"
 msgstr "SA"
 

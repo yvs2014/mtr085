@@ -20,6 +20,8 @@ void onoff_jitter(void);
 #endif
 const t_stat* active_stats(size_t nth);
 
+extern bool color_ready;
+
 long str2l(const char *arg);
 int arg2int(int8_t opt, const char *arg, int min, int max,
   const char *what, char *buff, size_t size) NONNULL(2);
