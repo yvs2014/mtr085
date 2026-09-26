@@ -24,6 +24,7 @@
 
 #define ROUNDED_CORNERS    true
 #define ON_MOUSE_DBL_CLICK C_SPACE
+#define IS_SELECTABLE(menuitem) (menuitem && (item_opts(menuitem) & O_SELECTABLE))
 
 #define LOGWINSIZE(name, kind, win) LOGMSG("menu %s, %s: x0=%d y0=%d w=%d h=%d", \
  (name), (kind), getbegx(win), getbegy(win), getmaxx(win), getmaxy(win))
@@ -565,8 +566,8 @@ static void init_kititems(kitmenu_s *kit, uint mlen, menuitem_s mi[mlen], optnam
     if (item) {
       LOGMSG("menu %s, item[%u]: \"%s\"=\"%s\"", kit->log, i, item_name(item), item_description(item));
       set_item_userptr(item, mi);
-      kit->items[i] = item;
       mi_selectabale(kit->ndx, i, item);
+      kit->items[i] = item;
     } else {
       LOGMSG("menu %s, new_item(#%u, %s) failed: %d", kit->log, i, opt->name, errno);
       break;
@@ -1509,7 +1510,7 @@ void menu_inout(int key) {
         menu_hide(kit);
     } else if (key == KEY_RIGHT) {
       ITEM *item = kit->menu ? current_item(kit->menu) : NULL;
-      menuitem_s *menuitem = (item && (item_opts(item) & O_SELECTABLE)) ? item_userptr(item) : NULL;
+      menuitem_s *menuitem = IS_SELECTABLE(item) ? item_userptr(item) : NULL;
       dosmth = (menuitem && (menuitem->type == MI_SUBMENU) && menuitem->submenu);
       if (dosmth)
         menu_show(menuitem->submenu);
@@ -1522,10 +1523,42 @@ void menu_inout(int key) {
   }
 }
 
+static int drivable_down(kitmenu_s *kit, int from) NONNULL(1);
+static int drivable_down(kitmenu_s *kit, int from) {
+  ITEM **item = &kit->items[from];
+  for (int i = from; (i < (int)kit->len) && *item; i++, item++)
+    if (IS_SELECTABLE(*item))
+      return i;
+  return -1; // index less than min
+}
+
+static int drivable_up(kitmenu_s *kit, int from) NONNULL(1);
+static int drivable_up(kitmenu_s *kit, int from) {
+  ITEM **item = &kit->items[from];
+  for (int i = from; (i >= 0) && *item; i--, item--)
+    if (IS_SELECTABLE(*item))
+      return i;
+  return kit->len; // index greater than max
+}
+
 void menu_line_updown(bool up) {
   kitmenu_s *kit = get_active_priokit();
-  if (kit)
-    menu_driver(kit->menu, up ? REQ_UP_ITEM : REQ_DOWN_ITEM);
+  if (kit && kit->menu) {
+    int len = (int)kit->len;
+    ITEM *item = current_item(kit->menu);
+    int ndx = item ? item_index(item) : -1;
+    if (up) {
+      int next = ((ndx > 0) && (ndx < len))
+        ? drivable_up(kit, ndx - 1) : len;
+      for (int i = ndx; i > next; i--)
+        menu_driver(kit->menu, REQ_UP_ITEM);
+    } else {
+      int next = ((ndx >= 0) && (ndx < (len - 1)))
+        ? drivable_down(kit, ndx + 1) : -1;
+      for (int i = ndx; i < next; i++)
+        menu_driver(kit->menu, REQ_DOWN_ITEM);
+    }
+  }
 }
 
 void menu_page_updown(int lines) {
@@ -1541,7 +1574,7 @@ key_action_t menu_action(void) {
   kitmenu_s *kit = get_active_priokit();
   ITEM *item = (kit && kit->posted && kit->menu) ? current_item(kit->menu) : NULL;
   key_action_t action = ActionNone;
-  if (item && (item_opts(item) & O_SELECTABLE)) {
+  if (IS_SELECTABLE(item)) {
     menuitem_s *data = item_userptr(item);
     if (data) {
       action = data->action;
@@ -1601,8 +1634,19 @@ menu_ndx_t inside_curr_menu(int x, int y) {
 int mouse_select_n_toggle(menu_ndx_t ndx) {
   kitmenu_s *kit = ((ndx >= 0) && (ndx < (int)ARRAY_LEN(kitmenu)))
     ? &kitmenu[ndx] : NULL;
-  int rc = kit ? menu_driver(kit->menu, KEY_MOUSE) : 0;
-  LOGMSG("menu %s, driver(KEY_MOUSE): rc=%d", kit ? kit->log : "UNKN", rc);
+  int rc = 0;
+  if (kit && kit->menu) {
+    ITEM *keep = current_item(kit->menu);
+    rc = menu_driver(kit->menu, KEY_MOUSE);
+    LOGMSG("menu %s, driver(KEY_MOUSE): rc=%d", kit ? kit->log : "UNKN", rc);
+    ITEM *curr = current_item(kit->menu);
+    if (!IS_SELECTABLE(curr) && keep) {
+      set_current_item(kit->menu, keep);
+      if (kit->type != KIT_SUBMENU) // otherwise it will be enabled on double click
+                                    // in cases CHART and XCACHE submenus
+        rc = 0;
+    }
+  }
   return (rc == E_UNKNOWN_COMMAND) ? ON_MOUSE_DBL_CLICK : 0;
 }
 
