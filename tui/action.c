@@ -168,6 +168,21 @@ static void tui_key_h(WINDOW *win) { // help
   MOUSE_ON;
 }
 
+static void tui_msgcont(WINDOW *win, const char *msg, const char *pre) NONNULL(1, 2);
+static void tui_msgcont(WINDOW *win, const char *msg, const char *pre) {
+  waddstr(win, " [");
+  if (pre) {
+    waddstr(win, pre);
+    waddstr(win, ": ");
+  }
+  waddstr(win, msg);
+  waddstr(win, ". ");
+  waddstr(win, ANYCONT_STR);
+  waddstr(win, " ...] ");
+  wrefresh(win);
+  wgetch(win);
+}
+
 static size_t enter_smth(WINDOW *win, char *buf, size_t size, int x) NONNULL(1);
 static size_t enter_smth(WINDOW *win, char *buf, size_t size, int x) {
   wmove(win, 0, x);
@@ -188,37 +203,23 @@ static size_t enter_smth(WINDOW *win, char *buf, size_t size, int x) {
 
 static void enter_stat_fields(WINDOW *win) NONNULL(1);
 static void enter_stat_fields(WINDOW *win) {
-  char fields[MAXFLD + 1] = {0};
+  char keys[sizeof(FSET_ALL)] = {0};
   int ch = 0, curs = curs_set(1);
-  for (uint i = 0; ((ch = wgetch(win)) != '\n') && (i < sizeof(fields));) {
+  for (uint i = 0; ((ch = wgetch(win)) != '\n') && (i < sizeof(keys));) {
     int nth = 0;
     for (; nth < stat_max; nth++) if (ch == stats[nth].key) {
       waddch(win, (uint)ch | A_BOLD);
       wrefresh(win);
-      fields[i++] = ch;
+      keys[i++] = ch;
       break;
     }
     if (nth >= stat_max) // beep on too long
       beep();
   }
-  if (fields[0])
-    set_fld_active(fields);
+  if (keys[0] && !set_active_fkeys(keys))
+    tui_msgcont(win, keys, NODUP_ERR);
   if (curs != ERR)
     curs_set(curs);
-}
-
-static void tui_msgcont(WINDOW *win, const char *msg, const char *pre) NONNULL(1, 2);
-static void tui_msgcont(WINDOW *win, const char *msg, const char *pre) {
-  if (pre) {
-    waddstr(win, pre);
-    waddstr(win, ": ");
-  }
-  waddstr(win, msg);
-  waddstr(win, ". ");
-  waddstr(win, ANYCONT_STR);
-  waddstr(win, " ...");
-  wrefresh(win);
-  wgetch(win);
 }
 
 static void tui_get_int(WINDOW *win, int *val, int min, int max,
@@ -235,7 +236,7 @@ static void tui_get_int(WINDOW *win, int *val, int min, int max,
     waddstr(win, hint);
   }
   int xpos = (what && what[0]) ? ustrnlen(what, getmaxx(win)) : 0;
-  char arg[MAXFLD + 1] = {0};
+  char arg[sizeof(FSET_ALL)] = {0};
   if (enter_smth(win, arg, sizeof(arg), xpos + 2)) {
     char error[NAMELEN] = {0};
     int num = arg2int(0, arg, min, max, what, error, sizeof(error));
@@ -273,7 +274,7 @@ static void tui_key_c(WINDOW *win) { // set number of cycles
   dx++; maxc--;
   xpos    += (maxc > 0) ? (ustrnlen(UNLIM0_STR,  maxc) + dx) : 0;
   //
-  char arg[MAXFLD + 1] = {0};
+  char arg[sizeof(FSET_ALL)] = {0};
   if (enter_smth(win, arg, sizeof(arg), xpos)) {
     char error[NAMELEN] = {0};
     int num = arg2int(0, arg, 0, INT_MAX, NCYCLES_STR, error, sizeof(error));
@@ -347,7 +348,7 @@ static void tui_key_o(WINDOW *win) { // set fields to display and their order
   wclear(win);
   mvwaddstr(win, 0, 0, FIELDS_STR);
   waddstr(win, ": ");
-  waddstr(win, fld_active);
+  waddstr(win, active_fkeys);
   int maxc = getmaxx(win) - 2;
   wmove(win, 0, (maxc > 0) ? (ustrnlen(FIELDS_STR, maxc) + 2) : 0);
   wrefresh(win);
@@ -394,7 +395,7 @@ static void tui_key_s(WINDOW *win) { // set payload size
   wprintw(win, "[%d,%d], ", -max, max);
   waddstr(win, NEG4RND_STR);
   int xpos = ustrnlen(PSIZE_CHNG_STR, getmaxx(win) - 2) + 2;
-  char arg[MAXFLD + 1] = {0};
+  char arg[sizeof(FSET_ALL)] = {0};
   if (enter_smth(win, arg, sizeof(arg), xpos)) {
     char error[NAMELEN] = {0};
     int num = arg2int(0, arg, -max, max, PSIZE_STR, error, sizeof(error));

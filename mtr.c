@@ -259,21 +259,21 @@ bool utf_compat;
 #endif
 //
 t_stat stats[] = {
-  {.name = "",      .min = 1, .key = UNDERSCORE, .hint = _GAP_HINT},
-  {.name = _LOSS_STR,  .min = 6, .key = 'L', .hint = _LOSS_HINT},
-  {.name = _DROP_STR,  .min = 5, .key = 'D', .hint = _DROP_HINT},
-  {.name = _RECV_STR,  .min = 6, .key = 'R', .hint = _RECV_HINT},
-  {.name = _SENT_STR,  .min = 6, .key = 'S', .hint = _SENT_HINT},
-  {.name = _LAST_STR,  .min = 6, .key = 'N', .hint = _LAST_HINT},
-  {.name = _BEST_STR,  .min = 6, .key = 'B', .hint = _BEST_HINT},
-  {.name = _AVRG_STR,  .min = 6, .key = 'A', .hint = _AVRG_HINT},
-  {.name = _WRST_STR,  .min = 6, .key = 'W', .hint = _WRST_HINT},
-  {.name = _STDEV_STR, .min = 6, .key = 'V', .hint = _STDEV_HINT},
-  {.name = _GAVR_STR,  .min = 6, .key = 'G', .hint = _GAVR_HINT},
-  {.name = _JTTR_STR,  .min = 5, .key = 'J', .hint = _JTTR_HINT},
-  {.name = _JAVG_STR,  .min = 5, .key = 'M', .hint = _JAVG_HINT},
-  {.name = _JMAX_STR,  .min = 5, .key = 'X', .hint = _JMAX_HINT},
-  {.name = _JINT_STR,  .min = 5, .key = 'I', .hint = _JINT_HINT},
+  {.name = "", .min = 1, .key = UNDERSCORE, .hint = _GAP_HINT},
+  {.name = _LOSS_STR, .min = 6, .key = 'L', .hint = _LOSS_HINT},
+  {.name = _DROP_STR, .min = 5, .key = 'D', .hint = _DROP_HINT},
+  {.name = _RECV_STR, .min = 6, .key = 'R', .hint = _RECV_HINT},
+  {.name = _SENT_STR, .min = 6, .key = 'S', .hint = _SENT_HINT},
+  {.name = _LAST_STR, .min = 6, .key = 'N', .hint = _LAST_HINT},
+  {.name = _BEST_STR, .min = 6, .key = 'B', .hint = _BEST_HINT},
+  {.name = _AVRG_STR, .min = 6, .key = 'A', .hint = _AVRG_HINT},
+  {.name = _WRST_STR, .min = 6, .key = 'W', .hint = _WRST_HINT},
+  {.name = _DVTN_STR, .min = 6, .key = 'V', .hint = _DVTN_HINT},
+  {.name = _GAVR_STR, .min = 6, .key = 'G', .hint = _GAVR_HINT},
+  {.name = _JTTR_STR, .min = 5, .key = 'J', .hint = _JTTR_HINT},
+  {.name = _JAVG_STR, .min = 5, .key = 'M', .hint = _JAVG_HINT},
+  {.name = _JMAX_STR, .min = 5, .key = 'X', .hint = _JMAX_HINT},
+  {.name = _JINT_STR, .min = 5, .key = 'I', .hint = _JINT_HINT},
 };
 const int stat_max = ARRAY_LEN(stats);
 //// end-of-global
@@ -564,17 +564,18 @@ static void option_display(char opt, const char *arg) {
 
 static void option_fields(char opt, const char *arg) NONNULL(2);
 static void option_fields(char opt, const char *arg) {
-  if (strnlen(arg, MAXFLD + 1) > MAXFLD)
-    ERRXT(EINVAL, "-%c: %s (%s=%d): %s", opt, OVERFLD_ERR, MAX_STR, MAXFLD, arg);
+  if (strnlen(arg, sizeof(FSET_ALL)) > MAXFKEYS)
+    ERRXT(EINVAL, "-%c: %s (%s=%d)", opt, OVERFLD_ERR, MAX_STR, MAXFKEYS);
   for (const char *c = arg; c && *c; c++) {
     uint cnt = 0;
     for (; cnt < ARRAY_LEN(stats); cnt++)
       if (*c == stats[cnt].key)
         break;
     if (cnt >= ARRAY_LEN(stats))
-      ERRXT(EINVAL, "-%c: %s: %c", opt, UNKNFLD_ERR, *c);
+      ERRXT(EINVAL, "-%c %s: %s: %c", opt, arg, UNKNFLD_ERR, *c);
   }
-  set_fld_active(arg);
+  if (!set_active_fkeys(arg))
+    ERRXT(EINVAL, "-%c %s: %s", opt, arg, NODUP_ERR);
 }
 
 #ifdef ENABLE_DNS
@@ -1114,8 +1115,8 @@ static inline void main_prep(int argc, char **argv) {
   srand(getpid()); // reset random seed
 #endif
   for (uint i = 0; i < ARRAY_LEN(stats); i++)
-    fld_index[(uint8_t)stats[i].key] = i;
-  set_fld_active(NULL);
+    fkey_index[(uint8_t)stats[i].key] = i;
+  set_active_fkeys(NULL);
   parse_options(argc, argv);
   if (optind >= argc) // TODO: set target at runtime
     usage(EXIT_SUCCESS);

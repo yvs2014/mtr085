@@ -12,16 +12,12 @@
 static const double float_upto = 10;
 static const double float_dec2 = 0.1;
 
-static char fld_custom[MAXFLD + 1];
-static const char fld_default[MAXFLD + 1] = "LS_NABWV";
-#ifdef TUIMODE
-static const char fld_jitter[MAXFLD + 1] = "DR_AGJMXI";
-#endif
+static char custom_fkeys[sizeof(FSET_ALL)];
 
 bool color_ready;
 
-const char* fld_active;
-int fld_index[UCHAR_MAX + 1] = {-1}; // key->index backresolv
+const char* active_fkeys;
+int fkey_index[UCHAR_MAX + 1] = {-1}; // key->index backresolv
 
 int val2len(double val) { return ((val > 0) && (val < float_upto)) ? (val < float_dec2 ? 2 : 1) : 0; }
 
@@ -38,22 +34,37 @@ char* trim(char *str) {
   return str;
 }
 
-void set_fld_active(const char *str) {
-  snprinte(fld_custom, sizeof(fld_custom), "%s", str ? str : fld_default);
-  fld_active = fld_custom;
+bool set_active_fkeys(const char *str) {
+  bool dups = false;
+  memset(custom_fkeys, 0, sizeof(custom_fkeys));
+  if (str && *str) {
+    uint slen = strnlen(str, sizeof(custom_fkeys));
+    char *c = custom_fkeys;
+    for (uint i = 0; (i < slen) && *str; i++, str++) {
+      if (strchr(custom_fkeys, *str)) // skip dups
+        dups = true;
+      else
+        *c++ = *str;
+    }
+    *c = 0;
+  }
+  if (!custom_fkeys[0]) // set defaults
+    snprinte(custom_fkeys, sizeof(custom_fkeys), "%s", run_opts.jitter ? FSET_JITTER : FSET_DEFAULT);
+  active_fkeys = custom_fkeys;
+  return !dups;
 }
 
 #ifdef TUIMODE
-#define NOT_JITTER_FLD  STR_NEQ(fld_active, fld_jitter,  sizeof(fld_jitter))
-#define NOT_DEFAULT_FLD STR_NEQ(fld_active, fld_default, sizeof(fld_default))
-void onoff_jitter(void) { fld_active = NOT_JITTER_FLD ? fld_jitter : fld_custom; }
-bool is_custom_fld(void) { return NOT_JITTER_FLD && NOT_DEFAULT_FLD; }
+#define NOT_JITTER_FLD  STR_NEQ(active_fkeys, FSET_JITTER,  sizeof(FSET_JITTER))
+#define NOT_DEFAULT_FLD STR_NEQ(active_fkeys, FSET_DEFAULT, sizeof(FSET_DEFAULT))
+void onoff_jitter(void) { active_fkeys = NOT_JITTER_FLD ? FSET_JITTER : custom_fkeys; }
+bool is_custom_fkeys(void) { return NOT_JITTER_FLD && NOT_DEFAULT_FLD; }
 #endif
 
 const t_stat* active_stats(size_t nth) {
-  if (!fld_active || (nth > MAXFLD))
+  if (!active_fkeys || (nth > MAXFKEYS))
     return NULL;
-  int ndx = fld_index[(uint8_t)fld_active[nth]];
+  int ndx = fkey_index[(uint8_t)active_fkeys[nth]];
   return ((ndx >= 0) && (ndx < stat_max)) ? &stats[ndx] : NULL;
 }
 

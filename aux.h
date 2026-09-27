@@ -9,13 +9,18 @@
 
 #define INDENT_NUMB 4 // "NN. " length
 
+#define FSET_ALL     "LDRS_NBAWVGJMXI"
+#define FSET_DEFAULT "LS_NABWV"
+#define FSET_JITTER  "DR_AGJMXI"
+enum { MAXFKEYS = sizeof(FSET_ALL) - 1 };
+
 char* trim(char *str);
 int val2len(double val);
 
-extern int fld_index[UCHAR_MAX + 1];
-void set_fld_active(const char *str);
+extern int fkey_index[UCHAR_MAX + 1];
+bool set_active_fkeys(const char *str);
 #ifdef TUIMODE
-bool is_custom_fld(void);
+bool is_custom_fkeys(void);
 void onoff_jitter(void);
 #endif
 const t_stat* active_stats(size_t nth);

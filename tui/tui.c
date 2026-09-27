@@ -47,6 +47,7 @@
 #endif
 
 #define VUSLASH "│"
+#define PRIMARY_ELEMS "LDRS" // Lost-Drop-Recv-Sent
 
 enum {
   HOSTINFOMAX =   30,
@@ -162,15 +163,15 @@ static void seal_n_bell(int at, int max) {
   }
 }
 
-static const char* settled_elem(int at, char key) {
+static inline const char* settled_elem(int at, char key) {
   // if there's no replies, show only packet counters (Lost-Drop-Recv-Sent)
-  return (hop[at].recv || strchr(SETTLED_ELEMS, key)) ? net_elem(at, key) : NULL;
+  return (hop[at].recv || strchr(PRIMARY_ELEMS, key)) ? net_elem(at, key) : NULL;
 }
 
 static int print_stat(WINDOW *win, int at, int y, int x, int max) NONNULL(1);
 static int print_stat(WINDOW *win, int at, int y, int x, int max) { // statistics
   if (wmove(win, y, x) == ERR) return ERR;
-  for (uint i = 0; i < MAXFLD; i++) {
+  for (uint i = 0; i < MAXFKEYS; i++) {
     const t_stat *stat = active_stats(i);
     if (!stat)
       break;
@@ -298,7 +299,7 @@ static void histogram(WINDOW *win, int indent) {
 
 static int get_stat_title_len(void) {
   int len = 0;
-  for (uint i = 0; i < MAXFLD; i++) {
+  for (uint i = 0; i < MAXFKEYS; i++) {
     const t_stat *stat = active_stats(i);
     if (stat)
       len += (stat->min > stat->len) ? stat->min : stat->len + 1;
@@ -315,9 +316,9 @@ static void display_main_labels(WINDOW *win, int indent) NONNULL(1);
 static void display_main_labels(WINDOW *win, int indent) {
   if (wmove(win, 1, indent) == ERR)
     return;
-  bool custom = is_custom_fld();
+  bool custom = is_custom_fkeys();
   int maxx = getmaxx(win);
-  for (uint i = 0; i < MAXFLD; i++) {
+  for (uint i = 0; i < MAXFKEYS; i++) {
     const t_stat *stat = active_stats(i);
     if (!stat)
       break;
@@ -333,10 +334,10 @@ static void display_main_labels(WINDOW *win, int indent) {
         const char div[] = ": ";
         int div_len = sizeof(div) - 1;
         int ufl = (maxx > div_len) ? ustrnlen(CUSTFLD_STR, maxx - div_len) : 0;
-        int len = ufl + div_len + strnlen(fld_active, MAXFLD);
+        int len = ufl + div_len + strnlen(active_fkeys, MAXFKEYS);
         mvwaddstr(win, 0, tui_fit_posx(pos, len, maxx), CUSTFLD_STR);
         waddstr(win, div);
-        waddstr(win, fld_active);
+        waddstr(win, active_fkeys);
       } else if (!custom) {
         // "Packets" or "Pings"
         const char *sub = (i == SUP1_NDX) ? PINGS_STR : PACKETS_STR;

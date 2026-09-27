@@ -34,8 +34,7 @@ int posted_form = -1;
 typedef enum {
   MI_TOGGLE_CB, // check-box
   MI_TOGGLE_RB, // radio-button
-  MI_INTFORM,
-  MI_STRFORM,
+  MI_INTFORM,   // int-edit-form
   MI_SUBMENU,
 } mi_type;
 
@@ -48,7 +47,7 @@ typedef enum {
 #endif
   SUBMENU_CHART,
   MENU_MAIN_JITTER,
-  MENU_MAIN_FIELDS,
+  SUBMENU_FKEYS,
   SUBMENU_CYCLES,
   SUBMENU_TTL,
   SUBMENU_PSIZE,
@@ -73,6 +72,8 @@ enum {
   SUBMENU_CHART_CLR,
   SUBMENU_CHART_LEN
 };
+static uint8_t fkey_order[] = FSET_ALL;
+enum { SUBMENU_FKEYS_LEN = sizeof(fkey_order) - 1 }; /*15*/
 enum {
   SUBMENU_CYCLES_INF,
   SUBMENU_CYCLES_NUM,
@@ -181,6 +182,8 @@ static ITEM*   main_items[MENU_MAIN_LEN + 1];
 static mi_s       main_mi[MENU_MAIN_LEN];
 static ITEM*  chart_items[SUBMENU_CHART_LEN + 1];
 static mi_s      chart_mi[SUBMENU_CHART_LEN];
+static ITEM*   fkey_items[SUBMENU_FKEYS_LEN + 1];
+static mi_s       fkey_mi[SUBMENU_FKEYS_LEN];
 static ITEM* cycles_items[SUBMENU_CYCLES_LEN + 1];
 static mi_s     cycles_mi[SUBMENU_CYCLES_LEN];
 static ITEM*    ttl_items[SUBMENU_TTL_LEN + 1];
@@ -196,6 +199,7 @@ static mi_s     xcache_mi[SUBMENU_XCACHE_LEN];
 
 static void init_mi_main  (void);
 static void init_mi_chart (void);
+static void init_mi_fkeys (void);
 static void init_mi_cycles(void);
 static void init_mi_ttl   (void);
 static void init_mi_psize (void);
@@ -209,13 +213,17 @@ static void init_mi_xcache(void);
 #define SUBMENU_DSC_WIDTH   5
 static kitmenu_s kitmenu[] = {
   [KITMENU_MAIN]   = {.ndx = KITMENU_MAIN,   .type = KIT_MENU,    .log = "main",
-    .len = MENU_MAIN_LEN,      .items = main_items,   .mis = main_mi,
+    .len = MENU_MAIN_LEN,      .items = main_items, .mis = main_mi,
     .spacing = NAMEDESC_SPACING, .pad = BORDER_PAD, .desc_width = MAINMENU_DSC_WIDTH,
     .mi_init = init_mi_main},
   [KITMENU_CHART]  = {.ndx = KITMENU_CHART,  .type = KIT_SUBMENU, .log = "chart",
-    .len = SUBMENU_CHART_LEN, .items = chart_items,   .mis = chart_mi, .nth = SUBMENU_CHART,
+    .len = SUBMENU_CHART_LEN, .items = chart_items, .mis = chart_mi, .nth = SUBMENU_CHART,
     .spacing = NAMEDESC_SPACING, .pad = BORDER_PAD, .desc_width = SUBMENU_DSC_WIDTH,
     .mi_init = init_mi_chart},
+  [KITMENU_FKEYS]  = {.ndx = KITMENU_FKEYS,  .type = KIT_SUBMENU, .log = "fields",
+    .len = SUBMENU_FKEYS_LEN, .items = fkey_items,  .mis = fkey_mi,  .nth = SUBMENU_FKEYS,
+    .spacing = NAMEDESC_SPACING, .pad = BORDER_PAD, .desc_width = SUBMENU_DSC_WIDTH,
+    .mi_init = init_mi_fkeys},
   [KITMENU_CYCLES] = {.ndx = KITMENU_CYCLES, .type = KIT_SUBMENU, .log = "cycles",
     .len = SUBMENU_CYCLES_LEN, .items = cycles_items, .mis = cycles_mi, .nth = SUBMENU_CYCLES,
     .spacing = NAMEDESC_SPACING, .pad = BORDER_PAD, .desc_width = SUBMENU_DSC_WIDTH,
@@ -254,7 +262,6 @@ static kitmenu_s kitmenu[] = {
 
 #define MI_DEF_FMT " %s"
 #define MI_PAD_FMT "%*s"
-#define MI_STR_FMT     MI_DEF_FMT " [%s]"
 #define MI_MINMAX_FMT  MI_DEF_FMT " [%d..%d]"
 #define MI_MININF_FMT  MI_DEF_FMT " [%d...]"
 #define MI_MINMAX_UFMT MI_DEF_FMT " [%d … %d]"
@@ -263,6 +270,7 @@ static kitmenu_s kitmenu[] = {
 typedef enum {
   ActionMenuNone = 0,
   ActionMenuChart,
+  ActionMenuFields,
   ActionMenuCyclesInf,
   ActionMenuPldSize,
   ActionMenuPattRnd,
@@ -282,15 +290,13 @@ typedef struct menuitem_s {
   char desc[NAMELEN];
   const key_action_t action;
   const extra_action_t extra_action;
-  const struct {
-    const bool  *flag;
-    const char **pstr;
-    int *num;
-    const uint *pos;
+  struct {
+    bool *flag;
+    int  *num;
+    const uint    *pos;
+    const uint8_t *key; // pointer to char
   } val;
   const int min, max, *pmin, *pmax;
-  const char *patt;
-  void (*str_setter)(const char *str);
   void (*int_setter)(int);
   //
   kitmenu_s *submenu;
@@ -298,7 +304,7 @@ typedef struct menuitem_s {
 
 typedef struct optname_s {
   int len; // name length in unicode characters
-  const char* const name;
+  const char *name;
 } optname_s;
 
 //
@@ -306,7 +312,10 @@ typedef struct optname_s {
 static attr_s common_attr;
 
 static struct subopts {
-  char fields[20]; // enough for stat keys [stat_max]
+  bool fkeys[SUBMENU_FKEYS_LEN];
+  //
+  uint proto_pos;
+  //
   bool chart_on;
   uint chart_mod;
   bool cycles_inf;
@@ -317,7 +326,6 @@ static struct subopts {
   int   bpatt_val;
   bool xcache_nop;
   int  xcache_val;
-  uint proto_pos;
 } subopts;
 
 #define MI_NDX(menu_ndx, item_ndx) (((menu_ndx) << 8) | ((item_ndx) & 0xFF))
@@ -434,12 +442,6 @@ static int fill_itemname(const menuitem_s *mi, const char *name,
           snprinte(buff, size, minmax_fmt, name, min, max) :
           snprinte(buff, size, mininf_fmt, name, min));
     } break;
-    case MI_STRFORM: {
-      const char *patt = mi->patt ? mi->patt : "";
-      rc = (pad > 0) ?
-        snprinte(buff, size, MI_STR_FMT "%*s", name, patt, pad, "") :
-        snprinte(buff, size, MI_STR_FMT,       name, patt);
-    } break;
     default:
       LOGMSG("unknwon menuitem type: %d", mi->type);
       break;
@@ -480,14 +482,6 @@ static int fill_itemdesc(const kitmenu_s *kit, menuitem_s *mitem) {
           snprinte(mitem->desc, sizeof(mitem->desc), "%d ", *num);
       }
     }  break;
-    case MI_STRFORM: {
-      const char *str = mitem->val.pstr ? *mitem->val.pstr : NULL;
-      if (str) {
-        rc = (kit->desc_width > 0) ?
-          snprinte(mitem->desc, sizeof(mitem->desc), "%*s ", kit->desc_width, str) :
-          snprinte(mitem->desc, sizeof(mitem->desc), "%s ", str);
-      }
-    }  break;
     case MI_SUBMENU: {
       const bool *flag = mitem->val.flag;
       const char *icon = (flag && *flag) ? menuexp->on : menuexp->off;
@@ -523,12 +517,6 @@ static int calc_maxnamelen(uint len,
   }
   LOGMSG("maxnamelen=%d", maxlen);
   return maxlen;
-}
-
-static void set_stat_keys(uint len, char buff[len]) NONNULL(2);
-static void set_stat_keys(uint len, char buff[len]) {
-  for (uint i = 0; i < len; i++)
-    buff[i] = ((int)i < stat_max) ? stats[i].key : 0;
 }
 
 static void init_kititems(kitmenu_s *kit, uint mlen, menuitem_s mi[mlen], optname_s opt[mlen]) NONNULL(1, 3, 4);
@@ -601,7 +589,7 @@ static void set_subopt_chart(void) {
 }
 
 static void init_mi_chart(void) {
-  static menuitem_s mi_chart[] = {
+  static menuitem_s chart_menuitems[] = {
     [SUBMENU_CHART_ON]  = {.ndx = SUBMENU_CHART_ON,  .type = MI_TOGGLE_CB,
       .extra_action = ActionMenuChart, .val.flag = &subopts.chart_on},
     [SUBMENU_CHART_1]   = {.ndx = SUBMENU_CHART_1,   .type = MI_TOGGLE_RB,
@@ -613,7 +601,7 @@ static void init_mi_chart(void) {
     [SUBMENU_CHART_CLR] = {.ndx = SUBMENU_CHART_CLR, .type = MI_TOGGLE_CB,
       .extra_action = ActionMenuChart, .val.flag = &run_opts.color},
   };
-  optname_s opts[ARRAY_LEN(mi_chart)] = {
+  optname_s opts[ARRAY_LEN(chart_menuitems)] = {
     [SUBMENU_CHART_ON]  = {.name = MENUSTRW(_CHART_STR)},
     [SUBMENU_CHART_1]   = {.name = MENUSTRW(_ASCMOD1_STR)},
     [SUBMENU_CHART_2]   = {.name = MENUSTRW(_ASCMOD2_STR)},
@@ -621,35 +609,98 @@ static void init_mi_chart(void) {
     [SUBMENU_CHART_CLR] = {.name = MENUSTRW(_COLORED_STR)},
   };
   set_subopt_chart();
-  init_kititems(&kitmenu[KITMENU_CHART], ARRAY_LEN(mi_chart), mi_chart, opts);
+  init_kititems(&kitmenu[KITMENU_CHART], ARRAY_LEN(chart_menuitems), chart_menuitems, opts);
+}
+
+#define FK_MIN 'A'
+#define FK_NDX(ch) ((ch) - FK_MIN)
+static const char* map_fkey2name[32] = { /*LDRS_NBAWVGJMXI*/
+  [FK_NDX('L')] = _LOSS_HINT,
+  [FK_NDX('D')] = _DROP_HINT,
+  [FK_NDX('R')] = _RECV_HINT,
+  [FK_NDX('S')] = _SENT_HINT,
+  [FK_NDX('_')] = _BLANK_STR,
+  [FK_NDX('N')] = _LAST_HINT,
+  [FK_NDX('B')] = _BEST_HINT,
+  [FK_NDX('A')] = _AVRG_HINT,
+  [FK_NDX('W')] = _WRST_HINT,
+  [FK_NDX('V')] = _DVTN_HINT,
+  [FK_NDX('G')] = _GAVR_HINT,
+  [FK_NDX('J')] = _JTTR_HINT,
+  [FK_NDX('M')] = _JAVG_HINT,
+  [FK_NDX('X')] = _JMAX_HINT,
+  [FK_NDX('I')] = _JINT_HINT,
+};
+
+static void reorder_fkeys(const char *active) NONNULL(1);
+static void reorder_fkeys(const char *active) {
+  LOGMSG("< key-order: %s", fkey_order);
+  uint8_t *key = fkey_order;
+  for (uint i = 0; (i < (ARRAY_LEN(fkey_order) - 1)) && *active; i++, key++)
+    if (*key && strchr(active_fkeys, *key))
+      *key = *active++;
+  LOGMSG("> key-order: %s", fkey_order);
+}
+
+#define MI_FLD_CONST(seq) [seq] = { .ndx = seq, .type = MI_TOGGLE_CB, \
+  .extra_action = ActionMenuFields, .val.flag = &subopts.fkeys[seq]}
+static void init_mi_fkeys(void) {
+  static menuitem_s fkey_menuitems[SUBMENU_FKEYS_LEN] = {
+    MI_FLD_CONST( 0), MI_FLD_CONST( 1), MI_FLD_CONST( 2), MI_FLD_CONST( 3),
+    MI_FLD_CONST( 4), MI_FLD_CONST( 5), MI_FLD_CONST( 6), MI_FLD_CONST( 7),
+    MI_FLD_CONST( 8), MI_FLD_CONST( 9), MI_FLD_CONST(10), MI_FLD_CONST(11),
+    MI_FLD_CONST(12), MI_FLD_CONST(13), MI_FLD_CONST(14),
+  };
+  reorder_fkeys(active_fkeys ? active_fkeys :
+             run_opts.jitter ? FSET_JITTER : FSET_DEFAULT);
+  optname_s opts[ARRAY_LEN(fkey_menuitems)] = {0};
+  for (uint i = 0; i < ARRAY_LEN(opts); i++) {
+    bool on = false;
+    if (i < (ARRAY_LEN(fkey_order) - 1)) {
+      const uint8_t *key = &fkey_order[i];
+      int ndx = (*key - (int)FK_MIN);
+      if ((ndx >= 0) && (ndx < (int)ARRAY_LEN(map_fkey2name))) {
+        const char *name = map_fkey2name[ndx];
+        if (name) {
+          fkey_menuitems[i].val.key = key;
+          opts[i].name = MENUSTRW(name);
+          on = (*key && strchr(active_fkeys, *key));
+        }
+      }
+    }
+    subopts.fkeys[i] = on;
+    if (!opts[i].name)
+      opts[i].name = ""; // not assigned
+  }
+  init_kititems(&kitmenu[KITMENU_FKEYS], ARRAY_LEN(fkey_menuitems), fkey_menuitems, opts);
 }
 
 static void init_mi_cycles(void) {
-  static menuitem_s mi_cycles[] = {
+  static menuitem_s cycles_menuitems[] = {
     [SUBMENU_CYCLES_INF] = {.ndx = SUBMENU_CYCLES_INF, .type = MI_TOGGLE_CB,
       .extra_action = ActionMenuCyclesInf, .val.flag = &subopts.cycles_inf},
     [SUBMENU_CYCLES_NUM] = {.ndx = SUBMENU_CYCLES_NUM, .type = MI_INTFORM,
       .min = 1, .max = INT_MAX,            .val.num  = &run_opts.cycles},
   };
-  optname_s opts[ARRAY_LEN(mi_cycles)] = {
+  optname_s opts[ARRAY_LEN(cycles_menuitems)] = {
     [SUBMENU_CYCLES_INF] = {.name = MENUSTRW(_UNLIM_STR)},
     [SUBMENU_CYCLES_NUM] = {.name = MENUSTRW(_NCYCLES_STR)},
   };
-  init_kititems(&kitmenu[KITMENU_CYCLES], ARRAY_LEN(mi_cycles), mi_cycles, opts);
+  init_kititems(&kitmenu[KITMENU_CYCLES], ARRAY_LEN(cycles_menuitems), cycles_menuitems, opts);
 }
 
 static void init_mi_ttl(void) {
-  static menuitem_s mi_ttl[] = {
+  static menuitem_s ttl_menuitems[] = {
     [SUBMENU_TTL_MIN] = {.ndx = SUBMENU_TTL_MIN, .type = MI_INTFORM,
       .val.num  = &run_opts.minttl, .min = 1, .max = MAXHOST, .pmax = &run_opts.maxttl},
     [SUBMENU_TTL_MAX] = {.ndx = SUBMENU_TTL_MAX, .type = MI_INTFORM,
       .val.num  = &run_opts.maxttl, .min = 1, .max = MAXHOST, .pmin = &run_opts.minttl},
   };
-  optname_s opts[ARRAY_LEN(mi_ttl)] = {
+  optname_s opts[ARRAY_LEN(ttl_menuitems)] = {
     [SUBMENU_TTL_MIN] = {.name = MENUSTRW(_MINTTL_STR)},
     [SUBMENU_TTL_MAX] = {.name = MENUSTRW(_MAXTTL_STR)},
   };
-  init_kititems(&kitmenu[KITMENU_TTL], ARRAY_LEN(mi_ttl), mi_ttl, opts);
+  init_kititems(&kitmenu[KITMENU_TTL], ARRAY_LEN(ttl_menuitems), ttl_menuitems, opts);
 }
 
 static void set_psize(int value) {
@@ -659,32 +710,32 @@ static void set_psize(int value) {
 }
 
 static void init_mi_psize(void) {
-  static menuitem_s mi_psize[] = {
+  static menuitem_s psize_menuitems[] = {
     [SUBMENU_PSIZE_RND] = {.ndx = SUBMENU_PSIZE_RND, .type = MI_TOGGLE_CB,
       .extra_action = ActionMenuPldSize, .val.flag = &subopts.psize_rnd},
     [SUBMENU_PSIZE_NUM] = {.ndx = SUBMENU_PSIZE_NUM, .type = MI_INTFORM,
       .int_setter = set_psize,           .val.num  = &subopts.psize_val,
       .min = 0, .max = MAXPACKET - MINPACKET},
   };
-  optname_s opts[ARRAY_LEN(mi_psize)] = {
+  optname_s opts[ARRAY_LEN(psize_menuitems)] = {
     [SUBMENU_PSIZE_RND] = {.name = MENUSTRW(_RANDOM_STR)},
     [SUBMENU_PSIZE_NUM] = {.name = MENUSTRW(_PSIZE_STR)},
   };
-  init_kititems(&kitmenu[KITMENU_PSIZE], ARRAY_LEN(mi_psize), mi_psize, opts);
+  init_kititems(&kitmenu[KITMENU_PSIZE], ARRAY_LEN(psize_menuitems), psize_menuitems, opts);
 }
 
 static void init_mi_bpatt(void) {
-  static menuitem_s mi_bpatt[] = {
+  static menuitem_s bpatt_menuitems[] = {
     [SUBMENU_BPATT_RND] = {.ndx = SUBMENU_BPATT_RND, .type = MI_TOGGLE_CB,
       .extra_action = ActionMenuPattRnd, .val.flag = &subopts.bpatt_rnd},
     [SUBMENU_BPATT_NUM] = {.ndx = SUBMENU_BPATT_NUM, .type = MI_INTFORM,
       .min = 0, .max = UINT8_MAX,        .val.num  = &run_opts.pattern},
   };
-  optname_s opts[ARRAY_LEN(mi_bpatt)] = {
+  optname_s opts[ARRAY_LEN(bpatt_menuitems)] = {
     [SUBMENU_BPATT_RND] = {.name = MENUSTRW(_RANDOM_STR)},
     [SUBMENU_BPATT_NUM] = {.name = MENUSTRW(_BITPATT_STR)},
   };
-  init_kititems(&kitmenu[KITMENU_BPATT], ARRAY_LEN(mi_bpatt), mi_bpatt, opts);
+  init_kititems(&kitmenu[KITMENU_BPATT], ARRAY_LEN(bpatt_menuitems), bpatt_menuitems, opts);
 }
 
 static void set_subopt_proto(void) {
@@ -698,7 +749,7 @@ static void set_subopt_proto(void) {
 }
 
 static void init_mi_proto(void) {
-  static menuitem_s mi_proto[] = {
+  static menuitem_s proto_menuitems[] = {
     [SUBMENU_PROTO_ICMP] = {.ndx = SUBMENU_PROTO_ICMP, .type = MI_TOGGLE_RB,
       .extra_action = ActionMenuICMP, .val.pos = &subopts.proto_pos},
     [SUBMENU_PROTO_UDP]  = {.ndx = SUBMENU_PROTO_UDP,  .type = MI_TOGGLE_RB,
@@ -708,7 +759,7 @@ static void init_mi_proto(void) {
       .extra_action = ActionMenuTCP,  .val.pos = &subopts.proto_pos},
 #endif
   };
-  optname_s opts[ARRAY_LEN(mi_proto)] = {
+  optname_s opts[ARRAY_LEN(proto_menuitems)] = {
     [SUBMENU_PROTO_ICMP] = {.name = MENUSTRW(_ICMP_STR)},
     [SUBMENU_PROTO_UDP]  = {.name = MENUSTRW(_UDP_STR)},
 #ifdef USE_RAW
@@ -716,25 +767,25 @@ static void init_mi_proto(void) {
 #endif
   };
   set_subopt_proto();
-  init_kititems(&kitmenu[KITMENU_PROTO], ARRAY_LEN(mi_proto), mi_proto, opts);
+  init_kititems(&kitmenu[KITMENU_PROTO], ARRAY_LEN(proto_menuitems), proto_menuitems, opts);
 }
 
 static void init_mi_xcache(void) {
-  static menuitem_s mi_xcache[] = {
+  static menuitem_s xcache_menuitems[] = {
     [SUBMENU_XCACHE_NOT] = {.ndx = SUBMENU_XCACHE_NOT, .type = MI_TOGGLE_CB,
       .extra_action = ActionMenuNoCache, .val.flag = &subopts.xcache_nop},
     [SUBMENU_XCACHE_NUM] = {.ndx = SUBMENU_XCACHE_NUM, .type = MI_INTFORM,
       .min = 1, .max = INT_MAX,          .val.num  = &run_opts.cache},
   };
-  optname_s opts[ARRAY_LEN(mi_xcache)] = {
+  optname_s opts[ARRAY_LEN(xcache_menuitems)] = {
     [SUBMENU_XCACHE_NOT] = {.name = MENUSTRW(_NOCACHE_STR)},
     [SUBMENU_XCACHE_NUM] = {.name = MENUSTRW(_CACHETM_STR)},
   };
-  init_kititems(&kitmenu[KITMENU_XCACHE], ARRAY_LEN(mi_xcache), mi_xcache, opts);
+  init_kititems(&kitmenu[KITMENU_XCACHE], ARRAY_LEN(xcache_menuitems), xcache_menuitems, opts);
 }
 
 static void init_mi_main(void) {
-  static menuitem_s mi_main[] = {
+  static menuitem_s main_menuitems[] = {
 #ifdef ENABLE_DNS
     [MENU_MAIN_DNS]    = {.ndx = MENU_MAIN_DNS,    .type = MI_TOGGLE_CB, .action = ActionDNS,
       .val.flag = &run_opts.dns},
@@ -747,8 +798,8 @@ static void init_mi_main(void) {
       .val.flag = &kitmenu[KITMENU_CHART].active,  .submenu = &kitmenu[KITMENU_CHART]},
     [MENU_MAIN_JITTER] = {.ndx = MENU_MAIN_JITTER, .type = MI_TOGGLE_CB,
       .action = ActionJttr, .val.flag = &run_opts.jitter},
-    [MENU_MAIN_FIELDS] = {.ndx = MENU_MAIN_FIELDS, .type = MI_STRFORM,
-      .val.pstr = &fld_active, .str_setter = set_fld_active, .patt = subopts.fields},
+    [SUBMENU_FKEYS]    = {.ndx = SUBMENU_FKEYS,    .type = MI_SUBMENU,
+      .val.flag = &kitmenu[KITMENU_FKEYS].active,  .submenu = &kitmenu[KITMENU_FKEYS]},
     [SUBMENU_CYCLES]   = {.ndx = SUBMENU_CYCLES,   .type = MI_SUBMENU,
       .val.flag = &kitmenu[KITMENU_CYCLES].active, .submenu = &kitmenu[KITMENU_CYCLES]},
     [SUBMENU_TTL]      = {.ndx = SUBMENU_TTL,      .type = MI_SUBMENU,
@@ -773,7 +824,7 @@ static void init_mi_main(void) {
       .val.flag = &kitmenu[KITMENU_XCACHE].active, .submenu = &kitmenu[KITMENU_XCACHE]},
   };
   //
-  optname_s opts[ARRAY_LEN(mi_main)] = {
+  optname_s opts[ARRAY_LEN(main_menuitems)] = {
 #ifdef ENABLE_DNS
     [MENU_MAIN_DNS]     = {.name = MENUSTRW(_DNS_STR)},
 #endif
@@ -782,7 +833,7 @@ static void init_mi_main(void) {
 #endif
     [SUBMENU_CHART]     = {.name = MENUSTRW(_CHART_STR)},
     [MENU_MAIN_JITTER]  = {.name = MENUSTRW(_JITTER_STR)},
-    [MENU_MAIN_FIELDS]  = {.name = MENUSTRW(_FIELDS_STR)},
+    [SUBMENU_FKEYS]     = {.name = MENUSTRW(_FKEYS_HINT)},
     [SUBMENU_CYCLES]    = {.name = MENUSTRW(_NCYCLES_STR)},
     [SUBMENU_TTL]       = {.name = MENUSTRW(_TTL_STR)},
     [SUBMENU_PSIZE]     = {.name = MENUSTRW(_PSIZE_STR)},
@@ -798,7 +849,7 @@ static void init_mi_main(void) {
     [SUBMENU_XCACHE]    = {.name = MENUSTRW(_CACHETM_STR)},
   };
   //
-  init_kititems(&kitmenu[KITMENU_MAIN], ARRAY_LEN(mi_main), mi_main, opts);
+  init_kititems(&kitmenu[KITMENU_MAIN], ARRAY_LEN(main_menuitems), main_menuitems, opts);
 }
 
 static void init_item_icons(void) {
@@ -836,8 +887,6 @@ static void init_subopt_values(void) {
   //
   subopts.xcache_val = is_value_xcache() ? run_opts.cache   : CACHE_TIMEOUT;
   subopts.xcache_nop = !is_value_xcache();
-  //
-  set_stat_keys(ARRAY_LEN(subopts.fields) - 1, subopts.fields);
 }
 
 static void init_all_menuitems(void) { // supposed to call once
@@ -845,6 +894,7 @@ static void init_all_menuitems(void) { // supposed to call once
   init_item_icons();
   //
   init_mi_chart ();
+  init_mi_fkeys();
   init_mi_cycles();
   init_mi_ttl   ();
   init_mi_psize ();
@@ -1014,18 +1064,6 @@ static void set_field_num(FIELD *field, int num, int width) {
   }
 }
 
-static void set_field_str(FIELD *field, const char *str, int width) NONNULL(1);
-static void set_field_str(FIELD *field, const char *str, int width) {
-  char buff[width + 1];
-  memset(buff, 0, sizeof(buff));
-  int rc = snprinte(buff, sizeof(buff), "%s", str ? str : "");
-  if (rc > 0) {
-    int ec = set_field_buffer(field, 0, buff);
-    if (ec != E_OK)
-      LOGECFAIL("str", "set_field_buffer", ec);
-  }
-}
-
 static void prepare_form(kitmenu_s *kit, int ndx, menuitem_s *data) NONNULL(1, 3);
 static void prepare_form(kitmenu_s *kit, int ndx, menuitem_s *data) {
   // menuitem types: INTFORM, STRFORM
@@ -1051,19 +1089,8 @@ static void prepare_form(kitmenu_s *kit, int ndx, menuitem_s *data) {
     field_opts_off(field, O_AUTOSKIP);
     kit->mis[ndx].field[0] = field;
   }
-  switch (data->type) {
-    case MI_INTFORM:
-      if (data->val.num)
-        set_field_num(field, *data->val.num,  w);
-      break;
-    case MI_STRFORM:
-      if (data->val.pstr)
-        set_field_str(field, *data->val.pstr, w);
-      break;
-    default:
-      set_field_str(field, "", w);
-      break;
-  }
+  if ((data->type == MI_INTFORM) && data->val.num)
+    set_field_num(field, *data->val.num, w);
   //
   FORM *form = kit->mis[ndx].form;
   if (!form) {
@@ -1196,11 +1223,8 @@ static void free_wsp(winpan_s *wsp) {
   }
 }
 
-static void process_form_input(kitmenu_s *kit, const char *got,
-  ITEM *item, FIELD *field) NONNULL(1, 2, 3, 4);
-static void process_form_input(kitmenu_s *kit, const char *got,
-  ITEM *item, FIELD *field)
-{
+static void process_form_input(const char *got, ITEM *item, FIELD *field) NONNULL(1, 2, 3);
+static void process_form_input(const char *got, ITEM *item, FIELD *field) {
   menuitem_s *data = item_userptr(item);
   if (!data)
     return;
@@ -1210,67 +1234,31 @@ static void process_form_input(kitmenu_s *kit, const char *got,
   const char *str = ((rc > 0) && value[0]) ? trim(value) : NULL;
   if (!str)
     str = got;
-  switch (data->type) {
-    case MI_INTFORM: {
-      char error[NAMELEN] = {0};
-      int min = data->pmin ? *data->pmin : data->min;
-      int max = data->pmax ? *data->pmax : data->max;
-      int num = arg2int(0, str, min, max, item_name(item), error, sizeof(error));
-      int *val = data->val.num;
-      if (error[0]) {
-        LOGMSG("%s", trim(error));
-        if (val) { // restore field buff
-          int rc = snprinte(value, sizeof(value), "%d", *val);
-          if (rc > 0)
-            set_field_buffer(field, 0, value);
-        }
-      } else {
-        LOGMSG("num: %d", num);
-        if (val && (*val != num))
-          *val = num;
-        if (data->int_setter)
-          data->int_setter(num);
+  if (data->type == MI_INTFORM) {
+    char error[NAMELEN] = {0};
+    int min = data->pmin ? *data->pmin : data->min;
+    int max = data->pmax ? *data->pmax : data->max;
+    int num = arg2int(0, str, min, max, item_name(item), error, sizeof(error));
+    int *val = data->val.num;
+    if (error[0]) {
+      LOGMSG("%s", trim(error));
+      if (val) { // restore field buff
+        int rc = snprinte(value, sizeof(value), "%d", *val);
+        if (rc > 0)
+          set_field_buffer(field, 0, value);
       }
-    } break;
-    case MI_STRFORM: {
-      bool valid = true;
-      const char *patt = data->patt;
-      if (patt) {
-        const char *key = str;
-        valid = key && key[0];
-        if (valid) {
-          for (int i = 0; (i < kit->desc_width) && *key; i++, key++)
-            if (!strchr(patt, *key)) {
-              LOGMSG("invalid key: %c", *key);
-              valid = false;
-              break;
-            }
-        }
-      }
-      const char *val = data->val.pstr ? *data->val.pstr : NULL;
-      if (valid) {
-        LOGMSG("str: %s", str);
-        if (val && STR_NEQ(val, str, kit->desc_width)) {
-          if (data->str_setter)
-            data->str_setter(str);
-          else // ? snprinte(val[len], len, "%s", str)
-            LOGMSG("%s", "no setter for string form");
-        }
-      } else {
-        LOGMSG("invalid input: %s", str);
-        if (val) { // restore field buff
-          int rc = snprinte(value, sizeof(value), "%s", val);
-          if (rc > 0)
-            set_field_buffer(field, 0, value);
-        }
-      }
-    } break;
-    default: break;
+    } else {
+      LOGMSG("num: %d", num);
+      if (val && (*val != num))
+        *val = num;
+      if (data->int_setter)
+        data->int_setter(num);
+    }
   }
 }
 
-static void fin_form(kitmenu_s *kit, mi_s *mi, ITEM *item) NONNULL(1, 2, 3);
-static void fin_form(kitmenu_s *kit, mi_s *mi, ITEM *item) {
+static void fin_form(mi_s *mi, ITEM *item) NONNULL(1, 2);
+static void fin_form(mi_s *mi, ITEM *item) {
   FIELD *field = mi->field[0];
   if (field) {
     LOGMSG("%s", item_name(item));
@@ -1280,7 +1268,7 @@ static void fin_form(kitmenu_s *kit, mi_s *mi, ITEM *item) {
       char value[NAMELEN] = {0};
       int rc = snprinte(value, sizeof(value), "%s", got);
       char *arg = ((rc > 0) && value[0]) ? trim(value) : NULL;
-      process_form_input(kit, arg ? arg : got, item, field);
+      process_form_input(arg ? arg : got, item, field);
     }
   }
 }
@@ -1381,8 +1369,8 @@ static void menu_repost(kitmenu_s *kit) {
   }
 }
 
-static void action_chart(uint ndx) {
-  switch (ndx) {
+static void menuaction_chart(menuitem_s *data, kitmenu_s *kit UNUSED) {
+  if (data) switch (data->ndx) {
     case SUBMENU_CHART_ON:
       chart_mode = subopts.chart_on ? 0                 :
                   subopts.chart_mod ? subopts.chart_mod : 1;
@@ -1390,7 +1378,7 @@ static void action_chart(uint ndx) {
     case SUBMENU_CHART_1:
     case SUBMENU_CHART_2:
     case SUBMENU_CHART_3:
-      chart_mode = (ndx - SUBMENU_CHART_1) + 1;
+      chart_mode = (data->ndx - SUBMENU_CHART_1) + 1;
       subopts.chart_mod = chart_mode;
       break;
     case SUBMENU_CHART_CLR:
@@ -1403,7 +1391,38 @@ static void action_chart(uint ndx) {
   LOGMSG("on=%d, mode=%d, color=%d", subopts.chart_on, chart_mode, run_opts.color);
 }
 
-static void action_cycles_unlim(uint ndx UNUSED) {
+static void menuaction_fields(menuitem_s *data, kitmenu_s *kit) NONNULL(1, 2);
+static void menuaction_fields(menuitem_s *data, kitmenu_s *kit) {
+  // toggle current key
+  bool *flag = data->val.flag;
+  if (flag)
+    *flag = !*flag;
+  // recollect keys
+  char state[sizeof(FSET_ALL)] = {0};
+  char *p = state;
+  ITEM **item = kit->items;
+  if (item) for (uint i = 0; (i < kit->len) && (i < sizeof(state)); i++, item++) {
+    if (*item && IS_SELECTABLE(*item)) {
+      menuitem_s *data = item_userptr(*item);
+      if (data) {
+        const uint8_t *key  = data->val.key;
+        const bool    *flag = data->val.flag;
+        if (key && *key && flag && *flag)
+          *p++ = *key;
+      }
+    }
+  }
+  if (state[0] && active_fkeys) {
+    if (set_active_fkeys(state))
+      LOGMSG("active: %s -> %s", active_fkeys, state);
+    else
+      LOGMSG("set_active_fkeys(%s): failed", state);
+// TODO: move menuitems with arrow-keys and reorder
+//    LOGMSG("all-in-order %s", fkey_order);
+  }
+}
+
+static void menuaction_cycles_unlim(menuitem_s *data UNUSED, kitmenu_s *kit UNUSED) {
   bool last = is_value_cycles();
   if (last) // keep
     subopts.cycles_val = run_opts.cycles;
@@ -1413,7 +1432,7 @@ static void action_cycles_unlim(uint ndx UNUSED) {
   subopts.cycles_inf = !is_value_cycles();
 }
 
-static void action_rnd_psize(uint ndx UNUSED) {
+static void menuaction_rnd_psize(menuitem_s *data UNUSED, kitmenu_s *kit UNUSED) {
   bool last = is_value_psize();
   if (last) // keep
     subopts.psize_val = run_opts.size;
@@ -1423,7 +1442,7 @@ static void action_rnd_psize(uint ndx UNUSED) {
   subopts.psize_rnd = !is_value_psize();
 }
 
-static void action_rnd_pattern(uint ndx UNUSED) {
+static void menuaction_rnd_pattern(menuitem_s *data UNUSED, kitmenu_s *kit UNUSED) {
   bool last = is_value_bpatt();
   if (last) // keep
     subopts.bpatt_val = run_opts.pattern;
@@ -1433,7 +1452,7 @@ static void action_rnd_pattern(uint ndx UNUSED) {
   subopts.bpatt_rnd = !is_value_bpatt();
 }
 
-static void action_no_xcache(uint ndx UNUSED) {
+static void menuaction_no_xcache(menuitem_s *data UNUSED, kitmenu_s *kit UNUSED) {
   bool last = is_value_xcache();
   if (last) // keep
     subopts.xcache_val = run_opts.cache;
@@ -1451,13 +1470,14 @@ static key_action_t ext2action[MaxMenuActions] = {
 #endif
 };
 
-typedef void (*menu_action_fn)(uint ndx);
+typedef void (*menu_action_fn)(menuitem_s *data, kitmenu_s *kit);
 static menu_action_fn ext2fn_action[MaxMenuActions] = {
-  [ActionMenuChart]     = action_chart,
-  [ActionMenuCyclesInf] = action_cycles_unlim,
-  [ActionMenuPldSize]   = action_rnd_psize,
-  [ActionMenuPattRnd]   = action_rnd_pattern,
-  [ActionMenuNoCache]   = action_no_xcache,
+  [ActionMenuChart]     = menuaction_chart,
+  [ActionMenuFields]    = menuaction_fields,
+  [ActionMenuCyclesInf] = menuaction_cycles_unlim,
+  [ActionMenuPldSize]   = menuaction_rnd_psize,
+  [ActionMenuPattRnd]   = menuaction_rnd_pattern,
+  [ActionMenuNoCache]   = menuaction_no_xcache,
 };
 
 //
@@ -1587,7 +1607,7 @@ key_action_t menu_action(void) {
             menu_action_fn fn = ((ext >= 0) && (ext < ARRAY_LEN(ext2fn_action))) ?
               ext2fn_action[ext] : NULL;
             if (fn)
-              fn(data->ndx);
+              fn(data, kit);
             action = ((ext >= 0) && (ext < ARRAY_LEN(ext2action))) ?
               ext2action[ext] : ActionNone;
           }
@@ -1598,7 +1618,6 @@ key_action_t menu_action(void) {
           }
         } break;
         case MI_INTFORM:
-        case MI_STRFORM:
           activate_form(kit, item, data);
           break;
         case MI_SUBMENU: {
@@ -1692,7 +1711,7 @@ int menu_form_key(int key) {
       ITEM *item = kit->items[ndx];
       mi_s *mi = &kit->mis[ndx];
       if (item)
-        fin_form(kit, mi, item);
+        fin_form(mi, item);
       close_form(mi);
       menuitem_s *data = item ? item_userptr(item) : NULL;
       if (data && (data->action == ActionNone))

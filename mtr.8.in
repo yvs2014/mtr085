@@ -134,7 +134,7 @@ Display MPLS information encoded in response packets
 .It Fl f, Fl -first-ttl Ar NUM
 Specify initial TTL to start.  Default is 1, `a' means auto (corresponding to TTL of the destination host).
 .It Fl F, Fl -fields Ar DISPLAY-FIELDS
-Specify fields to display and their order
+Specify fields to display and their order. Duplicates are not accepted.
 .Pp
 Available fields:
 .Bl -tag -offset Ds -compact
@@ -167,7 +167,7 @@ Worst Jitter
 .It Cm I
 Interarrival Jitter
 .It Cm _
-<space>
+<blank>
 .El
 .sp 2
 Examples:

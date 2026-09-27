@@ -83,15 +83,16 @@
 #define _II_ASNAME_STR "AS-Name"
 
 // stat init fields
+#define _FKEYS_HINT "Statistics"
 #define _GAP_HINT   "Space between fields"
 #define _LOSS_STR   "Loss"
-#define _LOSS_HINT  "Loss Ratio"
+#define _LOSS_HINT  "Loss ratio"
 #define _DROP_STR   "Drop"
-#define _DROP_HINT  "Dropped Packets"
+#define _DROP_HINT  "Dropped packets"
 #define _RECV_STR   "Recv"
-#define _RECV_HINT  "Received Packets"
+#define _RECV_HINT  "Received packets"
 #define _SENT_STR   "Sent"
-#define _SENT_HINT  "Sent Packets"
+#define _SENT_HINT  "Sent packets"
 #define _LAST_STR   "Last"
 #define _LAST_HINT  "Newest RTT(ms)"
 #define _BEST_STR   "Best"
@@ -99,19 +100,20 @@
 #define _AVRG_STR   "Avrg"
 #define _AVRG_HINT  "Average RTT(ms)"
 #define _WRST_STR   "Wrst"
-#define _WRST_HINT  "Max/Worst RTT(ms)"
-#define _STDEV_STR  "StDev"
-#define _STDEV_HINT "Standard Deviation"
+#define _WRST_HINT  "Max/worst RTT(ms)"
+#define _DVTN_STR   "StDev"
+#define _DVTN_HINT  "Standard deviation"
 #define _GAVR_STR   "GAvr"
-#define _GAVR_HINT  "Geometric Mean"
+#define _GAVR_HINT  "Geometric mean"
 #define _JTTR_STR   "Jttr"
-#define _JTTR_HINT  "Current Jitter"
+#define _JTTR_HINT  "Current jitter"
 #define _JAVG_STR   "Javg"
-#define _JAVG_HINT  "Jitter Mean/Avrg"
+#define _JAVG_HINT  "Jitter mean/avrg"
 #define _JMAX_STR   "Jmax"
-#define _JMAX_HINT  "Worst Jitter"
+#define _JMAX_HINT  "Worst jitter"
 #define _JINT_STR   "Jint"
-#define _JINT_HINT  "Interarrival Jitter"
+#define _JINT_HINT  "Interarrival jitter"
+#define _BLANK_STR  "_"
 //
 #define _DNS_STR      "DNS"
 #define _JITTER_STR   "Jitter"
@@ -156,7 +158,7 @@
 #define CMD_LL_STR   _("switch IP info")
 #define CMD_M_STR    _("set max TTL (default 30)")
 #define CMD_N_STR    _("toggle DNS")
-#define CMD_O_STR    _("set stat fields to display (default: LS_NABWV)")
+#define CMD_O_STR    _("set stat fields to display (default: LS_NABWV, all: LDRS_NBAWVGJMXI)")
 #ifdef USE_RAW
 #define CMD_P_STR    _("switch protocol (ICMP/UDP/TCP)")
 #else
@@ -247,5 +249,6 @@
 #define NOPOOL_ERR   _("No place in pool for sockets")
 #define NOSOCK_ERR   _("No sockets")
 #define NODNS_ERR    _("No nameservers")
+#define NODUP_ERR    _("No duplicates accepted")
 
 #endif

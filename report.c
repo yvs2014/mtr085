@@ -187,7 +187,7 @@ void backresolv_lookups(void) {
 
 static void foreach_stat(int at, void (*body)(int at, const t_stat *stat), char fin) NONNULL(2);
 static void foreach_stat(int at, void (*body)(int at, const t_stat *stat), char fin) {
-  for (uint i = 0; i < MAXFLD; i++) {
+  for (uint i = 0; i < MAXFKEYS; i++) {
     const t_stat *stat = active_stats(i);
     if (!stat)
       break;

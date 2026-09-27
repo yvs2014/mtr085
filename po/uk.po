@@ -243,6 +243,9 @@ msgstr "Назва-АС"
 
 ## stats
 
+msgid "Statistics"
+msgstr "Статистика"
+
 msgid "Space between fields"
 msgstr "Проміжок між полями"
 
@@ -291,7 +294,7 @@ msgstr "Середнє RTT(мс)"
 msgid "Wrst"
 msgstr "Гірш"
 
-msgid "Max/Worst RTT(ms)"
+msgid "Max/worst RTT(ms)"
 msgstr "Найгірше RTT(мс)"
 
 msgid "StDev"
@@ -375,8 +378,8 @@ msgstr "встановити максимум для TTL (стандартно 3
 msgid "toggle DNS"
 msgstr "увімкнути/вимкнути DNS"
 
-msgid "set stat fields to display (default: LS_NABWV)"
-msgstr "встановити поля статистики у відображенні (стандартно: LS_NABWV)"
+msgid "set stat fields to display (default: LS_NABWV, all: LDRS_NBAWVGJMXI)"
+msgstr "відображати поля статистики (стандартно: LS_NABWV, усі: LDRS_NBAWVGJMXI)"
 
 msgid "quit"
 msgstr "вихід"
@@ -655,6 +658,9 @@ msgstr "Нема сокетів"
 
 msgid "No nameservers"
 msgstr "Нема DNS серверів"
+
+msgid "No duplicates accepted"
+msgstr "Дублікати не приймаються"
 
 msgid "Colors are disabled"
 msgstr "Кольори вимкнено"

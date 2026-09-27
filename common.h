@@ -21,7 +21,7 @@
 #define MAX_ADDRSTRLEN INET6_ADDRSTRLEN
 
 #ifndef GITREV
-#define GITREV "337"
+#define GITREV "338"
 #endif
 
 #ifndef HAVE_UINT
@@ -73,7 +73,6 @@ typedef struct s_cmd_hint {
 
 enum {
   NAMELEN   = 256,
-  MAXFLD    =  20, // fields in custom set to display stats
   MAXLABELS =   8, // mpls labels
 };
 
@@ -133,7 +132,6 @@ typedef enum {
 #define NANO  1000000000
 #define UNKN_ITEM "???"
 #define AT_FMT "%2d."
-#define SETTLED_ELEMS "LDRS" // Lost-Drop-Recv-Sent
 
 #define CTRL_C    3
 #define C_ESCAPE 27
@@ -361,7 +359,7 @@ extern bool utf_compat;
 #endif
 
 // keys: the value in the array is the index number in stats[]
-extern const char *fld_active;
+extern const char *active_fkeys;
 extern t_stat stats[];
 extern const int stat_max;
 

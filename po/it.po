@@ -243,6 +243,9 @@ msgstr "Nome-di-SA"
 
 ## stats
 
+msgid "Statistics"
+msgstr "Statistica"
+
 msgid "Space between fields"
 msgstr "Spazio tra i campi"
 
@@ -291,7 +294,7 @@ msgstr "RTT(ms) medio"
 msgid "Wrst"
 msgstr "Pegg"
 
-msgid "Max/Worst RTT(ms)"
+msgid "Max/worst RTT(ms)"
 msgstr "RTT(ms) massimo/peggiore"
 
 msgid "StDev"
@@ -375,8 +378,8 @@ msgstr "imposta il TTL massimo (predefinito: 30)"
 msgid "toggle DNS"
 msgstr "(dis)attiva DNS"
 
-msgid "set stat fields to display (default: LS_NABWV)"
-msgstr "imposta i campi delle statistiche (predefinito: LS_NABWV)"
+msgid "set stat fields to display (default: LS_NABWV, all: LDRS_NBAWVGJMXI)"
+msgstr "visualizza campi delle statistiche (predefinito: LS_NABWV, tutto: LDRS_NBAWVGJMXI)"
 
 msgid "quit"
 msgstr "uscita"
@@ -655,4 +658,10 @@ msgstr "Nessun socket"
 
 msgid "No nameservers"
 msgstr "Nessun server DNS"
+
+msgid "No duplicates accepted"
+msgstr "Non si accettano duplicati"
+
+msgid "Colors are disabled"
+msgstr "Colori sono disabilitati"
 
