@@ -179,47 +179,20 @@ Examples:
 Set number of seconds between ICMP ECHO requests.  Default is 1.
 .ie "lL"\*[ol]" \{\
 .It Fl l, Fl -lookup
-Turn on ASN lookups. The data source is
+Turn on ASN lookups. Default source is
 .Sy riswhois.ripe.net
 .It Fl L, Fl -ipinfo Ar ORIGIN,FIELDS
-Specify IP info origin and its fields
-.Pp
-Available origins and their fields:
+Specify origin and field numbers
 .Bl -tag -width indent -offset Ds
-.It Cm 1 - origin.asn.cymru.com (both IPv4 and IPv6)
-ASN, Route, CC, Registry, Allocated
-.It Cm 2 - riswhois.ripe.net (both IPv4 and IPv6)
-Route, Origin, Descr, CC
-.It Cm 3 - peer.asn.shadowserver.org
-AS-Path, ASN, Route, CC, Org
-.It Cm 4 - origin.asn.spameatingmonkey.net
-Route, ASN, Org, Allocated, CC
-.It Cm 5 - ip-api.com
-Country, CC, RC, Region, City, Zip, Lat, Long, TZ, ISP, Org, AS-Name
-.It Cm 6 - asn.routeviews.org
-ASN
+.It Cm 1 - origin[6].asn.cymru.com
+ASN, Route, CountryCode, Registry, Allocated
+.It Cm 2 - riswhois.ripe.net
+Route, ASN, Description, CountryCode
 .El
-.sp
-Abbreviations:
+Example:
 .Bl -tag -width indent-two -offset Ds -compact
-.It Cm TZ
-TimeZone
-.It Cm Org
-Organization
-.It Cm DMA
-Designated Market Area
-.It Cm CC/RC/MC/LC
-Country/Region/Metro/Local Code
-.El
-.sp
-Examples:
-.Bl -tag -width indent-two -offset Ds -compact
-.It Cm -L5,2,5,7,8
-ip-api.com: CC City Lat Long
 .It Cm -L2,4,2
-riswhois.ripe.net: CC Origin
-.It Cm -L,
-origin.asn.cymru.com: ASN
+short for 'riswhois.ripe.net CountryCode ASN'
 .El
 .\}
 .It Fl m, Fl -max-ttl Ar NUM

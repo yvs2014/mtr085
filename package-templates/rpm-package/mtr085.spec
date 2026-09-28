@@ -7,7 +7,7 @@
 Name:       mtr085
 Version:    0.85%{gver}
 Release:    1
-Summary:    Full screen ncurses traceroute tool
+Summary:    Work-in-progress mtr v0.85 fork for testing extra features
 License:    GPL-2.0
 Group:      Productivity/Networking/Other
 URL:        https://github.com/yvs2014/%{name}
@@ -19,7 +19,7 @@ Conflicts: mtr, mtr-gtk
 
 %description
 mtr combines the functionality of the traceroute and ping programs in a single network diagnostic tool.
-Built from https://github.com/yvs2014/mtr085 fork with whois info, unicode, etc.
+Built from https://github.com/yvs2014/mtr085 fork for testing extra features.
 Main project's location is https://github.com/traviscross/mtr
 
 %define binname mtr

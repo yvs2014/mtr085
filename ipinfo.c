@@ -56,16 +56,15 @@
 enum { TCP_CONN_TIMEOUT = 3, IPINFO_TCP_TIMEOUT = 10 /* in seconds */ };
 enum { TCP_RESP_LINES = 100, NETDATA_MAXSIZE = 3000 };
 enum { WHOIS_LAST_NDX = 2 };
-#define HTTP_GET "GET %s HTTP/1.1\r\nHost: %s\r\nUser-Agent: %s\r\nAccept: */*\r\n\r\n"
 
 typedef struct { int sock, state, slot; } ipitseq_t;
 enum { TSEQ_CREATED, TSEQ_READY };  // tcp-socket state: created or ready, otherwise -1
 
 // global
-bool ipinfo_tcpmode;     // true if ipinfo origin is tcp (http or whois)
-uint ipinfo_queries[3];  // number of queries (sum, http, whois)
-uint ipinfo_replies[3];  // number of replies (sum, http, whois)
-bool ipinfo_rewidth;     // indicator to redraw titles
+bool ipinfo_tcpmode; // true if ipinfo origin is tcp (whois)
+uint whois_queries;  // number of queries (sum, whois)
+uint whois_replies;  // number of replies (sum, whois)
+bool ipinfo_rewidth; // indicator to redraw titles
 bool ipinfo_ready;
 //
 
@@ -75,24 +74,21 @@ static int itemname_max;  // set once at init
 static int ipinfo_syn_timeout = 3;     // in seconds
 static ipitseq_t *ipitseq;             // for tcp-origins
 
-// origin types: dns txt, http csv, whois pairs
-enum { OT_DNS = 0 /*sure*/, OT_HTTP, OT_WHOIS };
-enum { WHOIS_PORT = 43, HTTP_PORT = 80 };
+// origin types: dns txt, whois pairs
+enum { OT_DNS, OT_WHOIS };
+enum { WHOIS_PORT = 43 };
 
 #define SETFIELDS false
 #define ADDFIELDS true
 
 typedef struct {
+  int   type;  // dns or whois
   const char* host;
   const char* host6;
-  const char* unkn;
   const char* prefix;
   const char* name[II_REC_ARR_LEN];
   const char* uname[II_REC_ARR_LEN];
-  const char* skip_str[II_REC_ARR_LEN]; // skip by string: "query ip", ...
   int   asnth; // ASN-field-number in ipinfo field-list
-  int   type; // 0 - dns, 1 - http, 2 - whois
-  int   skip_ndx[II_REC_ARR_LEN]; // skip by index: 1, ...
   int   width[II_REC_ARR_LEN];
   char  sep;
   char  comb_last_fields;
@@ -100,23 +96,16 @@ typedef struct {
 
 #define ORIG_TYPE (origins[origin_no].type)
 #define ORIG_HOST (origins[origin_no].host)
-#define ORIG_UNKN (origins[origin_no].unkn)
-#define ORIG_SKIP_NDX   (origins[origin_no].skip_ndx)
-#define ORIG_SKIP_STR   (origins[origin_no].skip_str)
 #define ORIG_NAME(num)  (origins[origin_no].name[num])
 #define ORIG_UNAME(num) (origins[origin_no].uname[num])
 #define ORIG_WIDTH(num) (origins[origin_no].width[num])
-#define ORIG_SKIPNDX_LEN  ARRAY_LEN(origins[origin_no].skip_ndx)
-#define ORIG_SKIPSTR_LEN  ARRAY_LEN(origins[origin_no].skip_str)
 
-static int ipinfo_no[II_REC_ARR_LEN] = {-1}; // the longest list: #8 getcitydetails.geobytes.com
-
-enum { IPAPI_STATUS_NDX = 1, IPAPI_QUERYIP_NDX = 14};
+static int ipinfo_no[II_REC_ARR_LEN] = {-1}; // length enough for the longest list
 
 static origin_t origins[] = {
-// Abbreviations: CC - Country Code, RC - Region Code, MC - Metro Code, Org - Organization, TZ - TimeZone
 // 1
   { .host  = "origin.asn.cymru.com", .host6 = "origin6.asn.cymru.com",
+    .type  = OT_DNS,
     .name  = {_II_ASN_STR, _II_ROUTE_STR, _II_CC_STR, _II_REG_STR, _II_ALLOC_STR},
     .asnth = 0,
     .sep   = VSLASH,
@@ -134,67 +123,15 @@ static origin_t origins[] = {
 #else
       "2001:67c:2e8:25::c100:b05",
 #endif
+    .type   = OT_WHOIS,
     .name   = {_II_ROUTE_STR, _II_ORIGIN_STR, _II_DESC_STR, _II_CC_STR},
     .asnth  = 1,
     .sep    = 0,
-    .type   = OT_WHOIS,
     .prefix = "-m ",
-  },
-// 3
-  { .host     = "peer.asn.shadowserver.org",
-    .name     = {_II_ASPATH_STR, _II_ASN_STR, _II_ROUTE_STR, /*_II_ASNAME_STR,*/ _II_CC_STR, _II_ORG_STR},
-    .asnth    = 1,
-    .sep      = VSLASH,
-    .skip_ndx = {4},
-  },
-// 4
-  { .host  = "origin.asn.spameatingmonkey.net",
-    .name  = {_II_ROUTE_STR, _II_ASN_STR, _II_ORG_STR, _II_ALLOC_STR, _II_CC_STR},
-    .asnth = 1,
-    .unkn  = "Unknown",
-    .sep   = VSLASH,
-  },
-// 5
-  { .host  =
-#ifdef ENABLE_DNS
-      "ip-api.com",
-#else
-      "208.95.112.1",
-#endif
-    .name     = {/*Status,*/ _II_CNAME_STR, _II_CC_STR, _II_RC_STR, _II_RNAME_STR, _II_CITY_STR, _II_ZIP_STR,
-                 _II_LAT_STR, _II_LNG_STR, _II_TZ_STR, _II_ISP_STR, _II_ORG_STR, _II_ASNAME_STR /*,QueryIP*/},
-    .asnth    = 11,
-    .sep      = COMMA,
-    .type     = OT_HTTP,
-    .skip_ndx = {IPAPI_STATUS_NDX, IPAPI_QUERYIP_NDX}, .prefix = "/csv/",
-  },
-// 6
-  { .host  = "asn.routeviews.org",
-    .name  = {_II_ASN_STR, _II_ROUTE_STR},
-    .asnth = 0,
-    .unkn  = "4294967295",
-    .sep   = VSLASH,
-    .comb_last_fields = '/', /* route / prefix */
   },
 };
 
 //
-
-static bool str_in_skip_list(const char *str, uint len, const char* list[len]) NONNULL(1, 3);
-static bool str_in_skip_list(const char *str, uint len, const char* list[len]) {
-    for (uint i = 0; (i < len) && list[i]; i++)
-        if (STR_EQ(str, list[i], NAMELEN))
-            return true;
-    return false;
-}
-
-static bool ndx_in_skip_list(int ndx, uint len, const int list[len]) NONNULL(3);
-static bool ndx_in_skip_list(int ndx, uint len, const int list[len]) {
-    for (uint i = 0; (i < len) && list[i]; i++)
-        if ((ndx + 1) == list[i])
-            return true;
-    return false;
-}
 
 static int split_with_sep(uint len, char* list[len], char sep, char quote) NONNULL(2);
 static int split_with_sep(uint len, char* list[len], char sep, char quote) {
@@ -218,21 +155,10 @@ static int split_with_sep(uint len, char* list[len], char sep, char quote) {
   return (count > len) ? len : count;
 }
 
-static void unkn2norm(uint len, char* record[len]) NONNULL(2);
-static void unkn2norm(uint len, char* record[len]) {
-  if (ORIG_UNKN) { // change to common UNKN
-    size_t lim = strnlen(ORIG_UNKN, NAMELEN);
-    for (uint i = 0; (i < len) && record[i]; i++)
-      if (STR_EQ(record[i], ORIG_UNKN, lim))
-        record[i] = UNKN;
-  }
-}
-
 static char** split_record(char *data, uint len, char* list[len]) NONNULL(1, 3);
 static char** split_record(char *data, uint len, char* list[len]) {
   list[0] = data;
   split_with_sep(len, list, origins[origin_no].sep, '"');
-  unkn2norm(len, list);
   return list;
 }
 
@@ -274,36 +200,33 @@ static inline int snprint_addmulti(uint len, char buff[len],
 }
 
 static void save_fields(int at, int ndx, uint rlen, char* record[rlen], bool add, uint srcndx) {
-  unkn2norm(rlen, record);
   for (int i = 0; i < itemname_max; i++)
     if (!record[i])
       record[i] = UNKN;
   for (uint i = 0, j = 0; (i < rlen) && record[i]; i++) {
-    if (!ndx_in_skip_list(i, ORIG_SKIPNDX_LEN, ORIG_SKIP_NDX)) {
-      char *str = trim(record[i]);
-      if (str && str[0] && !str_in_skip_list(str, ORIG_SKIPSTR_LEN, ORIG_SKIP_STR)) {
-        char buff[NAMELEN] = {0};
-        char *pview = buff, *view = II_VIEW_AT(at, ndx, j);
-        int len = snprinte(buff, sizeof(buff), "%s", str);
-        if (len > 0) {
-          char mbuff[NAMELEN] = {0};
-          if (view && add) {
-            len = snprint_addmulti(sizeof(mbuff), mbuff, view, str, run_opts.multi);
-            if (len > 0)
-              pview = mbuff;
-          }
-          if (len > 0) {
-            bool view_ok = set_newrec(at, ndx, j, strndup(pview, NAMELEN), -1);
-            bool src_ok  = set_newrec(at, ndx, j, strndup(buff, sizeof(buff)), srcndx);
-            if (!view_ok || !src_ok)
-              break;
-          }
+    char *str = trim(record[i]);
+    if (str && str[0]) {
+      char buff[NAMELEN] = {0};
+      char *pview = buff, *view = II_VIEW_AT(at, ndx, j);
+      int len = snprinte(buff, sizeof(buff), "%s", str);
+      if (len > 0) {
+        char mbuff[NAMELEN] = {0};
+        if (view && add) {
+          len = snprint_addmulti(sizeof(mbuff), mbuff, view, str, run_opts.multi);
+          if (len > 0)
+            pview = mbuff;
         }
-        //
-        LOGMSG(" rec[%d, %d, %d, %d]: %s", at, ndx, j, srcndx, II_SRC_AT(at, ndx, j, srcndx));
-        LOGMSG("view[%d, %d, %d]: %s", at, ndx, j, II_VIEW_AT(at, ndx, j));
-        j++;
+        if (len > 0) {
+          bool view_ok = set_newrec(at, ndx, j, strndup(pview, NAMELEN), -1);
+          bool src_ok  = set_newrec(at, ndx, j, strndup(buff, sizeof(buff)), srcndx);
+          if (!view_ok || !src_ok)
+            break;
+        }
       }
+      //
+      LOGMSG(" rec[%d, %d, %d, %d]: %s", at, ndx, j, srcndx, II_SRC_AT(at, ndx, j, srcndx));
+      LOGMSG("view[%d, %d, %d]: %s", at, ndx, j, II_VIEW_AT(at, ndx, j));
+      j++;
     }
   }
 }
@@ -408,101 +331,6 @@ static void save_records(atndx_t id, uint rlen, char* record[rlen], bool add, ui
   adjust_width(II_REC_ARR_LEN, II_REC_ARR(id.at, id.ndx));
 }
 
-static int trim_n_count_records(uint len, char* record[len]) {
-  int count = 0;
-  for (uint i = 0; (i < len) && record[i]; i++) {
-    if (!ndx_in_skip_list(i, ORIG_SKIPNDX_LEN, ORIG_SKIP_NDX)) {
-      record[i] = trim(record[i]);
-      if (!str_in_skip_list(record[i], ORIG_SKIPSTR_LEN, ORIG_SKIP_STR))
-        count++;
-    }
-  }
-  return count;
-}
-
-static inline int parse_http_content_len(uint lines_no, char* lines[TCP_RESP_LINES],
-	size_t recv_size, uint *cndx) {
-  uint ndx = 0, len = 0; // content index in tcp response and its length
-  uint min = lines_no < TCP_RESP_LINES ? lines_no : TCP_RESP_LINES;
-  const char cntx_len_tag[] = "Content-Length:";
-  for (uint i = 0; i < min; i++) {
-    char* pair[2] = {lines[i], NULL};
-    if (split_with_sep(ARRAY_LEN(pair), pair, ' ', 0) == ARRAY_LEN(pair)
-      && STR_EQ(cntx_len_tag, pair[0], sizeof(cntx_len_tag))
-      && pair[1])
-    {
-        errno = 0;
-        long n = str2l(pair[1]);
-        if (errno)
-          errno = 0;
-        else if ((0 < n) && (n <= INT_MAX))
-          len = n;
-    }
-    if (lines[i][0]) // skip header lines
-      continue;
-    if ((i + 1) < lines_no)
-      ndx = i + 1;
-    break;
-  }
-  if (ndx && (len > 0) && (len < recv_size))
-    *(lines[ndx] + len) = 0;
-  else
-    len = ustrnlen(lines[ndx], NAMELEN);
-  if (cndx) *cndx = ndx;
-  return (len < NETDATA_MAXSIZE) ? len : NETDATA_MAXSIZE;
-}
-
-static void parse_http(atndx_t id, int len, char txt[len]) {
-  /*summ*/ ipinfo_replies[0]++; ipinfo_replies[1]++;
-  char* list[II_REC_ARR_LEN] = {0};
-  const char http1_1[] = "HTTP/1.1";
-  //
-  int got = -1;
-  char *ptr =
-#ifdef HAVE_MEMMEM
-    memmem(txt, len, http1_1, sizeof(http1_1) - 1);
-#else
-    strstr(txt, http1_1);
-#endif
-  if (ptr) {
-    ptr += sizeof(http1_1); // i.e. beyond 'HTTP/1.1 '
-    char okay[] = "200 OK";
-    int olen = sizeof(okay) - 1;
-    if (STR_NEQ(ptr, okay, olen)) // HTTP OK, or not
-      LOGMSG("not OK: %.*s", olen, ptr);
-    else {
-      char* lines[TCP_RESP_LINES] = {txt};
-      uint lines_no = split_with_sep(ARRAY_LEN(lines), lines, '\n', 0);
-      if (lines_no < 4) // HEADER + NL + NL + DATA
-        LOGMSG("No data after header (got %d lines only)", lines_no);
-      else {
-        uint cndx = 0, clen = parse_http_content_len(lines_no, lines, len, &cndx);
-        // combine into one line
-        char context[clen + 1];
-        memset(context, 0, sizeof(context));
-        for (uint i = cndx, len = 0; (i < lines_no) && (len < clen); i++) {
-          int inc = snprinte(context + len, clen - len, "%s", lines[i]);
-          if (inc < 0)
-            break;
-          len += inc;
-        }
-        LOGMSG("context(%.*s)", clen, context);
-        //
-        split_record(context, ARRAY_LEN(list), list);
-        got = trim_n_count_records(ARRAY_LEN(list), list);
-        if (got == itemname_max) { // success
-          save_records(id, ARRAY_LEN(list), list, SETFIELDS, 0);
-          return;
-        }
-      }
-    }
-  }
-  // fail
-  LOGMSG("Expected %d records, got %d", itemname_max, got < 0 ? 0 : got);
-  memset(list, 0, sizeof(list)); // as unknown
-  save_records(id, ARRAY_LEN(list), list, SETFIELDS, 0);
-}
-
 static void parse_whois_tagvalue(char* line, uint rlen, char* record[rlen]) {
   char* tagvalue[2] = {line, NULL};
   if (split_with_sep(ARRAY_LEN(tagvalue), tagvalue, ':', 0) != ARRAY_LEN(tagvalue))
@@ -572,7 +400,7 @@ static int skip_whois_nodata(uint len, char* lines[len]) {
 }
 
 static void parse_whois(atndx_t id, uint len, char txt[len]) {
-  /*summ*/ ipinfo_replies[0]++; ipinfo_replies[2]++;
+  /*summ*/ whois_replies++;
   char* msrc[II_SRC_ARR_LEN + 1] = {0};
   split_by_empty_lines(len, txt, ARRAY_LEN(msrc) - 1, msrc);
   bool op = SETFIELDS;
@@ -620,31 +448,25 @@ static void close_ipitseq(int seq) {
   }
 }
 
-void ipinfo_parse(int sock, int seq) { // except dns, dns.ack in dns.c
+void ipinfo_parse(int sock, int seq) { // except dns
+  if (ORIG_TYPE != OT_WHOIS)
+    return;
   char data[NETDATA_MAXSIZE + 1] = {0};
   seq %= MAXSEQ;
   ssize_t received = recv(sock, data, sizeof(data) - 1, 0);
   if (received > 0) {
     atndx_t id = { .at = seq / MAXPATH, .ndx = seq % MAXPATH };
-    switch ORIG_TYPE {
-      case OT_HTTP:
-        LOGMSG( "HTTP: got[%zd]: \"%.*s\"", received, (int)received, data);
-        parse_http(id, received, data);
-        return;
-      case OT_WHOIS:
-        LOGMSG("WHOIS: got[%zd]: \"%.*s\"", received, (int)received, data);
-        parse_whois(id, received, data);
-        return;
-      default: break;
-    }
-  } else if (received < 0)
+    LOGMSG("WHOIS: got[%zd]: \"%.*s\"", received, (int)received, data);
+    parse_whois(id, received, data);
+    return;
+  }
+  if (received < 0)
     WARNF("seq=%d recv(sock=%d)", seq, sock);
   close_ipitseq(seq);
 }
 
-
 static int create_tcpsock(int seq) {
-  uint16_t port = (ORIG_TYPE == OT_WHOIS) ? WHOIS_PORT : HTTP_PORT;
+  uint16_t port = WHOIS_PORT;
   char srv[8] = {0};
   snprinte(srv, sizeof(srv), "%u", port);
   LOGMSG("%s:%s", ORIG_HOST, srv);
@@ -687,20 +509,18 @@ static int create_tcpsock(int seq) {
 }
 
 static int send_tcp_query(int sock, const char *q) {
+  if (ORIG_TYPE != OT_WHOIS)
+    return -1;
   char buf[NETDATA_MAXSIZE] = {0};
-  if (ORIG_TYPE == OT_WHOIS)
-    snprinte(buf, sizeof(buf), "%s\r\n", q);
-  else
-    snprinte(buf, sizeof(buf), HTTP_GET, q, ORIG_HOST, PACKAGE_NAME);
+  snprinte(buf, sizeof(buf), "%s\r\n", q);
   size_t len = strnlen(buf, sizeof(buf));
   if (!len) {
     errno = EINVAL;
     return -1;
   }
   int rc = send(sock, buf, len, 0);
-  if (rc >= 0) {
-    /*summ*/ ipinfo_queries[0]++; (ORIG_TYPE == OT_HTTP) ? ipinfo_queries[1]++ : ipinfo_queries[2]++;
-  }
+  if (rc >= 0)
+    /*summ*/ whois_queries++;
   LOGMSG("[orig=%d sock=%d] q=\"%s\" rc=%d ts=%lld", origin_no, sock, q, rc, (long long)time(NULL));
   return rc;
 }
@@ -761,7 +581,7 @@ static int ipinfo_lookup(int at, int ndx, const char *qstr) {
     return -1; // too often
   QTXT_TS_AT_NDX(at, ndx) = now; // save time of trying to send something
 
-  if (ORIG_TYPE != OT_DNS) { // tcp
+  if (ORIG_TYPE == OT_WHOIS) {   // tcp
     int state = ipitseq[seq].state;
     if (state != TSEQ_READY) {
       if (state != -1)
@@ -796,22 +616,19 @@ static char *get_ipinfo(int at, int ndx, int item_no) {
 #endif
   { if (!ORIG_HOST) return NULL; }
   char query[NAMELEN] = {0};
-  switch (ORIG_TYPE) {
-    case OT_HTTP:
-    case OT_WHOIS: {
-      const char *q = make_tcp_qstr(at, ndx, sizeof(query), query);
-      if (q)
-        ipinfo_lookup(at, ndx, q);
-    } break;
-#ifdef ENABLE_DNS
-    default: { // dns
-      t_ipaddr *ipaddr = &IP_AT_NDX(at, ndx);
-      ip2arpa(sizeof(query), query, ipaddr, ORIG_HOST, origins[origin_no].host6);
-      if (query[0])
-        ipinfo_lookup(at, ndx, query);
-    } break;
-#endif
+  if      (ORIG_TYPE == OT_WHOIS) {
+    const char *q = make_tcp_qstr(at, ndx, sizeof(query), query);
+    if (q)
+      ipinfo_lookup(at, ndx, q);
   }
+#ifdef ENABLE_DNS
+  else if (ORIG_TYPE == OT_DNS)   {
+    t_ipaddr *ipaddr = &IP_AT_NDX(at, ndx);
+    ip2arpa(sizeof(query), query, ipaddr, ORIG_HOST, origins[origin_no].host6);
+    if (query[0])
+      ipinfo_lookup(at, ndx, query);
+  }
+#endif
   return NULL;
 }
 
@@ -965,8 +782,12 @@ static bool alloc_ipitseq(void) {
 #endif
 
 static bool ipinfo_open(void) {
-  ipinfo_ready = (ORIG_TYPE == OT_DNS) ? DNS_OPEN :
-    (ipitseq ? true : alloc_ipitseq()); // http or whois
+  ipinfo_ready =
+#ifdef ENABLE_DNS
+    (ORIG_TYPE == OT_DNS)   ? DNS_OPEN :
+#endif
+    (ORIG_TYPE == OT_WHOIS) ? (ipitseq ? true : alloc_ipitseq()) :
+    false;
 #ifdef ENABLE_DNS
   if (!dns_txt_handler) // use-note: only in ipinfo so far
     dns_txt_handler = save_txt_answer;

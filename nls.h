@@ -69,18 +69,6 @@
 #define _II_ALLOC_STR  "Allocated"
 #define _II_ORIGIN_STR "Origin"
 #define _II_DESC_STR   "Descr"
-#define _II_ASPATH_STR "AS-Path"
-#define _II_ORG_STR    "Org"
-#define _II_CNAME_STR  "Country"
-#define _II_RC_STR     "RC"
-#define _II_RNAME_STR  "Region"
-#define _II_CITY_STR   "City"
-#define _II_ZIP_STR    "Zip"
-#define _II_LAT_STR    "Lat"
-#define _II_LNG_STR    "Long"
-#define _II_TZ_STR     "TZ"
-#define _II_ISP_STR    "ISP"
-#define _II_ASNAME_STR "AS-Name"
 
 // stat init fields
 #define _FKEYS_HINT "Statistics"

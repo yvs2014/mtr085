@@ -43,8 +43,8 @@ uint ipinfo_datalist(uint len, const char* key[], const char* val[], int at, int
 void query_ipinfo(void);
 
 extern bool ipinfo_tcpmode;
-extern uint ipinfo_queries[];
-extern uint ipinfo_replies[];
+extern uint whois_queries;
+extern uint whois_replies;
 extern bool ipinfo_rewidth;
 extern bool ipinfo_ready;
 

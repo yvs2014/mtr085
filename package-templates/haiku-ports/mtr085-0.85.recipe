@@ -1,4 +1,4 @@
-SUMMARY="Network diagnostic tool"
+SUMMARY="Work-in-progress mtr v0.85 fork for testing extra features"
 DESCRIPTION="\
   mtr combines the functionality of the 'traceroute' and 'ping' programs\
   in a single network diagnostic tool.\

@@ -16,7 +16,7 @@
 #endif
 
 #ifdef WITH_IPINFO
-#define MAX_II_ITEMS      25
+#define MAX_II_ITEMS       5
 #define MAX_WHOIS_SOURCES 10
 #endif
 

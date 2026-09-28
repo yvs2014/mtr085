@@ -1102,9 +1102,7 @@ static inline void stat_fin(void) {
     dns_replies[0], REPLIES_STR, dns_replies[1], dns_replies[2]);
 #endif
 #ifdef WITH_IPINFO
-  printf("IPINFO: %u %s (%u http, %u whois), %u %s (%u http, %u whois)\n",
-    ipinfo_queries[0], QUERIES_STR, ipinfo_queries[1], ipinfo_queries[2],
-    ipinfo_replies[0], REPLIES_STR, ipinfo_replies[1], ipinfo_replies[2]);
+  printf("IPINFO-whois: %u %s, %u %s\n", whois_queries, QUERIES_STR, whois_replies, REPLIES_STR);
 #endif
 }
 

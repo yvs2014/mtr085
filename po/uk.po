@@ -204,42 +204,6 @@ msgstr "АС"
 msgid "Descr"
 msgstr "Опис"
 
-msgid "AS-Path"
-msgstr "АС-Шлях"
-
-msgid "Org"
-msgstr "Компанія"
-
-msgid "Country"
-msgstr "Країна"
-
-msgid "RC"
-msgstr "Код"
-
-msgid "Region"
-msgstr "Регіон"
-
-msgid "City"
-msgstr "Місто"
-
-msgid "Zip"
-msgstr "Індекс"
-
-msgid "Lat"
-msgstr "Широта"
-
-msgid "Long"
-msgstr "Довгота"
-
-msgid "TZ"
-msgstr "Час.пояс"
-
-msgid "ISP"
-msgstr "Інтернет-пров"
-
-msgid "AS-Name"
-msgstr "Назва-АС"
-
 
 ## stats
 

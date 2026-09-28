@@ -204,42 +204,6 @@ msgstr "SA"
 msgid "Descr"
 msgstr "Descr"
 
-msgid "AS-Path"
-msgstr "SA-camino"
-
-msgid "Org"
-msgstr "Empresa"
-
-msgid "Country"
-msgstr "País"
-
-msgid "RC"
-msgstr "Código"
-
-msgid "Region"
-msgstr "Región"
-
-msgid "City"
-msgstr "Ciudad"
-
-msgid "Zip"
-msgstr "Postal"
-
-msgid "Lat"
-msgstr "Lat"
-
-msgid "Long"
-msgstr "Long"
-
-msgid "TZ"
-msgstr "TZ"
-
-msgid "ISP"
-msgstr "PSI"
-
-msgid "AS-Name"
-msgstr "Nombre-de-SA"
-
 
 ## stats
 

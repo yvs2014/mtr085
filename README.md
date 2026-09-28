@@ -16,14 +16,19 @@ DESCRIPTION
 As **mtr** starts, it investigates the network connection between the host **mtr** runs on and **TARGET** by sending packets with purposely low TTLs. It continues to send packets with low TTL, noting the response time of the intervening routers. This allows **mtr** to print the response percentage and response times of the internet route to **TARGET**.
 
 EXTRA
--------
+-----
 
 - Unicode histograms
 - Native Language Support
 - Internationalized Domain Names
 - Additional IP address information
-- work-in-progress: user sockets on Linux (no extra privileges)
-- work-in-progress: TUI menu (ncurses)
+- User sockets on Linux (no extra privileges)
+- TUI menu (ncurses)
+
+NOTE
+----
+It's work-in-progress exploratory fork for testing extra features.
+MTR project location is https://github.com/traviscross/mtr
 
 DETAILS
 -------
