@@ -60,6 +60,7 @@ enum { WHOIS_LAST_NDX = 2 };
 typedef struct { int sock, state, slot; } ipitseq_t;
 enum { TSEQ_CREATED, TSEQ_READY };  // tcp-socket state: created or ready, otherwise -1
 
+
 // global
 bool ipinfo_tcpmode; // true if ipinfo origin is tcp (whois)
 uint whois_queries;  // number of queries (sum, whois)
@@ -68,11 +69,10 @@ bool ipinfo_rewidth; // indicator to redraw titles
 bool ipinfo_ready;
 //
 
-static int origin_no;     // set once at init
-static int itemname_max;  // set once at init
+static int origin_no;
 
-static int ipinfo_syn_timeout = 3;     // in seconds
 static ipitseq_t *ipitseq;             // for tcp-origins
+static int ipinfo_syn_timeout = 3;     // in seconds
 
 // origin types: dns txt, whois pairs
 enum { OT_DNS, OT_WHOIS };
@@ -88,6 +88,7 @@ typedef struct {
   const char* prefix;
   const char* name[II_REC_ARR_LEN];
   const char* uname[II_REC_ARR_LEN];
+  int   max;   // origin's max fields (must be <= ARRAY_LEN(name))
   int   asnth; // ASN-field-number in ipinfo field-list
   int   width[II_REC_ARR_LEN];
   char  sep;
@@ -96,17 +97,21 @@ typedef struct {
 
 #define ORIG_TYPE (origins[origin_no].type)
 #define ORIG_HOST (origins[origin_no].host)
+#define ORIG_MAX  (origins[origin_no].max)
 #define ORIG_NAME(num)  (origins[origin_no].name[num])
 #define ORIG_UNAME(num) (origins[origin_no].uname[num])
 #define ORIG_WIDTH(num) (origins[origin_no].width[num])
 
-static int ipinfo_no[II_REC_ARR_LEN] = {-1}; // length enough for the longest list
+static int ipinfo_no[II_REC_ARR_LEN] = {-1}; // supposed to be enough for the longest list
+#define VALID_IINDX(ndx) (((ndx) < ARRAY_LEN(ipinfo_no)) && \
+  (ipinfo_no[ndx] >= 0) && (ipinfo_no[ndx] < ORIG_MAX))
 
 static origin_t origins[] = {
 // 1
   { .host  = "origin.asn.cymru.com", .host6 = "origin6.asn.cymru.com",
     .type  = OT_DNS,
     .name  = {_II_ASN_STR, _II_ROUTE_STR, _II_CC_STR, _II_REG_STR, _II_ALLOC_STR},
+    .max   = 5,
     .asnth = 0,
     .sep   = VSLASH,
   },
@@ -125,6 +130,7 @@ static origin_t origins[] = {
 #endif
     .type   = OT_WHOIS,
     .name   = {_II_ROUTE_STR, _II_ORIGIN_STR, _II_DESC_STR, _II_CC_STR},
+    .max    = 4,
     .asnth  = 1,
     .sep    = 0,
     .prefix = "-m ",
@@ -200,7 +206,7 @@ static inline int snprint_addmulti(uint len, char buff[len],
 }
 
 static void save_fields(int at, int ndx, uint rlen, char* record[rlen], bool add, uint srcndx) {
-  for (int i = 0; i < itemname_max; i++)
+  for (uint i = 0; i < rlen; i++)
     if (!record[i])
       record[i] = UNKN;
   for (uint i = 0, j = 0; (i < rlen) && record[i]; i++) {
@@ -634,9 +640,7 @@ static char *get_ipinfo(int at, int ndx, int item_no) {
 
 int ipinfo_width(void) {
   int width = 0;
-  for (uint i = 0; (i < ARRAY_LEN(ipinfo_no))
-      && (ipinfo_no[i] >= 0) && (ipinfo_no[i] < itemname_max)
-      && (width < NAMELEN); i++)
+  for (uint i = 0; VALID_IINDX(i) && (width < NAMELEN); i++)
     width += ORIG_WIDTH(ipinfo_no[i]) + 1;
   return width;
 }
@@ -661,9 +665,9 @@ void ipinfo_head_div(size_t size, char buff[size], char div, char q) { // NONNUL
   if (run_opts.asn)
     str_filler(size, buff, ORIG_UNAME(origins[origin_no].asnth), 0, q);
   else
-    for (uint i = 0, len = 0; (i < ARRAY_LEN(ipinfo_no))
-         && (ipinfo_no[i] >= 0) && (ipinfo_no[i] < itemname_max)
-         && ORIG_UNAME(ipinfo_no[i]) && (size > len); i++)
+    for (uint i = 0, len = 0;
+         VALID_IINDX(i) && ORIG_UNAME(ipinfo_no[i]) && (size > len);
+         i++)
   {
     int inc = str_filler(size - len, buff + len, ORIG_UNAME(ipinfo_no[i]), i ? div : 0, q);
     if (inc < 0)
@@ -684,9 +688,9 @@ void ipinfo_head_fix(size_t size, char buff[size]) { // NONNULL(2)
   if (run_opts.asn)
     ipinfo_head_fix_nth(size, buff, origins[origin_no].asnth);
   else
-    for (uint i = 0, len = 0; (i < ARRAY_LEN(ipinfo_no))
-         && (ipinfo_no[i] >= 0) && (ipinfo_no[i] < itemname_max)
-         && ORIG_UNAME(ipinfo_no[i]) && (size > len); i++)
+    for (uint i = 0, len = 0;
+         VALID_IINDX(i) && ORIG_UNAME(ipinfo_no[i]) && (size > len);
+         i++)
   {
     int inc = ipinfo_head_fix_nth(size - len, buff + len, ipinfo_no[i]);
     if (inc < 0)
@@ -720,9 +724,7 @@ void ipinfo_data_div(size_t size, char buff[size], int at, int ndx, char div, ch
   if (run_opts.asn)
     ipinfo_data_div_nth(size, buff, at, ndx, origins[origin_no].asnth, div, 0, filler, q);
   else
-    for (uint i = 0, len = 0; (i < ARRAY_LEN(ipinfo_no))
-         && (ipinfo_no[i] >= 0) && (ipinfo_no[i] < itemname_max)
-         && (size > len); i++)
+    for (uint i = 0, len = 0; VALID_IINDX(i) && (size > len); i++)
   {
     int inc = ipinfo_data_div_nth(size - len, buff + len, at, ndx, ipinfo_no[i], div, i, filler, q);
     if (inc < 0)
@@ -746,8 +748,8 @@ uint ipinfo_datalist(uint len, const char* key[], const char* val[], int at, int
       val[0] = exist ? get_ipinfo(at, ndx, iino) : UNKN;
     n++;
   } else {
-    for (int *iino = ipinfo_no; (n < ARRAY_LEN(ipinfo_no)) && (n < len) &&
-         (*iino >= 0) && (*iino < itemname_max);
+    for (int *iino = ipinfo_no; (n < ARRAY_LEN(ipinfo_no))
+         && (n < len) && (*iino >= 0) && (*iino < ORIG_MAX);
          iino++, n++)
     {
       const char *name = ORIG_UNAME(*iino);
@@ -815,67 +817,90 @@ void ipinfo_close(void) {
 
 #define LIM_CHARS 20
 
+static int set_iporig(const char *arg) NONNULL(1);
+static int set_iporig(const char *arg) {
+  errno = 0;
+  long orig = arg[0] ? str2l(arg) : 0;
+  bool okay = (!errno && (orig > 0) && (orig <= (long)ARRAY_LEN(origins)));
+  if (okay)
+    return orig - 1;
+  if (errno)
+    WARNT("%s: -L%.*s...", IPINFO_STR, LIM_CHARS, arg);
+  else {
+    errno = ERANGE;
+    WARNT("%s %s[1..%zu]: %.*s", IPINFO_STR, RANGE_STR, ARRAY_LEN(origins), LIM_CHARS, arg);
+  }
+  errno = 0;
+  return -1;
+}
+
+static bool set_ipfield(const char *arg, int *field, int max) NONNULL(1, 2);
+static bool set_ipfield(const char *arg, int *field, int max) {
+  errno = 0;
+  bool okay = false;
+  if (arg[0]) {
+    long n = str2l(arg);
+    okay = (!errno && (n > 0) && (n <= max));
+    if (okay)
+      *field = n - 1;
+    else
+      WARNXT("%s: %.*s: %s", IPINFO_STR, LIM_CHARS, arg, strerror(errno ? errno : ERANGE));
+  } else
+    WARNXT("%s: %s", IPINFO_STR, NONE_STR);
+  errno = 0;
+  return okay;
+}
+
 bool ipinfo_init(const char *arg) {
   if (!arg)
     arg = ASLOOKUP_DEFAULT;
-  char* args[II_REC_ARR_LEN + 1] = {strdup(arg)};
-  if (!args[0]) {
-    WARNF("strdup(%s)", arg);
+  if (strnlen(arg, NAMELEN + 1) > NAMELEN) {
+    errno = EOVERFLOW;
+    WARNT("%s: %.*s...", IPINFO_STR, NAMELEN, arg);
     return false;
   }
-  split_with_sep(ARRAY_LEN(args) - 1, args, COMMA, 0);
+  char* dup = strdup(arg);
+  if (!dup) {
+    WARNT("strdup(%s)", arg);
+    return false;
+  }
+  char* args[ARRAY_LEN(ipinfo_no) + 2] = {dup}; /* +2: orig + e2big */
+  split_with_sep(ARRAY_LEN(args), args, COMMA, 0);
   if (!args[0]) {
     errno = EINVAL;
-    WARNF("split_with_sep(%s)", arg);
+    WARNT("split_with_sep(%s)", arg);
+    free(dup);
+    return false;
+  }
+  const char *over = args[ARRAY_LEN(args) - 1];
+  if (over) {
+    errno = E2BIG;
+    WARNT("%s: %s: ...%s", IPINFO_STR, arg, over);
+    free(dup);
     return false;
   }
   //
-  int omax = ARRAY_LEN(origins);
-  int org = -1;
-  errno = 0;
-  if (*args[0]) {
-    long n = str2l(args[0]);
-    if (!errno && (0 <= n) && (n <= omax))
-      org = n;
+  int orig = set_iporig(args[0]);
+  if (orig < 0) {
+    free(dup);
+    return false;
   }
-  if ((org > 0) && (org <= omax)) {
-    origin_no = org - 1;
-    ipinfo_tcpmode = (ORIG_TYPE != OT_DNS);
-  } else {
-    if (errno)
-      warn("%s: -L%.*s...", IPINFO_STR, LIM_CHARS, args[0]);
-    else {
-      errno = ERANGE;
-      warn("%s %s[1..%d]: %.*s", IPINFO_STR, RANGE_STR, omax, LIM_CHARS, args[0]);
+  int fields[ARRAY_LEN(ipinfo_no)];
+  memset(fields, -1, sizeof(fields));
+  for (uint i = 1, j = 0;
+       args[i] && (i < (ARRAY_LEN(args) - 1)) && (j < ARRAY_LEN(fields));
+       i++, j++)
+    if (!set_ipfield(args[i], &fields[j], origins[orig].max)) {
+      free(dup);
+      return false;
     }
-    errno = 0;
-    free(args[0]);
-    return false;
-  }
-  itemname_max = 0;
-  while (ORIG_NAME(itemname_max))
-    itemname_max++;
   //
-  uint j = 0;
-  for (uint i = 1; args[i] && (i < ARRAY_LEN(args)) && (j < ARRAY_LEN(args) - 1); i++) {
-    if (*args[i]) {
-      errno = 0; long n = str2l(args[i]);
-      if (errno) {
-        warn("%s: -L%u [%u]=%.*s", IPINFO_STR, org, i + 1, LIM_CHARS, args[i]);
-        errno = 0;
-      } else if ((0 < n) && (n <= itemname_max))
-        ipinfo_no[j++] = n - 1;
-      else
-        warnx("%s: -L%u [%u]=%.*s: %s", IPINFO_STR, org, i + 1, LIM_CHARS, args[i], SKIPPED_STR);
-    } else
-      warnx("%s: -L%u [%u]: %s", IPINFO_STR, org, i + 1, NONE_STR);
-  }
-  for (uint i = j; i < ARRAY_LEN(ipinfo_no); i++)
-    ipinfo_no[i] = -1;
+  free(dup);
+  origin_no = orig;
+  memcpy(ipinfo_no, fields, sizeof(ipinfo_no));
   if (ipinfo_no[0] < 0)
     ipinfo_no[0] = 0;
-  //
-  free(args[0]);
+  ipinfo_tcpmode = (ORIG_TYPE != OT_DNS);
   //
   uint imax = ARRAY_LEN(origins[0].name);
   if (ARRAY_LEN(origins[0].width) < imax)
@@ -918,7 +943,7 @@ bool ipinfo_action(key_action_t action) {
       else {
         for (uint i = 0; (i < ARRAY_LEN(ipinfo_no)) && (ipinfo_no[i] >= 0); i++) {
           ipinfo_no[i]++;
-          if (ipinfo_no[i] >= itemname_max)
+          if (ipinfo_no[i] >= ORIG_MAX)
             ipinfo_no[i] = 0;
         }
         if (!ipinfo_no[0]) {

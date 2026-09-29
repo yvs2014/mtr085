@@ -37,6 +37,7 @@
 #define DNS_STR        _(_DNS_STR)
 #define ASN_STR        _(_ASN_STR)
 #define INFO_STR       _(_INFO_STR) // ipinfo
+#define IPINFO_STR     _(_IPINFO_STR)
 #define MPLS_STR       _(_MPLS_STR)
 #define PROTO_STR      _("Proto")   // icmp-udp-tcp
 //
@@ -112,6 +113,7 @@
 #define _COLORED_STR  "Colored"
 #define _ASN_STR      "ASN"
 #define _INFO_STR     "Info"
+#define _IPINFO_STR   "IP-info"
 #define _MPLS_STR     "MPLS"
 #define _MPLS_EXT_STR "MPLS extension"
 #define _PROTO_STR    "Protocol"
@@ -202,7 +204,6 @@
 #define HOP_STR      _("Hop")
 #define DATA_STR     _("Data")
 #define ACTIVE_STR   _("Active")
-#define IPINFO_STR   _("IP-info")
 #define DATETIME_STR _("Datetime")
 //
 #define NONE_STR     _("NONE")

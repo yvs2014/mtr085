@@ -189,9 +189,9 @@ void warntty(const char *fmt, ...) {
   va_start(args, fmt);
   vfprintf(stderr, fmt, args);
   va_end(args);
+  fprintf(stderr, ": %s\n", strerror(errno));
   if (istty)
     fprintf(stderr, "%s", ANSI_NORM);
-  fprintf(stderr, "%s\n", strerror(errno));
 }
 //
 void warnxtty(const char *fmt, ...) {
@@ -217,9 +217,9 @@ NORETURN void errtty(int eval, const char *fmt, ...) {
   va_start(args, fmt);
   vfprintf(stderr, fmt, args);
   va_end(args);
+  fprintf(stderr, ": %s\n", strerror(errno));
   if (istty)
     fprintf(stderr, "%s", ANSI_NORM);
-  fprintf(stderr, "%s\n", strerror(errno));
   exit(eval);
 }
 //
