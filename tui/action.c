@@ -554,13 +554,15 @@ static void reset_by_key(int key, void (*reset)(void)) {
 //
 static inline const char* onoff_str(bool on) {return on ? ONN_STR : OFF_STR;}
 //
-static void print_statusitem(WINDOW *win, const char *name, const char *value, const bool *onoff) NONNULL(1, 2);
-static void print_statusitem(WINDOW *win, const char *name, const char *value, const bool *onoff) {
+static void print_statusitem(WINDOW *win, const char *name, const char *value, int8_t onoff) NONNULL(1, 2);
+static void print_statusitem(WINDOW *win, const char *name, const char *value, int8_t onoff) {
   waddch(win, ' ');
   waddstr(win, name);
   waddch(win, '=');
-  const char *valstr = onoff ? onoff_str(*onoff) : ((value && value[0]) ? value : NULL);
-  waddstr(win, valstr ? valstr : onoff_str(false));
+  waddstr(win,
+    (onoff >= 0)        ? onoff_str(onoff) :
+    (value && value[0]) ? value            :
+    onoff_str(false) /*last-resort*/);
 }
 #ifdef WITH_MOUSE
 static void print_menukeep(WINDOW *win, const char *name,
@@ -579,23 +581,25 @@ static void print_menukeep(WINDOW *win, const char *name, int dx, int dy, crd_s 
 }
 //
 static void print_statuskeep(WINDOW *win, const char *name, const char *value,
-  const bool *onoff, int dx, int dy, crd_s *crd) NONNULL(1, 2, 7);
+  int8_t onoff, int dx, int dy, crd_s *crd) NONNULL(1, 2, 7);
 static void print_statuskeep(WINDOW *win, const char *name, const char *value,
-  const bool *onoff, int dx, int dy, crd_s *crd)
+  int8_t onoff, int dx, int dy, crd_s *crd)
 {
   waddch(win, ' ');
   crd->x0 = dx + getcurx(win);
   crd->y0 = dy + getcury(win);
   waddstr(win, name);
   waddch(win, '=');
-  const char *valstr = onoff ? onoff_str(*onoff) : ((value && value[0]) ? value : NULL);
-  waddstr(win, valstr ? valstr : onoff_str(false));
+  const char *valstr = (onoff >= 0)        ? onoff_str(onoff) :
+                       (value && value[0]) ? value            :
+                       onoff_str(false) /*last-resort*/;
+  waddstr(win, valstr);
   crd->x1 = dx + getcurx(win);
   crd->y1 = dy + getcury(win);
   if (getcurx(win) < (getmaxx(win) - 1))
     crd->x1--; // successful addstr()
-  LOGMSG("status(%s=%d): x0=%d y0=%d x1=%d y1=%d (w=%d h=%d)",
-    name, onoff ? *onoff : -1, crd->x0, crd->y0, crd->x1, crd->y1,
+  LOGMSG("status(%s=%s): x0=%d y0=%d x1=%d y1=%d (w=%d h=%d)",
+    name, valstr, crd->x0, crd->y0, crd->x1, crd->y1,
     crd->x1 - crd->x0 + 1, crd->y1 - crd->y0 + 1);
 }
 //
@@ -778,51 +782,51 @@ void topbar_icons(WINDOW *win) { // NONNULL(1)
 void status_n_keep_crd(WINDOW *win, uint len, char buff[len]) { // NONNULL(1, 3)
   int dx = getbegx(win), dy = getbegy(win);
 #ifdef ENABLE_DNS
-  print_statuskeep(win, DNS_STR,  NULL, &run_opts.dns,    dx, dy, &crd_status.dns);
+  print_statuskeep(win, DNS_STR,  NULL, run_opts.dns,    dx, dy, &crd_status.dns);
 #endif
-  print_statuskeep(win, JTTR_STR, NULL, &run_opts.jitter, dx, dy, &crd_status.jttr);
+  print_statuskeep(win, JTTR_STR, NULL, run_opts.jitter, dx, dy, &crd_status.jttr);
   buff[0] = 0;
   if (run_opts.chart)
     snprinte(buff, len, "%d", CHART_MODE);
-  print_statuskeep(win, CHART_STR, buff, NULL, dx, dy, &crd_status.chart);
+  print_statuskeep(win, CHART_STR, buff, -1, dx, dy, &crd_status.chart);
 #ifdef WITH_IPINFO
-  print_statuskeep(win, ASN_STR,  NULL, &run_opts.asn,  dx, dy, &crd_status.asn);
+  print_statuskeep(win, ASN_STR,  NULL, is_asn_present(), dx, dy, &crd_status.asn);
   buff[0] = 0;
-  if (run_opts.ipinfo)
+  if (run_opts.ipinfo != IPI_NONE)
     ipinfo_head_div(len, buff, COMMA, 0);
-  print_statuskeep(win, INFO_STR, buff, NULL, dx, dy, &crd_status.info);
+  print_statuskeep(win, INFO_STR, buff, -1, dx, dy, &crd_status.info);
 #endif
 #ifdef WITH_MPLS
-  print_statuskeep(win, MPLS_STR, NULL, &run_opts.mpls, dx, dy, &crd_status.mpls);
+  print_statuskeep(win, MPLS_STR, NULL, run_opts.mpls, dx, dy, &crd_status.mpls);
 #endif
   buff[0] = 0;
   snprinte(buff, len, "%s", USED_PROTO);
-  print_statuskeep(win, PROTO_STR, buff, NULL, dx, dy, &crd_status.proto);
+  print_statuskeep(win, PROTO_STR, buff, -1, dx, dy, &crd_status.proto);
 }
 #endif
 
 void status_no_crd(WINDOW *win, uint len, char buff[len]) { // NONNULL(1, 3)
 #ifdef ENABLE_DNS
-  print_statusitem(win, DNS_STR,  NULL, &run_opts.dns);
+  print_statusitem(win, DNS_STR,  NULL, run_opts.dns);
 #endif
-  print_statusitem(win, JTTR_STR, NULL, &run_opts.jitter);
+  print_statusitem(win, JTTR_STR, NULL, run_opts.jitter);
   buff[0] = 0;
   if (run_opts.chart)
     snprinte(buff, len, "%d", CHART_MODE);
-  print_statusitem(win, CHART_STR, buff, NULL);
+  print_statusitem(win, CHART_STR, buff, -1);
 #ifdef WITH_IPINFO
-  print_statusitem(win, ASN_STR,  NULL, &run_opts.asn);
+  print_statusitem(win, ASN_STR,  NULL, is_asn_present());
   buff[0] = 0;
-  if (run_opts.ipinfo)
+  if (run_opts.ipinfo != IPI_NONE)
     ipinfo_head_div(len, buff, COMMA, 0);
-  print_statusitem(win, INFO_STR, buff, NULL);
+  print_statusitem(win, INFO_STR, buff, -1);
 #endif
 #ifdef WITH_MPLS
-  print_statusitem(win, MPLS_STR, NULL, &run_opts.mpls);
+  print_statusitem(win, MPLS_STR, NULL, run_opts.mpls);
 #endif
   buff[0] = 0;
   snprinte(buff, len, "%s", USED_PROTO);
-  print_statusitem(win, PROTO_STR, buff, NULL);
+  print_statusitem(win, PROTO_STR, buff, -1);
 }
 
 #ifdef WITH_MOUSE

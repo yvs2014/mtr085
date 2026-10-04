@@ -386,7 +386,6 @@ static int tui_print_args(uint size, char buf[size]) {
     INT_OPT2STR(chart,   PAR_CHART_STR, "%u");
     BOOL_OPT2STR(color,  PAR_COLOR_STR);
 #ifdef WITH_IPINFO
-    BOOL_OPT2STR(asn,    PAR_ASN_STR);
     BOOL_OPT2STR(ipinfo, PAR_II_STR);
 #endif
   }

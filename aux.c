@@ -179,6 +179,13 @@ int snprinte(char str[], size_t size, const char *format, ...) {
   return len;
 }
 
+bool ndx_in_intarr(uint len, const int arr[len], int ndx) { // NONNULL(2)
+  for (uint i = 0; i < len; i++)
+    if (ndx == arr[i])
+      return true;
+  return false;
+}
+
 #ifdef USE_COLOR
 void warntty(const char *fmt, ...) {
   if (mtrname)

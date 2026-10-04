@@ -67,9 +67,9 @@ uint whois_queries;  // number of queries (sum, whois)
 uint whois_replies;  // number of replies (sum, whois)
 bool ipinfo_rewidth; // indicator to redraw titles
 bool ipinfo_ready;
+int origin_no;
 //
 
-static int origin_no;
 
 static ipitseq_t *ipitseq;             // for tcp-origins
 static int ipinfo_syn_timeout = 3;     // in seconds
@@ -83,6 +83,9 @@ enum { WHOIS_PORT = 43 };
 
 typedef struct {
   int   type;  // dns or whois
+#ifdef WITH_MENU
+  const char* desc;
+#endif
   const char* host;
   const char* host6;
   const char* prefix;
@@ -107,16 +110,21 @@ static int ipinfo_no[II_REC_ARR_LEN] = {-1}; // supposed to be enough for the lo
   (ipinfo_no[ndx] >= 0) && (ipinfo_no[ndx] < ORIG_MAX))
 
 static origin_t origins[] = {
-// 1
-  { .host  = "origin.asn.cymru.com", .host6 = "origin6.asn.cymru.com",
+  {
+#ifdef WITH_MENU
+    .desc  = "Team Cymru (DNS proto)",
+#endif
+    .host  = "origin.asn.cymru.com", .host6 = "origin6.asn.cymru.com",
     .type  = OT_DNS,
     .name  = {_II_ASN_STR, _II_ROUTE_STR, _II_CC_STR, _II_REG_STR, _II_ALLOC_STR},
     .max   = 5,
     .asnth = 0,
     .sep   = VSLASH,
-  },
-// 2
-  { .host  =
+  }, {
+#ifdef WITH_MENU
+    .desc  = "RIPE RIS (WHOIS proto)",
+#endif
+    .host  =
 #ifdef ENABLE_DNS
       "riswhois.ripe.net",
 #else
@@ -556,12 +564,10 @@ void ipinfo_seq_ready(int seq) {
 }
 
 static int ipinfo_lookup(int at, int ndx, const char *qstr) {
-  if (!(run_opts.asn || run_opts.ipinfo)) // not enabled
-    return -1;
-  if (!addr_exist(&IP_AT_NDX(at, ndx))) // on the off chance
-    return -1;
-  if (II_VIEW_AT(at, ndx, 0)) // already known
-    return -1;
+  if (   (run_opts.ipinfo == IPI_NONE)
+      || !addr_exist(&IP_AT_NDX(at, ndx)) // on the off chance
+      || II_VIEW_AT(at, ndx, 0) // already known
+     ) return -1;
 
   // set query string if not yet (setting a new ip, free this query)
   if (!QTXT_AT_NDX(at, ndx)) {
@@ -662,18 +668,18 @@ static int str_filler(uint size, char buff[size], const char *str, int div, char
 }
 // 'div'-separated output
 void ipinfo_head_div(size_t size, char buff[size], char div, char q) { // NONNULL(2)
-  if (run_opts.asn)
+  if      (run_opts.ipinfo == IPI_ASN)
     str_filler(size, buff, ORIG_UNAME(origins[origin_no].asnth), 0, q);
-  else
-    for (uint i = 0, len = 0;
-         VALID_IINDX(i) && ORIG_UNAME(ipinfo_no[i]) && (size > len);
-         i++)
-  {
-    int inc = str_filler(size - len, buff + len, ORIG_UNAME(ipinfo_no[i]), i ? div : 0, q);
-    if (inc < 0)
-      break;
-    len += inc;
-  }
+  else if (run_opts.ipinfo == IPI_ANY)
+    for (uint i = 0, len = 0; VALID_IINDX(i) && (size > len); i++) {
+      const char *uname = ORIG_UNAME(ipinfo_no[i]);
+      if (!uname)
+        break;
+      int inc = str_filler(size - len, buff + len, uname, i ? div : 0, q);
+      if (inc < 0)
+        break;
+      len += inc;
+    }
 }
 //
 static int ipinfo_head_fix_nth(size_t size, char buff[size], int iino) NONNULL(2);
@@ -685,18 +691,19 @@ static int ipinfo_head_fix_nth(size_t size, char buff[size], int iino) {
 }
 // fixed width output
 void ipinfo_head_fix(size_t size, char buff[size]) { // NONNULL(2)
-  if (run_opts.asn)
+  if      (run_opts.ipinfo == IPI_ASN)
     ipinfo_head_fix_nth(size, buff, origins[origin_no].asnth);
-  else
-    for (uint i = 0, len = 0;
-         VALID_IINDX(i) && ORIG_UNAME(ipinfo_no[i]) && (size > len);
-         i++)
-  {
-    int inc = ipinfo_head_fix_nth(size - len, buff + len, ipinfo_no[i]);
-    if (inc < 0)
-      break;
-    len += inc;
-  }
+  else if (run_opts.ipinfo == IPI_ANY)
+    for (uint i = 0, len = 0; VALID_IINDX(i) && (size > len); i++) {
+      uint num = ipinfo_no[i];
+      const char *uname = ORIG_UNAME(num);
+      if (!uname)
+        break;
+      int inc = ipinfo_head_fix_nth(size - len, buff + len, num);
+      if (inc < 0)
+        break;
+      len += inc;
+   }
 }
 //
 static int fmt_filler(uint size, char buff[size], const char *str, int width, char q UNUSED) NONNULL(2);
@@ -721,11 +728,10 @@ static inline int ipinfo_data_div_nth(size_t size, char buff[size], int at, int 
 // formatted output
 void ipinfo_data_div(size_t size, char buff[size], int at, int ndx, char div, char q) { // NONNULL(2)
   str_filler_fn filler = div ? str_filler : fmt_filler;
-  if (run_opts.asn)
+  if      (run_opts.ipinfo == IPI_ASN)
     ipinfo_data_div_nth(size, buff, at, ndx, origins[origin_no].asnth, div, 0, filler, q);
-  else
-    for (uint i = 0, len = 0; VALID_IINDX(i) && (size > len); i++)
-  {
+  else if (run_opts.ipinfo == IPI_ANY)
+    for (uint i = 0, len = 0; VALID_IINDX(i) && (size > len); i++) {
     int inc = ipinfo_data_div_nth(size - len, buff + len, at, ndx, ipinfo_no[i], div, i, filler, q);
     if (inc < 0)
       break;
@@ -740,27 +746,24 @@ uint ipinfo_datalist(uint len, const char* key[], const char* val[], int at, int
 {
   uint n = 0;
   bool exist = addr_exist(&IP_AT_NDX(at, ndx));
-  if (run_opts.asn) {
+  if        (run_opts.ipinfo == IPI_ASN) {
     int iino = origins[origin_no].asnth;
     if (key)
       key[0] = ORIG_UNAME(iino);
     if (val)
       val[0] = exist ? get_ipinfo(at, ndx, iino) : UNKN;
     n++;
-  } else {
-    for (int *iino = ipinfo_no; (n < ARRAY_LEN(ipinfo_no))
-         && (n < len) && (*iino >= 0) && (*iino < ORIG_MAX);
-         iino++, n++)
-    {
-      const char *name = ORIG_UNAME(*iino);
+  } else if (run_opts.ipinfo == IPI_ANY)
+    for (; VALID_IINDX(n) && (n < len); n++) {
+      int num = ipinfo_no[n];
+      const char *name = ORIG_UNAME(num);
       if (key)
         key[n] = name;
       if (val) {
-        const char *value = exist ? get_ipinfo(at, ndx, *iino) : UNKN;
+        const char *value = exist ? get_ipinfo(at, ndx, num) : UNKN;
         val[n] = value ? value : (name ? UNKN : NULL);
       }
     }
-  }
   return n;
 }
 
@@ -783,7 +786,7 @@ static bool alloc_ipitseq(void) {
 #define DNS_OPEN false
 #endif
 
-static bool ipinfo_open(void) {
+bool ipinfo_prep(void) {
   ipinfo_ready =
 #ifdef ENABLE_DNS
     (ORIG_TYPE == OT_DNS)   ? DNS_OPEN :
@@ -852,6 +855,8 @@ static bool set_ipfield(const char *arg, int *field, int max) {
 }
 
 bool ipinfo_init(const char *arg) {
+  if (ipinfo_no[0] >= 0)
+    ipinfo_close();
   if (!arg)
     arg = ASLOOKUP_DEFAULT;
   if (strnlen(arg, NAMELEN + 1) > NAMELEN) {
@@ -898,8 +903,8 @@ bool ipinfo_init(const char *arg) {
   free(dup);
   origin_no = orig;
   memcpy(ipinfo_no, fields, sizeof(ipinfo_no));
-  if (ipinfo_no[0] < 0)
-    ipinfo_no[0] = 0;
+//  if (ipinfo_no[0] < 0)
+//    ipinfo_no[0] = 0;
   ipinfo_tcpmode = (ORIG_TYPE != OT_DNS);
   //
   uint imax = ARRAY_LEN(origins[0].name);
@@ -919,39 +924,36 @@ bool ipinfo_init(const char *arg) {
 
 #undef MAXFIELDCHARS
 
+static bool ipinfo_reuse(const char *arg) {
+  return (ipinfo_no[0] < 0) ? ipinfo_init(arg) : true/*already init'ed*/;
+}
 
 bool ipinfo_action(key_action_t action) {
-  if ((ipinfo_no[0] < 0) // not at start, set default
-    && !ipinfo_init(NULL))
-      return false;
-  if (!ipinfo_ready && !ipinfo_open())
+  static bool postponed_L;
+  if (ipinfo_no[0] < 0) { // do not toggle at start
+    postponed_L = true;
+    run_opts.ipinfo = IPI_ANY;
+  }
+  if (!ipinfo_reuse(NULL/*default at start*/))
+    return false;
+  if (!ipinfo_ready && !ipinfo_prep())
     return false;
   switch (action) {
-    case ActionASN:  // `l'
-      run_opts.asn = !run_opts.asn;
-      if (run_opts.ipinfo)
-        run_opts.ipinfo = false;
+    case ActionASN: // `l'
+      run_opts.ipinfo = (run_opts.ipinfo != IPI_ASN) ? IPI_ASN : IPI_NONE;
       break;
-    case ActionII: { // `L'
-      static bool postponed_L;
-      if (!run_opts.ipinfo)
-        run_opts.ipinfo = true;
-      if (run_opts.asn)
-        run_opts.asn = false;
+    case ActionII:  // `L'
       if (postponed_L)
         postponed_L = false;
-      else {
-        for (uint i = 0; (i < ARRAY_LEN(ipinfo_no)) && (ipinfo_no[i] >= 0); i++) {
-          ipinfo_no[i]++;
-          if (ipinfo_no[i] >= ORIG_MAX)
-            ipinfo_no[i] = 0;
-        }
-        if (!ipinfo_no[0]) {
+      else for (uint i = 0; VALID_IINDX(i); i++) {
+        ipinfo_no[i]++;
+        if (ipinfo_no[i] >= ORIG_MAX)
+          ipinfo_no[i] = 0;
+        if (!ipinfo_no[0])
           postponed_L = true;
-          run_opts.ipinfo = false;
-        }
       }
-    } break;
+      run_opts.ipinfo = postponed_L ? IPI_NONE : IPI_ANY;
+      break;
     case ActionMultiII: // `y'
       run_opts.multi = !run_opts.multi;
       reset_view();
@@ -962,10 +964,10 @@ bool ipinfo_action(key_action_t action) {
 }
 
 static void query_iiaddr(int at, int ndx) {
-  if (run_opts.asn)
+  if        (run_opts.ipinfo == IPI_ASN)
     get_ipinfo(at, ndx, origins[origin_no].asnth);
-  else
-    for (uint i = 0; (i < ARRAY_LEN(ipinfo_no)) && (ipinfo_no[i] >= 0); i++)
+  else if   (run_opts.ipinfo == IPI_ANY)
+    for (uint i = 0; VALID_IINDX(i); i++)
       get_ipinfo(at, ndx, ipinfo_no[i]);
 }
 
@@ -984,4 +986,35 @@ void query_ipinfo(void) {
     }
   }
 }
+
+bool is_asn_present(void) {
+  return (run_opts.ipinfo == IPI_ASN) ||
+    ((run_opts.ipinfo == IPI_ANY) && ndx_in_intarr(
+       ARRAY_LEN(ipinfo_no), ipinfo_no, origins[origin_no].asnth));
+}
+
+#ifdef WITH_MENU
+void ipinfo_name_list(ii_fields *fields) { // NONNULL(1)
+  fields->len  = origins[origin_no].max < 0 ? 0 : origins[origin_no].max;
+  fields->name = origins[origin_no].name;
+  fields->inum = ipinfo_no;
+}
+//
+#define IPINUM_ONLY_ASN ((ipinfo_no[0] == origins[origin_no].asnth) && (ipinfo_no[1] < 0))
+void ipinfo_set_fields(uint len, const int arr[len]) { // NONNULL(2)
+  memset(ipinfo_no, -1, sizeof(ipinfo_no));
+  memcpy(ipinfo_no, arr, len < ARRAY_LEN(ipinfo_no) ? (len * sizeof(*arr)) : sizeof(ipinfo_no));
+  run_opts.ipinfo = (ipinfo_no[0] < 0) ? IPI_NONE :
+                       IPINUM_ONLY_ASN ? IPI_ASN  : IPI_ANY;
+}
+//
+void ipinfo_get_origs(uint len, const char* arr[len]) { // NONNULL(2)
+  for (uint i = 0; (i < len) && (i < ARRAY_LEN(origins)); i++)
+    arr[i] = origins[i].desc ? origins[i].desc  :
+#ifdef ENABLE_IPV6
+            (af == AF_INET6) ? origins[i].host6 :
+#endif
+             origins[i].host;
+}
+#endif
 

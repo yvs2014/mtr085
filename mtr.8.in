@@ -186,8 +186,16 @@ Specify origin and field numbers
 .Bl -tag -width indent -offset Ds
 .It Cm 1 - origin[6].asn.cymru.com
 ASN, Route, CountryCode, Registry, Allocated
+.br
+(See
+.Lk https://www.team-cymru.com/ip-asn-mapping#dns
+for details)
 .It Cm 2 - riswhois.ripe.net
 Route, ASN, Description, CountryCode
+.br
+(See
+.Lk https://ris.ripe.net/docs/ris-whois/#dataservice
+for details)
 .El
 Example:
 .Bl -tag -width indent-two -offset Ds -compact

@@ -837,10 +837,7 @@ static void short_set(char opt) {
     case OPT_LOOKUP:
     case OPT_IPINFO: {
       const char *arg = (opt == OPT_IPINFO) ? optarg : NULL;
-      if (arg)
-        ini_opts.ipinfo = true;
-      else
-        ini_opts.asn    = true;
+      ini_opts.ipinfo = arg ? IPI_ANY : IPI_ASN;
       if (!ipinfo_init(arg))
         exit(EXIT_FAILURE);
       if (!ipinfo_action(ActionNone)) // fail to init

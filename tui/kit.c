@@ -17,6 +17,9 @@
 #include "chart.h"
 #include "nls.h"
 #include "net.h"
+#ifdef WITH_IPINFO
+#include "ipinfo.h"
+#endif
 
 #ifndef NCURSES_VERSION
 #error Non-ncurses menus are not supported yet
@@ -24,9 +27,9 @@
 
 #define ROUNDED_CORNERS    true
 #define ON_MOUSE_DBL_CLICK C_SPACE
-#define IS_SELECTABLE(menuitem) (menuitem && (item_opts(menuitem) & O_SELECTABLE))
+#define IS_SELECTABLE(menuitem) ((menuitem) && (item_opts(menuitem) & O_SELECTABLE))
 
-#define LOGWINSIZE(name, kind, win) LOGMSG("menu %s, %s: x0=%d y0=%d w=%d h=%d", \
+#define LOGWINSIZE(name, kind, win) LOGMSG("%s, %s: x0=%d y0=%d w=%d h=%d", \
  (name), (kind), getbegx(win), getbegy(win), getmaxx(win), getmaxy(win))
 
 int posted_form = -1;
@@ -43,11 +46,12 @@ typedef enum {
   MENU_MAIN_DNS,
 #endif
 #ifdef WITH_IPINFO
-  MENU_MAIN_ASN,
+  SUBMENU_IPORIG,   // ipinfo
+  SUBMENU_IPINFO,   // ipinfo
 #endif
   SUBMENU_CHART,
-  MENU_MAIN_JITTER,
-  SUBMENU_FKEYS,
+  MENU_MAIN_JITTER, // statistics
+  SUBMENU_FKEYS,    // statistics
   SUBMENU_CYCLES,
   SUBMENU_TTL,
   SUBMENU_PSIZE,
@@ -64,6 +68,15 @@ typedef enum {
   MENU_MAIN_LEN
 } mi_inst;
 
+#ifdef WITH_IPINFO
+enum {
+  SUBMENU_IPORIG_ON,
+  SUBMENU_IPORIG_1,
+  SUBMENU_IPORIG_2,
+  SUBMENU_IPORIG_LEN
+};
+enum { SUBMENU_IPINFO_LEN = II_REC_ARR_LEN }; /*5*/
+#endif
 enum {
   SUBMENU_CHART_ON,
   SUBMENU_CHART_1,
@@ -180,6 +193,12 @@ typedef struct kitmenu_s {
 
 static ITEM*   main_items[MENU_MAIN_LEN + 1];
 static mi_s       main_mi[MENU_MAIN_LEN];
+#ifdef WITH_IPINFO
+static ITEM*    ipo_items[SUBMENU_IPORIG_LEN + 1]; // origins
+static mi_s        ipo_mi[SUBMENU_IPORIG_LEN];
+static ITEM*    ipi_items[SUBMENU_IPINFO_LEN + 1]; // fields
+static mi_s        ipi_mi[SUBMENU_IPINFO_LEN];
+#endif
 static ITEM*  chart_items[SUBMENU_CHART_LEN + 1];
 static mi_s      chart_mi[SUBMENU_CHART_LEN];
 static ITEM*   fkey_items[SUBMENU_FKEYS_LEN + 1];
@@ -198,6 +217,8 @@ static ITEM* xcache_items[SUBMENU_XCACHE_LEN + 1];
 static mi_s     xcache_mi[SUBMENU_XCACHE_LEN];
 
 static void init_mi_main  (void);
+static void init_mi_iporig(void);
+static void init_mi_ipinfo(void);
 static void init_mi_chart (void);
 static void init_mi_fkeys (void);
 static void init_mi_cycles(void);
@@ -213,9 +234,19 @@ static void init_mi_xcache(void);
 #define SUBMENU_DSC_WIDTH   5
 static kitmenu_s kitmenu[] = {
   [KITMENU_MAIN]   = {.ndx = KITMENU_MAIN,   .type = KIT_MENU,    .log = "main",
-    .len = MENU_MAIN_LEN,      .items = main_items, .mis = main_mi,
+    .len = MENU_MAIN_LEN,      .items = main_items,  .mis = main_mi,
     .spacing = NAMEDESC_SPACING, .pad = BORDER_PAD, .desc_width = MAINMENU_DSC_WIDTH,
     .mi_init = init_mi_main},
+#ifdef WITH_IPINFO
+  [KITMENU_IPORIG] = {.ndx = KITMENU_IPORIG, .type = KIT_SUBMENU, .log = "ipinfo-origins",
+    .len = SUBMENU_IPORIG_LEN, .items = ipo_items,   .mis = ipo_mi,   .nth = SUBMENU_IPORIG,
+    .spacing = NAMEDESC_SPACING, .pad = BORDER_PAD, .desc_width = SUBMENU_DSC_WIDTH,
+    .mi_init = init_mi_iporig},
+  [KITMENU_IPINFO] = {.ndx = KITMENU_IPINFO, .type = KIT_SUBMENU, .log = "ipinfo-fields",
+    .len = SUBMENU_IPINFO_LEN, .items = ipi_items,   .mis = ipi_mi,   .nth = SUBMENU_IPINFO,
+    .spacing = NAMEDESC_SPACING, .pad = BORDER_PAD, .desc_width = SUBMENU_DSC_WIDTH,
+    .mi_init = init_mi_ipinfo},
+#endif
   [KITMENU_CHART]  = {.ndx = KITMENU_CHART,  .type = KIT_SUBMENU, .log = "chart",
     .len = SUBMENU_CHART_LEN, .items = chart_items, .mis = chart_mi, .nth = SUBMENU_CHART,
     .spacing = NAMEDESC_SPACING, .pad = BORDER_PAD, .desc_width = SUBMENU_DSC_WIDTH,
@@ -269,6 +300,10 @@ static kitmenu_s kitmenu[] = {
 
 typedef enum {
   ActionMenuNone = 0,
+#ifdef WITH_IPINFO
+  ActionMenuIporig,
+  ActionMenuIpinfo,
+#endif
   ActionMenuChart,
   ActionMenuFields,
   ActionMenuCyclesInf,
@@ -295,6 +330,7 @@ typedef struct menuitem_s {
     int  *num;
     const uint    *pos;
     const uint8_t *key; // pointer to char
+    uint8_t ord; // order in external list
   } val;
   const int min, max, *pmin, *pmax;
   void (*int_setter)(int);
@@ -312,9 +348,11 @@ typedef struct optname_s {
 static attr_s common_attr;
 
 static struct subopts {
+#ifdef WITH_IPINFO
+  uint iporig_pos;
+  bool ikeys[SUBMENU_IPINFO_LEN];
+#endif
   bool fkeys[SUBMENU_FKEYS_LEN];
-  //
-  uint proto_pos;
   //
   bool chart_on;
   uint chart_mod;
@@ -326,6 +364,8 @@ static struct subopts {
   int   bpatt_val;
   bool xcache_nop;
   int  xcache_val;
+  //
+  uint proto_pos;
 } subopts;
 
 #define MI_NDX(menu_ndx, item_ndx) (((menu_ndx) << 8) | ((item_ndx) & 0xFF))
@@ -338,6 +378,9 @@ static void menu_posteditaction(int type, int opt) {
       net_set_qos();
       OPT_SUM(qos);      break;
 #endif
+    case MI_NDX(KITMENU_IPORIG, 0):
+    case MI_NDX(KITMENU_IPINFO, 0):
+      OPT_SUM(ipinfo);   break;
     case MI_NDX(KITMENU_CHART,  SUBMENU_CHART_ON):
     case MI_NDX(KITMENU_CHART,  SUBMENU_CHART_1):
     case MI_NDX(KITMENU_CHART,  SUBMENU_CHART_2):
@@ -369,6 +412,10 @@ static void menu_posteditaction(int type, int opt) {
 static void mi_selectabale(int type, int opt, ITEM *item) NONNULL(3);
 static void mi_selectabale(int type, int opt, ITEM *item) {
   bool dim = false;
+#ifdef WITH_IPINFO
+  if (type == KITMENU_IPINFO)
+    opt = 0; // i.e. all subitems
+#endif
   switch MI_NDX(type, opt) {
 #if defined(ENABLE_QOS) && (!defined(ENABLE_QOS4) || !defined(ENABLE_QOS6))
     case MI_NDX(KITMENU_MAIN, MENU_MAIN_QOS):
@@ -377,6 +424,14 @@ static void mi_selectabale(int type, int opt, ITEM *item) {
 #elif !defined(ENABLE_QOS6)
       dim = (af == AF_INET6);
 #endif
+      break;
+#endif
+#ifdef WITH_IPINFO
+    case MI_NDX(KITMENU_MAIN,   SUBMENU_IPINFO):
+    case MI_NDX(KITMENU_IPORIG, SUBMENU_IPORIG_1):
+    case MI_NDX(KITMENU_IPORIG, SUBMENU_IPORIG_2):
+    case MI_NDX(KITMENU_IPINFO, 0):
+      dim = !ipinfo_ready;
       break;
 #endif
     case MI_NDX(KITMENU_CHART,  SUBMENU_CHART_1):
@@ -491,7 +546,7 @@ static int fill_itemdesc(const kitmenu_s *kit, menuitem_s *mitem) {
         snprinte(mitem->desc, sizeof(mitem->desc), "%s ", icon);
     }  break;
     default:
-      LOGMSG("menu %s: unknown menuitem type: %d", kit->log, mitem->type);
+      LOGMSG("%s: unknown menuitem type: %d", kit->log, mitem->type);
       break;
   }
   return rc;
@@ -541,23 +596,24 @@ static void init_kititems(kitmenu_s *kit, uint mlen, menuitem_s mi[mlen], optnam
       LOGECFAIL(kit->log, "set_menu_items", ec);
   }
   //
-  for (uint i = 0; (i < mlen) && opt->name; i++, opt++, mi++) {
+  for (uint i = 0; i < mlen; i++, opt++, mi++) {
+    const char *optname = opt->name ? opt->name : "";
     int pad = // utf8-compat padding
       (opt->len > 0) ? (kit->maxnamelen - opt->len) : 0;
     const char *name =
-      (fill_itemname(mi, opt->name, sizeof(mi->name), mi->name, pad) > 0) && mi->name[0]
-      ? mi->name : opt->name;
+      (fill_itemname(mi, optname, sizeof(mi->name), mi->name, pad) > 0) && mi->name[0]
+      ? mi->name : optname;
     const char *desc =
       (fill_itemdesc(kit, mi) > 0) && mi->desc[0]
       ? mi->desc : NULL;
     ITEM *item = new_item(name, desc);
     if (item) {
-      LOGMSG("menu %s, item[%u]: \"%s\"=\"%s\"", kit->log, i, item_name(item), item_description(item));
+      LOGMSG("%s, item[%u]: \"%s\": \"%s\"", kit->log, i, item_name(item), item_description(item));
       set_item_userptr(item, mi);
       mi_selectabale(kit->ndx, i, item);
       kit->items[i] = item;
     } else {
-      LOGMSG("menu %s, new_item(#%u, %s) failed: %d", kit->log, i, opt->name, errno);
+      LOGMSG("%s, new_item(#%u, %s) failed: %d", kit->log, i, optname, errno);
       break;
     }
   }
@@ -582,12 +638,131 @@ static void init_menus_attr(void) {
   }
 }
 
+static void position_inside_menu(kitmenu_s *kit, int was) NONNULL(1);
+static void position_inside_menu(kitmenu_s *kit, int was) {
+  int count = (kit->menu && (was >= 0)) ? item_count(kit->menu) : -1;
+  if (count > 0) {
+    ITEM **list = menu_items(kit->menu);
+    if (list) for (int i = 0; i < count; i++) {
+      ITEM *item = list[i];
+      int now = item ? item_index(item) : -1;
+      if (now == was) {
+        set_current_item(kit->menu, item);
+        LOGMSG("%s: %d", kit->log, now);
+        return;
+      }
+    }
+  }
+  LOGMSG("%s: %s", kit->log, "state isn't restored");
+}
+
+static void menu_update(kitmenu_s *kit) NONNULL(1);
+static void menu_update(kitmenu_s *kit) {
+//  if (!kit->posted && kit->menu) { // try again?
+//    int ec = post_menu(kit->menu);
+//    kit->posted = ((ec == E_OK) || (ec == E_POSTED));
+//  }
+  if (kit->posted) {
+    ITEM *curr = current_item(kit->menu);
+    int ndx = curr ? item_index(curr) : -1;
+    unpost_menu(kit->menu);
+    kit->posted = false;
+    if (kit->mi_init)
+      kit->mi_init();
+    if (kit->items[0]) {
+      int ec = set_menu_items(kit->menu, kit->items);
+      if (ec == E_OK) {
+        position_inside_menu(kit, ndx);
+        int ec = post_menu(kit->menu);
+        if ((ec == E_OK) || (ec == E_POSTED)) {
+          kit->posted = true;
+          LOGMSG("%s: %s", kit->log, "reposted");
+        } else
+          LOGECFAIL(kit->log, "post_menu", ec);
+      } else
+        LOGECFAIL(kit->log, "set_menu_items", ec);
+    } else
+      LOGMSG("%s: %s", kit->log, "cannot reinit menu items");
+  }
+}
+
+#ifdef WITH_IPINFO
+static void set_subopt_iporig(void) {
+  if (ipinfo_ready) {
+    uint orig = origin_no + SUBMENU_IPORIG_1;
+    switch (orig) {
+      case SUBMENU_IPORIG_1:
+      case SUBMENU_IPORIG_2:
+        subopts.iporig_pos = orig;
+        break;
+      default: break;
+    }
+  }
+}
+//
+static bool prepare_kitwin(kitmenu_s *kit) NONNULL(1);
+//
+static void init_mi_iporig(void) {
+  static menuitem_s iporig_menuitems[] = {
+    [SUBMENU_IPORIG_ON] = {.ndx = SUBMENU_IPORIG_ON, .type = MI_TOGGLE_CB,
+      .extra_action = ActionMenuIporig, .val.flag = &ipinfo_ready},
+    [SUBMENU_IPORIG_1]  = {.ndx = SUBMENU_IPORIG_1,  .type = MI_TOGGLE_RB,
+      .extra_action = ActionMenuIporig, .val.pos  = &subopts.iporig_pos},
+    [SUBMENU_IPORIG_2]  = {.ndx = SUBMENU_IPORIG_2,  .type = MI_TOGGLE_RB,
+      .extra_action = ActionMenuIporig, .val.pos  = &subopts.iporig_pos},
+  };
+  const char* list[ARRAY_LEN(iporig_menuitems) - SUBMENU_IPORIG_1] = {0};
+  ipinfo_get_origs(ARRAY_LEN(list), list);
+  optname_s opts[ARRAY_LEN(iporig_menuitems)] = {
+    [SUBMENU_IPORIG_ON] = {.name = MENUSTRW(_IPLOOKUP_STR)},
+    [SUBMENU_IPORIG_1]  = {.name = list[0] ? list[0] : "ORIG-DNS"  },
+    [SUBMENU_IPORIG_2]  = {.name = list[1] ? list[1] : "ORIG-WHOIS"},
+  };
+  set_subopt_iporig();
+  init_kititems(&kitmenu[KITMENU_IPORIG], ARRAY_LEN(iporig_menuitems), iporig_menuitems, opts);
+}
+//
+#define MI_IPI_CONST(seq) [seq] = { .ndx = (seq), .type = MI_TOGGLE_CB, .extra_action = ActionMenuIpinfo, \
+  .val = {.flag = &subopts.ikeys[seq], .ord = (seq)/*TODO: ipinfo_no[seq] order*/}}
+static void init_mi_ipinfo(void) {
+  static menuitem_s ipinfo_menuitems[SUBMENU_IPINFO_LEN] = {
+    MI_IPI_CONST( 0), MI_IPI_CONST( 1), MI_IPI_CONST( 2),
+    MI_IPI_CONST( 3), MI_IPI_CONST( 4),
+  };
+  kitmenu_s *kit = &kitmenu[KITMENU_IPINFO];
+  kit->len = 1;
+  optname_s opts[ARRAY_LEN(ipinfo_menuitems)] = {0};
+  if (ipinfo_ready) {
+    ii_fields fld = {0};
+    ipinfo_name_list(&fld);
+    if (fld.len > ARRAY_LEN(ipinfo_menuitems))
+      fld.len = ARRAY_LEN(ipinfo_menuitems);
+    if (fld.len > 0) // set actual len
+      kit->len = fld.len;
+    for (uint i = 0; (i < fld.len) && fld.name[i] && (i < ARRAY_LEN(opts)); i++) {
+      opts[i].name = _(fld.name[i]);
+      if (i < ARRAY_LEN(subopts.ikeys))
+        subopts.ikeys[i] = (run_opts.ipinfo != IPI_NONE) ? ndx_in_intarr(fld.len, fld.inum, i) : false;
+    }
+  }
+  init_kititems(kit, kit->len, ipinfo_menuitems, opts);
+  if (IPINFOED && kit->wsp.win) {
+    static uint ipinfo_kit_len;
+    if (ipinfo_kit_len != kit->len) {
+      prepare_kitwin(kit); // resize menu window accordingly
+      ipinfo_kit_len = kit->len;
+    }
+    // menu_update(): item-text, item-number, and item-order can be changed
+  }
+}
+#endif
+
 static void set_subopt_chart(void) {
   subopts.chart_on = chart_mode != 0;
   if (!subopts.chart_mod)
     subopts.chart_mod = chart_mode ? chart_mode : 1;
 }
-
+//
 static void init_mi_chart(void) {
   static menuitem_s chart_menuitems[] = {
     [SUBMENU_CHART_ON]  = {.ndx = SUBMENU_CHART_ON,  .type = MI_TOGGLE_CB,
@@ -631,18 +806,18 @@ static const char* map_fkey2name[32] = { /*LDRS_NBAWVGJMXI*/
   [FK_NDX('X')] = _JMAX_HINT,
   [FK_NDX('I')] = _JINT_HINT,
 };
-
+//
 static void reorder_fkeys(const char *active) NONNULL(1);
 static void reorder_fkeys(const char *active) {
   LOGMSG("< key-order: %s", fkey_order);
   uint8_t *key = fkey_order;
   for (uint i = 0; (i < (ARRAY_LEN(fkey_order) - 1)) && *active; i++, key++)
-    if (*key && strchr(active_fkeys, *key))
+    if (*key && strchr(active, *key))
       *key = *active++;
   LOGMSG("> key-order: %s", fkey_order);
 }
-
-#define MI_FLD_CONST(seq) [seq] = { .ndx = seq, .type = MI_TOGGLE_CB, \
+//
+#define MI_FLD_CONST(seq) [seq] = { .ndx = (seq), .type = MI_TOGGLE_CB, \
   .extra_action = ActionMenuFields, .val.flag = &subopts.fkeys[seq]}
 static void init_mi_fkeys(void) {
   static menuitem_s fkey_menuitems[SUBMENU_FKEYS_LEN] = {
@@ -652,13 +827,14 @@ static void init_mi_fkeys(void) {
     MI_FLD_CONST(12), MI_FLD_CONST(13), MI_FLD_CONST(14),
   };
   reorder_fkeys(active_fkeys ? active_fkeys :
-             run_opts.jitter ? FSET_JITTER : FSET_DEFAULT);
+             run_opts.jitter ? FSET_JITTER  : FSET_DEFAULT);
   optname_s opts[ARRAY_LEN(fkey_menuitems)] = {0};
   for (uint i = 0; i < ARRAY_LEN(opts); i++) {
     bool on = false;
     if (i < (ARRAY_LEN(fkey_order) - 1)) {
       const uint8_t *key = &fkey_order[i];
-      int ndx = (*key - (int)FK_MIN);
+      int ndx = *key;
+      ndx -= FK_MIN;
       if ((ndx >= 0) && (ndx < (int)ARRAY_LEN(map_fkey2name))) {
         const char *name = map_fkey2name[ndx];
         if (name) {
@@ -708,7 +884,7 @@ static void set_psize(int value) {
   if (subopts.psize_rnd && value)
     run_opts.size = -run_opts.size;
 }
-
+//
 static void init_mi_psize(void) {
   static menuitem_s psize_menuitems[] = {
     [SUBMENU_PSIZE_RND] = {.ndx = SUBMENU_PSIZE_RND, .type = MI_TOGGLE_CB,
@@ -739,15 +915,14 @@ static void init_mi_bpatt(void) {
 }
 
 static void set_subopt_proto(void) {
-  switch (proto) {
-    case IPPROTO_UDP: subopts.proto_pos = SUBMENU_PROTO_UDP;  break;
+  subopts.proto_pos =
+    proto == IPPROTO_UDP ? SUBMENU_PROTO_UDP :
 #ifdef USE_RAW
-    case IPPROTO_TCP: subopts.proto_pos = SUBMENU_PROTO_TCP;  break;
+    proto == IPPROTO_TCP ? SUBMENU_PROTO_TCP :
 #endif
-    default:          subopts.proto_pos = SUBMENU_PROTO_ICMP; break;
-  }
+    SUBMENU_PROTO_ICMP;
 }
-
+//
 static void init_mi_proto(void) {
   static menuitem_s proto_menuitems[] = {
     [SUBMENU_PROTO_ICMP] = {.ndx = SUBMENU_PROTO_ICMP, .type = MI_TOGGLE_RB,
@@ -791,8 +966,10 @@ static void init_mi_main(void) {
       .val.flag = &run_opts.dns},
 #endif
 #ifdef WITH_IPINFO
-    [MENU_MAIN_ASN]    = {.ndx = MENU_MAIN_ASN,    .type = MI_TOGGLE_CB, .action = ActionASN,
-      .val.flag = &run_opts.asn},
+    [SUBMENU_IPORIG]   = {.ndx = SUBMENU_IPORIG,   .type = MI_SUBMENU,
+      .val.flag = &kitmenu[KITMENU_IPORIG].active, .submenu = &kitmenu[KITMENU_IPORIG]},
+    [SUBMENU_IPINFO]   = {.ndx = SUBMENU_IPINFO,   .type = MI_SUBMENU,
+      .val.flag = &kitmenu[KITMENU_IPINFO].active, .submenu = &kitmenu[KITMENU_IPINFO]},
 #endif
     [SUBMENU_CHART]    = {.ndx = SUBMENU_CHART,    .type = MI_SUBMENU,
       .val.flag = &kitmenu[KITMENU_CHART].active,  .submenu = &kitmenu[KITMENU_CHART]},
@@ -829,7 +1006,8 @@ static void init_mi_main(void) {
     [MENU_MAIN_DNS]     = {.name = MENUSTRW(_DNS_STR)},
 #endif
 #ifdef WITH_IPINFO
-    [MENU_MAIN_ASN]     = {.name = MENUSTRW(_ASN_STR)},
+    [SUBMENU_IPORIG]    = {.name = MENUSTRW(_IPORIG_STR)},
+    [SUBMENU_IPINFO]    = {.name = MENUSTRW(_IPINFO_STR)},
 #endif
     [SUBMENU_CHART]     = {.name = MENUSTRW(_CHART_STR)},
     [MENU_MAIN_JITTER]  = {.name = MENUSTRW(_JITTER_STR)},
@@ -893,6 +1071,10 @@ static void init_all_menuitems(void) { // supposed to call once
   init_subopt_values();
   init_item_icons();
   //
+#ifdef WITH_IPINFO
+  init_mi_iporig();
+  init_mi_ipinfo();
+#endif
   init_mi_chart ();
   init_mi_fkeys();
   init_mi_cycles();
@@ -906,26 +1088,47 @@ static void init_all_menuitems(void) { // supposed to call once
   init_menus_attr();
 }
 
-static void prepare_menu_kit(kitmenu_s *kit) NONNULL(1);
-static void prepare_menu_kit(kitmenu_s *kit) {
+static bool prepare_kitmenu(kitmenu_s *kit) NONNULL(1);
+static bool prepare_kitmenu(kitmenu_s *kit) {
   if (!kit->menu) {
     kit->menu = new_menu(kit->items);
-    if (!kit->menu) {
+    if (kit->menu) {
+      int ec = set_menu_mark(kit->menu, NULL);
+      if (ec != E_OK)
+        LOGFNFAIL(kit->log, "set_menu_mark");
+      if (kit->attr.bg > 0) {
+        ec = set_menu_back(kit->menu, COLOR_PAIR(kit->attr.bg));
+        if (ec != E_OK)
+          LOGECFAIL(kit->log, "set_menu_back", ec);
+      }
+      ec = set_menu_grey(kit->menu, COLOR_PAIR(kit->attr.bg > 0 ? kit->attr.bg : 0) | A_DIM);
+      if (ec != E_OK)
+        LOGECFAIL(kit->log, "set_menu_grey", ec);
+    } else
       LOGECFAIL(kit->log, "new_menu", errno);
-      return;
-    }
-    { int ec = set_menu_mark(kit->menu, NULL);
-      if (ec != E_OK)
-        LOGFNFAIL(kit->log, "set_menu_mark"); }
-    if (kit->attr.bg > 0) {
-      int ec = set_menu_back(kit->menu, COLOR_PAIR(kit->attr.bg));
-      if (ec != E_OK)
-        LOGECFAIL(kit->log, "set_menu_back", ec);
-    }
-    { int ec = set_menu_grey(kit->menu, COLOR_PAIR(kit->attr.bg > 0 ? kit->attr.bg : 0) | A_DIM);
-      if (ec != E_OK)
-        LOGECFAIL(kit->log, "set_menu_grey", ec); }
   }
+  return kit->menu != NULL;
+}
+
+static void set_win_bgframe(WINDOW *win, short bg, bool frame) NONNULL(1);
+static void set_win_bgframe(WINDOW *win, short bg, bool frame) {
+  if (bg > 0)
+    wbkgd(win, COLOR_PAIR(bg));
+  if (frame) {
+#ifdef ROUNDED_CORNERS
+    cchar_t tl = {0}, tr = {0}, bl = {0}, br = {0};
+    setcchar(&tl, L"╭", A_NORMAL, 0, NULL);
+    setcchar(&tr, L"╮", A_NORMAL, 0, NULL);
+    setcchar(&bl, L"╰", A_NORMAL, 0, NULL);
+    setcchar(&br, L"╯", A_NORMAL, 0, NULL);
+    wborder_set(win, NULL, NULL, NULL, NULL, &tl, &tr, &bl, &br);
+#else
+    box(menuwin, 0, 0);
+#endif
+  }
+}
+
+static bool prepare_kitwin(kitmenu_s *kit) { // NONNULL(1)
 #ifdef HAVE_MENU_SPACING
   menu_spacing(kit->menu, &kit->spacing, NULL, NULL);
 #endif
@@ -934,42 +1137,53 @@ static void prepare_menu_kit(kitmenu_s *kit) {
     utf_compat ? 1 :
 #endif
   0;
-  LOGMSG("menu %s: frame=%d spacing=%d", kit->log, kit->frame, kit->spacing);
-  int h = kit->len, w = (kit->maxnamelen > 0) ? kit->maxnamelen : 16;
+  LOGMSG("%s: frame=%d spacing=%d", kit->log, kit->frame, kit->spacing);
+  int h = kit->len, w = (kit->maxnamelen > 0) ? kit->maxnamelen : 1, fr = 2 * kit->frame;
   w += kit->spacing;
   w += kit->desc_width;
   w++;
-  if (!kit->wsp.win) {
-    kit->wsp.win = newwin(h + 2 * kit->frame, w + 2 * kit->frame, kit->attr.y0, kit->attr.x0);
+  int hf = h + fr, wf = w + fr;
+  if (kit->wsp.win) {
+    WINDOW *win = kit->wsp.win;
+    if ((getmaxy(win) != hf) || (getmaxx(win) != wf)) {
+      if (wresize(win, hf, wf) == OK)
+        set_win_bgframe(kit->wsp.win, kit->attr.bg, kit->frame);
+      else
+        LOGFNFAIL(kit->log, "wresize(base-win)");
+    }
+  } else {
+    kit->wsp.win = newwin(hf, wf, kit->attr.y0, kit->attr.x0);
     if (!kit->wsp.win) {
       LOGFNFAIL(kit->log, "newwin");
-      return;
+      return false;
     }
     keypad(kit->wsp.win, TRUE);
-    if (kit->attr.bg > 0)
-      wbkgd(kit->wsp.win, COLOR_PAIR(kit->attr.bg));
-    if (kit->frame) {
-#ifdef ROUNDED_CORNERS
-      cchar_t tl = {0}, tr = {0}, bl = {0}, br = {0};
-      setcchar(&tl, L"╭", A_NORMAL, 0, NULL);
-      setcchar(&tr, L"╮", A_NORMAL, 0, NULL);
-      setcchar(&bl, L"╰", A_NORMAL, 0, NULL);
-      setcchar(&br, L"╯", A_NORMAL, 0, NULL);
-      wborder_set(kit->wsp.win, NULL, NULL, NULL, NULL, &tl, &tr, &bl, &br);
-#else
-      box(menuwin, 0, 0);
-#endif
-    }
+    set_win_bgframe(kit->wsp.win, kit->attr.bg, kit->frame);
     LOGWINSIZE(kit->log, "base", kit->wsp.win);
   }
-  if (!kit->wsp.sub) {
+  if (kit->wsp.sub) {
+    WINDOW *sub = kit->wsp.sub;
+    if (((getmaxy(sub) != hf) || (getmaxx(sub) != wf))
+        && (wresize(sub, h, w) != OK))
+      LOGFNFAIL(kit->log, "wresize(derived-win)");
+  } else {
     kit->wsp.sub = derwin(kit->wsp.win, h, w, kit->frame, kit->frame);
     if (!kit->wsp.sub) {
       LOGFNFAIL(kit->log, "derwin");
-      return;
+      return FALSE;
     }
     LOGWINSIZE(kit->log, "derived", kit->wsp.sub);
   }
+  return true;
+}
+
+static void prepare_kit(kitmenu_s *kit) NONNULL(1);
+static void prepare_kit(kitmenu_s *kit) {
+  LOGMSG("%s", kit->log);
+  if (!prepare_kitmenu(kit))
+    return;
+  if (!prepare_kitwin(kit))
+    return;
   //
   if (menu_win(kit->menu) != kit->wsp.win) {
     int ec = set_menu_win(kit->menu, kit->wsp.win);
@@ -979,6 +1193,7 @@ static void prepare_menu_kit(kitmenu_s *kit) {
       kit->menu = NULL;
       return;
     }
+    LOGMSG("set_menu_win(%s)", kit->log);
   }
   if (menu_sub(kit->menu) != kit->wsp.sub) {
     int ec = set_menu_sub(kit->menu, kit->wsp.sub);
@@ -988,6 +1203,7 @@ static void prepare_menu_kit(kitmenu_s *kit) {
       kit->menu = NULL;
       return;
     }
+    LOGMSG("set_menu_sub(%s)", kit->log);
   }
   //
   if (!kit->wsp.pan) {
@@ -996,10 +1212,16 @@ static void prepare_menu_kit(kitmenu_s *kit) {
       LOGFNFAIL(kit->log, "new_panel");
       return;
     }
+    LOGMSG("new_panel(%s)", kit->log);
   }
   //
-  if (!kit->posted)
-    kit->posted = (post_menu(kit->menu) == E_OK);
+  if (!kit->posted) {
+    int ec = post_menu(kit->menu);
+    kit->posted = ((ec == E_OK) || (ec == E_POSTED));
+    if (!kit->posted)
+      LOGECFAIL(kit->log, "post_menu", ec);
+  }
+  LOGMSG("%s posted=%d", kit->log, kit->posted);
   hide_panel(kit->wsp.pan);
   bottom_panel(kit->wsp.pan);
 }
@@ -1011,12 +1233,12 @@ static void prepare_menus(void) {
       LOGMSG("%s", "no items");
   }
   for (uint i = 0; i < ARRAY_LEN(kitmenu); i++)
-    prepare_menu_kit(&kitmenu[i]);
+    prepare_kit(&kitmenu[i]);
 }
 
 static void menu_hide(kitmenu_s *kit) NONNULL(1);
 static void menu_hide(kitmenu_s *kit) {
-  LOGMSG("menu %s", kit->log);
+  LOGMSG("%s", kit->log);
   hide_panel(kit->wsp.pan);
   bottom_panel(kit->wsp.pan);
   update_panels();
@@ -1026,30 +1248,12 @@ static void menu_hide(kitmenu_s *kit) {
 
 static void menu_show(kitmenu_s *kit) NONNULL(1);
 static void menu_show(kitmenu_s *kit) {
-  LOGMSG("menu %s", kit->log);
+  LOGMSG("%s", kit->log);
   top_panel(kit->wsp.pan);
   show_panel(kit->wsp.pan);
   update_panels();
   doupdate();
   kit->active = true;
-}
-
-static void position_inside_menu(kitmenu_s *kit, int was) NONNULL(1);
-static void position_inside_menu(kitmenu_s *kit, int was) {
-  int count = (kit->menu && (was >= 0)) ? item_count(kit->menu) : -1;
-  if (count > 0) {
-    ITEM **list = menu_items(kit->menu);
-    if (list) for (int i = 0; i < count; i++) {
-      ITEM *item = list[i];
-      int now = item ? item_index(item) : -1;
-      if (now == was) {
-        set_current_item(kit->menu, item);
-        LOGMSG("menu %s: %d", kit->log, now);
-        return;
-      }
-    }
-  }
-  LOGMSG("menu %s: %s", kit->log, "state isn't restored");
 }
 
 static void set_field_num(FIELD *field, int num, int width) NONNULL(1);
@@ -1072,7 +1276,7 @@ static void prepare_form(kitmenu_s *kit, int ndx, menuitem_s *data) {
     return;
   }
   int desc_x0 = kit->maxnamelen + kit->spacing;
-  LOGMSG("menu %s: index=%d desc-offset=%d", kit->log, ndx, desc_x0);
+  LOGMSG("%s: index=%d desc-offset=%d", kit->log, ndx, desc_x0);
   int x0 = getbegx(kit->wsp.sub) + desc_x0;
   int y0 = getbegy(kit->wsp.sub) + ndx;
   int w  = getmaxx(kit->wsp.sub) - (desc_x0 + 1);
@@ -1165,7 +1369,7 @@ static void activate_form(kitmenu_s *kit, ITEM *item, menuitem_s *data) {
   // menuitem types: INTFORM, STRFORM
   int ndx = item_index(item);
   if ((ndx < 0) || (ndx >= (int)kit->len)) {
-    LOGMSG("menu %s: %s", kit->log, "no item/data");
+    LOGMSG("%s: %s", kit->log, "no item/data");
     return;
   }
   mi_s *curr = &kit->mis[ndx];
@@ -1275,7 +1479,7 @@ static void fin_form(mi_s *mi, ITEM *item) {
 
 static void free_menukit(kitmenu_s *kit) NONNULL(1);
 static void free_menukit(kitmenu_s *kit) {
-  LOGMSG("menu %s: %s", kit->log, "free menu stuff");
+  LOGMSG("%s: %s", kit->log, "free menu stuff");
   // menu itself
   if (kit->menu) {
     if (kit->posted) {
@@ -1342,35 +1546,74 @@ static bool hide_all_submenus(void) {
   return done;
 }
 
-static void menu_repost(kitmenu_s *kit) NONNULL(1);
-static void menu_repost(kitmenu_s *kit) {
-  if (kit->posted) {
-    LOGMSG("%s", kit->log);
-    ITEM *curr = current_item(kit->menu);
-    int ndx = curr ? item_index(curr) : -1;
-    unpost_menu(kit->menu);
-    kit->posted = false;
-    if (kit->mi_init)
-      kit->mi_init();
-    if (kit->items[0]) {
-      int ec = set_menu_items(kit->menu, kit->items);
-      if (ec == E_OK) {
-        position_inside_menu(kit, ndx);
-        int ec = post_menu(kit->menu);
-        if (ec == E_OK) {
-          kit->posted = true;
-          LOGMSG("menu %s: %s", kit->log, "reposted");
-        } else
-          LOGECFAIL(kit->log, "post_menu", ec);
-      } else
-        LOGECFAIL(kit->log, "set_menu_items", ec);
-    } else
-      LOGMSG("menu %s: %s", kit->log, "cannot reinit menu items");
+#ifdef WITH_IPINFO
+static void menuaction_iporig(menuitem_s *data, kitmenu_s *kit) NONNULL(1, 2);
+static void menuaction_iporig(menuitem_s *data, kitmenu_s *kit UNUSED) {
+  static int last_known_orig = - 1, last_known_ipi = IPI_NONE;
+  switch (data->ndx) {
+    case SUBMENU_IPORIG_ON:
+      if (ipinfo_ready)
+        ipinfo_close();
+      else if (ipinfo_init(last_known_orig <  0 ? NULL         :
+                           last_known_orig == 0 ? ASLOOKUP_DNS : ASLOOKUP_WHOIS))
+        ipinfo_prep();
+      subopts.iporig_pos = ipinfo_ready ? origin_no + SUBMENU_IPORIG_1 : 0;
+      run_opts.ipinfo = ipinfo_ready ?
+        ((last_known_ipi != IPI_NONE) ? last_known_ipi : IPI_ASN) :
+        IPI_NONE;
+      if (run_opts.ipinfo != IPI_NONE) // then keep it
+        last_known_ipi = run_opts.ipinfo;
+      if (origin_no >= 0) // then keep it
+        last_known_orig = origin_no;
+      break;
+    case SUBMENU_IPORIG_1:
+    case SUBMENU_IPORIG_2:
+      if (ipinfo_ready) {
+        int orig = data->ndx - SUBMENU_IPORIG_1;
+        if (orig != origin_no) {
+          if (ipinfo_ready)
+            ipinfo_close();
+          if (ipinfo_init(data->ndx != SUBMENU_IPORIG_1 ? ASLOOKUP_WHOIS : ASLOOKUP_DNS))
+            ipinfo_prep();
+          subopts.iporig_pos = ipinfo_ready ? data->ndx : 0;
+        }
+        last_known_orig = origin_no;
+      }
+      break;
+    default: break;
   }
 }
-
+//
+static void menuaction_ipinfo(menuitem_s *data, kitmenu_s *kit) NONNULL(1, 2);
+static void menuaction_ipinfo(menuitem_s *data UNUSED, kitmenu_s *kit UNUSED) {
+  // toggle current key
+  bool *flag = data->val.flag;
+  if (flag)
+    *flag = !*flag;
+  // recollect toggles
+  int state[ARRAY_LEN(subopts.ikeys)];
+  memset(state, -1, sizeof(state));
+  int *p = state;
+  ITEM **item = kit->items;
+  if (item) for (uint i = 0; (i < kit->len) && (i < ARRAY_LEN(state)); i++, item++) {
+    if (IS_SELECTABLE(*item)) {
+      menuitem_s *data = item_userptr(*item);
+      if (data) {
+        const bool *flag = data->val.flag;
+        if (flag && *flag)
+          *p++ = data->val.ord;
+      }
+    }
+  }
+  ipinfo_set_fields(ARRAY_LEN(state), state);
+// TODO: move menuitems with arrow-keys and reorder
+//    LOGMSG("all-in-order %a", ipinfo_no[]);
+}
+#endif
+//
+static void menuaction_chart(menuitem_s *data, kitmenu_s *kit) NONNULL(1, 2);
 static void menuaction_chart(menuitem_s *data, kitmenu_s *kit UNUSED) {
-  if (data) switch (data->ndx) {
+  switch (data->ndx) {
     case SUBMENU_CHART_ON:
       chart_mode = subopts.chart_on ? 0                 :
                   subopts.chart_mod ? subopts.chart_mod : 1;
@@ -1390,9 +1633,9 @@ static void menuaction_chart(menuitem_s *data, kitmenu_s *kit UNUSED) {
   run_opts.chart = chart_mode & 3;
   LOGMSG("on=%d, mode=%d, color=%d", subopts.chart_on, chart_mode, run_opts.color);
 }
-
-static void menuaction_fields(menuitem_s *data, kitmenu_s *kit) NONNULL(1, 2);
-static void menuaction_fields(menuitem_s *data, kitmenu_s *kit) {
+//
+static void menuaction_fkeys(menuitem_s *data, kitmenu_s *kit) NONNULL(1, 2);
+static void menuaction_fkeys(menuitem_s *data, kitmenu_s *kit) {
   // toggle current key
   bool *flag = data->val.flag;
   if (flag)
@@ -1402,7 +1645,7 @@ static void menuaction_fields(menuitem_s *data, kitmenu_s *kit) {
   char *p = state;
   ITEM **item = kit->items;
   if (item) for (uint i = 0; (i < kit->len) && (i < sizeof(state)); i++, item++) {
-    if (*item && IS_SELECTABLE(*item)) {
+    if (IS_SELECTABLE(*item)) {
       menuitem_s *data = item_userptr(*item);
       if (data) {
         const uint8_t *key  = data->val.key;
@@ -1421,7 +1664,8 @@ static void menuaction_fields(menuitem_s *data, kitmenu_s *kit) {
 //    LOGMSG("all-in-order %s", fkey_order);
   }
 }
-
+//
+static void menuaction_cycles_unlim(menuitem_s *data, kitmenu_s *kit) NONNULL(1, 2);
 static void menuaction_cycles_unlim(menuitem_s *data UNUSED, kitmenu_s *kit UNUSED) {
   bool last = is_value_cycles();
   if (last) // keep
@@ -1431,7 +1675,8 @@ static void menuaction_cycles_unlim(menuitem_s *data UNUSED, kitmenu_s *kit UNUS
   run_opts.cycles = value;
   subopts.cycles_inf = !is_value_cycles();
 }
-
+//
+static void menuaction_rnd_psize(menuitem_s *data UNUSED, kitmenu_s *kit UNUSED) NONNULL(1, 2);
 static void menuaction_rnd_psize(menuitem_s *data UNUSED, kitmenu_s *kit UNUSED) {
   bool last = is_value_psize();
   if (last) // keep
@@ -1441,7 +1686,8 @@ static void menuaction_rnd_psize(menuitem_s *data UNUSED, kitmenu_s *kit UNUSED)
   run_opts.size = value;
   subopts.psize_rnd = !is_value_psize();
 }
-
+//
+static void menuaction_rnd_pattern(menuitem_s *data, kitmenu_s *kit) NONNULL(1, 2);
 static void menuaction_rnd_pattern(menuitem_s *data UNUSED, kitmenu_s *kit UNUSED) {
   bool last = is_value_bpatt();
   if (last) // keep
@@ -1451,7 +1697,8 @@ static void menuaction_rnd_pattern(menuitem_s *data UNUSED, kitmenu_s *kit UNUSE
   run_opts.pattern = value;
   subopts.bpatt_rnd = !is_value_bpatt();
 }
-
+//
+static void menuaction_no_xcache(menuitem_s *data, kitmenu_s *kit) NONNULL(1, 2);
 static void menuaction_no_xcache(menuitem_s *data UNUSED, kitmenu_s *kit UNUSED) {
   bool last = is_value_xcache();
   if (last) // keep
@@ -1461,7 +1708,7 @@ static void menuaction_no_xcache(menuitem_s *data UNUSED, kitmenu_s *kit UNUSED)
   run_opts.cache = value;
   subopts.xcache_nop = !is_value_xcache();
 }
-
+//
 static key_action_t ext2action[MaxMenuActions] = {
   [ActionMenuICMP] = ActionSetICMP,
   [ActionMenuUDP]  = ActionSetUDP,
@@ -1469,11 +1716,15 @@ static key_action_t ext2action[MaxMenuActions] = {
   [ActionMenuTCP]  = ActionSetTCP,
 #endif
 };
-
+//
 typedef void (*menu_action_fn)(menuitem_s *data, kitmenu_s *kit);
 static menu_action_fn ext2fn_action[MaxMenuActions] = {
+#ifdef WITH_IPINFO
+  [ActionMenuIporig]    = menuaction_iporig,
+  [ActionMenuIpinfo]    = menuaction_ipinfo,
+#endif
   [ActionMenuChart]     = menuaction_chart,
-  [ActionMenuFields]    = menuaction_fields,
+  [ActionMenuFields]    = menuaction_fkeys,
   [ActionMenuCyclesInf] = menuaction_cycles_unlim,
   [ActionMenuPldSize]   = menuaction_rnd_psize,
   [ActionMenuPattRnd]   = menuaction_rnd_pattern,
@@ -1491,9 +1742,9 @@ void free_menus(void) {
 }
 
 #ifdef LOGMOD
-#define LOGKITMENUACTIVE do {                                        \
-  for (uint i = 0; i < ARRAY_LEN(kitmenu); i++)                      \
-    LOGMSG("menu %s: active=%d", kitmenu[i].log, kitmenu[i].active); \
+#define LOGKITMENUACTIVE do {                                   \
+  for (uint i = 0; i < ARRAY_LEN(kitmenu); i++)                 \
+    LOGMSG("%s: active=%d", kitmenu[i].log, kitmenu[i].active); \
 } while (0)
 #else
 #define LOGKITMENUACTIVE
@@ -1520,23 +1771,25 @@ void menu_showup(WINDOW *_win UNUSED) {
 }
 
 void menu_inout(int key) {
-  bool dosmth = false;
+  bool inout = false;
   kitmenu_s *kit = get_active_priokit();
   if (kit) {
-    LOGKITMENUACTIVE;
     if        (key == KEY_LEFT) {
-      dosmth = (kit->type == KIT_SUBMENU);
-      if (dosmth)
+      inout = (kit->type == KIT_SUBMENU);
+      if (inout)
         menu_hide(kit);
     } else if (key == KEY_RIGHT) {
       ITEM *item = kit->menu ? current_item(kit->menu) : NULL;
       menuitem_s *menuitem = IS_SELECTABLE(item) ? item_userptr(item) : NULL;
-      dosmth = (menuitem && (menuitem->type == MI_SUBMENU) && menuitem->submenu);
-      if (dosmth)
+      inout = (menuitem && (menuitem->type == MI_SUBMENU) && menuitem->submenu);
+      if (inout) {
+        LOGMSG("show %s", menuitem->submenu ? menuitem->submenu->log : "");
         menu_show(menuitem->submenu);
+      }
+      LOGKITMENUACTIVE;
     }
   }
-  if (dosmth) {
+  if (inout) {
     menu_toggle_look();
     update_panels();
     doupdate();
@@ -1602,7 +1855,7 @@ key_action_t menu_action(void) {
         case MI_TOGGLE_CB:
         case MI_TOGGLE_RB: {
           extra_action_t ext = data->extra_action;
-          LOGMSG("menu %s: extra=%d", kit->log, ext);
+          LOGMSG("%s: extra=%d", kit->log, ext);
           if (ext != ActionMenuNone) {
             menu_action_fn fn = ((ext >= 0) && (ext < ARRAY_LEN(ext2fn_action))) ?
               ext2fn_action[ext] : NULL;
@@ -1611,7 +1864,7 @@ key_action_t menu_action(void) {
             action = ((ext >= 0) && (ext < ARRAY_LEN(ext2action))) ?
               ext2action[ext] : ActionNone;
           }
-          LOGMSG("menu %s: action=%d", kit->log, action);
+          LOGMSG("%s: action=%d", kit->log, action);
           if (action == ActionNone) { // i.e. it's already handled
             menu_posteditaction(kit->ndx, data->ndx);
             menu_toggle_look();
@@ -1637,7 +1890,7 @@ key_action_t menu_action(void) {
 void menu_toggle_look(void) {
   for (uint i = 0; i < ARRAY_LEN(kitmenu); i++)
     if (kitmenu[i].active)
-      menu_repost(&kitmenu[i]);
+      menu_update(&kitmenu[i]);
 }
 
 inline static bool enclose_kit(kitmenu_s *kit, int x, int y) NONNULL(1);
@@ -1657,12 +1910,12 @@ int mouse_select_n_toggle(menu_ndx_t ndx) {
   if (kit && kit->menu) {
     ITEM *keep = current_item(kit->menu);
     rc = menu_driver(kit->menu, KEY_MOUSE);
-    LOGMSG("menu %s, driver(KEY_MOUSE): rc=%d", kit ? kit->log : "UNKN", rc);
+    LOGMSG("%s, driver(KEY_MOUSE): rc=%d", kit ? kit->log : "UNKN", rc);
     ITEM *curr = current_item(kit->menu);
     if (!IS_SELECTABLE(curr) && keep) {
       set_current_item(kit->menu, keep);
       if (kit->type != KIT_SUBMENU) // otherwise it will be enabled on double click
-                                    // in cases CHART and XCACHE submenus
+                                    // in cases CHART and XCACHE submenus for example
         rc = 0;
     }
   }

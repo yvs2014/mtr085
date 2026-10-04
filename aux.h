@@ -35,6 +35,7 @@ int snprinte(char str[], size_t size, const char *format, ...);
 char* fmt_datetime(time_t at, const char *fmt, size_t size, char buff[size]) NONNULL(2, 4);
 char* datetime_c (time_t at, size_t size, char buff[size]) NONNULL(3);
 char* datetime_FT(time_t at, size_t size, char buff[size]) NONNULL(3);
+bool ndx_in_intarr(uint len, const int arr[len], int ndx) NONNULL(2);
 
 #ifdef USE_COLOR
 void warntty(const char *fmt, ...);

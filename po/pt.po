@@ -135,9 +135,6 @@ msgstr "tcp"
 msgid "mpls"
 msgstr "mpls"
 
-msgid "asn"
-msgstr "asn"
-
 msgid "ipinfo"
 msgstr "IP-info"
 
@@ -560,8 +557,16 @@ msgid "Active"
 msgstr "ativo"
 
 #
-msgid "IP-info"
-msgstr "IP-info"
+msgid "IP info"
+msgstr "IP info"
+
+#
+msgid "IP origin"
+msgstr "IP origem"
+
+#
+msgid "IP lookup"
+msgstr "Consultar IP"
 
 
 ## messages

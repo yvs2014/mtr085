@@ -21,7 +21,7 @@
 #define MAX_ADDRSTRLEN INET6_ADDRSTRLEN
 
 #ifndef GITREV
-#define GITREV "340"
+#define GITREV "341"
 #endif
 
 #ifndef HAVE_UINT
@@ -141,6 +141,8 @@ typedef enum {
 #define BITPATTERN     0 // default payload pattern
 #define CACHE_TIMEOUT 60 // default if enabled, in seconds
 
+enum { IPI_NONE = 0, IPI_ASN, IPI_ANY };
+
 // options
 typedef struct opts_s {
   bool
@@ -150,10 +152,6 @@ typedef struct opts_s {
     mpls,     // -e
     endpoint, // -fa
     jitter,   // -j
-#ifdef WITH_IPINFO
-    asn,      // -l
-    ipinfo,   // -L
-#endif
 #ifdef WITH_MOUSE
     mouse,    // -M (disable)
 #endif
@@ -171,6 +169,10 @@ typedef struct opts_s {
     visible,  // -d 6th bit (visible bell: flash)
     audible,  // -d 5th bit (beep)
     color;    // -d 4th bit (color mode)
+#ifdef WITH_IPINFO
+  uint8_t
+    ipinfo;   // -l/-L
+#endif
   uint8_t
     chart;    // -d 1st and 2nd bits
   int

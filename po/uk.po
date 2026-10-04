@@ -135,9 +135,6 @@ msgstr "tcp"
 msgid "mpls"
 msgstr "mpls"
 
-msgid "asn"
-msgstr "asn"
-
 msgid "ipinfo"
 msgstr "IP-інфо"
 
@@ -555,8 +552,16 @@ msgid "Active"
 msgstr "Діючий"
 
 #
-msgid "IP-info"
-msgstr "IP-інфо"
+msgid "IP info"
+msgstr "IP інфо"
+
+#
+msgid "IP origin"
+msgstr "IP походження"
+
+#
+msgid "IP lookup"
+msgstr "Джерело інформації"
 
 
 ## messages

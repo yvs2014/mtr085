@@ -36,15 +36,16 @@
 #define CHART_STR      _(_CHART_STR)
 #define DNS_STR        _(_DNS_STR)
 #define ASN_STR        _(_ASN_STR)
-#define INFO_STR       _(_INFO_STR) // ipinfo
+#define INFO_STR       _(_INFO_STR)
 #define IPINFO_STR     _(_IPINFO_STR)
+#define IPORIG_STR     _(_IPORIG_STR)
+#define IPLOOKUP_STR   _(_IPLOOKUP_STR)
 #define MPLS_STR       _(_MPLS_STR)
 #define PROTO_STR      _("Proto")   // icmp-udp-tcp
 //
 #define PAR_UDP_STR    _("udp")
 #define PAR_TCP_STR    _("tcp")
 #define PAR_MPLS_STR   _("mpls")
-#define PAR_ASN_STR    _("asn")
 #define PAR_II_STR     _("ipinfo")
 #define PAR_MII_STR    _("multi-sources")
 #define PAR_DNS_STR    _("dns")
@@ -113,7 +114,9 @@
 #define _COLORED_STR  "Colored"
 #define _ASN_STR      "ASN"
 #define _INFO_STR     "Info"
-#define _IPINFO_STR   "IP-info"
+#define _IPINFO_STR   "IP info"
+#define _IPORIG_STR   "IP origin"
+#define _IPLOOKUP_STR "IP lookup"
 #define _MPLS_STR     "MPLS"
 #define _MPLS_EXT_STR "MPLS extension"
 #define _PROTO_STR    "Protocol"

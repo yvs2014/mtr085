@@ -91,10 +91,10 @@ static void set_fds(void) {
 #ifdef ENABLE_DNS
   need_dns = run_opts.dns
 #ifdef WITH_IPINFO
-          || run_opts.asn || run_opts.ipinfo
+          || (origin_no == 0/*DNS lookup at ipinfo-init*/);
 #endif
   ;
-  SET_POLLFD(FD_DNS, need_dns ? dns_wait(AF_INET) : -1);
+  SET_POLLFD(FD_DNS,  need_dns ? dns_wait(AF_INET)  : -1);
 #ifdef ENABLE_IPV6
   SET_POLLFD(FD_DNS6, need_dns ? dns_wait(AF_INET6) : -1);
 #endif
@@ -463,12 +463,10 @@ static key_action_t keyboard_events(key_action_t action) {
     case ActionMultiII:
       LOGMSG("toggle %s", "ipinfo-mode");
       ipinfo_action(action);
-      OPT_SUM(asn);
       OPT_SUM(ipinfo);
       OPT_SUM(multi);
 #ifdef WITH_MENU
-      if (action == ActionASN)
-        menu_toggle_look();
+      menu_toggle_look();
 #endif
       break;
 #endif

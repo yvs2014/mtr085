@@ -22,30 +22,47 @@
 #include "attr.h"
 #include "common.h"
 
-#define ASLOOKUP_DEFAULT   "2,2" // ripe whois
-#define IPINFOED (ipinfo_ready && (run_opts.asn || run_opts.ipinfo))
+#define ASLOOKUP_DNS     "1,1"
+#define ASLOOKUP_WHOIS   "2,2"
+#define ASLOOKUP_DEFAULT ASLOOKUP_WHOIS
+#define IPINFOED (ipinfo_ready && (run_opts.ipinfo != IPI_NONE))
 
 bool ipinfo_init(const char *arg);
+bool ipinfo_prep(void);
 void ipinfo_close(void);
 bool ipinfo_action(key_action_t action); // if necessary it calls init() too
 void ipinfo_parse(int sock, int seq);
 int  ipinfo_width(void);
 bool ipinfo_timedout(int seq);
 void ipinfo_seq_ready(int seq);
-
+//
 void ipinfo_head_fix(size_t size, char buff[size]) NONNULL(2);
 void ipinfo_head_div(size_t size, char buff[size], char div, char q) NONNULL(2);
 void ipinfo_data_fix(size_t size, char buff[size], int at, int ndx) NONNULL(2);
 void ipinfo_data_div(size_t size, char buff[size], int at, int ndx, char div, char q) NONNULL(2);
 //
 uint ipinfo_datalist(uint len, const char* key[], const char* val[], int at, int ndx);
-
 void query_ipinfo(void);
+bool is_asn_present(void);
+
+extern bool ipinfo_ready;
+extern int  origin_no;
 
 extern bool ipinfo_tcpmode;
 extern uint whois_queries;
 extern uint whois_replies;
 extern bool ipinfo_rewidth;
-extern bool ipinfo_ready;
+
+#ifdef WITH_MENU
+typedef struct ii_fields {
+  uint len;
+  const char **name;
+  const int *inum;
+} ii_fields;
+//
+void ipinfo_name_list(ii_fields *fields) NONNULL(1);
+void ipinfo_set_fields(uint len, const int arr[len]) NONNULL(2);
+void ipinfo_get_origs(uint len, const char* arr[len]) NONNULL(2);
+#endif
 
 #endif
