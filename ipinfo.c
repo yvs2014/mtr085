@@ -108,6 +108,7 @@ typedef struct {
 static int ipinfo_no[II_REC_ARR_LEN] = {-1}; // supposed to be enough for the longest list
 #define VALID_IINDX(ndx) (((ndx) < ARRAY_LEN(ipinfo_no)) && \
   (ipinfo_no[ndx] >= 0) && (ipinfo_no[ndx] < ORIG_MAX))
+static int ikey_ord[ARRAY_LEN(ipinfo_no)] = {0, 1, 2, 3, 4/*, ...*/}; // {-1}
 
 static origin_t origins[] = {
   {
@@ -837,21 +838,60 @@ static int set_iporig(const char *arg) {
   return -1;
 }
 
-static bool set_ipfield(const char *arg, int *field, int max) NONNULL(1, 2);
-static bool set_ipfield(const char *arg, int *field, int max) {
+static bool set_ipfield(const char *arg, int *field, int max, uint ulen, int uniq[ulen]) NONNULL(1, 2);
+static bool set_ipfield(const char *arg, int *field, int max, uint ulen, int uniq[ulen]) {
   errno = 0;
   bool okay = false;
   if (arg[0]) {
-    long n = str2l(arg);
-    okay = (!errno && (n > 0) && (n <= max));
-    if (okay)
-      *field = n - 1;
-    else
+    long n = str2l(arg) - 1;
+    okay = (!errno && (n >= 0) && (n < max));
+    if (okay) {
+      if (uniq && ulen)
+        okay = !intval_in_arr(ulen, uniq, n);
+      if (okay)
+        *field = n;
+      else
+        WARNXT("%s: %s", arg, NODUP_ERR);
+    } else
       WARNXT("%s: %.*s: %s", IPINFO_STR, LIM_CHARS, arg, strerror(errno ? errno : ERANGE));
   } else
     WARNXT("%s: %s", IPINFO_STR, NONE_STR);
   errno = 0;
   return okay;
+}
+
+#ifdef LOGMOD
+#define LOGIARR(prfx, alen, arr) do {                               \
+  char buff[256] = {0};                                             \
+  int l = snprinte(buff, sizeof(buff), "%s", prfx);                 \
+  if (l > 0) for (uint i = 0; i < (alen); i++) {                    \
+    int dl = snprinte(buff + l, sizeof(buff) - l, " %d", (arr)[i]); \
+    if (dl <= 0)                                                    \
+      break;                                                        \
+    l += dl;                                                        \
+  }                                                                 \
+  if (buff[0])                                                      \
+    LOGMSG("%s", buff);                                             \
+} while (0)
+#else
+#define LOGIARR(prfx, alen, arr) NOOP
+#endif
+
+//void _tmp_log_iiarr(void) {
+//  LOGIARR("ikey_ord:", ARRAY_LEN(ikey_ord), ikey_ord);
+//  LOGIARR("ipinfo_no:", ARRAY_LEN(ipinfo_no), ipinfo_no);
+//}
+
+static void ikey_in_order(void) { // reorder 'ikey_ord' in line with 'ipinfo_no'
+  LOGIARR("< num-order:", ARRAY_LEN(ikey_ord), ikey_ord);
+  uint ilen = 0; for (; VALID_IINDX(ilen); ilen++);
+  if (ilen) {
+    int *key = ikey_ord, *next = ipinfo_no;
+    for (uint i = 0; (i < ARRAY_LEN(ikey_ord)) && (*next >= 0); i++, key++)
+      if (intval_in_arr(ilen, ipinfo_no, *key))
+        *key = *next++;
+  }
+  LOGIARR("> num-order:", ARRAY_LEN(ikey_ord), ikey_ord);
 }
 
 bool ipinfo_init(const char *arg) {
@@ -895,7 +935,7 @@ bool ipinfo_init(const char *arg) {
   for (uint i = 1, j = 0;
        args[i] && (i < (ARRAY_LEN(args) - 1)) && (j < ARRAY_LEN(fields));
        i++, j++)
-    if (!set_ipfield(args[i], &fields[j], origins[orig].max)) {
+    if (!set_ipfield(args[i], &fields[j], origins[orig].max, ARRAY_LEN(fields), fields)) {
       free(dup);
       return false;
     }
@@ -903,6 +943,7 @@ bool ipinfo_init(const char *arg) {
   free(dup);
   origin_no = orig;
   memcpy(ipinfo_no, fields, sizeof(ipinfo_no));
+  ikey_in_order();
 //  if (ipinfo_no[0] < 0)
 //    ipinfo_no[0] = 0;
   ipinfo_tcpmode = (ORIG_TYPE != OT_DNS);
@@ -989,7 +1030,7 @@ void query_ipinfo(void) {
 
 bool is_asn_present(void) {
   return (run_opts.ipinfo == IPI_ASN) ||
-    ((run_opts.ipinfo == IPI_ANY) && ndx_in_intarr(
+    ((run_opts.ipinfo == IPI_ANY) && intval_in_arr(
        ARRAY_LEN(ipinfo_no), ipinfo_no, origins[origin_no].asnth));
 }
 
@@ -998,14 +1039,17 @@ void ipinfo_name_list(ii_fields *fields) { // NONNULL(1)
   fields->len  = origins[origin_no].max < 0 ? 0 : origins[origin_no].max;
   fields->name = origins[origin_no].name;
   fields->inum = ipinfo_no;
+  fields->ord  = ikey_ord;
 }
 //
 #define IPINUM_ONLY_ASN ((ipinfo_no[0] == origins[origin_no].asnth) && (ipinfo_no[1] < 0))
 void ipinfo_set_fields(uint len, const int arr[len]) { // NONNULL(2)
+  LOGIARR("< fld-order:", ARRAY_LEN(ipinfo_no), ipinfo_no);
   memset(ipinfo_no, -1, sizeof(ipinfo_no));
   memcpy(ipinfo_no, arr, len < ARRAY_LEN(ipinfo_no) ? (len * sizeof(*arr)) : sizeof(ipinfo_no));
   run_opts.ipinfo = (ipinfo_no[0] < 0) ? IPI_NONE :
                        IPINUM_ONLY_ASN ? IPI_ASN  : IPI_ANY;
+  LOGIARR("> fld-order:", ARRAY_LEN(ipinfo_no), ipinfo_no);
 }
 //
 void ipinfo_get_origs(uint len, const char* arr[len]) { // NONNULL(2)
@@ -1016,5 +1060,11 @@ void ipinfo_get_origs(uint len, const char* arr[len]) { // NONNULL(2)
 #endif
              origins[i].host;
 }
-#endif
+
+void ipinfo_set_ord(uint n, int nth) {
+  if ((n < ARRAY_LEN(ikey_ord)) && (nth < ORIG_MAX))
+    ikey_ord[n] = nth;
+}
+
+#endif /*WITH_MENU*/
 

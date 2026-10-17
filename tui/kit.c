@@ -330,7 +330,7 @@ typedef struct menuitem_s {
     int  *num;
     const uint    *pos;
     const uint8_t *key; // pointer to char
-    uint8_t ord; // order in external list
+    int   ord; // order in external list
   } val;
   const int min, max, *pmin, *pmax;
   void (*int_setter)(int);
@@ -409,9 +409,8 @@ static void menu_posteditaction(int type, int opt) {
   }
 }
 
-static void mi_selectabale(int type, int opt, ITEM *item) NONNULL(3);
-static void mi_selectabale(int type, int opt, ITEM *item) {
-  bool dim = false;
+static bool mi_selectabale(int type, int opt) {
+  bool sel = true;
 #ifdef WITH_IPINFO
   if (type == KITMENU_IPINFO)
     opt = 0; // i.e. all subitems
@@ -431,32 +430,31 @@ static void mi_selectabale(int type, int opt, ITEM *item) {
     case MI_NDX(KITMENU_IPORIG, SUBMENU_IPORIG_1):
     case MI_NDX(KITMENU_IPORIG, SUBMENU_IPORIG_2):
     case MI_NDX(KITMENU_IPINFO, 0):
-      dim = !ipinfo_ready;
+      sel = ipinfo_ready;
       break;
 #endif
     case MI_NDX(KITMENU_CHART,  SUBMENU_CHART_1):
     case MI_NDX(KITMENU_CHART,  SUBMENU_CHART_2):
-      dim = !subopts.chart_on;
+      sel = subopts.chart_on;
       break;
     case MI_NDX(KITMENU_CHART,  SUBMENU_CHART_3):
-      dim = !subopts.chart_on || (chart_mode_max < 4);
+      sel = subopts.chart_on && (chart_mode_max > 3);
       break;
     case MI_NDX(KITMENU_CHART,  SUBMENU_CHART_CLR):
-      dim = !subopts.chart_on || !color_ready;
+      sel = subopts.chart_on && color_ready;
       break;
     case MI_NDX(KITMENU_CYCLES, SUBMENU_CYCLES_NUM):
-      dim = (run_opts.cycles <= 0);
+      sel = (run_opts.cycles > 0);
       break;
     case MI_NDX(KITMENU_BPATT,  SUBMENU_BPATT_NUM):
-      dim = (run_opts.pattern < 0);
+      sel = (run_opts.pattern >= 0);
       break;
     case MI_NDX(KITMENU_XCACHE, SUBMENU_XCACHE_NUM):
-      dim = (run_opts.cache  <= 0);
+      sel = (run_opts.cache > 0);
       break;
     default: break;
   }
-  if (dim)
-    item_opts_off(item, O_SELECTABLE);
+  return sel;
 }
 
 static int fill_itemname(const menuitem_s *mi, const char *name,
@@ -610,7 +608,8 @@ static void init_kititems(kitmenu_s *kit, uint mlen, menuitem_s mi[mlen], optnam
     if (item) {
       LOGMSG("%s, item[%u]: \"%s\": \"%s\"", kit->log, i, item_name(item), item_description(item));
       set_item_userptr(item, mi);
-      mi_selectabale(kit->ndx, i, item);
+      if (!mi_selectabale(kit->ndx, i))
+        item_opts_off(item, O_SELECTABLE);
       kit->items[i] = item;
     } else {
       LOGMSG("%s, new_item(#%u, %s) failed: %d", kit->log, i, optname, errno);
@@ -723,7 +722,7 @@ static void init_mi_iporig(void) {
 }
 //
 #define MI_IPI_CONST(seq) [seq] = { .ndx = (seq), .type = MI_TOGGLE_CB, .extra_action = ActionMenuIpinfo, \
-  .val = {.flag = &subopts.ikeys[seq], .ord = (seq)/*TODO: ipinfo_no[seq] order*/}}
+  .val = {.flag = &subopts.ikeys[seq], /*.ord = (seq)*/}}
 static void init_mi_ipinfo(void) {
   static menuitem_s ipinfo_menuitems[SUBMENU_IPINFO_LEN] = {
     MI_IPI_CONST( 0), MI_IPI_CONST( 1), MI_IPI_CONST( 2),
@@ -740,9 +739,14 @@ static void init_mi_ipinfo(void) {
     if (fld.len > 0) // set actual len
       kit->len = fld.len;
     for (uint i = 0; (i < fld.len) && fld.name[i] && (i < ARRAY_LEN(opts)); i++) {
-      opts[i].name = _(fld.name[i]);
-      if (i < ARRAY_LEN(subopts.ikeys))
-        subopts.ikeys[i] = (run_opts.ipinfo != IPI_NONE) ? ndx_in_intarr(fld.len, fld.inum, i) : false;
+      uint ord = fld.ord[i];
+      if (i < ARRAY_LEN(ipinfo_menuitems))
+        ipinfo_menuitems[i].val.ord = ord;
+      if (ord < fld.len) {
+        opts[i].name = _(fld.name[ord]);
+        if (i < ARRAY_LEN(subopts.ikeys))
+          subopts.ikeys[i] = (run_opts.ipinfo != IPI_NONE) ? intval_in_arr(fld.len, fld.inum, ord) : false;
+      }
     }
   }
   init_kititems(kit, kit->len, ipinfo_menuitems, opts);
@@ -757,11 +761,6 @@ static void init_mi_ipinfo(void) {
 }
 #endif
 
-static void set_subopt_chart(void) {
-  subopts.chart_on = chart_mode != 0;
-  if (!subopts.chart_mod)
-    subopts.chart_mod = chart_mode ? chart_mode : 1;
-}
 //
 static void init_mi_chart(void) {
   static menuitem_s chart_menuitems[] = {
@@ -783,7 +782,9 @@ static void init_mi_chart(void) {
     [SUBMENU_CHART_3]   = {.name = MENUSTRW(_UTFMOD1_STR)},
     [SUBMENU_CHART_CLR] = {.name = MENUSTRW(_COLORED_STR)},
   };
-  set_subopt_chart();
+  subopts.chart_on = chart_mode != 0;
+  if (!subopts.chart_mod)
+    subopts.chart_mod = chart_mode ? chart_mode : 1;
   init_kititems(&kitmenu[KITMENU_CHART], ARRAY_LEN(chart_menuitems), chart_menuitems, opts);
 }
 
@@ -1584,13 +1585,9 @@ static void menuaction_iporig(menuitem_s *data, kitmenu_s *kit UNUSED) {
   }
 }
 //
-static void menuaction_ipinfo(menuitem_s *data, kitmenu_s *kit) NONNULL(1, 2);
-static void menuaction_ipinfo(menuitem_s *data UNUSED, kitmenu_s *kit UNUSED) {
-  // toggle current key
-  bool *flag = data->val.flag;
-  if (flag)
-    *flag = !*flag;
-  // recollect toggles
+// recollect ipinfo-toggles
+static void recollect_ii_toggles(kitmenu_s *kit) NONNULL(1);
+static void recollect_ii_toggles(kitmenu_s *kit) {
   int state[ARRAY_LEN(subopts.ikeys)];
   memset(state, -1, sizeof(state));
   int *p = state;
@@ -1605,9 +1602,16 @@ static void menuaction_ipinfo(menuitem_s *data UNUSED, kitmenu_s *kit UNUSED) {
       }
     }
   }
+  // set not-negative values into ipinfo_no[]
   ipinfo_set_fields(ARRAY_LEN(state), state);
-// TODO: move menuitems with arrow-keys and reorder
-//    LOGMSG("all-in-order %a", ipinfo_no[]);
+}
+//
+static void menuaction_ipinfo(menuitem_s *data, kitmenu_s *kit) NONNULL(1, 2);
+static void menuaction_ipinfo(menuitem_s *data, kitmenu_s *kit) {
+  bool *flag = data->val.flag;
+  if (flag)
+    *flag = !*flag;
+  recollect_ii_toggles(kit);
 }
 #endif
 //
@@ -1830,6 +1834,45 @@ void menu_line_updown(bool up) {
         ? drivable_down(kit, ndx + 1) : -1;
       for (int i = ndx; i < next; i++)
         menu_driver(kit->menu, REQ_DOWN_ITEM);
+    }
+  }
+}
+
+void menu_line_reorder(bool up, void (*reset)(void)) {
+  kitmenu_s *kit = get_active_priokit();
+  if (kit && kit->menu && (kit->ndx == KITMENU_IPINFO)) {
+    LOGMSG("%s: move %s", kit->log, up ? "up" : "down");
+    ITEM *item = current_item(kit->menu);
+    int ndx = item ? item_index(item) : -1;
+    uint len = kit->len;
+    bool reorder = up ?
+      ((ndx > 0) && (ndx < (int)len)) :
+      ((ndx >= 0) && (ndx < ((int)len - 1)));
+    if (reorder) {
+      int next = up ?
+        drivable_up  (kit, ndx - 1) :
+        drivable_down(kit, ndx + 1);
+      if ((next >= 0) && (ndx < (int)len)) {
+        LOGMSG("%s: position: %d -> %d", kit->log, ndx, next);
+        ITEM *swap       = kit->items[ndx];
+        kit->items[ndx]  = kit->items[next];
+        kit->items[next] = swap;
+        if (up)
+          for (int i = ndx; i > next; i--)
+            menu_driver(kit->menu, REQ_UP_ITEM);
+        else
+          for (int i = ndx; i < next; i++)
+            menu_driver(kit->menu, REQ_DOWN_ITEM);
+        for (uint i = 0; (i < kit->len); i++) {
+          menuitem_s *data = item_userptr(kit->items[i]);
+          if (data)
+            ipinfo_set_ord(i, data->val.ord);
+        }
+        recollect_ii_toggles(kit);
+        if (reset)
+          reset();
+        menu_toggle_look();
+      }
     }
   }
 }

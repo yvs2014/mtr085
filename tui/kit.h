@@ -30,12 +30,14 @@ void menu_inout(int key);
 void menu_line_updown(bool up);
 void menu_page_updown(int lines);
 int  menu_form_key(int key);
+void menu_line_reorder(bool up, void (*reset)(void));
+#define LINEUP   true
+#define LINEDOWN false
 //
 key_action_t menu_action(void);
 menu_ndx_t inside_curr_menu(int x, int y);
 int mouse_select_n_toggle(menu_ndx_t ndx);
 void set_kit_attr(const short *bg, const int *x0, const int *y0);
-//void cursor_at_form(void);
 
 extern int posted_form;
 #define CURS_FORM 2

@@ -724,7 +724,7 @@ key_action_t tui_actionw(WINDOW *win, void (*reset)(void)) { // NONNULL(1)
     case KEY_UP:
 #ifdef WITH_MENU
       // navigate up menuline
-      menu_active() ? menu_line_updown(true)  :
+      menu_active() ? menu_line_updown(LINEUP)    :
 #endif
       // decrease number of visible hops by one line
       dec_lines(1);
@@ -732,7 +732,7 @@ key_action_t tui_actionw(WINDOW *win, void (*reset)(void)) { // NONNULL(1)
     case KEY_DOWN:
 #ifdef WITH_MENU
       // navigate down menuline
-      menu_active() ? menu_line_updown(false) :
+      menu_active() ? menu_line_updown(LINEDOWN) :
 #endif
       // increase number of visible hops by one line
       inc_lines(1);
@@ -760,7 +760,14 @@ key_action_t tui_actionw(WINDOW *win, void (*reset)(void)) { // NONNULL(1)
         menu_inout(ch);
       break;
 #endif
-
+    case KEY_SR: /*supposed to be shift+up  */
+    case KEY_SF: /*supposed to be shift+down*/
+#ifdef WITH_MENU
+      // reorder: move menuline up/down
+      if (menu_active())
+        menu_line_reorder(ch == KEY_SR ? LINEUP : LINEDOWN, reset);
+#endif
+      break;
     default: break;
   }
   LOGMSG("action in result: %d", action);
