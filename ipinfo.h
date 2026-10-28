@@ -44,8 +44,6 @@ void ipinfo_data_div(size_t size, char buff[size], int at, int ndx, char div, ch
 uint ipinfo_datalist(uint len, const char* key[], const char* val[], int at, int ndx);
 void query_ipinfo(void);
 bool is_asn_present(void);
-//void ikey_in_order(void);
-//void _tmp_log_iiarr(void);
 
 extern bool ipinfo_ready;
 extern int  origin_no;

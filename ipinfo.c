@@ -877,11 +877,6 @@ static bool set_ipfield(const char *arg, int *field, int max, uint ulen, int uni
 #define LOGIARR(prfx, alen, arr) NOOP
 #endif
 
-//void _tmp_log_iiarr(void) {
-//  LOGIARR("ikey_ord:", ARRAY_LEN(ikey_ord), ikey_ord);
-//  LOGIARR("ipinfo_no:", ARRAY_LEN(ipinfo_no), ipinfo_no);
-//}
-
 static void ikey_in_order(void) { // reorder 'ikey_ord' in line with 'ipinfo_no'
   LOGIARR("< num-order:", ARRAY_LEN(ikey_ord), ikey_ord);
   uint ilen = 0; for (; VALID_IINDX(ilen); ilen++);

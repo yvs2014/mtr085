@@ -85,7 +85,7 @@ enum {
   SUBMENU_CHART_CLR,
   SUBMENU_CHART_LEN
 };
-static uint8_t fkey_order[] = FSET_ALL;
+static char fkey_order[] = FSET_ALL;
 enum { SUBMENU_FKEYS_LEN = sizeof(fkey_order) - 1 }; /*15*/
 enum {
   SUBMENU_CYCLES_INF,
@@ -217,8 +217,10 @@ static ITEM* xcache_items[SUBMENU_XCACHE_LEN + 1];
 static mi_s     xcache_mi[SUBMENU_XCACHE_LEN];
 
 static void init_mi_main  (void);
+#ifdef WITH_IPINFO
 static void init_mi_iporig(void);
 static void init_mi_ipinfo(void);
+#endif
 static void init_mi_chart (void);
 static void init_mi_fkeys (void);
 static void init_mi_cycles(void);
@@ -329,7 +331,7 @@ typedef struct menuitem_s {
     bool *flag;
     int  *num;
     const uint    *pos;
-    const uint8_t *key; // pointer to char
+    char  key; // field char
     int   ord; // order in external list
   } val;
   const int min, max, *pmin, *pmax;
@@ -378,9 +380,11 @@ static void menu_posteditaction(int type, int opt) {
       net_set_qos();
       OPT_SUM(qos);      break;
 #endif
+#ifdef WITH_IPINFO
     case MI_NDX(KITMENU_IPORIG, 0):
     case MI_NDX(KITMENU_IPINFO, 0):
       OPT_SUM(ipinfo);   break;
+#endif
     case MI_NDX(KITMENU_CHART,  SUBMENU_CHART_ON):
     case MI_NDX(KITMENU_CHART,  SUBMENU_CHART_1):
     case MI_NDX(KITMENU_CHART,  SUBMENU_CHART_2):
@@ -810,11 +814,14 @@ static const char* map_fkey2name[32] = { /*LDRS_NBAWVGJMXI*/
 //
 static void reorder_fkeys(const char *active) NONNULL(1);
 static void reorder_fkeys(const char *active) {
+  LOGMSG("< fld-active: %s", active);
   LOGMSG("< key-order: %s", fkey_order);
-  uint8_t *key = fkey_order;
-  for (uint i = 0; (i < (ARRAY_LEN(fkey_order) - 1)) && *active; i++, key++)
-    if (*key && strchr(active, *key))
-      *key = *active++;
+  char *key = fkey_order;
+  const char *act = active;
+  const uint sz = ARRAY_LEN(fkey_order) - 1;
+  for (uint i = 0; (i < sz) && *act; i++, key++)
+    if (memchr(active, *key, sz))
+      *key = *act++;
   LOGMSG("> key-order: %s", fkey_order);
 }
 //
@@ -833,15 +840,14 @@ static void init_mi_fkeys(void) {
   for (uint i = 0; i < ARRAY_LEN(opts); i++) {
     bool on = false;
     if (i < (ARRAY_LEN(fkey_order) - 1)) {
-      const uint8_t *key = &fkey_order[i];
-      int ndx = *key;
-      ndx -= FK_MIN;
+      const char key = fkey_order[i];
+      int ndx = (int)key - FK_MIN;
       if ((ndx >= 0) && (ndx < (int)ARRAY_LEN(map_fkey2name))) {
         const char *name = map_fkey2name[ndx];
         if (name) {
           fkey_menuitems[i].val.key = key;
           opts[i].name = MENUSTRW(name);
-          on = (*key && strchr(active_fkeys, *key));
+          on = memchr(active_fkeys, key, sizeof(FSET_ALL) - 1);
         }
       }
     }
@@ -1638,13 +1644,8 @@ static void menuaction_chart(menuitem_s *data, kitmenu_s *kit UNUSED) {
   LOGMSG("on=%d, mode=%d, color=%d", subopts.chart_on, chart_mode, run_opts.color);
 }
 //
-static void menuaction_fkeys(menuitem_s *data, kitmenu_s *kit) NONNULL(1, 2);
-static void menuaction_fkeys(menuitem_s *data, kitmenu_s *kit) {
-  // toggle current key
-  bool *flag = data->val.flag;
-  if (flag)
-    *flag = !*flag;
-  // recollect keys
+static void recollect_fld_keys(kitmenu_s *kit) NONNULL(1);
+static void recollect_fld_keys(kitmenu_s *kit) {
   char state[sizeof(FSET_ALL)] = {0};
   char *p = state;
   ITEM **item = kit->items;
@@ -1652,10 +1653,10 @@ static void menuaction_fkeys(menuitem_s *data, kitmenu_s *kit) {
     if (IS_SELECTABLE(*item)) {
       menuitem_s *data = item_userptr(*item);
       if (data) {
-        const uint8_t *key  = data->val.key;
-        const bool    *flag = data->val.flag;
-        if (key && *key && flag && *flag)
-          *p++ = *key;
+        const char  key  = data->val.key;
+        const bool *flag = data->val.flag;
+        if (key && flag && *flag)
+          *p++ = key;
       }
     }
   }
@@ -1664,9 +1665,15 @@ static void menuaction_fkeys(menuitem_s *data, kitmenu_s *kit) {
       LOGMSG("active: %s -> %s", active_fkeys, state);
     else
       LOGMSG("set_active_fkeys(%s): failed", state);
-// TODO: move menuitems with arrow-keys and reorder
-//    LOGMSG("all-in-order %s", fkey_order);
   }
+}
+//
+static void menuaction_fkeys(menuitem_s *data, kitmenu_s *kit) NONNULL(1, 2);
+static void menuaction_fkeys(menuitem_s *data, kitmenu_s *kit) {
+  bool *flag = data->val.flag;
+  if (flag)
+    *flag = !*flag;
+  recollect_fld_keys(kit);
 }
 //
 static void menuaction_cycles_unlim(menuitem_s *data, kitmenu_s *kit) NONNULL(1, 2);
@@ -1838,51 +1845,91 @@ void menu_line_updown(bool up) {
   }
 }
 
-void menu_line_reorder(bool up, void (*reset)(void)) {
-  kitmenu_s *kit = get_active_priokit();
-  if (kit && kit->menu && (kit->ndx == KITMENU_IPINFO)) {
-    LOGMSG("%s: move %s", kit->log, up ? "up" : "down");
-    ITEM *item = current_item(kit->menu);
-    int ndx = item ? item_index(item) : -1;
-    uint len = kit->len;
-    bool reorder = up ?
-      ((ndx > 0) && (ndx < (int)len)) :
-      ((ndx >= 0) && (ndx < ((int)len - 1)));
-    if (reorder) {
-      int next = up ?
-        drivable_up  (kit, ndx - 1) :
-        drivable_down(kit, ndx + 1);
-      if ((next >= 0) && (ndx < (int)len)) {
-        LOGMSG("%s: position: %d -> %d", kit->log, ndx, next);
-        ITEM *swap       = kit->items[ndx];
-        kit->items[ndx]  = kit->items[next];
-        kit->items[next] = swap;
-        if (up)
-          for (int i = ndx; i > next; i--)
-            menu_driver(kit->menu, REQ_UP_ITEM);
-        else
-          for (int i = ndx; i < next; i++)
-            menu_driver(kit->menu, REQ_DOWN_ITEM);
-        for (uint i = 0; (i < kit->len); i++) {
-          menuitem_s *data = item_userptr(kit->items[i]);
-          if (data)
-            ipinfo_set_ord(i, data->val.ord);
-        }
-        recollect_ii_toggles(kit);
-        if (reset)
-          reset();
-        menu_toggle_look();
-      }
-    }
-  }
-}
-
 void menu_page_updown(int lines) {
   bool up = (lines > 0);
   if (lines < 0)
     lines = -lines;
   for (int i = 0; i < lines; i++)
     menu_line_updown(up);
+}
+
+static inline void fkey_set_fld(uint n, char ch) {
+  if (memchr(FSET_ALL, ch, sizeof(FSET_ALL) - 1)
+      && (n < (sizeof(fkey_order) - 1)))
+    fkey_order[n] = ch;
+}
+//
+static void finish_fld_reordering(kitmenu_s *kit) NONNULL(1);
+static void finish_fld_reordering(kitmenu_s *kit) {
+  for (uint i = 0; (i < kit->len); i++) {
+    menuitem_s *data = item_userptr(kit->items[i]);
+    if (data && data->val.key)
+      fkey_set_fld(i, data->val.key);
+  }
+  recollect_fld_keys(kit);
+}
+//
+#ifdef WITH_IPINFO
+static void finish_ipi_reordering(kitmenu_s *kit) NONNULL(1);
+static void finish_ipi_reordering(kitmenu_s *kit) {
+  for (uint i = 0; (i < kit->len); i++) {
+    menuitem_s *data = item_userptr(kit->items[i]);
+    if (data)
+      ipinfo_set_ord(i, data->val.ord);
+  }
+  recollect_ii_toggles(kit);
+}
+#endif
+//
+static bool menu_reorder_smth(bool up, kitmenu_s *kit,
+  void (*reset)(void), void (*finish)(kitmenu_s *kit)) NONNULL(2, 4);
+static bool menu_reorder_smth(bool up, kitmenu_s *kit,
+  void (*reset)(void), void (*finish)(kitmenu_s *kit)) { // NONNULL(kit && kit->menu)
+  bool done = false;
+  ITEM *item = current_item(kit->menu);
+  int ndx = item ? item_index(item) : -1;
+  uint len = kit->len;
+  bool reorder = up ?
+    ((ndx > 0) && (ndx < (int)len)) :
+    ((ndx >= 0) && (ndx < ((int)len - 1)));
+  if (reorder) {
+    int next = up ?
+      drivable_up  (kit, ndx - 1) :
+      drivable_down(kit, ndx + 1);
+    done = ((next >= 0) && (ndx < (int)len));
+    if (done) {
+      LOGMSG("%s: position: %d -> %d", kit->log, ndx, next);
+      ITEM *swap       = kit->items[ndx];
+      kit->items[ndx]  = kit->items[next];
+      kit->items[next] = swap;
+      if (up)
+        for (int i = ndx; i > next; i--)
+          menu_driver(kit->menu, REQ_UP_ITEM);
+      else
+        for (int i = ndx; i < next; i++)
+          menu_driver(kit->menu, REQ_DOWN_ITEM);
+      finish(kit);
+      if (reset)
+        reset();
+      menu_toggle_look();
+    }
+  }
+  return done;
+}
+
+void menu_sub_reorder(bool up, void (*reset)(void)) {
+  kitmenu_s *kit = get_active_priokit();
+  if (kit && kit->menu) {
+    menu_ndx_t ndx = kit->ndx;
+    void (*finish)(kitmenu_s*) =
+#ifdef WITH_IPINFO
+      (ndx == KITMENU_IPINFO) ? finish_ipi_reordering :
+#endif
+      (ndx == KITMENU_FKEYS)  ? finish_fld_reordering :
+      NULL;
+    if (finish && menu_reorder_smth(up, kit, reset, finish))
+      LOGMSG("%s: moved %s", kit->log, up ? "up" : "down");
+  }
 }
 
 key_action_t menu_action(void) {

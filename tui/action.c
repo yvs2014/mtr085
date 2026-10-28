@@ -765,7 +765,7 @@ key_action_t tui_actionw(WINDOW *win, void (*reset)(void)) { // NONNULL(1)
 #ifdef WITH_MENU
       // reorder: move menuline up/down
       if (menu_active())
-        menu_line_reorder(ch == KEY_SR ? LINEUP : LINEDOWN, reset);
+        menu_sub_reorder(ch == KEY_SR ? LINEUP : LINEDOWN, reset);
 #endif
       break;
     default: break;

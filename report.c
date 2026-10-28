@@ -220,12 +220,14 @@ static void report_headstat(int at UNUSED, const t_stat *stat) {
     printf("%*s", stat->min, "");
 }
 
-static void report_print_header(int hostlen, int infolen) {
+static void report_print_header(int hostlen, int infolen UNUSED) {
   printf("%*s", IND_REP, "");
   // left
+#ifdef WITH_IPINFO
   { char info[NAMELEN] = {0};
     ipinfo_head_fix(sizeof(info), info);
     REPORT_INFO(infolen, info); }
+#endif
   fputs(HOST_STR, stdout);
   int len = hostlen - ustrnlen(HOST_STR, hostlen);
   if (len > 0)
@@ -244,16 +246,18 @@ static void report_bodystat(int at, const t_stat *stat) {
     printf("%*s", stat->min, "");
 }
 
-static void report_print_rest(int at, int hostlen, int infolen) {
+static void report_print_rest(int at, int hostlen, int infolen UNUSED) {
   for (int i = 0; i < MAXPATH; i++) {
     if (i == hop[at].current)
       continue; // because already printed
     if (!addr_exist(&IP_AT_NDX(at, i)))
       break; // done
     printf("%*s", IND_REP, "");
+#ifdef WITH_IPINFO
     { char info[NAMELEN] = {0};
       ipinfo_data_fix(sizeof(info), info, at, i);
       REPORT_INFO(infolen, info); }
+#endif
     print_nameaddr(at, i, hostlen);
     putchar('\n');
 #ifdef WITH_MPLS
@@ -270,6 +274,7 @@ static void report_print_body(int at, int hostlen, int infolen) {
   const char *color = (netcolor > 0) ? ((netcolor > 1) ? ANSI_RED : ANSI_YELLOW) : NULL;
   if (color)
     fputs(color, stdout);
+#ifdef WITH_IPINFO
   { char info[NAMELEN] = {0};
     ipinfo_data_fix(sizeof(info), info, at, hop[at].current);
     const char *keep = color;
@@ -279,6 +284,7 @@ static void report_print_body(int at, int hostlen, int infolen) {
     if (istty)
       fputs(keep ? keep : ANSI_NORM, stdout);
   }
+#endif
   print_nameaddr(at, hop[at].current, hostlen);
   // body: right
   foreach_stat(at, report_bodystat, '\n');

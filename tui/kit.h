@@ -30,7 +30,7 @@ void menu_inout(int key);
 void menu_line_updown(bool up);
 void menu_page_updown(int lines);
 int  menu_form_key(int key);
-void menu_line_reorder(bool up, void (*reset)(void));
+void menu_sub_reorder(bool up, void (*reset)(void));
 #define LINEUP   true
 #define LINEDOWN false
 //
