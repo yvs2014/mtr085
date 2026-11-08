@@ -25,7 +25,12 @@ void onoff_jitter(void);
 #endif
 const t_stat* active_stats(size_t nth);
 
+#ifdef TUIMODE
 extern bool color_ready;
+extern void require_redraw(void);
+extern void (*tuimode_close)(void);
+#endif
+extern char tgterr_txt[NAMELEN]; // for current target
 
 long str2l(const char *arg);
 int arg2int(int8_t opt, const char *arg, int min, int max,

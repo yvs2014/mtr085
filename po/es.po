@@ -471,9 +471,6 @@ msgstr "Tiempo de espera de caché"
 msgid "No cache"
 msgstr "Sin caché"
 
-msgid "Mouse is only supported with option '-1'"
-msgstr "Ratón solo es compatible con opción '-1'"
-
 
 ## misc
 

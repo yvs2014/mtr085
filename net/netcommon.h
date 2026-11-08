@@ -89,8 +89,6 @@ bool set_opt_ck6(int sock);
 //
 #define NET_FAIL_WARN(fmt, ...) do {                     \
   WARNXF(fmt ": %s", __VA_ARGS__, tgterr_txt);           \
-  snprinte(logerr_txt, sizeof(logerr_txt),               \
-    fmt ": %s", __VA_ARGS__, tgterr_txt);                \
   LOGRET_RC(false, fmt ": %s", __VA_ARGS__, tgterr_txt); \
 } while (0)
 //

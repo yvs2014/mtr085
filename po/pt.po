@@ -472,9 +472,6 @@ msgstr "Tempo limite cache"
 msgid "No cache"
 msgstr "Sem cache"
 
-msgid "Mouse is only supported with option '-1'"
-msgstr "Rato só é compatível com opção '-1'"
-
 
 ## misc
 

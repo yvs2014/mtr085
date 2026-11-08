@@ -21,7 +21,7 @@
 #define MAX_ADDRSTRLEN INET6_ADDRSTRLEN
 
 #ifndef GITREV
-#define GITREV "343"
+#define GITREV "344"
 #endif
 
 #ifndef HAVE_UINT
@@ -243,17 +243,17 @@ typedef union opt_sum_u {
 
 // note, VA_OPT min compat: gcc8, clang6
 #if (__GNUC__ >= 8) || (__clang_major__ >= 6) || (__STDC_VERSION__ >= 202311L)
-#define WARNF(fmt, ...)   warn("%s: " fmt, __func__ __VA_OPT__(,) __VA_ARGS__)
-#define WARNXF(fmt, ...) warnx("%s: " fmt, __func__ __VA_OPT__(,) __VA_ARGS__)
-#define ERRF(status, fmt, ...)   err(status, "%s: " fmt, __func__ __VA_OPT__(,) __VA_ARGS__)
-#define ERRXF(status, fmt, ...) errx(status, "%s: " fmt, __func__ __VA_OPT__(,) __VA_ARGS__)
-#define FAILF(fmt, ...)   errx(EXIT_FAILURE, "%s: " fmt, __func__ __VA_OPT__(,) __VA_ARGS__)
+#define WARNF(fmt, ...)   warntty("%s: " fmt, __func__ __VA_OPT__(,) __VA_ARGS__)
+#define WARNXF(fmt, ...) warnxtty("%s: " fmt, __func__ __VA_OPT__(,) __VA_ARGS__)
+#define ERRF(status, fmt, ...)   errtty(status, "%s: " fmt, __func__ __VA_OPT__(,) __VA_ARGS__)
+#define ERRXF(status, fmt, ...) errxtty(status, "%s: " fmt, __func__ __VA_OPT__(,) __VA_ARGS__)
+#define FAILF(fmt, ...)   errxtty(EXIT_FAILURE, "%s: " fmt, __func__ __VA_OPT__(,) __VA_ARGS__)
 #else /* no VA_OPT, use GNU extension */
-#define WARNF(fmt, ...)   warn("%s: " fmt, __func__, ##__VA_ARGS__)
-#define WARNXF(fmt, ...) warnx("%s: " fmt, __func__, ##__VA_ARGS__)
-#define ERRF(status, fmt, ...)   err(status, "%s: " fmt, __func__, ##__VA_ARGS__)
-#define ERRXF(status, fmt, ...) errx(status, "%s: " fmt, __func__, ##__VA_ARGS__)
-#define FAILF(fmt, ...)   errx(EXIT_FAILURE, "%s: " fmt, __func__, ##__VA_ARGS__)
+#define WARNF(fmt, ...)   warntty("%s: " fmt, __func__, ##__VA_ARGS__)
+#define WARNXF(fmt, ...) warnxtty("%s: " fmt, __func__, ##__VA_ARGS__)
+#define ERRF(status, fmt, ...)   errtty(status, "%s: " fmt, __func__, ##__VA_ARGS__)
+#define ERRXF(status, fmt, ...) errxtty(status, "%s: " fmt, __func__, ##__VA_ARGS__)
+#define FAILF(fmt, ...)   errxtty(EXIT_FAILURE, "%s: " fmt, __func__, ##__VA_ARGS__)
 #endif /* VA_OPT, VA_ARGS */
 
 // time conversions

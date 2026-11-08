@@ -471,9 +471,6 @@ msgstr "Timeout cache"
 msgid "No cache"
 msgstr "Nessuna cache"
 
-msgid "Mouse is only supported with option '-1'"
-msgstr "Mouse è supportato solo con opzione '-1'"
-
 
 ## misc
 

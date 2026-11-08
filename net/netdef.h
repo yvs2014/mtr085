@@ -130,10 +130,6 @@ extern hop_t hop[MAXHOST];
 extern int af;    // address family
 extern int proto; // icmp-udp-tcp proto
 
-extern char strerr_txt[NAMELEN];     // any target
-extern char tgterr_txt[NAMELEN];     // current target
-extern char logerr_txt[NAMELEN * 2]; // $func: $tgterr
-
 //
 
 bool  addr4exist(const void *a) NONNULL(1);
@@ -161,8 +157,8 @@ void set_sock6(void);
 bool sock6_ready(int type);
 #endif
 
-void keep_error(int rc, const char *prefix) NONNULL(2);
 const char* rstrerror(int rc);
+void warnerr_tgt(int rc, const char *prefix) NONNULL(2);
 
 #define SA(sa)  ((struct sockaddr     *)(sa))
 #define SA4(sa) ((struct sockaddr_in  *)(sa))

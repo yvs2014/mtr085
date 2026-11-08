@@ -14,7 +14,12 @@ static const double float_dec2 = 0.1;
 
 static char custom_fkeys[sizeof(FSET_ALL)];
 
+#ifdef TUIMODE
 bool color_ready;
+void (*tuimode_close)(void);
+#endif
+
+char tgterr_txt[NAMELEN]; // for current target
 
 const char* active_fkeys;
 int fkey_index[UCHAR_MAX + 1] = {-1}; // key->index backresolv
@@ -187,61 +192,82 @@ bool intval_in_arr(uint len, const int arr[len], int value) { // NONNULL(2)
 }
 
 #ifdef USE_COLOR
-void warntty(const char *fmt, ...) {
+static void aux_warn(const char *tail, const char *fmt, va_list args) {
   if (mtrname)
     fprintf(stderr, "%s%s%s: ", TTY_BOLD, mtrname, TTY_NORM);
   if (istty)
     fprintf(stderr, "%s", ANSI_YELLOW);
-  va_list args;
-  va_start(args, fmt);
   vfprintf(stderr, fmt, args);
-  va_end(args);
-  fprintf(stderr, ": %s\n", strerror(errno));
-  if (istty)
-    fprintf(stderr, "%s", ANSI_NORM);
-}
-//
-void warnxtty(const char *fmt, ...) {
-  if (mtrname)
-    fprintf(stderr, "%s%s%s: ", TTY_BOLD, mtrname, TTY_NORM);
-  if (istty)
-    fprintf(stderr, "%s", ANSI_YELLOW);
-  va_list args;
-  va_start(args, fmt);
-  vfprintf(stderr, fmt, args);
-  va_end(args);
+  if (tail)
+    fprintf(stderr, ": %s", tail);
   if (istty)
     fprintf(stderr, "%s", ANSI_NORM);
   putc('\n', stderr);
 }
+
+void warntty(const char *fmt, ...) {
+  va_list args;
+  va_start(args, fmt);
+#ifdef TUIMODE
+  if (tuimode_close)
+    require_redraw();
+  else
+#endif
+  {
+    va_list copy;
+    va_copy(copy, args);
+    aux_warn(strerror(errno), fmt, args);
+    va_end(copy);
+  }
+  vsnprintf(tgterr_txt, sizeof(tgterr_txt), fmt, args);
+  va_end(args);
+}
+void warnxtty(const char *fmt, ...) {
+  va_list args;
+  va_start(args, fmt);
+#ifdef TUIMODE
+  if (tuimode_close)
+    require_redraw();
+  else
+#endif
+  {
+    va_list copy;
+    va_copy(copy, args);
+    aux_warn(NULL, fmt, copy);
+    va_end(copy);
+  }
+  vsnprintf(tgterr_txt, sizeof(tgterr_txt), fmt, args);
+  va_end(args);
+}
 //
-NORETURN void errtty(int eval, const char *fmt, ...) {
+static void aux_err(const char *tail, const char *fmt, va_list args) {
+#ifdef TUIMODE
+  if (tuimode_close)
+    tuimode_close();
+#endif
   if (mtrname)
     fprintf(stderr, "%s%s%s: ", TTY_BOLD, mtrname, TTY_NORM);
   if (istty)
     fprintf(stderr, "%s", ANSI_RED);
-  va_list args;
-  va_start(args, fmt);
   vfprintf(stderr, fmt, args);
-  va_end(args);
-  fprintf(stderr, ": %s\n", strerror(errno));
+  if (tail)
+    fprintf(stderr, ": %s", tail);
   if (istty)
     fprintf(stderr, "%s", ANSI_NORM);
+  putc('\n', stderr);
+}
+NORETURN void errtty(int eval, const char *fmt, ...) {
+  va_list args;
+  va_start(args, fmt);
+  aux_err(strerror(errno), fmt, args);
+  va_end(args);
   exit(eval);
 }
-//
 NORETURN void errxtty(int eval, const char *fmt, ...) {
-  if (mtrname)
-    fprintf(stderr, "%s%s%s: ", TTY_BOLD, mtrname, TTY_NORM);
-  if (istty)
-    fprintf(stderr, "%s", ANSI_RED);
   va_list args;
   va_start(args, fmt);
-  vfprintf(stderr, fmt, args);
+  aux_err(NULL, fmt, args);
   va_end(args);
-  if (istty)
-    fprintf(stderr, "%s", ANSI_NORM);
-  putc('\n', stderr);
   exit(eval);
 }
 #endif

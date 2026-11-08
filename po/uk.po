@@ -471,9 +471,6 @@ msgstr "Таймаут кешування"
 msgid "No cache"
 msgstr "Без кешу"
 
-msgid "Mouse is only supported with option '-1'"
-msgstr "Миша підтримується тільки з опцією '-1'"
-
 
 ## misc
 

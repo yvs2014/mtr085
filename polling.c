@@ -227,8 +227,12 @@ static void proceed_tcp(struct timespec *tm UNUSED) {
   }
 }
 
-#define PL_GETTIME(tspec) { if (clock_gettime(CLOCK_MONOTONIC, (tspec)) < 0) { \
-  keep_error(errno, __func__); return false; }}
+#define PL_GETTIME(tspec) do {                       \
+  if (clock_gettime(CLOCK_MONOTONIC, (tspec)) < 0) { \
+    warnerr_tgt(errno, __func__);                    \
+    return false;                                    \
+  }                                                  \
+} while (0)
 
 static bool svc(struct timespec *last, const struct timespec *interval, int *timeout) NONNULL(1, 2, 3);
 static bool svc(struct timespec *last, const struct timespec *interval, int *timeout) {
@@ -236,7 +240,7 @@ static bool svc(struct timespec *last, const struct timespec *interval, int *tim
   struct timespec now, tv;
   PL_GETTIME(&now);
   timespecadd(last, interval, &tv);
-
+  //
   if (timespeccmp(&now, &tv, >)) {
     *last = now;
     if (grace != GRACE_START) {
@@ -254,13 +258,13 @@ static bool svc(struct timespec *last, const struct timespec *interval, int *tim
       }
     }
   }
-
+  //
   if (grace == GRACE_START) {
     timespecsub(&now, &grace_started, &tv);
     if (timespeccmp(&tv, &GRACETIME, >))
       return false;
   }
-
+  //
   struct timespec tout;
   timespecsub(&now, last, &tout);
   timespecsub(interval, &tout, &tout);
@@ -666,9 +670,7 @@ bool poll_loop(void) {
     if (rv < 0) {
       int e = errno;
       display_close(true);
-      const char* str = rstrerror(e);
-      WARNF("%s", str);
-      LOGMSG("%s", str);
+      warnerr_tgt(e, __func__);
       break;
     }
     if (rv) {

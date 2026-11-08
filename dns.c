@@ -153,7 +153,7 @@ static bool dns_sockets(void) {
   if (nscount4 && (resfd4 < 0)) {
     resfd4 = socket(AF_INET, SOCK_DGRAM, 0);
     if (resfd4 < 0)
-      warn("%s", "dns-socket4");
+      warntty("%s", "dns-socket4");
     else
       /*summ*/ sum_sock[0]++;
   }
@@ -205,7 +205,7 @@ static inline void dns_nses(void) {
 #endif
     (nscount4 > 0);
   if (!dns_ready) {
-    warnx("%s", NODNS_ERR);
+    warnxtty("%s", NODNS_ERR);
     MYRES_CLOSE(myres);
   }
 }
@@ -229,7 +229,7 @@ bool dns_open(void) {
   if (dns_ready)
     return true;
   if (MYRES_INIT(myres) < 0)
-    warn("%s", MYRES_INIT_STR);
+    warntty("%s", MYRES_INIT_STR);
   else
     dns_nses();
   if (dns_ready) {
@@ -650,6 +650,6 @@ void dns_parse(int fd, int family) {
     else
       LOGMSG("%s", "Reply from unknown source");
   } else if (r < 0)
-    warn("recvfrom(fd=%d)", fd);
+    warntty("recvfrom(fd=%d)", fd);
 }
 

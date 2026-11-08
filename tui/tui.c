@@ -55,7 +55,7 @@ enum {
   LINEMAXLEN  = 1024,
 };
 
-enum {NDX_TOP = 0, NDX_STATUS, NDX_LABEL, NDX_WORK};
+enum {NDX_TOP = 0, NDX_LABEL, NDX_WORK, NDX_WARN, NDX_STATUS};
 typedef struct {
   WINDOW *win;
 #ifdef WITH_MENU
@@ -66,17 +66,18 @@ typedef struct {
 
 static area_s area[] = {
   [NDX_TOP]    = {.height =  1},
-  [NDX_STATUS] = {.height =  1},
   [NDX_LABEL]  = {.height =  2},
-  [NDX_WORK]   = {.height = -4 /*sum others*/},
+  [NDX_WORK]   = {.height = -5 /*sum others*/},
+  [NDX_WARN]   = {.height =  1},
+  [NDX_STATUS] = {.height =  1},
 };
-static int area_old_order[ARRAY_LEN(area)] = {NDX_TOP, NDX_STATUS, NDX_LABEL, NDX_WORK};
-static int area_new_order[ARRAY_LEN(area)] = {NDX_TOP, NDX_LABEL, NDX_WORK, NDX_STATUS};
+static int area_old_order[ARRAY_LEN(area)] = {NDX_TOP, NDX_STATUS, NDX_LABEL, NDX_WORK, NDX_WARN};
+static int area_new_order[ARRAY_LEN(area)] = {NDX_TOP, NDX_LABEL, NDX_WORK, NDX_WARN, NDX_STATUS};
 static char* (*tui_datetime)(time_t at, size_t size, char buff[size]) NONNULL(3)
   = datetime_c;
 
 typedef struct {
-  bool top, labels, chart_title, field_status;
+  bool top, labels, chart_title, field_status, warn_msg;
 } redrawn_s;
 static redrawn_s redrawn; // need redrawing unless true
 
@@ -91,7 +92,7 @@ static title_len_s titlelen;
 
 //
 
-static void require_redraw(void) {
+void require_redraw(void) {
   memset(&redrawn, 0, sizeof(redrawn));
   titlelen = (title_len_s){.screen = -1, .stat = -1, .chart = -1};
   LOGMSG("%s", "flags are reset");
@@ -99,7 +100,7 @@ static void require_redraw(void) {
 
 key_action_t tui_keyaction(void) {
   WINDOW *win = area[NDX_LABEL].win;
-  key_action_t action = win ? tui_actionw(win, require_redraw) : ActionNone;
+  key_action_t action = win ? tui_actionw(win) : ActionNone;
   if (action == ActionQuit)
     quit_acked = true;
   return action;
@@ -528,6 +529,17 @@ static void redraw_top(WINDOW *win) {
   WREFRESH(win);
 }
 
+static void redraw_warns(WINDOW *win) NONNULL(1);
+static void redraw_warns(WINDOW *win) {
+  werase(win);
+  if (tgterr_txt[0]) {
+    wattron(win, A_BOLD);
+    wprintw(win, " %s: %s", ERROR_STR, tgterr_txt);
+    wattroff(win, A_BOLD);
+  }
+  WREFRESH(win);
+}
+
 static void print_hintmenu(WINDOW *win, char ch, const char *name) NONNULL(1, 3);
 static void print_hintmenu(WINDOW *win, char ch, const char *name) {
   waddch(win, ' ');
@@ -696,6 +708,11 @@ static inline void redraw_areas(void) {
     redrawn.top = true;
   }
   redraw_mainarea(area[NDX_LABEL].win, area[NDX_WORK].win);
+  redraw_top(area[NDX_TOP].win);
+  if (!redrawn.warn_msg) {
+    redraw_warns(area[NDX_WARN].win);
+    redrawn.warn_msg = true;
+  }
   redraw_status(area[NDX_STATUS].win);
 }
 
@@ -705,7 +722,7 @@ void tui_redraw(void) {
     doupdate();
   } else {
     erase();
-    printw("TUI init areas: failed");
+    printw("%s failed", "init screen areas");
     refresh();
   }
 }
@@ -720,7 +737,7 @@ bool tui_open(void) {
   screen_ready = initscr();
   LOGMSG("screen ready: %d", screen_ready);
   if (!screen_ready) {
-    warnx("TUI initscr() failed");
+    warnxtty("%s failed", "init screen");
     return false;
   }
 #ifdef WITH_MOUSE
@@ -745,6 +762,7 @@ bool tui_open(void) {
   screen_title_len = screen_title[0] ? ustrnlen(screen_title, getmaxx(area[NDX_TOP].win)) : 0;
   //
   curs_set(0);
+  tuimode_close = okay ? tui_close : NULL;
   return okay;
 }
 
@@ -767,6 +785,7 @@ void tui_confirm(void) {
 }
 
 void tui_close(void) {
+  tuimode_close = NULL;
 #ifdef LOGMOD
   { char str[64] = {0};
     const char *date = tui_datetime ? tui_datetime(time(NULL), sizeof(str), str) : NULL;

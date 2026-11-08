@@ -1881,10 +1881,8 @@ static void finish_ipi_reordering(kitmenu_s *kit) {
 }
 #endif
 //
-static bool menu_reorder_smth(bool up, kitmenu_s *kit,
-  void (*reset)(void), void (*finish)(kitmenu_s *kit)) NONNULL(2, 4);
-static bool menu_reorder_smth(bool up, kitmenu_s *kit,
-  void (*reset)(void), void (*finish)(kitmenu_s *kit)) { // NONNULL(kit && kit->menu)
+static bool menu_reorder_smth(bool up, kitmenu_s *kit, void (*finish)(kitmenu_s *kit)) NONNULL(2, 3);
+static bool menu_reorder_smth(bool up, kitmenu_s *kit, void (*finish)(kitmenu_s *kit)) { // NONNULL(kit && kit->menu)
   bool done = false;
   ITEM *item = current_item(kit->menu);
   int ndx = item ? item_index(item) : -1;
@@ -1909,15 +1907,14 @@ static bool menu_reorder_smth(bool up, kitmenu_s *kit,
         for (int i = ndx; i < next; i++)
           menu_driver(kit->menu, REQ_DOWN_ITEM);
       finish(kit);
-      if (reset)
-        reset();
+      require_redraw();
       menu_toggle_look();
     }
   }
   return done;
 }
 
-void menu_sub_reorder(bool up, void (*reset)(void)) {
+void menu_sub_reorder(bool up) {
   kitmenu_s *kit = get_active_priokit();
   if (kit && kit->menu) {
     menu_ndx_t ndx = kit->ndx;
@@ -1927,7 +1924,7 @@ void menu_sub_reorder(bool up, void (*reset)(void)) {
 #endif
       (ndx == KITMENU_FKEYS)  ? finish_fld_reordering :
       NULL;
-    if (finish && menu_reorder_smth(up, kit, reset, finish))
+    if (finish && menu_reorder_smth(up, kit, finish))
       LOGMSG("%s: moved %s", kit->log, up ? "up" : "down");
   }
 }

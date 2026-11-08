@@ -486,8 +486,7 @@ static key_action_t action_map[UINT8_MAX] =  {
 #endif
 };
 
-static void reset_by_key(int key, void (*reset)(void)) NONNULL(2);
-static void reset_by_key(int key, void (*reset)(void)) {
+static void reset_by_key(int key) {
   switch (key) {
     case '?':
     case 'h':
@@ -521,12 +520,12 @@ static void reset_by_key(int key, void (*reset)(void)) {
 #endif
     case 'u': // [ActionToggleUDP]
     case 'x': // [ActionCache]
-      reset();
+      require_redraw();
       break;
 #ifdef WITH_IPINFO
     case 'y': // [ActionMultiII]
       if (IPINFOED)
-        reset();
+        require_redraw();
       break;
 #endif
 #ifdef WITH_MENU
@@ -534,7 +533,7 @@ static void reset_by_key(int key, void (*reset)(void)) {
     case '\r':
     case '\n':
       if (menu_active())
-        reset();
+        require_redraw();
 #endif
     default: break;
   }
@@ -655,7 +654,7 @@ static int mouse2key(void) {
 
 // global
 
-key_action_t tui_actionw(WINDOW *win, void (*reset)(void)) { // NONNULL(1)
+key_action_t tui_actionw(WINDOW *win) { // NONNULL(1)
   key_action_t action = ActionNone /*0*/;
   int ch = wgetch(win);
   if (!ch || (ch == ERR))
@@ -664,8 +663,7 @@ key_action_t tui_actionw(WINDOW *win, void (*reset)(void)) { // NONNULL(1)
 #ifdef KEY_RESIZE
   // skip resize keys
   if (ch == KEY_RESIZE) { // cleanup by batch
-    if (reset)
-      reset();
+    require_redraw();
     for (uint i = 0; (ch == KEY_RESIZE) && (i < GETCH_BATCH); i++)
       ch = wgetch(win);
     if ((ch == KEY_RESIZE) || (ch == ERR)) { // otherwise flush
@@ -682,11 +680,11 @@ key_action_t tui_actionw(WINDOW *win, void (*reset)(void)) { // NONNULL(1)
       return action;
   }
 #endif
-  if (reset)
-    reset_by_key(ch, reset);
 //
+  reset_by_key(ch);
 #ifdef WITH_MENU
   if (menu_active() && (posted_form >= 0)) {
+    require_redraw();
     ch = menu_form_key(ch);
     if (!ch)
       return action;
@@ -695,6 +693,7 @@ key_action_t tui_actionw(WINDOW *win, void (*reset)(void)) { // NONNULL(1)
   if ((ch >= 0) && (ch < (int)ARRAY_LEN(actfn_map))) { // 8bit char
     tui_key_fn fn = actfn_map[ch];
     if (fn) { // handle it here
+      require_redraw();
       LOGCHAR("[handling inplace] fnmap index: ", ch);
       WINDOW *w = (fn == tui_key_h) ? stdscr : win;
       if (w)
@@ -706,6 +705,7 @@ key_action_t tui_actionw(WINDOW *win, void (*reset)(void)) { // NONNULL(1)
         case KEY_ENTER:
         case '\r':
         case '\n':
+          require_redraw();
           action = menu_action();
           LOGMSG("menu toggle action: %d", action);
           break;
@@ -728,6 +728,7 @@ key_action_t tui_actionw(WINDOW *win, void (*reset)(void)) { // NONNULL(1)
 #endif
       // decrease number of visible hops by one line
       dec_lines(1);
+      require_redraw();
       break;
     case KEY_DOWN:
 #ifdef WITH_MENU
@@ -736,6 +737,7 @@ key_action_t tui_actionw(WINDOW *win, void (*reset)(void)) { // NONNULL(1)
 #endif
       // increase number of visible hops by one line
       inc_lines(1);
+      require_redraw();
       break;
     case KEY_PPAGE: // PageUp
 #ifdef WITH_MENU
@@ -744,6 +746,7 @@ key_action_t tui_actionw(WINDOW *win, void (*reset)(void)) { // NONNULL(1)
 #endif
       // decrease number of visible hops by 'page'-lines
       dec_lines(LINES_PER_PAGE);
+      require_redraw();
       break;
     case KEY_NPAGE: // PageDown
 #ifdef WITH_MENU
@@ -752,20 +755,25 @@ key_action_t tui_actionw(WINDOW *win, void (*reset)(void)) { // NONNULL(1)
 #endif
       // increase number of visible hops by 'page'-lines
       inc_lines(LINES_PER_PAGE);
+      require_redraw();
       break;
 #ifdef WITH_MENU
     case KEY_LEFT:
     case KEY_RIGHT:
-      if (menu_active())
+      if (menu_active()) {
         menu_inout(ch);
+        require_redraw();
+      }
       break;
 #endif
     case KEY_SR: /*supposed to be shift+up  */
     case KEY_SF: /*supposed to be shift+down*/
 #ifdef WITH_MENU
       // reorder: move menuline up/down
-      if (menu_active())
-        menu_sub_reorder(ch == KEY_SR ? LINEUP : LINEDOWN, reset);
+      if (menu_active()) {
+        menu_sub_reorder(ch == KEY_SR ? LINEUP : LINEDOWN);
+        require_redraw();
+      }
 #endif
       break;
     default: break;

@@ -5,7 +5,7 @@
 #include "common.h"
 #include "inc.h" // IWYU pragma: keep
 
-key_action_t tui_actionw(WINDOW *win, void (*reset)(void)) NONNULL(1);
+key_action_t tui_actionw(WINDOW *win) NONNULL(1);
 void status_no_crd(WINDOW *win, uint len, char buff[len]) NONNULL(1, 3);
 #ifdef WITH_MOUSE
 void status_n_keep_crd(WINDOW *win, uint len, char buff[len]) NONNULL(1, 3);

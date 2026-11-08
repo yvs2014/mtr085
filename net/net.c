@@ -306,7 +306,7 @@ static int net_stat(uint port, const t_ipaddr *addr, const struct timespec *recv
       // no free slots? - warn once, and change the last one
       static bool warn_exceed_once;
       if (!warn_exceed_once) {
-        warnx("%s=%d (MAXPATH=%d): %s", HOP_STR, at, MAXPATH, strerror(EOVERFLOW));
+        warnxtty("%s=%d (MAXPATH=%d): %s", HOP_STR, at, MAXPATH, strerror(EOVERFLOW));
         warn_exceed_once = true;
       }
       ndx = MAXPATH - 1;
@@ -724,7 +724,7 @@ bool net_set_ifaddr(const char *ifaddr) { // NONNULL(1)
     case AF_INET:
       SPORT4(&lsa) = 0;
       if (!inet_aton(ifaddr, &SADDR4(&lsa))) {
-        warnx("%s: %s", ifaddr, strerror(EFAULT));
+        warnxtty("%s: %s", ifaddr, strerror(EFAULT));
         return false;
       }
       len = sizeof(SADDR4(&lsa));
@@ -733,7 +733,7 @@ bool net_set_ifaddr(const char *ifaddr) { // NONNULL(1)
     case AF_INET6:
       SPORT6(&lsa) = 0;
       if (inet_pton(af, ifaddr, &SADDR6(&lsa)) < 1) {
-        warnx("%s: %s", ifaddr, strerror(EFAULT));
+        warnxtty("%s: %s", ifaddr, strerror(EFAULT));
         return false;
       }
       len = sizeof(SADDR6(&lsa));
@@ -742,7 +742,7 @@ bool net_set_ifaddr(const char *ifaddr) { // NONNULL(1)
     default: break;
   }
   if (bind(SENDSOCK, SA(&lsa), len) < 0) {
-    warn("bind(%d)", SENDSOCK);
+    warntty("bind(%d)", SENDSOCK);
     return false;
   }
   return true;
@@ -798,7 +798,7 @@ void net_tcp_parse(int sock, int seq, int noerr, struct timespec *recv_at) { // 
 bool net_timedout(int seq) {
   struct timespec now, dt;
   if (clock_gettime(CLOCK_MONOTONIC, &now) < 0) {
-    keep_error(errno, __func__);
+    warnerr_tgt(errno, __func__);
     return false;
   }
   timespecsub(&now, &seqlist[seq].time, &dt);
@@ -867,7 +867,7 @@ void net_set_proto(int type) {
 #ifdef USE_RAW
     case IPPROTO_TCP:  hdr_minsz += sizeof(_tcphdr);  netping = ping_tcp;  break;
 #endif
-    default: warnx("%d: %s", type, strerror(EPROTONOSUPPORT));
+    default: warnxtty("%d: %s", type, strerror(EPROTONOSUPPORT));
   }
   minfailsz = hdr_minsz + IPHSZ_IN_REPLY + sizeof(_icmphdr);
 #ifndef USE_RAW

@@ -39,22 +39,8 @@ int portpid;
 ulong net_queries[QR_MAX];  // number of queries (sum, icmp, udp, tcp)
 ulong net_replies[QR_MAX];  // number of replies (sum, icmp, udp, tcp)
 
-char strerr_txt[NAMELEN];     // any target
-char tgterr_txt[NAMELEN];     // current target
-char logerr_txt[NAMELEN * 2]; // $func: $tgterr
-
 const t_ipaddr unspec_addr; // 0
 #define TCP_DEFAULT_PORT 80
-
-//
-
-static void net_warn(const char *prefix) NONNULL(1);
-static void net_warn(const char *prefix) {
-  char* str = tgterr_txt[0] ? tgterr_txt : "Unknown error";
-  warnx("%s: %s", prefix, str);
-  snprinte(logerr_txt, sizeof(logerr_txt), "%s: %s", prefix, str);
-  LOGMSG("%s: %s", prefix, str);
-}
 
 //
 
@@ -75,14 +61,13 @@ bool  (*addr_equal)(const void *a, const void *b) NONNULL(1, 2) = addr4equal;
 void* (*addr_copy)(void *dst, const void *src) NONNULL(1, 2) = addr4copy;
 
 const char* rstrerror(int rc) {
-  snprinte(strerr_txt, sizeof(strerr_txt), "%s", strerror(rc));
   snprinte(tgterr_txt, sizeof(tgterr_txt), "%s", strerror(rc));
   return tgterr_txt;
 }
 
-void keep_error(int rc, const char *prefix) { // NONNULL(2)
-  rstrerror(rc);
-  net_warn(prefix);
+void warnerr_tgt(int rc, const char *prefix) { // NONNULL(2)
+  warntty("%s: %s", prefix, strerror(rc));
+  LOGMSG("%s: %s", prefix, strerror(rc));
 }
 
 int new_sequence(int at) {
@@ -118,7 +103,7 @@ void save_sequence(int seq, int at) {
 bool save_curr_ts(int seq) {
   int rc = clock_gettime(CLOCK_MONOTONIC, &seqlist[seq].time);
   if (rc)
-    keep_error(errno, __func__);
+    warnerr_tgt(errno, __func__);
   return (rc == 0);
 }
 

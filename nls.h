@@ -191,7 +191,6 @@
 #define NCYCLES_STR    _(_NCYCLES_STR)
 #define MINTTL_STR     _(_MINTTL_STR)
 #define MAXTTL_STR     _(_MAXTTL_STR)
-#define MOUSE_OUT_STR  _("Mouse is only supported with option '-1'")
 #define INTERVAL_STR   _("Interval")
 #define QOSTOS_STR     _(_QOSTOS_STR)
 #define PSIZE_STR      _(_PSIZE_STR)

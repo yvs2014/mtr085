@@ -873,10 +873,8 @@ static void parse_options(int argc, char **argv) {
     tuilook = OLDLOOK; // by default so far at wip
 #endif
 #ifdef WITH_MOUSE
-  if (ini_opts.mouse && !((display_mode == DisplayTUI) || (display_mode == DisplayAuto))) {
-    WARNXT("%s", MOUSE_OUT_STR);
+  if (ini_opts.mouse && !((display_mode == DisplayTUI) || (display_mode == DisplayAuto)))
     ini_opts.mouse = false;
-  }
 #endif
 #ifdef USE_COLOR
   if (ini_opts.color && nocolor) {
@@ -1184,8 +1182,6 @@ static inline void main_fin(void) {
 #endif
   if (run_opts.stat)
     stat_fin();
-  if (strerr_txt[0] && (display_mode == DisplayTUI))
-    WARNXT("%s", strerr_txt); // duplicate an error cleaned by ncurses
   UNICODE_FREE;
   if (mtrname_dup) {
     mtrname = "";
@@ -1195,9 +1191,7 @@ static inline void main_fin(void) {
 }
 
 // return: failed or not
-static int resolv_n_ping(int port, bool next, bool fin) {
-  tgterr_txt[0] = 0;    // clear per target error message
-  ini_opts.port = port; // set initial port
+static int resolv_n_ping(bool next, bool fin) {
   t_res_rc rr = {       // default resolv data
     .target = dsthost,
     .hints = {
@@ -1261,16 +1255,22 @@ int main(int argc, char **argv) {
   //
   int port = ini_opts.port;
   int ec = 0;
+  bool anyerr = false;
   for (int ndx = optind; (ndx < argc) && argv[ndx];) {
     bool next = ndx > optind;
     dsthost   = argv[ndx++]; // there's ++
+    ini_opts.port = port; // set initial port
+    if (tgterr_txt[0])
+      anyerr = true;
+    if (next)
+      tgterr_txt[0] = 0;  // clear per target error message
     bool fin  = ndx == argc;
-    int rc = resolv_n_ping(port, next, fin);
+    int rc = resolv_n_ping(next, fin);
     if (rc && !ec)
       ec = rc;
   }
   //
   main_fin();
-  return strerr_txt[0] ? EXIT_FAILURE : ec;
+  return anyerr ? EXIT_FAILURE : ec;
 }
 
