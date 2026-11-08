@@ -207,8 +207,7 @@ short for 'riswhois.ripe.net CountryCode ASN'
 Specify maximum number of hops (max time-to-live value) traceroute will probe.  Default is 30.
 .ie "M"\*[oM]" \{\
 .It Fl M, Fl -mouse
-Run without mouse support even if a mouse is supported. Used in combination with option
-.Fl 1 .
+Run without mouse support even if a mouse is supported
 .\}
 .ie "n"\*[on]" \{\
 .It Fl n, Fl -no-dns

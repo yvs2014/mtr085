@@ -349,6 +349,9 @@ static char *short_options;
 char srchost[NAMELEN];
 const char *dsthost;
 display_mode_t display_mode = DisplayAuto;
+#ifdef WITH_MOUSE
+static int force_mouse = -1;
+#endif
 //
 
 static const char *iface_addr;
@@ -696,9 +699,6 @@ static void short_set(char opt) {
       if ((wasold && nownew) || (wasnew && !nownew))
         ERRXT(EINVAL, "-%c -%c: %s", wasnew ? OPT_NEWLOOK : OPT_OLDLOOK, opt, MUTEXCL_ERR);
       tuilook = nownew ? NEWLOOK : OLDLOOK;
-#ifdef WITH_MOUSE
-      ini_opts.mouse = nownew;
-#endif
     } break;
 #endif
 #ifdef ENABLE_IPV6
@@ -766,7 +766,7 @@ static void short_set(char opt) {
       break;
 #ifdef WITH_MOUSE
     case OPT_MOUSE:
-      ini_opts.mouse = false;
+      force_mouse = 0;
       break;
 #endif
 #ifdef ENABLE_DNS
@@ -870,11 +870,14 @@ static void parse_options(int argc, char **argv) {
     option_version(countv);
 #ifdef TUIMODE
   if (tuilook == UNKNLOOK)
-    tuilook = OLDLOOK; // by default so far at wip
-#endif
+    tuilook = NEWLOOK;
 #ifdef WITH_MOUSE
+  // mouse support by default in NEWLOOK TUI-mode
+  ini_opts.mouse = (force_mouse < 0) ? (tuilook == NEWLOOK) : force_mouse;
+  // disable mouse in non-intercative modes
   if (ini_opts.mouse && !((display_mode == DisplayTUI) || (display_mode == DisplayAuto)))
     ini_opts.mouse = false;
+#endif
 #endif
 #ifdef USE_COLOR
   if (ini_opts.color && nocolor) {

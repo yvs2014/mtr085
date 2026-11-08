@@ -1,14 +1,9 @@
-# work-in-progress: user sockets
 option('SOCKET',    type: 'combo', choices: ['raw', 'user', 'auto'], value: 'auto',
-#option('SOCKET',    type: 'combo', choices: ['raw', 'user', 'auto'], value: 'raw',
   description: 'RAW or USER sockets (AUTO is USER on Linux, otherwise RAW)')
-#
 option('TUI',       type: 'boolean', value: true,  description: 'TUI: [n]curses')
 option('COLOR',     type: 'boolean', value: true,  description: 'Colored output')
 option('MOUSE',     type: 'boolean', value: true,  description: 'Mouse (TUI required)')
-# work-in-progress: menu kit
-option('MENU',      type: 'boolean', value: false, description: 'Menu,Panel,Form (TUI required)')
-#
+option('MENU',      type: 'boolean', value: true,  description: 'Menu,Panel,Form (TUI required)')
 option('UNICODE',   type: 'boolean', value: true,  description: 'Unicode support')
 option('NLS',       type: 'boolean', value: true,  description: 'I18n support')
 option('DNS',       type: 'boolean', value: true,  description: 'DNS support')
