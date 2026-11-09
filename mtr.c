@@ -1258,13 +1258,10 @@ int main(int argc, char **argv) {
   //
   int port = ini_opts.port;
   int ec = 0;
-  bool anyerr = false;
   for (int ndx = optind; (ndx < argc) && argv[ndx];) {
     bool next = ndx > optind;
     dsthost   = argv[ndx++]; // there's ++
     ini_opts.port = port; // set initial port
-    if (tgterr_txt[0])
-      anyerr = true;
     if (next)
       tgterr_txt[0] = 0;  // clear per target error message
     bool fin  = ndx == argc;
@@ -1274,6 +1271,6 @@ int main(int argc, char **argv) {
   }
   //
   main_fin();
-  return anyerr ? EXIT_FAILURE : ec;
+  return ec;
 }
 
