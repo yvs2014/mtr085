@@ -21,7 +21,6 @@ CONFLICTS=	mtr-[0-9]*
 USE_TOOLS+=		pkg-config
 INSTALLATION_DIRS=	${PKGMANDIR}/man8 sbin share/doc/mtr
 
-MESON_ARGS+=	-DCAP=false
 MESON_ARGS+=	-DSBIN=true
 
 .include "options.mk"

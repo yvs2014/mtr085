@@ -60,7 +60,7 @@ jobs:
         env:
           CC: ${{matrix.compiler}}
         run: |
-          meson setup _build -DNLS=false
+          meson setup _build -DNLS=false -DMENU=false
           meson compile -C _build
       - name: Run on ${{matrix.os}}
         run: |

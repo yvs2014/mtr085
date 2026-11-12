@@ -20,18 +20,25 @@ GH_PROJECT=	mtr085
 GH_ACCOUNT=	yvs2014
 GH_TAGNAME=	<GIT_COMMIT_HASH>
 
-OPTIONS_DEFINE=	SETUID IPINFO IDN NLS UNICODE IPV6
-OPTIONS_DEFAULT=	IPINFO IDN UNICODE IPV6
-IPINFO_DESC=	Extended information like ASN, etc.
-SETUID_DESC=	Install with setuid root
+OPTIONS_DEFINE=	TUI COLOR MOUSE MENU UNICODE NLS DNS IPINFO IPV6 MPLS
+OPTIONS_DEFAULT=	TUI COLOR UNICODE DNS IPINFO IPV6 MPLS
+TUI_DESC=	Ncurses TUI
+COLOR_DESC=	Colored output
+MOUSE_DESC=	Mouse (TUI required, not tested on FreeBSD)
+MENU_DESC=	Menu,Panel,Form (TUI required, not tested on FreeBSD)
+UNICIDE_DESC=	Unicode support
 NLS_DESC=	NLS locale LC_MESSAGES
+DNS_DESC=	DNS support
+IPINFO_DESC=	Extended information like ASN, etc.
+MPLS_DESC=	MPLS decoding
 
-MESON_ARGS+=	-DCAP=false
 MESON_ARGS+=	-DSBIN=true
 
 SUB_FILES=	pkg-message
-PLIST_FILES=	${DOCSDIR_REL}/SECURITY
 
+# no setuid install
+PLIST_FILES=	${DOCSDIR_REL}/SECURITY
+#
 post-install:
 	@${MKDIR} ${STAGEDIR}${DOCSDIR}
 	${INSTALL_DATA} ${WRKSRC}/SECURITY ${STAGEDIR}${DOCSDIR}/
@@ -40,22 +47,34 @@ post-install:
 
 PLIST_FILES+=	share/man/man8/mtr.8.gz
 
-.if ${PORT_OPTIONS:MSETUID}
-PLIST_FILES+=	"@(,,4555) sbin/mtr"
-.else
 PLIST_FILES+=	sbin/mtr
+
+.if empty(PORT_OPTIONS:MTUI)
+MESON_ARGS+=	-DTUI=false
 .endif
 
-.if empty(PORT_OPTIONS:MIPINFO)
-MESON_ARGS+=	-DIPINFO=false
+.if empty(PORT_OPTIONS:MCOLOR)
+MESON_ARGS+=	-DCOLOR=false
 .endif
 
-.if !empty(PORT_OPTIONS:MIDN)
-LIB_DEPENDS+=	libidn2.so:dns/libidn2
+.if empty(PORT_OPTIONS:MMOUSE)
+MESON_ARGS+=	-DMOUSE=false
+.endif
+
+.if empty(PORT_OPTIONS:MMENU)
+MESON_ARGS+=	-DMENU=false
 .endif
 
 .if empty(PORT_OPTIONS:MUNICODE)
 MESON_ARGS+=	-DUNICODE=false
+.endif
+
+.if !empty(PORT_OPTIONS:MUNICODE) && !empty(PORT_OPTIONS:MDNS)
+LIB_DEPENDS+=	libidn2.so:dns/libidn2
+.endif
+
+.if empty(PORT_OPTIONS:MIPINFO)
+MESON_ARGS+=	-DIPINFO=false
 .endif
 
 .if empty(PORT_OPTIONS:MNLS)
@@ -72,6 +91,10 @@ PLIST_FILES+=	${LOCALE_REL}/uk/${MOFILE}
 
 .if empty(PORT_OPTIONS:MIPV6)
 MESON_ARGS+=	-DIPV6=false
+.endif
+
+.if empty(PORT_OPTIONS:MMPLS)
+MESON_ARGS+=	-DMPLS=false
 .endif
 
 .include <bsd.port.mk>
